@@ -296,7 +296,7 @@ export default function LeadsPage() {
               roleCode === "tmk") && (
               <a
                 href="/leads/nuevo"
-                className="inline-flex rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white"
+                className="inline-flex rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium !text-white"
               >
                 Nuevo lead
               </a>
@@ -400,21 +400,12 @@ export default function LeadsPage() {
                         {formatDate(lead.created_at)}
                       </td>
                       <td className="rounded-r-2xl px-4 py-4">
-                        <div className="flex flex-wrap gap-2">
-                          <a
-                            href={`/leads/${lead.id}`}
-                            className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
-                          >
-                            Ver / editar
-                          </a>
-
-                          <a
-                            href={`/recepcion?leadId=${lead.id}`}
-                            className="inline-flex rounded-xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-                          >
-                            Agendar cita
-                          </a>
-                        </div>
+                        <a
+                          href={`/leads/${lead.id}`}
+                          className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                        >
+                          Ver / editar
+                        </a>
                       </td>
                     </tr>
                   ))}
