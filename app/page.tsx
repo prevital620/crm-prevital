@@ -52,7 +52,7 @@ const quickActions: QuickAction[] = [
   },
   {
     title: "Usuarios y roles",
-    subtitle: "Consultar usuarios, roles y permisos.",
+    subtitle: "Consultar usuarios creados en el sistema.",
     href: "/usuarios",
     roles: ["super_user"],
   },
@@ -82,46 +82,22 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
-    title: "Consultar citas",
-    subtitle: "Ver agenda y citas del sistema.",
-    href: "/citas",
-    roles: ["super_user"],
+    title: "Recepción",
+    subtitle: "Ver agenda, citas y admisión del sistema.",
+    href: "/recepcion",
+    roles: ["super_user", "recepcion"],
   },
   {
-    title: "Consultar ventas",
-    subtitle: "Revisar ventas, cierres y valores.",
-    href: "/ventas",
-    roles: ["super_user"],
+    title: "Comercial",
+    subtitle: "Gestionar seguimiento y cierre comercial.",
+    href: "/comercial",
+    roles: ["super_user", "comercial"],
   },
   {
-    title: "Historias clínicas",
-    subtitle: "Consultar historias y evolución.",
-    href: "/historias-clinicas",
-    roles: ["super_user"],
-  },
-  {
-    title: "Departamentos",
-    subtitle: "Ver estructura de áreas del CRM.",
-    href: "/departamentos",
-    roles: ["super_user"],
-  },
-  {
-    title: "Roles y permisos",
-    subtitle: "Configurar accesos del sistema.",
-    href: "/roles",
-    roles: ["super_user"],
-  },
-  {
-    title: "Comisiones y bonos",
-    subtitle: "Consultar acumulados y reglas.",
-    href: "/comisiones",
-    roles: ["super_user"],
-  },
-  {
-    title: "Reportes",
-    subtitle: "Ver indicadores y reportes generales.",
-    href: "/reportes",
-    roles: ["super_user"],
+    title: "Gerencia comercial",
+    subtitle: "Supervisar cartera, ventas y desempeño comercial.",
+    href: "/gerencia/comercial",
+    roles: ["super_user", "gerencia_comercial"],
   },
 ];
 
@@ -203,17 +179,16 @@ export default function HomePage() {
           .limit(6);
       }
 
-      const [
-        leadsResult,
-        departmentsResult,
-        rolesResult,
-        profilesResult,
-      ] = await Promise.all([
-        leadsQuery,
-        supabase.from("departments").select("id, name").order("name", { ascending: true }),
-        supabase.from("roles").select("id, name, code").order("name", { ascending: true }),
-        supabase.from("profiles").select("id, full_name, job_title, is_active, created_at").order("created_at", { ascending: false }),
-      ]);
+      const [leadsResult, departmentsResult, rolesResult, profilesResult] =
+        await Promise.all([
+          leadsQuery,
+          supabase.from("departments").select("id, name").order("name", { ascending: true }),
+          supabase.from("roles").select("id, name, code").order("name", { ascending: true }),
+          supabase
+            .from("profiles")
+            .select("id, full_name, job_title, is_active, created_at")
+            .order("created_at", { ascending: false }),
+        ]);
 
       if (leadsResult.error) throw leadsResult.error;
       if (departmentsResult.error) throw departmentsResult.error;
@@ -292,9 +267,7 @@ export default function HomePage() {
         <section className="mb-8 rounded-3xl bg-white p-6 shadow-sm md:p-8">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">
-                Panel principal
-              </p>
+              <p className="text-sm font-medium text-slate-500">Panel principal</p>
               <h1 className="mt-2 text-3xl font-bold text-slate-900 md:text-4xl">
                 CRM Prevital
               </h1>
@@ -460,12 +433,8 @@ export default function HomePage() {
 
           <div className="space-y-6">
             <div className="rounded-3xl bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">
-                Departamentos
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Resumen general.
-              </p>
+              <h2 className="text-2xl font-bold text-slate-900">Departamentos</h2>
+              <p className="mt-1 text-sm text-slate-500">Resumen general.</p>
 
               <div className="mt-5 space-y-3">
                 {loading ? (
@@ -489,9 +458,7 @@ export default function HomePage() {
 
             <div className="rounded-3xl bg-white p-6 shadow-sm">
               <h2 className="text-2xl font-bold text-slate-900">Roles</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Estructura configurada.
-              </p>
+              <p className="mt-1 text-sm text-slate-500">Estructura configurada.</p>
 
               <div className="mt-5 max-h-[320px] space-y-3 overflow-auto pr-1">
                 {loading ? (
@@ -509,9 +476,7 @@ export default function HomePage() {
                       <p className="text-sm font-semibold text-slate-900">
                         {role.name}
                       </p>
-                      <p className="mt-1 text-xs text-slate-500">
-                        {role.code}
-                      </p>
+                      <p className="mt-1 text-xs text-slate-500">{role.code}</p>
                     </div>
                   ))
                 )}
