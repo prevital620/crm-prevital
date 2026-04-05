@@ -41,7 +41,7 @@ type AppointmentRow = {
   attended_at: string | null;
 };
 
-const allowedRoles = ["super_user", "recepcion"];
+const allowedRoles = ["super_user", "recepcion", "tmk", "confirmador"];
 
 const appointmentStatusOptions = [
   { value: "agendada", label: "Agendada" },
@@ -156,6 +156,7 @@ function RecepcionContent() {
   const [mensaje, setMensaje] = useState("");
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentRoleCode, setCurrentRoleCode] = useState<string | null>(null);
 
   const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
   const [busquedaAgenda, setBusquedaAgenda] = useState("");
@@ -184,6 +185,9 @@ function RecepcionContent() {
     instructions_text: "",
   });
 
+  const isReadOnlyAgendaForCall =
+    currentRoleCode === "tmk" || currentRoleCode === "confirmador";
+
   async function validarAcceso() {
     try {
       setLoadingAuth(true);
@@ -205,6 +209,7 @@ function RecepcionContent() {
 
       setAuthorized(true);
       setCurrentUserId(auth.user.id);
+      setCurrentRoleCode(auth.roleCode);
     } catch (err: any) {
       setAuthorized(false);
       setError(err?.message || "No se pudo validar el acceso.");
@@ -407,6 +412,8 @@ function RecepcionContent() {
   }
 
   function cargarCitaParaEditar(item: AppointmentRow) {
+    if (isReadOnlyAgendaForCall) return;
+
     setEditingAppointmentId(item.id);
     setForm({
       mode: item.lead_id ? "lead" : "manual",
@@ -529,6 +536,8 @@ function RecepcionContent() {
   }
 
   async function guardarEstado(id: string) {
+    if (isReadOnlyAgendaForCall) return;
+
     const nuevoEstado = statusById[id];
     if (!nuevoEstado || !currentUserId) return;
 
@@ -630,12 +639,16 @@ function RecepcionContent() {
         <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">Recepción</p>
+              <p className="text-sm font-medium text-slate-500">
+                {isReadOnlyAgendaForCall ? "Agenda" : "Recepción"}
+              </p>
               <h1 className="mt-2 text-3xl font-bold text-slate-900">
-                Agenda y admisión
+                {isReadOnlyAgendaForCall ? "Agendar cita" : "Agenda y admisión"}
               </h1>
               <p className="mt-3 text-sm text-slate-600">
-                Crear citas, ubicar clientes, registrar llegada y actualizar estado.
+                {isReadOnlyAgendaForCall
+                  ? "Desde aquí puedes crear una cita para tu lead sin entrar al módulo completo de recepción."
+                  : "Crear citas, ubicar clientes, registrar llegada y actualizar estado."}
               </p>
             </div>
 
@@ -648,6 +661,13 @@ function RecepcionContent() {
               className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
             >
               Inicio
+            </a>
+
+            <a
+              href="/call-center"
+              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+            >
+              Call Center
             </a>
           </div>
         </section>
@@ -664,15 +684,17 @@ function RecepcionContent() {
           </div>
         ) : null}
 
-        <section className="mb-6 grid gap-4 md:grid-cols-5">
-          <StatCard title="Citas del día" value={String(resumen.total)} />
-          <StatCard title="Agendadas" value={String(resumen.agendadas)} />
-          <StatCard title="En espera" value={String(resumen.espera)} />
-          <StatCard title="Asistió" value={String(resumen.asistio)} />
-          <StatCard title="No asistió" value={String(resumen.noAsistio)} />
-        </section>
+        {!isReadOnlyAgendaForCall && (
+          <section className="mb-6 grid gap-4 md:grid-cols-5">
+            <StatCard title="Citas del día" value={String(resumen.total)} />
+            <StatCard title="Agendadas" value={String(resumen.agendadas)} />
+            <StatCard title="En espera" value={String(resumen.espera)} />
+            <StatCard title="Asistió" value={String(resumen.asistio)} />
+            <StatCard title="No asistió" value={String(resumen.noAsistio)} />
+          </section>
+        )}
 
-        <section className="mb-6 grid gap-6 xl:grid-cols-2">
+        <section className={`mb-6 grid gap-6 ${isReadOnlyAgendaForCall ? "" : "xl:grid-cols-2"}`}>
           <div className="rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -925,149 +947,151 @@ function RecepcionContent() {
             </form>
           </div>
 
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
-            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">Agenda visible</h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Busca por nombre o teléfono y filtra por fecha.
-                </p>
+          {!isReadOnlyAgendaForCall && (
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Agenda visible</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Busca por nombre o teléfono y filtra por fecha.
+                  </p>
+                </div>
+
+                <button
+                  onClick={cargarTodo}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Actualizar
+                </button>
               </div>
 
-              <button
-                onClick={cargarTodo}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Actualizar
-              </button>
-            </div>
+              <div className="mb-6 grid gap-3 md:grid-cols-2">
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="date"
+                  value={fechaFiltro}
+                  onChange={(e) => setFechaFiltro(e.target.value)}
+                />
 
-            <div className="mb-6 grid gap-3 md:grid-cols-2">
-              <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
-                type="date"
-                value={fechaFiltro}
-                onChange={(e) => setFechaFiltro(e.target.value)}
-              />
-
-              <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
-                type="text"
-                placeholder="Buscar por nombre o teléfono"
-                value={busquedaAgenda}
-                onChange={(e) => setBusquedaAgenda(e.target.value)}
-              />
-            </div>
-
-            {loading ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                Cargando citas...
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="text"
+                  placeholder="Buscar por nombre o teléfono"
+                  value={busquedaAgenda}
+                  onChange={(e) => setBusquedaAgenda(e.target.value)}
+                />
               </div>
-            ) : agendaFiltrada.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                No hay citas con esos filtros.
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {agendaFiltrada.map((item) => (
-                  <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-900">
-                              {item.patient_name}
-                            </h3>
 
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs ${badgeEstado(
-                                item.status
-                              )}`}
-                            >
-                              {traducirEstado(item.status)}
-                            </span>
+              {loading ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  Cargando citas...
+                </div>
+              ) : agendaFiltrada.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  No hay citas con esos filtros.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {agendaFiltrada.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                      <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div>
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-lg font-semibold text-slate-900">
+                                {item.patient_name}
+                              </h3>
 
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
-                              {item.appointment_date}
-                            </span>
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs ${badgeEstado(
+                                  item.status
+                                )}`}
+                              >
+                                {traducirEstado(item.status)}
+                              </span>
 
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
-                              {formatHora(item.appointment_time)}
-                            </span>
-                          </div>
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                                {item.appointment_date}
+                              </span>
 
-                          <p className="mt-2 text-sm text-slate-600">
-                            {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
-                          </p>
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                                {formatHora(item.appointment_time)}
+                              </span>
+                            </div>
 
-                          <p className="mt-1 text-sm text-slate-600">
-                            Servicio: {item.service_type || "Sin servicio"}
-                          </p>
-
-                          {item.treatment_type ? (
-                            <p className="mt-1 text-sm text-slate-600">
-                              Tratamiento: {item.treatment_type}
-                            </p>
-                          ) : null}
-
-                          {item.notes ? (
                             <p className="mt-2 text-sm text-slate-600">
-                              <span className="font-medium text-slate-800">Notas:</span>{" "}
-                              {item.notes}
+                              {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
                             </p>
-                          ) : null}
-                        </div>
 
-                        <button
-                          type="button"
-                          onClick={() => cargarCitaParaEditar(item)}
-                          className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-                        >
-                          Reagendar
-                        </button>
-                      </div>
+                            <p className="mt-1 text-sm text-slate-600">
+                              Servicio: {item.service_type || "Sin servicio"}
+                            </p>
 
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-3 text-sm font-medium text-slate-700">
-                          Estado de la cita
-                        </p>
+                            {item.treatment_type ? (
+                              <p className="mt-1 text-sm text-slate-600">
+                                Tratamiento: {item.treatment_type}
+                              </p>
+                            ) : null}
 
-                        <div className="flex flex-col gap-3 md:flex-row">
-                          <select
-                            className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
-                            value={statusById[item.id] || item.status}
-                            onChange={(e) =>
-                              setStatusById((prev) => ({
-                                ...prev,
-                                [item.id]: e.target.value,
-                              }))
-                            }
-                          >
-                            {appointmentStatusOptions.map((status) => (
-                              <option key={status.value} value={status.value}>
-                                {status.label}
-                              </option>
-                            ))}
-                          </select>
+                            {item.notes ? (
+                              <p className="mt-2 text-sm text-slate-600">
+                                <span className="font-medium text-slate-800">Notas:</span>{" "}
+                                {item.notes}
+                              </p>
+                            ) : null}
+                          </div>
 
                           <button
                             type="button"
-                            onClick={() => guardarEstado(item.id)}
-                            disabled={savingStatusId === item.id}
-                            className="rounded-2xl border border-slate-900 px-5 py-3 text-sm font-medium text-slate-900 disabled:opacity-60"
+                            onClick={() => cargarCitaParaEditar(item)}
+                            className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
                           >
-                            {savingStatusId === item.id
-                              ? "Guardando..."
-                              : "Guardar estado"}
+                            Reagendar
                           </button>
+                        </div>
+
+                        <div className="rounded-2xl bg-slate-50 p-4">
+                          <p className="mb-3 text-sm font-medium text-slate-700">
+                            Estado de la cita
+                          </p>
+
+                          <div className="flex flex-col gap-3 md:flex-row">
+                            <select
+                              className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
+                              value={statusById[item.id] || item.status}
+                              onChange={(e) =>
+                                setStatusById((prev) => ({
+                                  ...prev,
+                                  [item.id]: e.target.value,
+                                }))
+                              }
+                            >
+                              {appointmentStatusOptions.map((status) => (
+                                <option key={status.value} value={status.value}>
+                                  {status.label}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => guardarEstado(item.id)}
+                              disabled={savingStatusId === item.id}
+                              className="rounded-2xl border border-slate-900 px-5 py-3 text-sm font-medium text-slate-900 disabled:opacity-60"
+                            >
+                              {savingStatusId === item.id
+                                ? "Guardando..."
+                                : "Guardar estado"}
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </section>
       </div>
     </main>

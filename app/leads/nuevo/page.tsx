@@ -45,6 +45,7 @@ export default function NuevoLeadPage() {
   const [authorized, setAuthorized] = useState(false);
   const [currentUserId, setCurrentUserId] = useState("");
   const [currentUserName, setCurrentUserName] = useState("");
+  const [currentRoleCode, setCurrentRoleCode] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
 
@@ -98,6 +99,7 @@ export default function NuevoLeadPage() {
       setAuthorized(true);
       setCurrentUserId(profile.id);
       setCurrentUserName(profile.full_name || "Usuario actual");
+      setCurrentRoleCode(auth.roleCode);
     } catch (err: any) {
       setAuthorized(false);
       setError(err?.message || "No se pudo validar el acceso.");
@@ -133,6 +135,9 @@ export default function NuevoLeadPage() {
     setLoading(true);
 
     try {
+      const debeAutoAsignarse =
+        currentRoleCode === "tmk" || currentRoleCode === "confirmador";
+
       const { error } = await supabase.from("leads").insert([
         {
           first_name: form.first_name.trim(),
@@ -154,12 +159,17 @@ export default function NuevoLeadPage() {
           city: form.city.trim() || null,
           status: form.status,
           created_by_user_id: currentUserId,
+          assigned_to_user_id: debeAutoAsignarse ? currentUserId : null,
         },
       ]);
 
       if (error) throw error;
 
-      setMensaje("Lead creado correctamente.");
+      setMensaje(
+        debeAutoAsignarse
+          ? "Lead creado y autoasignado correctamente."
+          : "Lead creado correctamente."
+      );
 
       setForm({
         first_name: "",
@@ -253,6 +263,11 @@ export default function NuevoLeadPage() {
               <p className="mt-1 text-base font-semibold text-slate-900">
                 {currentUserName}
               </p>
+              {(currentRoleCode === "tmk" || currentRoleCode === "confirmador") && (
+                <p className="mt-2 text-sm text-slate-600">
+                  Este lead se asignará automáticamente a tu usuario.
+                </p>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

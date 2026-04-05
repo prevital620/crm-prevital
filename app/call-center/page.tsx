@@ -470,15 +470,22 @@ export default function CallCenterPage() {
     };
   }, [leadsBasePorRol, fechaFiltro]);
 
-  function obtenerNombreAsignado(userId: string | null) {
-    if (!userId) return "Sin asignar";
-    const user = callCenterUsers.find((u) => u.id === userId);
-    return user ? `${user.full_name} · ${user.role_name}` : "Sin asignar";
-  }
+  function obtenerNombreAsignado(lead: Lead) {
+    if (lead.assigned_to_user_id) {
+      const user = callCenterUsers.find((u) => u.id === lead.assigned_to_user_id);
+      return user ? `${user.full_name} · ${user.role_name}` : "Asignado";
+    }
 
-  function obtenerNombreCreador(userId: string | null) {
-    if (!userId) return "Sin registro";
-    return creatorNames[userId] || "Sin nombre";
+    if (lead.created_by_user_id && lead.created_by_user_id === currentUserId) {
+      return "Tú (por creación del lead)";
+    }
+
+    if (lead.created_by_user_id) {
+      const creador = creatorNames[lead.created_by_user_id];
+      if (creador) return `${creador} · Creador`;
+    }
+
+    return "Sin asignar";
   }
 
   if (loadingAuth) {
@@ -522,13 +529,6 @@ export default function CallCenterPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a
-              href="/leads"
-              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white text-center"
-            >
-              Leads
-            </a>
-
             <a
               href="/"
               className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 text-center"
@@ -659,7 +659,7 @@ export default function CallCenterPage() {
                           </p>
 
                           <p className="mt-1 text-sm text-slate-600">
-                            Creado por: {obtenerNombreCreador(lead.created_by_user_id)}
+                            Creado por: {creatorNames[lead.created_by_user_id || ""] || "Sin nombre"}
                           </p>
 
                           {lead.observations && (
@@ -671,7 +671,7 @@ export default function CallCenterPage() {
 
                           <p className="mt-2 text-sm text-slate-700">
                             <span className="font-medium">Asignado a:</span>{" "}
-                            {obtenerNombreAsignado(lead.assigned_to_user_id)}
+                            {obtenerNombreAsignado(lead)}
                           </p>
                         </div>
 
