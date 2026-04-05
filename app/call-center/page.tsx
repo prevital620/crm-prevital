@@ -14,9 +14,11 @@ type Lead = {
   city: string | null;
   interest_service: string | null;
   capture_location: string | null;
+  source: string | null;
   status: string;
   observations: string | null;
   created_at: string;
+  created_by_user_id: string | null;
   assigned_to_user_id: string | null;
 };
 
@@ -27,16 +29,24 @@ type CallCenterUser = {
   role_code: string;
 };
 
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+};
+
 const statusOptions = [
   { value: "nuevo", label: "Nuevo" },
-  { value: "pendiente_contacto", label: "Pendiente de contacto" },
+  { value: "pendiente_contacto", label: "Pendiente" },
+  { value: "interesado", label: "Interesado" },
+  { value: "no_responde", label: "No responde" },
   { value: "contactado", label: "Contactado" },
   { value: "agendado", label: "Agendado" },
+  { value: "reagendar", label: "Reagendar" },
   { value: "asistio", label: "Asistió" },
   { value: "no_asistio", label: "No asistió" },
   { value: "vendido", label: "Vendido" },
   { value: "cerrado", label: "Cerrado" },
-  { value: "descartado", label: "Descartado" },
+  { value: "descartado", label: "Perdido" },
 ];
 
 const allowedRoles = [
@@ -65,10 +75,16 @@ function estadoBadge(estado: string | null) {
       return "bg-slate-100 text-slate-700";
     case "pendiente_contacto":
       return "bg-blue-100 text-blue-700";
+    case "interesado":
+      return "bg-amber-100 text-amber-700";
+    case "no_responde":
+      return "bg-orange-100 text-orange-700";
     case "contactado":
       return "bg-indigo-100 text-indigo-700";
     case "agendado":
       return "bg-emerald-100 text-emerald-700";
+    case "reagendar":
+      return "bg-cyan-100 text-cyan-700";
     case "asistio":
       return "bg-teal-100 text-teal-700";
     case "no_asistio":
@@ -87,14 +103,17 @@ function estadoBadge(estado: string | null) {
 function traducirEstado(estado: string | null) {
   const map: Record<string, string> = {
     nuevo: "Nuevo",
-    pendiente_contacto: "Pendiente de contacto",
+    pendiente_contacto: "Pendiente",
+    interesado: "Interesado",
+    no_responde: "No responde",
     contactado: "Contactado",
     agendado: "Agendado",
+    reagendar: "Reagendar",
     asistio: "Asistió",
     no_asistio: "No asistió",
     vendido: "Vendido",
     cerrado: "Cerrado",
-    descartado: "Descartado",
+    descartado: "Perdido",
   };
 
   if (!estado) return "Sin estado";
@@ -116,9 +135,24 @@ function traducirServicio(servicio: string | null) {
   return map[servicio] || servicio;
 }
 
+function traducirOrigen(source: string | null) {
+  const map: Record<string, string> = {
+    opc: "OPC",
+    redes_sociales: "Redes sociales",
+    referido: "Referido",
+    evento: "Evento",
+    punto_fisico: "Punto físico",
+    otro: "Otro",
+  };
+
+  if (!source) return "Sin origen";
+  return map[source] || source;
+}
+
 export default function CallCenterPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
   const [callCenterUsers, setCallCenterUsers] = useState<CallCenterUser[]>([]);
+  const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [cargando, setCargando] = useState(true);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
@@ -137,7 +171,7 @@ export default function CallCenterPage() {
     const { data, error } = await supabase
       .from("leads")
       .select(
-        "id, first_name, last_name, full_name, phone, city, interest_service, capture_location, status, observations, created_at, assigned_to_user_id"
+        "id, first_name, last_name, full_name, phone, city, interest_service, capture_location, source, status, observations, created_at, created_by_user_id, assigned_to_user_id"
       )
       .order("created_at", { ascending: false });
 
@@ -188,6 +222,38 @@ export default function CallCenterPage() {
     return filtered;
   }
 
+  async function cargarNombresCreadores(leadsData: Lead[]) {
+    const creatorIds = Array.from(
+      new Set(
+        leadsData
+          .map((lead) => lead.created_by_user_id)
+          .filter((id): id is string => Boolean(id))
+      )
+    );
+
+    if (creatorIds.length === 0) {
+      setCreatorNames({});
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("id, full_name")
+      .in("id", creatorIds);
+
+    if (error) {
+      console.error("Error cargando creadores:", error);
+      throw new Error("No se pudieron cargar los nombres de los creadores.");
+    }
+
+    const map: Record<string, string> = {};
+    ((data as ProfileRow[]) || []).forEach((profile) => {
+      map[profile.id] = profile.full_name?.trim() || "Sin nombre";
+    });
+
+    setCreatorNames(map);
+  }
+
   async function cargarTodo() {
     try {
       setCargando(true);
@@ -201,6 +267,7 @@ export default function CallCenterPage() {
 
       setLeads(leadsData);
       setCallCenterUsers(usersData);
+      await cargarNombresCreadores(leadsData);
 
       const assignments: Record<string, string> = {};
       const statuses: Record<string, string> = {};
@@ -333,13 +400,24 @@ export default function CallCenterPage() {
     }
   }
 
-  const leadsFiltrados = useMemo(() => {
+  const leadsBasePorRol = useMemo(() => {
     let base = leads;
-    const q = busqueda.trim().toLowerCase();
 
     if (currentRoleCode === "confirmador" || currentRoleCode === "tmk") {
-      base = base.filter((lead) => lead.assigned_to_user_id === currentUserId);
+      base = base.filter(
+        (lead) =>
+          lead.assigned_to_user_id === currentUserId ||
+          lead.created_by_user_id === currentUserId
+      );
     }
+
+    return base;
+  }, [leads, currentRoleCode, currentUserId]);
+
+  const leadsFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+
+    let base = leadsBasePorRol;
 
     if (!q) {
       base = base.filter((lead) => soloFecha(lead.created_at) === fechaFiltro);
@@ -352,39 +430,55 @@ export default function CallCenterPage() {
         lead.full_name?.toLowerCase() ||
         `${lead.first_name || ""} ${lead.last_name || ""}`.trim().toLowerCase();
 
+      const creador = (creatorNames[lead.created_by_user_id || ""] || "").toLowerCase();
+
       return (
         (lead.phone || "").toLowerCase().includes(q) ||
-        nombre.includes(q)
+        nombre.includes(q) ||
+        creador.includes(q)
       );
     });
-  }, [leads, fechaFiltro, busqueda, currentRoleCode, currentUserId]);
+  }, [leadsBasePorRol, fechaFiltro, busqueda, creatorNames]);
 
   const resumen = useMemo(() => {
-    let base = leads;
-
-    if (currentRoleCode === "confirmador" || currentRoleCode === "tmk") {
-      base = base.filter((lead) => lead.assigned_to_user_id === currentUserId);
-    }
-
-    const delDia = base.filter((lead) => soloFecha(lead.created_at) === fechaFiltro);
+    const delDia = leadsBasePorRol.filter(
+      (lead) => soloFecha(lead.created_at) === fechaFiltro
+    );
 
     return {
       total: delDia.length,
       pendientes: delDia.filter(
-        (lead) => lead.status === "nuevo" || lead.status === "pendiente_contacto"
+        (lead) =>
+          lead.status === "nuevo" ||
+          lead.status === "pendiente_contacto" ||
+          lead.status === "no_responde"
       ).length,
-      contactados: delDia.filter((lead) => lead.status === "contactado").length,
-      agendados: delDia.filter((lead) => lead.status === "agendado").length,
+      interesados: delDia.filter(
+        (lead) =>
+          lead.status === "interesado" || lead.status === "contactado"
+      ).length,
+      agendados: delDia.filter(
+        (lead) =>
+          lead.status === "agendado" || lead.status === "reagendar"
+      ).length,
       cerrados: delDia.filter(
-        (lead) => lead.status === "vendido" || lead.status === "cerrado"
+        (lead) =>
+          lead.status === "vendido" ||
+          lead.status === "cerrado" ||
+          lead.status === "descartado"
       ).length,
     };
-  }, [leads, fechaFiltro, currentRoleCode, currentUserId]);
+  }, [leadsBasePorRol, fechaFiltro]);
 
   function obtenerNombreAsignado(userId: string | null) {
     if (!userId) return "Sin asignar";
     const user = callCenterUsers.find((u) => u.id === userId);
     return user ? `${user.full_name} · ${user.role_name}` : "Sin asignar";
+  }
+
+  function obtenerNombreCreador(userId: string | null) {
+    if (!userId) return "Sin registro";
+    return creatorNames[userId] || "Sin nombre";
   }
 
   if (loadingAuth) {
@@ -420,7 +514,7 @@ export default function CallCenterPage() {
               <p className="mt-2 text-slate-600">
                 {currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user"
                   ? "Puedes consultar, asignar y actualizar el estado de los leads."
-                  : "Puedes consultar tus leads asignados y actualizar su estado."}
+                  : "Puedes consultar tus leads asignados o creados por ti y actualizar su estado."}
               </p>
             </div>
 
@@ -468,12 +562,12 @@ export default function CallCenterPage() {
           </div>
 
           <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Contactados</p>
-            <p className="mt-2 text-3xl font-bold text-indigo-700">{resumen.contactados}</p>
+            <p className="text-sm text-slate-500">Interesados/Contactados</p>
+            <p className="mt-2 text-3xl font-bold text-amber-700">{resumen.interesados}</p>
           </div>
 
           <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Agendados</p>
+            <p className="text-sm text-slate-500">Agendados/Reagendar</p>
             <p className="mt-2 text-3xl font-bold text-emerald-700">{resumen.agendados}</p>
           </div>
 
@@ -494,7 +588,7 @@ export default function CallCenterPage() {
 
             <input
               className="rounded-2xl border border-slate-300 p-4 outline-none"
-              placeholder="Buscar por teléfono o nombre"
+              placeholder="Buscar por teléfono, nombre o creador"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
@@ -557,7 +651,15 @@ export default function CallCenterPage() {
                           </p>
 
                           <p className="mt-1 text-sm text-slate-600">
+                            Origen: {traducirOrigen(lead.source)}
+                          </p>
+
+                          <p className="mt-1 text-sm text-slate-600">
                             Captación: {lead.capture_location || "No registrado"}
+                          </p>
+
+                          <p className="mt-1 text-sm text-slate-600">
+                            Creado por: {obtenerNombreCreador(lead.created_by_user_id)}
                           </p>
 
                           {lead.observations && (
