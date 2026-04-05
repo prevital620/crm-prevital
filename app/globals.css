@@ -1,26 +1,109 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #f7f7f3;
+  --foreground: #24312a;
+
+  --card: #ffffff;
+  --card-foreground: #24312a;
+
+  --primary: #7fa287;
+  --primary-strong: #5f7d66;
+  --primary-soft: #dfece4;
+
+  --secondary: #a8cdbd;
+  --accent: #8fbf7a;
+
+  --muted: #eef3ef;
+  --muted-foreground: #647269;
+
+  --border: #d7e2da;
+  --ring: rgba(127, 162, 135, 0.35);
+
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-soft: var(--primary-soft);
+
+  --color-secondary: var(--secondary);
+  --color-accent: var(--accent);
+
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+
+  --color-border: var(--border);
+  --color-ring: var(--ring);
+
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  min-height: 100%;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
+  background:
+    radial-gradient(circle at top left, rgba(168, 205, 189, 0.16), transparent 26%),
+    radial-gradient(circle at top right, rgba(143, 191, 122, 0.10), transparent 20%),
+    linear-gradient(180deg, #fbfbf8 0%, #f4f6f2 100%);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+::selection {
+  background: rgba(127, 162, 135, 0.24);
+  color: #1f2b24;
+}
+
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+  outline: none;
+}
+
+input:focus-visible,
+select:focus-visible,
+textarea:focus-visible,
+button:focus-visible,
+a:focus-visible {
+  box-shadow: 0 0 0 4px var(--ring);
+  border-radius: 14px;
+}
+
+img {
+  max-width: 100%;
+  height: auto;
 }
