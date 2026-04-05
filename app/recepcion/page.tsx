@@ -49,7 +49,17 @@ type SlotOption = {
   label: string;
 };
 
-type ReceptionSection = "agenda" | "especialistas" | "tratamientos";
+type ReceptionSection = "agenda" | "especialistas" | "tratamientos" | "impresiones";
+
+type DeliveryLog = {
+  id: string;
+  patient_name: string;
+  phone: string;
+  product: string;
+  quantity: number;
+  notes: string;
+  created_at: string;
+};
 
 const allowedRoles = [
   "super_user",
@@ -101,18 +111,21 @@ function getSectionForService(serviceType: string | null | undefined): Reception
 function getSectionLabel(section: ReceptionSection) {
   if (section === "especialistas") return "Especialistas";
   if (section === "tratamientos") return "Tratamientos";
+  if (section === "impresiones") return "Impresiones y entregas";
   return "Agenda";
 }
 
 function getServiceFieldLabel(section: ReceptionSection) {
   if (section === "especialistas") return "Especialista";
   if (section === "tratamientos") return "Tratamiento";
+  if (section === "impresiones") return "Servicio";
   return "Servicio";
 }
 
 function getServiceOptionsBySection(section: ReceptionSection) {
   if (section === "especialistas") return specialistOptions;
   if (section === "tratamientos") return treatmentOptions;
+  if (section === "impresiones") return [];
   return generalServiceOptions;
 }
 
@@ -289,6 +302,11 @@ function RecepcionContent() {
 
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<ReceptionSection>("agenda");
+  const [deliveryLogs, setDeliveryLogs] = useState<DeliveryLog[]>([]);
+  const [printSearch, setPrintSearch] = useState("");
+  const [deliveryProduct, setDeliveryProduct] = useState("");
+  const [deliveryQuantity, setDeliveryQuantity] = useState("1");
+  const [deliveryNotes, setDeliveryNotes] = useState("");
 
   const [form, setForm] = useState({
     mode: leadIdFromUrl ? "lead" : "lead",
@@ -448,6 +466,19 @@ function RecepcionContent() {
       cargarTodo();
     }
   }, [authorized]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = window.localStorage.getItem("recepcion_delivery_logs");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as DeliveryLog[];
+      if (Array.isArray(parsed)) {
+        setDeliveryLogs(parsed);
+      }
+    } catch {}
+  }, []);
+
 
   useEffect(() => {
     if (!leadIdFromUrl || leads.length === 0) return;
@@ -642,6 +673,142 @@ function RecepcionContent() {
     editingAppointmentId,
   ]);
 
+
+  const printCandidates = useMemo(() => {
+    const merged = [
+      ...appointments.map((item) => ({
+        id: `appointment_${item.id}`,
+        patient_name: item.patient_name || "Sin nombre",
+        phone: item.phone || "",
+        city: item.city || "",
+        source: item.lead_id ? "Lead existente" : traducirFuenteManual(extraerFuenteManualDesdeNotas(item.notes)),
+        detail:
+          item.appointment_date && item.appointment_time
+            ? `${item.appointment_date} · ${formatHora(item.appointment_time)}`
+            : "Sin cita",
+        service_type: item.service_type || "",
+        notes: limpiarFuenteManualDeNotas(item.notes),
+      })),
+      ...leads.map((lead) => ({
+        id: `lead_${lead.id}`,
+        patient_name: fullLeadName(lead),
+        phone: lead.phone || "",
+        city: lead.city || "",
+        source: "Lead existente",
+        detail: lead.status ? `Lead · ${lead.status}` : "Lead",
+        service_type: "",
+        notes: "",
+      })),
+    ];
+
+    const unique = new Map<string, (typeof merged)[number]>();
+    merged.forEach((item) => {
+      const key = `${item.patient_name.toLowerCase()}_${item.phone}`;
+      if (!unique.has(key)) unique.set(key, item);
+    });
+
+    const values = Array.from(unique.values());
+    const q = printSearch.trim().toLowerCase();
+    if (!q) return values.slice(0, 12);
+
+    return values
+      .filter((item) => {
+        return (
+          item.patient_name.toLowerCase().includes(q) ||
+          item.phone.toLowerCase().includes(q)
+        );
+      })
+      .slice(0, 12);
+  }, [appointments, leads, printSearch]);
+
+  const selectedPrintPatient = useMemo(() => {
+    return printCandidates[0] || null;
+  }, [printCandidates]);
+
+  function imprimirDocumento(tipo: "cita" | "instrucciones") {
+    if (typeof window === "undefined") return;
+
+    const nombre = selectedPrintPatient?.patient_name || "Paciente";
+    const telefono = selectedPrintPatient?.phone || "Sin teléfono";
+    const ciudad = selectedPrintPatient?.city || "Sin ciudad";
+    const detalle = selectedPrintPatient?.detail || "Sin detalle";
+    const servicio = selectedPrintPatient?.service_type || "Sin servicio";
+    const notas = selectedPrintPatient?.notes || "Sin notas registradas";
+    const titulo = tipo === "cita" ? "Comprobante de cita" : "Instrucciones";
+
+    const nuevaVentana = window.open("", "_blank", "width=900,height=700");
+    if (!nuevaVentana) return;
+
+    nuevaVentana.document.write(`
+      <html>
+        <head>
+          <title>${titulo}</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
+            h1 { margin-bottom: 8px; }
+            .box { border: 1px solid #cbd5e1; border-radius: 16px; padding: 20px; margin-top: 20px; }
+            .muted { color: #475569; margin: 6px 0; }
+          </style>
+        </head>
+        <body>
+          <h1>${titulo}</h1>
+          <p class="muted">CRM Prevital · Recepción</p>
+          <div class="box">
+            <p><strong>Cliente:</strong> ${nombre}</p>
+            <p><strong>Teléfono:</strong> ${telefono}</p>
+            <p><strong>Ciudad:</strong> ${ciudad}</p>
+            <p><strong>Detalle:</strong> ${detalle}</p>
+            <p><strong>Servicio:</strong> ${servicio}</p>
+            <p><strong>Notas:</strong> ${notas}</p>
+          </div>
+        </body>
+      </html>
+    `);
+    nuevaVentana.document.close();
+    nuevaVentana.focus();
+    nuevaVentana.print();
+  }
+
+  function registrarEntregaLocal() {
+    if (!selectedPrintPatient) {
+      setError("Debes buscar un cliente para registrar la entrega.");
+      return;
+    }
+
+    if (!deliveryProduct.trim()) {
+      setError("Debes escribir el nutracéutico o producto entregado.");
+      return;
+    }
+
+    const quantity = Number(deliveryQuantity || "0");
+    if (!quantity || quantity < 1) {
+      setError("La cantidad debe ser mayor que cero.");
+      return;
+    }
+
+    const nuevo: DeliveryLog = {
+      id: `${Date.now()}`,
+      patient_name: selectedPrintPatient.patient_name,
+      phone: selectedPrintPatient.phone,
+      product: deliveryProduct.trim(),
+      quantity,
+      notes: deliveryNotes.trim(),
+      created_at: new Date().toISOString(),
+    };
+
+    const next = [nuevo, ...deliveryLogs].slice(0, 30);
+    setDeliveryLogs(next);
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("recepcion_delivery_logs", JSON.stringify(next));
+    }
+
+    setDeliveryProduct("");
+    setDeliveryQuantity("1");
+    setDeliveryNotes("");
+    setMensaje("Entrega registrada correctamente en este dispositivo.");
+    setError("");
+  }
+
   function resetForm() {
     setEditingAppointmentId(null);
     setForm({
@@ -829,7 +996,10 @@ function RecepcionContent() {
         appointment_date: form.appointment_date,
         appointment_time: form.appointment_time,
         status: form.status,
-        service_type: form.service_type || null,
+        service_type:
+          activeSection === "agenda"
+            ? "valoracion"
+            : form.service_type || null,
         notes:
           form.mode === "manual"
             ? construirNotasConFuente(form.notes, form.manual_source).trim() || null
@@ -1035,7 +1205,7 @@ function RecepcionContent() {
               Inicio
             </a>
 
-            {!isReadOnlyAgendaForCall && (
+            {!isReadOnlyAgendaForCall && activeSection !== "impresiones" && (
               <>
                 <button
                   type="button"
@@ -1057,6 +1227,13 @@ function RecepcionContent() {
                   className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "tratamientos" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
                 >
                   Tratamientos
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cambiarSeccion("impresiones")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "impresiones" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                >
+                  Impresiones / Entregas
                 </button>
               </>
             )}
@@ -1085,7 +1262,7 @@ function RecepcionContent() {
           </section>
         )}
 
-        {canManageAgendaConfig ? (
+        {canManageAgendaConfig && activeSection !== "impresiones" ? (
           <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
@@ -1201,6 +1378,175 @@ function RecepcionContent() {
           </section>
         ) : null}
 
+        {activeSection === "impresiones" && !isReadOnlyAgendaForCall ? (
+          <section className="mb-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Impresiones y entregas</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Busca un cliente para imprimir su cita, sus instrucciones o registrar la entrega de nutracéuticos.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 space-y-4">
+                <Field
+                  label="Buscar cliente"
+                  input={
+                    <input
+                      className={inputClass}
+                      placeholder="Nombre o teléfono"
+                      value={printSearch}
+                      onChange={(e) => setPrintSearch(e.target.value)}
+                    />
+                  }
+                />
+
+                {selectedPrintPatient ? (
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Cliente seleccionado
+                    </p>
+                    <p className="mt-1 text-lg font-semibold text-slate-900">
+                      {selectedPrintPatient.patient_name}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {selectedPrintPatient.phone || "Sin teléfono"} · {selectedPrintPatient.city || "Sin ciudad"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {selectedPrintPatient.detail}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Fuente: {selectedPrintPatient.source}
+                    </p>
+                  </div>
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                    Escribe un nombre o teléfono para buscar el cliente.
+                  </div>
+                )}
+
+                <div className="grid gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => imprimirDocumento("cita")}
+                    className="rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white"
+                  >
+                    Imprimir cita
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => imprimirDocumento("instrucciones")}
+                    className="rounded-2xl border border-slate-300 px-4 py-4 text-base font-semibold text-slate-700"
+                  >
+                    Imprimir instrucciones
+                  </button>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <h3 className="text-lg font-semibold text-slate-900">
+                    Registrar entrega de nutracéuticos
+                  </h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Este registro queda guardado en este equipo mientras conectamos el inventario completo.
+                  </p>
+
+                  <div className="mt-4 grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="Producto"
+                      input={
+                        <input
+                          className={inputClass}
+                          placeholder="Ej: Omega 3"
+                          value={deliveryProduct}
+                          onChange={(e) => setDeliveryProduct(e.target.value)}
+                        />
+                      }
+                    />
+
+                    <Field
+                      label="Cantidad"
+                      input={
+                        <input
+                          className={inputClass}
+                          type="number"
+                          min="1"
+                          value={deliveryQuantity}
+                          onChange={(e) => setDeliveryQuantity(e.target.value)}
+                        />
+                      }
+                    />
+                  </div>
+
+                  <div className="mt-4">
+                    <Field
+                      label="Observaciones"
+                      input={
+                        <textarea
+                          className={`${inputClass} min-h-[110px] resize-none`}
+                          value={deliveryNotes}
+                          onChange={(e) => setDeliveryNotes(e.target.value)}
+                        />
+                      }
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={registrarEntregaLocal}
+                    className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white"
+                  >
+                    Registrar entrega
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <h2 className="text-2xl font-bold text-slate-900">Entregas recientes</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Vista rápida de lo entregado desde este dispositivo.
+              </p>
+
+              <div className="mt-5 space-y-3">
+                {deliveryLogs.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                    Aún no hay entregas registradas.
+                  </div>
+                ) : (
+                  deliveryLogs.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-base font-semibold text-slate-900">{item.patient_name}</p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {item.phone || "Sin teléfono"}
+                          </p>
+                          <p className="mt-2 text-sm text-slate-700">
+                            <span className="font-medium">Producto:</span> {item.product}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-700">
+                            <span className="font-medium">Cantidad:</span> {item.quantity}
+                          </p>
+                          {item.notes ? (
+                            <p className="mt-1 text-sm text-slate-700">
+                              <span className="font-medium">Observaciones:</span> {item.notes}
+                            </p>
+                          ) : null}
+                        </div>
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                          {new Date(item.created_at).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+        ) : (
         <section className={`mb-6 grid gap-6 ${isReadOnlyAgendaForCall ? "" : "xl:grid-cols-2"}`}>
           <div className="rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
@@ -1362,25 +1708,27 @@ function RecepcionContent() {
                   }
                 />
 
-                <Field
-                  label={serviceFieldLabel}
-                  input={
-                    <select
-                      className={inputClass}
-                      value={form.service_type}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, service_type: e.target.value }))
-                      }
-                    >
-                      <option value="">Selecciona</option>
-                      {serviceOptions.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  }
-                />
+                {activeSection !== "agenda" ? (
+                  <Field
+                    label={serviceFieldLabel}
+                    input={
+                      <select
+                        className={inputClass}
+                        value={form.service_type}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, service_type: e.target.value }))
+                        }
+                      >
+                        <option value="">Selecciona</option>
+                        {serviceOptions.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    }
+                  />
+                ) : null}
 
                 <Field
                   label="Fecha"
@@ -1599,6 +1947,7 @@ function RecepcionContent() {
             </div>
           )}
         </section>
+        )}
       </div>
     </main>
   );
