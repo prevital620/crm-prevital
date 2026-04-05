@@ -41,7 +41,31 @@ type AppointmentRow = {
   attended_at: string | null;
 };
 
-const allowedRoles = ["super_user", "recepcion", "tmk", "confirmador"];
+type AgendaDaySetting = {
+  agenda_date: string;
+  daily_capacity: number | null;
+  is_closed: boolean;
+};
+
+type AgendaSlotSetting = {
+  agenda_date: string;
+  slot_time: string;
+  capacity: number | null;
+  is_blocked: boolean;
+};
+
+type SlotOption = {
+  value: string;
+  label: string;
+};
+
+const allowedRoles = [
+  "super_user",
+  "recepcion",
+  "tmk",
+  "confirmador",
+  "supervisor_call_center",
+];
 
 const appointmentStatusOptions = [
   { value: "agendada", label: "Agendada" },
@@ -65,14 +89,29 @@ const serviceOptions = [
   { value: "otro", label: "Otro" },
 ];
 
-const treatmentOptions = [
-  { value: "detox", label: "Detox" },
-  { value: "sueroterapia", label: "Sueroterapia" },
-  { value: "plan_nutricional", label: "Plan nutricional" },
-  { value: "terapia", label: "Terapia" },
-  { value: "valoracion_preventiva", label: "Valoración preventiva" },
-  { value: "otro", label: "Otro" },
+const SLOT_OPTIONS: SlotOption[] = [
+  { value: "08:00", label: "8:00 a. m." },
+  { value: "09:00", label: "9:00 a. m." },
+  { value: "10:00", label: "10:00 a. m." },
+  { value: "11:00", label: "11:00 a. m." },
+  { value: "12:00", label: "12:00 m." },
+  { value: "13:30", label: "1:30 p. m." },
+  { value: "14:30", label: "2:30 p. m." },
+  { value: "15:30", label: "3:30 p. m." },
+  { value: "16:30", label: "4:30 p. m." },
+  { value: "17:30", label: "5:30 p. m." },
 ];
+
+const ACTIVE_APPOINTMENT_STATUSES = [
+  "agendada",
+  "confirmada",
+  "en_espera",
+  "reagendada",
+  "en_atencion",
+];
+
+const DEFAULT_SLOT_CAPACITY = 6;
+const DEFAULT_DAILY_CAPACITY = 60;
 
 function hoyISO() {
   const hoy = new Date();
@@ -80,13 +119,6 @@ function hoyISO() {
   const m = String(hoy.getMonth() + 1).padStart(2, "0");
   const d = String(hoy.getDate()).padStart(2, "0");
   return `${y}-${m}-${d}`;
-}
-
-function ahoraHora() {
-  const ahora = new Date();
-  const hh = String(ahora.getHours()).padStart(2, "0");
-  const mm = String(ahora.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
 }
 
 function formatHora(hora: string | null | undefined) {
@@ -142,6 +174,10 @@ function traducirEstado(status: string) {
   return map[status] || status;
 }
 
+function normalizarHora(value: string) {
+  return value.slice(0, 5);
+}
+
 function RecepcionContent() {
   const searchParams = useSearchParams();
   const leadIdFromUrl = searchParams.get("leadId");
@@ -151,6 +187,7 @@ function RecepcionContent() {
   const [loading, setLoading] = useState(true);
   const [savingAppointment, setSavingAppointment] = useState(false);
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
+  const [savingConfig, setSavingConfig] = useState(false);
 
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
@@ -167,16 +204,23 @@ function RecepcionContent() {
   const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
   const [statusById, setStatusById] = useState<Record<string, string>>({});
 
+  const [daySettings, setDaySettings] = useState<Record<string, AgendaDaySetting>>({});
+  const [slotSettings, setSlotSettings] = useState<Record<string, AgendaSlotSetting>>({});
+  const [dailyCapacityInput, setDailyCapacityInput] = useState(String(DEFAULT_DAILY_CAPACITY));
+  const [dailyClosedInput, setDailyClosedInput] = useState(false);
+  const [slotCapacityInputs, setSlotCapacityInputs] = useState<Record<string, string>>({});
+  const [slotBlockedInputs, setSlotBlockedInputs] = useState<Record<string, boolean>>({});
+
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
 
   const [form, setForm] = useState({
-    mode: "lead",
+    mode: leadIdFromUrl ? "lead" : "lead",
     lead_id: "",
     patient_name: "",
     phone: "",
     city: "",
     appointment_date: hoyISO(),
-    appointment_time: ahoraHora(),
+    appointment_time: "08:00",
     status: "agendada",
     service_type: "",
     treatment_type: "",
@@ -187,6 +231,9 @@ function RecepcionContent() {
 
   const isReadOnlyAgendaForCall =
     currentRoleCode === "tmk" || currentRoleCode === "confirmador";
+
+  const canManageAgendaConfig =
+    currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
 
   async function validarAcceso() {
     try {
@@ -224,7 +271,13 @@ function RecepcionContent() {
       setError("");
       setMensaje("");
 
-      const [appointmentsResult, leadsResult, specialistsResult] = await Promise.all([
+      const [
+        appointmentsResult,
+        leadsResult,
+        specialistsResult,
+        daySettingsResult,
+        slotSettingsResult,
+      ] = await Promise.all([
         supabase
           .from("appointments")
           .select(`
@@ -259,7 +312,7 @@ function RecepcionContent() {
             status
           `)
           .order("created_at", { ascending: false })
-          .limit(200),
+          .limit(300),
 
         supabase
           .from("profiles")
@@ -273,15 +326,27 @@ function RecepcionContent() {
               )
             )
           `),
+
+        supabase
+          .from("agenda_day_settings")
+          .select("agenda_date, daily_capacity, is_closed"),
+
+        supabase
+          .from("agenda_slot_settings")
+          .select("agenda_date, slot_time, capacity, is_blocked"),
       ]);
 
       if (appointmentsResult.error) throw appointmentsResult.error;
       if (leadsResult.error) throw leadsResult.error;
       if (specialistsResult.error) throw specialistsResult.error;
+      if (daySettingsResult.error) throw daySettingsResult.error;
+      if (slotSettingsResult.error) throw slotSettingsResult.error;
 
       const appointmentsData = (appointmentsResult.data as AppointmentRow[]) || [];
       const leadsData = (leadsResult.data as LeadOption[]) || [];
       const profileRows = (specialistsResult.data as any[]) || [];
+      const dayRows = (daySettingsResult.data as AgendaDaySetting[]) || [];
+      const slotRows = (slotSettingsResult.data as AgendaSlotSetting[]) || [];
 
       const specialistList: SpecialistOption[] = profileRows
         .map((row) => {
@@ -303,10 +368,25 @@ function RecepcionContent() {
         nextStatuses[item.id] = item.status;
       });
 
+      const dayMap: Record<string, AgendaDaySetting> = {};
+      dayRows.forEach((row) => {
+        dayMap[row.agenda_date] = row;
+      });
+
+      const slotMap: Record<string, AgendaSlotSetting> = {};
+      slotRows.forEach((row) => {
+        slotMap[`${row.agenda_date}_${normalizarHora(row.slot_time)}`] = {
+          ...row,
+          slot_time: normalizarHora(row.slot_time),
+        };
+      });
+
       setAppointments(appointmentsData);
       setLeads(leadsData);
       setSpecialists(specialistList);
       setStatusById(nextStatuses);
+      setDaySettings(dayMap);
+      setSlotSettings(slotMap);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los datos de recepción.");
     } finally {
@@ -354,19 +434,71 @@ function RecepcionContent() {
     }));
   }, [form.lead_id, leads]);
 
+  useEffect(() => {
+    const daySetting = daySettings[form.appointment_date];
+    setDailyCapacityInput(
+      String(daySetting?.daily_capacity ?? DEFAULT_DAILY_CAPACITY)
+    );
+    setDailyClosedInput(daySetting?.is_closed ?? false);
+
+    const nextCaps: Record<string, string> = {};
+    const nextBlocked: Record<string, boolean> = {};
+
+    SLOT_OPTIONS.forEach((slot) => {
+      const key = `${form.appointment_date}_${slot.value}`;
+      const row = slotSettings[key];
+      nextCaps[slot.value] = String(row?.capacity ?? DEFAULT_SLOT_CAPACITY);
+      nextBlocked[slot.value] = row?.is_blocked ?? false;
+    });
+
+    setSlotCapacityInputs(nextCaps);
+    setSlotBlockedInputs(nextBlocked);
+  }, [form.appointment_date, daySettings, slotSettings]);
+
+  const appointmentsForSelectedDate = useMemo(() => {
+    return appointments.filter(
+      (item) => item.appointment_date === form.appointment_date
+    );
+  }, [appointments, form.appointment_date]);
+
+  const activeAppointmentsForSelectedDate = useMemo(() => {
+    return appointmentsForSelectedDate.filter((item) =>
+      ACTIVE_APPOINTMENT_STATUSES.includes(item.status)
+    );
+  }, [appointmentsForSelectedDate]);
+
+  const leadsConCitaActiva = useMemo(() => {
+    const ids = new Set<string>();
+    appointments.forEach((item) => {
+      if (
+        item.lead_id &&
+        ACTIVE_APPOINTMENT_STATUSES.includes(item.status) &&
+        item.id !== editingAppointmentId
+      ) {
+        ids.add(item.lead_id);
+      }
+    });
+    return ids;
+  }, [appointments, editingAppointmentId]);
+
   const leadsFiltrados = useMemo(() => {
     const q = busquedaLead.trim().toLowerCase();
 
-    if (!q) return leads.slice(0, 20);
+    const base = leads.filter((lead) => {
+      if (editingAppointmentId && lead.id === form.lead_id) return true;
+      return !leadsConCitaActiva.has(lead.id);
+    });
 
-    return leads
+    if (!q) return base.slice(0, 20);
+
+    return base
       .filter((lead) => {
         const nombre = fullLeadName(lead).toLowerCase();
         const telefono = (lead.phone || "").toLowerCase();
         return nombre.includes(q) || telefono.includes(q);
       })
       .slice(0, 20);
-  }, [leads, busquedaLead]);
+  }, [leads, busquedaLead, leadsConCitaActiva, editingAppointmentId, form.lead_id]);
 
   const agendaFiltrada = useMemo(() => {
     const q = busquedaAgenda.trim().toLowerCase();
@@ -392,16 +524,67 @@ function RecepcionContent() {
     };
   }, [appointments, fechaFiltro]);
 
+  const selectedDaySetting = daySettings[form.appointment_date];
+  const selectedDateDailyCapacity =
+    selectedDaySetting?.daily_capacity ?? DEFAULT_DAILY_CAPACITY;
+  const selectedDateClosed = selectedDaySetting?.is_closed ?? false;
+  const selectedDateActiveTotal = activeAppointmentsForSelectedDate.length;
+
+  const slotAvailability = useMemo(() => {
+    return SLOT_OPTIONS.map((slot) => {
+      const key = `${form.appointment_date}_${slot.value}`;
+      const setting = slotSettings[key];
+      const capacity = setting?.capacity ?? DEFAULT_SLOT_CAPACITY;
+      const isBlocked = setting?.is_blocked ?? false;
+
+      const booked = appointmentsForSelectedDate.filter(
+        (item) =>
+          normalizarHora(item.appointment_time) === slot.value &&
+          ACTIVE_APPOINTMENT_STATUSES.includes(item.status) &&
+          item.id !== editingAppointmentId
+      ).length;
+
+      const dailyRemaining = Math.max(
+        selectedDateDailyCapacity - selectedDateActiveTotal,
+        0
+      );
+
+      const isFullBySlot = booked >= capacity;
+      const isFullByDay =
+        selectedDateActiveTotal >= selectedDateDailyCapacity &&
+        !editingAppointmentId;
+      const disabled = selectedDateClosed || isBlocked || isFullBySlot || isFullByDay;
+
+      return {
+        ...slot,
+        capacity,
+        booked,
+        disabled,
+        isBlocked,
+        isFullBySlot,
+        isFullByDay,
+      };
+    });
+  }, [
+    appointmentsForSelectedDate,
+    slotSettings,
+    form.appointment_date,
+    selectedDateClosed,
+    selectedDateDailyCapacity,
+    selectedDateActiveTotal,
+    editingAppointmentId,
+  ]);
+
   function resetForm() {
     setEditingAppointmentId(null);
     setForm({
-      mode: "lead",
-      lead_id: "",
+      mode: leadIdFromUrl ? "lead" : "lead",
+      lead_id: leadIdFromUrl || "",
       patient_name: "",
       phone: "",
       city: "",
       appointment_date: hoyISO(),
-      appointment_time: ahoraHora(),
+      appointment_time: "08:00",
       status: "agendada",
       service_type: "",
       treatment_type: "",
@@ -409,6 +592,7 @@ function RecepcionContent() {
       notes: "",
       instructions_text: "",
     });
+    setBusquedaLead("");
   }
 
   function cargarCitaParaEditar(item: AppointmentRow) {
@@ -422,7 +606,7 @@ function RecepcionContent() {
       phone: item.phone || "",
       city: item.city || "",
       appointment_date: item.appointment_date,
-      appointment_time: item.appointment_time,
+      appointment_time: normalizarHora(item.appointment_time),
       status: item.status || "agendada",
       service_type: item.service_type || "",
       treatment_type: item.treatment_type || "",
@@ -431,6 +615,75 @@ function RecepcionContent() {
       instructions_text: item.instructions_text || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  async function actualizarEstadoLeadPorCita(
+    leadId: string | null,
+    appointmentStatus: string
+  ) {
+    if (!leadId) return;
+
+    let leadStatus = "agendado";
+
+    if (appointmentStatus === "no_asistio") {
+      leadStatus = "no_asistio";
+    }
+
+    if (appointmentStatus === "cancelada" || appointmentStatus === "finalizada") {
+      leadStatus = "contactado";
+    }
+
+    const { error } = await supabase
+      .from("leads")
+      .update({ status: leadStatus })
+      .eq("id", leadId);
+
+    if (error) throw error;
+  }
+
+  async function guardarConfiguracionAgenda() {
+    try {
+      setSavingConfig(true);
+      setMensaje("");
+      setError("");
+
+      const agenda_date = form.appointment_date;
+
+      const { error: dayError } = await supabase
+        .from("agenda_day_settings")
+        .upsert(
+          [
+            {
+              agenda_date,
+              daily_capacity: Number(dailyCapacityInput || DEFAULT_DAILY_CAPACITY),
+              is_closed: dailyClosedInput,
+            },
+          ],
+          { onConflict: "agenda_date" }
+        );
+
+      if (dayError) throw dayError;
+
+      const slotRows = SLOT_OPTIONS.map((slot) => ({
+        agenda_date,
+        slot_time: slot.value,
+        capacity: Number(slotCapacityInputs[slot.value] || DEFAULT_SLOT_CAPACITY),
+        is_blocked: slotBlockedInputs[slot.value] || false,
+      }));
+
+      const { error: slotError } = await supabase
+        .from("agenda_slot_settings")
+        .upsert(slotRows, { onConflict: "agenda_date,slot_time" });
+
+      if (slotError) throw slotError;
+
+      setMensaje("Configuración de agenda guardada correctamente.");
+      await cargarTodo();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo guardar la configuración de agenda.");
+    } finally {
+      setSavingConfig(false);
+    }
   }
 
   async function guardarCita(e: React.FormEvent) {
@@ -458,6 +711,39 @@ function RecepcionContent() {
       return;
     }
 
+    if (selectedDateClosed) {
+      setError("Ese día está cerrado para agenda.");
+      return;
+    }
+
+    const selectedSlot = slotAvailability.find(
+      (slot) => slot.value === form.appointment_time
+    );
+
+    if (!selectedSlot) {
+      setError("Debes seleccionar una hora válida.");
+      return;
+    }
+
+    if (selectedSlot.disabled) {
+      setError("Ese horario no está disponible.");
+      return;
+    }
+
+    if (
+      form.mode === "lead" &&
+      form.lead_id &&
+      appointments.some(
+        (item) =>
+          item.lead_id === form.lead_id &&
+          ACTIVE_APPOINTMENT_STATUSES.includes(item.status) &&
+          item.id !== editingAppointmentId
+      )
+    ) {
+      setError("Este lead ya tiene una cita activa. Primero debes cerrar o marcar la cita anterior.");
+      return;
+    }
+
     setSavingAppointment(true);
 
     try {
@@ -470,8 +756,8 @@ function RecepcionContent() {
         appointment_time: form.appointment_time,
         status: form.status,
         service_type: form.service_type || null,
-        treatment_type: form.treatment_type || null,
-        specialist_user_id: form.specialist_user_id || null,
+        treatment_type: isReadOnlyAgendaForCall ? null : form.treatment_type || null,
+        specialist_user_id: isReadOnlyAgendaForCall ? null : form.specialist_user_id || null,
         notes: form.notes.trim() || null,
         instructions_text: form.instructions_text.trim() || null,
         updated_by_user_id: currentUserId,
@@ -485,6 +771,10 @@ function RecepcionContent() {
 
         if (error) throw error;
 
+        if (payload.lead_id) {
+          await actualizarEstadoLeadPorCita(payload.lead_id, payload.status);
+        }
+
         setMensaje("Cita actualizada correctamente.");
       } else {
         const { error } = await supabase.from("appointments").insert([
@@ -495,6 +785,10 @@ function RecepcionContent() {
         ]);
 
         if (error) throw error;
+
+        if (payload.lead_id) {
+          await actualizarEstadoLeadPorCita(payload.lead_id, payload.status);
+        }
 
         setMensaje("Cita creada correctamente.");
       }
@@ -571,6 +865,10 @@ function RecepcionContent() {
     let mensajeFinal = "Estado actualizado correctamente.";
 
     try {
+      if (appointmentActual?.lead_id) {
+        await actualizarEstadoLeadPorCita(appointmentActual.lead_id, nuevoEstado);
+      }
+
       if (nuevoEstado === "asistio" && appointmentActual) {
         const creado = await crearCasoVentasSiNoExiste(appointmentActual);
         if (creado) {
@@ -581,7 +879,7 @@ function RecepcionContent() {
     } catch (err: any) {
       setError(
         err?.message ||
-          "La cita se actualizó, pero no se pudo crear el caso de ventas."
+          "La cita se actualizó, pero no se pudo terminar el proceso posterior."
       );
       setSavingStatusId(null);
       await cargarTodo();
@@ -694,6 +992,122 @@ function RecepcionContent() {
           </section>
         )}
 
+        {canManageAgendaConfig ? (
+          <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Configuración de cupos
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Define cupos diarios y bloquea horarios por fecha.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={guardarConfiguracionAgenda}
+                disabled={savingConfig}
+                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white disabled:opacity-60"
+              >
+                {savingConfig ? "Guardando..." : "Guardar configuración"}
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-3">
+              <Field
+                label="Fecha a configurar"
+                input={
+                  <input
+                    className={inputClass}
+                    type="date"
+                    value={form.appointment_date}
+                    onChange={(e) =>
+                      setForm((prev) => ({
+                        ...prev,
+                        appointment_date: e.target.value,
+                      }))
+                    }
+                  />
+                }
+              />
+
+              <Field
+                label="Cupo total del día"
+                input={
+                  <input
+                    className={inputClass}
+                    type="number"
+                    min="0"
+                    value={dailyCapacityInput}
+                    onChange={(e) => setDailyCapacityInput(e.target.value)}
+                  />
+                }
+              />
+
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-300 px-4 py-4">
+                <input
+                  type="checkbox"
+                  checked={dailyClosedInput}
+                  onChange={(e) => setDailyClosedInput(e.target.checked)}
+                />
+                <span className="text-sm font-medium text-slate-700">
+                  Cerrar este día completo
+                </span>
+              </label>
+            </div>
+
+            <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+              {SLOT_OPTIONS.map((slot) => (
+                <div key={slot.value} className="rounded-2xl border border-slate-200 p-4">
+                  <p className="text-sm font-semibold text-slate-900">{slot.label}</p>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Activos:{" "}
+                    {
+                      appointmentsForSelectedDate.filter(
+                        (item) =>
+                          normalizarHora(item.appointment_time) === slot.value &&
+                          ACTIVE_APPOINTMENT_STATUSES.includes(item.status)
+                      ).length
+                    }
+                    /{slotCapacityInputs[slot.value] || DEFAULT_SLOT_CAPACITY}
+                  </p>
+
+                  <div className="mt-3">
+                    <label className="text-xs text-slate-500">Cupo</label>
+                    <input
+                      className={`${inputClass} mt-1 py-3`}
+                      type="number"
+                      min="0"
+                      value={slotCapacityInputs[slot.value] || ""}
+                      onChange={(e) =>
+                        setSlotCapacityInputs((prev) => ({
+                          ...prev,
+                          [slot.value]: e.target.value,
+                        }))
+                      }
+                    />
+                  </div>
+
+                  <label className="mt-3 flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={slotBlockedInputs[slot.value] || false}
+                      onChange={(e) =>
+                        setSlotBlockedInputs((prev) => ({
+                          ...prev,
+                          [slot.value]: e.target.checked,
+                        }))
+                      }
+                    />
+                    <span className="text-sm text-slate-700">Bloquear hora</span>
+                  </label>
+                </div>
+              ))}
+            </div>
+          </section>
+        ) : null}
+
         <section className={`mb-6 grid gap-6 ${isReadOnlyAgendaForCall ? "" : "xl:grid-cols-2"}`}>
           <div className="rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
@@ -702,7 +1116,9 @@ function RecepcionContent() {
                   {editingAppointmentId ? "Reagendar / editar cita" : "Nueva cita"}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Puedes elegir un lead existente o ingresar el cliente manualmente.
+                  {leadIdFromUrl
+                    ? "Esta cita se está creando desde un lead específico."
+                    : "Puedes elegir un lead existente o ingresar el cliente manualmente."}
                 </p>
               </div>
 
@@ -718,41 +1134,43 @@ function RecepcionContent() {
             </div>
 
             <form onSubmit={guardarCita} className="mt-5 space-y-4">
-              <div className="grid gap-3 md:grid-cols-2">
-                <label className="rounded-2xl border border-slate-300 p-4 text-sm">
-                  <div className="mb-2 font-medium text-slate-700">Modo de creación</div>
-                  <select
-                    className="w-full outline-none"
-                    value={form.mode}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        mode: e.target.value,
-                        lead_id: "",
-                        patient_name: "",
-                        phone: "",
-                        city: "",
-                      }))
-                    }
-                  >
-                    <option value="lead">Desde lead</option>
-                    <option value="manual">Manual</option>
-                  </select>
-                </label>
+              {!leadIdFromUrl ? (
+                <div className="grid gap-3 md:grid-cols-2">
+                  <label className="rounded-2xl border border-slate-300 p-4 text-sm">
+                    <div className="mb-2 font-medium text-slate-700">Modo de creación</div>
+                    <select
+                      className="w-full outline-none"
+                      value={form.mode}
+                      onChange={(e) =>
+                        setForm((prev) => ({
+                          ...prev,
+                          mode: e.target.value,
+                          lead_id: "",
+                          patient_name: "",
+                          phone: "",
+                          city: "",
+                        }))
+                      }
+                    >
+                      <option value="lead">Desde lead</option>
+                      <option value="manual">Manual</option>
+                    </select>
+                  </label>
 
-                <label className="rounded-2xl border border-slate-300 p-4 text-sm">
-                  <div className="mb-2 font-medium text-slate-700">Buscar lead</div>
-                  <input
-                    className="w-full outline-none"
-                    placeholder="Nombre o teléfono"
-                    value={busquedaLead}
-                    onChange={(e) => setBusquedaLead(e.target.value)}
-                    disabled={form.mode !== "lead"}
-                  />
-                </label>
-              </div>
+                  <label className="rounded-2xl border border-slate-300 p-4 text-sm">
+                    <div className="mb-2 font-medium text-slate-700">Buscar lead</div>
+                    <input
+                      className="w-full outline-none"
+                      placeholder="Nombre o teléfono"
+                      value={busquedaLead}
+                      onChange={(e) => setBusquedaLead(e.target.value)}
+                      disabled={form.mode !== "lead"}
+                    />
+                  </label>
+                </div>
+              ) : null}
 
-              {form.mode === "lead" ? (
+              {form.mode === "lead" && !leadIdFromUrl ? (
                 <label className="block rounded-2xl border border-slate-300 p-4 text-sm">
                   <div className="mb-2 font-medium text-slate-700">Seleccionar lead</div>
                   <select
@@ -770,6 +1188,20 @@ function RecepcionContent() {
                     ))}
                   </select>
                 </label>
+              ) : null}
+
+              {leadIdFromUrl ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Lead seleccionado
+                  </p>
+                  <p className="mt-1 text-base font-semibold text-slate-900">
+                    {form.patient_name || "Cliente"}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-600">
+                    {form.phone || "Sin teléfono"} · {form.city || "Sin ciudad"}
+                  </p>
+                </div>
               ) : null}
 
               <div className="grid gap-4 md:grid-cols-2">
@@ -849,60 +1281,73 @@ function RecepcionContent() {
                 <Field
                   label="Hora"
                   input={
-                    <input
+                    <select
                       className={inputClass}
-                      type="time"
                       value={form.appointment_time}
                       onChange={(e) =>
                         setForm((prev) => ({ ...prev, appointment_time: e.target.value }))
                       }
-                    />
-                  }
-                />
-
-                <Field
-                  label="Especialista"
-                  input={
-                    <select
-                      className={inputClass}
-                      value={form.specialist_user_id}
-                      onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          specialist_user_id: e.target.value,
-                        }))
-                      }
                     >
-                      <option value="">Selecciona</option>
-                      {specialists.map((item) => (
-                        <option key={item.id} value={item.id}>
-                          {item.full_name} · {item.role_name}
-                        </option>
-                      ))}
-                    </select>
-                  }
-                />
-
-                <Field
-                  label="Tratamiento"
-                  input={
-                    <select
-                      className={inputClass}
-                      value={form.treatment_type}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, treatment_type: e.target.value }))
-                      }
-                    >
-                      <option value="">Selecciona</option>
-                      {treatmentOptions.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
+                      {slotAvailability.map((slot) => (
+                        <option
+                          key={slot.value}
+                          value={slot.value}
+                          disabled={slot.disabled}
+                        >
+                          {slot.label}{" "}
+                          {slot.isBlocked
+                            ? "· Bloqueado"
+                            : slot.isFullByDay
+                            ? "· Día lleno"
+                            : slot.isFullBySlot
+                            ? `· Lleno (${slot.booked}/${slot.capacity})`
+                            : `· ${slot.booked}/${slot.capacity}`}
                         </option>
                       ))}
                     </select>
                   }
                 />
               </div>
+
+              {!isReadOnlyAgendaForCall ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field
+                    label="Especialista"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={form.specialist_user_id}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            specialist_user_id: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Selecciona</option>
+                        {specialists.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.full_name} · {item.role_name}
+                          </option>
+                        ))}
+                      </select>
+                    }
+                  />
+
+                  <Field
+                    label="Tratamiento"
+                    input={
+                      <input
+                        className={inputClass}
+                        value={form.treatment_type}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, treatment_type: e.target.value }))
+                        }
+                      />
+                    }
+                  />
+                </div>
+              ) : null}
 
               <Field
                 label="Notas"
@@ -912,22 +1357,6 @@ function RecepcionContent() {
                     value={form.notes}
                     onChange={(e) =>
                       setForm((prev) => ({ ...prev, notes: e.target.value }))
-                    }
-                  />
-                }
-              />
-
-              <Field
-                label="Instrucciones"
-                input={
-                  <textarea
-                    className={`${inputClass} min-h-[110px] resize-none`}
-                    value={form.instructions_text}
-                    onChange={(e) =>
-                      setForm((prev) => ({
-                        ...prev,
-                        instructions_text: e.target.value,
-                      }))
                     }
                   />
                 }
@@ -1026,12 +1455,6 @@ function RecepcionContent() {
                             <p className="mt-1 text-sm text-slate-600">
                               Servicio: {item.service_type || "Sin servicio"}
                             </p>
-
-                            {item.treatment_type ? (
-                              <p className="mt-1 text-sm text-slate-600">
-                                Tratamiento: {item.treatment_type}
-                              </p>
-                            ) : null}
 
                             {item.notes ? (
                               <p className="mt-2 text-sm text-slate-600">
