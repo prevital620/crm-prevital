@@ -29,9 +29,14 @@ type ProfileRow = {
 type AppointmentRow = {
   id: string;
   lead_id: string | null;
-  status: string;
+  patient_name: string;
+  phone: string | null;
+  city: string | null;
   appointment_date: string;
   appointment_time: string;
+  status: string;
+  service_type: string | null;
+  notes: string | null;
 };
 
 type QuickFilter =
@@ -114,6 +119,20 @@ function estadoBadge(estado: string | null) {
       return "bg-slate-200 text-slate-800";
     case "descartado":
       return "bg-red-100 text-red-700";
+    case "agendada":
+      return "bg-emerald-100 text-emerald-700";
+    case "confirmada":
+      return "bg-blue-100 text-blue-700";
+    case "en_espera":
+      return "bg-amber-100 text-amber-700";
+    case "reagendada":
+      return "bg-cyan-100 text-cyan-700";
+    case "en_atencion":
+      return "bg-indigo-100 text-indigo-700";
+    case "cancelada":
+      return "bg-red-100 text-red-700";
+    case "finalizada":
+      return "bg-slate-200 text-slate-800";
     default:
       return "bg-slate-100 text-slate-700";
   }
@@ -131,6 +150,8 @@ export default function LeadsPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState(hoyISO());
+  const [appointmentsDateFilter, setAppointmentsDateFilter] = useState(hoyISO());
+  const [appointmentsSearch, setAppointmentsSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
 
   const showCreatorColumn =
@@ -198,7 +219,20 @@ export default function LeadsPage() {
 
         supabase
           .from("appointments")
-          .select("id, lead_id, status, appointment_date, appointment_time"),
+          .select(`
+            id,
+            lead_id,
+            patient_name,
+            phone,
+            city,
+            appointment_date,
+            appointment_time,
+            status,
+            service_type,
+            notes
+          `)
+          .order("appointment_date", { ascending: true })
+          .order("appointment_time", { ascending: true }),
       ]);
 
       if (leadsResult.error) throw leadsResult.error;
@@ -231,7 +265,6 @@ export default function LeadsPage() {
       if (profilesError) throw profilesError;
 
       const namesMap: Record<string, string> = {};
-
       ((profilesData as ProfileRow[]) || []).forEach((profile) => {
         namesMap[profile.id] = profile.full_name?.trim() || "Sin nombre";
       });
@@ -256,7 +289,6 @@ export default function LeadsPage() {
 
   const activeAppointmentByLeadId = useMemo(() => {
     const map: Record<string, AppointmentRow> = {};
-
     appointments.forEach((appointment) => {
       if (
         appointment.lead_id &&
@@ -265,7 +297,6 @@ export default function LeadsPage() {
         map[appointment.lead_id] = appointment;
       }
     });
-
     return map;
   }, [appointments]);
 
@@ -306,10 +337,7 @@ export default function LeadsPage() {
 
   function isPending(lead: LeadRow) {
     const estado = getVisibleStatus(lead);
-    return (
-      estado === "pendiente_contacto" ||
-      estado === "no_responde"
-    );
+    return estado === "pendiente_contacto" || estado === "no_responde";
   }
 
   function isInterested(lead: LeadRow) {
@@ -365,23 +393,18 @@ export default function LeadsPage() {
       if (quickFilter === "nuevos") {
         base = base.filter((lead) => getVisibleStatus(lead) === "nuevo");
       }
-
       if (quickFilter === "pendientes") {
         base = base.filter((lead) => isPending(lead));
       }
-
       if (quickFilter === "interesados") {
         base = base.filter((lead) => isInterested(lead));
       }
-
       if (quickFilter === "agendados") {
         base = base.filter((lead) => isScheduled(lead));
       }
-
       if (quickFilter === "no_asistio") {
         base = base.filter((lead) => isNoAsistio(lead));
       }
-
       if (quickFilter === "cerrados") {
         base = base.filter((lead) => isClosed(lead));
       }
@@ -395,7 +418,6 @@ export default function LeadsPage() {
         `${lead.first_name || ""} ${lead.last_name || ""}`.trim().toLowerCase();
 
       const telefono = (lead.phone || "").toLowerCase();
-
       const creador = (creatorNames[lead.created_by_user_id] || "").toLowerCase();
 
       return (
@@ -413,6 +435,37 @@ export default function LeadsPage() {
     showSupervisorOpcTools,
     activeAppointmentByLeadId,
   ]);
+
+  const citasSupervisorOpc = useMemo(() => {
+    if (!showSupervisorOpcTools) return [];
+
+    const leadsIdsEquipo = new Set(leadsPorRol.map((lead) => lead.id));
+
+    return appointments.filter(
+      (appointment) => appointment.lead_id && leadsIdsEquipo.has(appointment.lead_id)
+    );
+  }, [appointments, leadsPorRol, showSupervisorOpcTools]);
+
+  const citasFiltradas = useMemo(() => {
+    if (!showSupervisorOpcTools) return [];
+
+    const q = appointmentsSearch.trim().toLowerCase();
+
+    return citasSupervisorOpc.filter((appointment) => {
+      const fechaOk = appointmentsDateFilter
+        ? appointment.appointment_date === appointmentsDateFilter
+        : true;
+
+      const nombre = (appointment.patient_name || "").toLowerCase();
+      const telefono = (appointment.phone || "").toLowerCase();
+
+      const busquedaOk = q
+        ? nombre.includes(q) || telefono.includes(q)
+        : true;
+
+      return fechaOk && busquedaOk;
+    });
+  }, [citasSupervisorOpc, appointmentsDateFilter, appointmentsSearch, showSupervisorOpcTools]);
 
   function formatDate(dateString: string) {
     try {
@@ -439,6 +492,13 @@ export default function LeadsPage() {
       vendido: "Vendido",
       cerrado: "Cerrado",
       descartado: "Descartado",
+      agendada: "Agendada",
+      confirmada: "Confirmada",
+      en_espera: "En espera",
+      reagendada: "Reagendada",
+      en_atencion: "En atención",
+      cancelada: "Cancelada",
+      finalizada: "Finalizada",
     };
 
     return map[status] || status;
@@ -547,207 +607,381 @@ export default function LeadsPage() {
 
         {showSupervisorOpcTools ? (
           <section className="mb-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-            <StatCard
-              title="Todos"
-              value={resumen.total}
-              active={quickFilter === "todos"}
-              onClick={() => setQuickFilter("todos")}
-            />
-            <StatCard
-              title="Nuevos"
-              value={resumen.nuevos}
-              active={quickFilter === "nuevos"}
-              onClick={() => setQuickFilter("nuevos")}
-            />
-            <StatCard
-              title="Pendientes"
-              value={resumen.pendientes}
-              active={quickFilter === "pendientes"}
-              onClick={() => setQuickFilter("pendientes")}
-            />
-            <StatCard
-              title="Interesados"
-              value={resumen.interesados}
-              active={quickFilter === "interesados"}
-              onClick={() => setQuickFilter("interesados")}
-            />
-            <StatCard
-              title="Agendados"
-              value={resumen.agendados}
-              active={quickFilter === "agendados"}
-              onClick={() => setQuickFilter("agendados")}
-            />
-            <StatCard
-              title="No asistió"
-              value={resumen.noAsistio}
-              active={quickFilter === "no_asistio"}
-              onClick={() => setQuickFilter("no_asistio")}
-            />
+            <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
+            <StatCard title="Nuevos" value={resumen.nuevos} active={quickFilter === "nuevos"} onClick={() => setQuickFilter("nuevos")} />
+            <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
+            <StatCard title="Interesados" value={resumen.interesados} active={quickFilter === "interesados"} onClick={() => setQuickFilter("interesados")} />
+            <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
+            <StatCard title="No asistió" value={resumen.noAsistio} active={quickFilter === "no_asistio"} onClick={() => setQuickFilter("no_asistio")} />
           </section>
         ) : null}
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
-          <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">
-                Leads visibles para tu rol
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {showCreatorColumn
-                  ? "Busca por nombre, teléfono o nombre del OPC y filtra por fecha."
-                  : "Busca por nombre o teléfono y filtra por fecha."}
-              </p>
-            </div>
+        {showSupervisorOpcTools ? (
+          <section className="grid gap-6 xl:grid-cols-2">
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    Leads visibles para tu rol
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Busca por nombre, teléfono o nombre del OPC y filtra por fecha.
+                  </p>
+                </div>
 
-            <button
-              onClick={cargarLeads}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-            >
-              Actualizar
-            </button>
-          </div>
-
-          {showSupervisorOpcTools ? (
-            <div className="mb-4 flex flex-wrap gap-2">
-              {[
-                { key: "todos", label: "Todos" },
-                { key: "nuevos", label: "Nuevos" },
-                { key: "pendientes", label: "Pendientes" },
-                { key: "interesados", label: "Interesados" },
-                { key: "agendados", label: "Agendados" },
-                { key: "no_asistio", label: "No asistió" },
-                { key: "cerrados", label: "Cerrados" },
-              ].map((item) => (
                 <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setQuickFilter(item.key as QuickFilter)}
-                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${
-                    quickFilter === item.key
-                      ? "bg-slate-900 text-white"
-                      : "border border-slate-300 text-slate-700"
-                  }`}
+                  onClick={cargarLeads}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
-                  {item.label}
+                  Actualizar
                 </button>
-              ))}
-            </div>
-          ) : null}
+              </div>
 
-          <div className="mb-6 grid gap-3 md:grid-cols-2">
-            <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
-              type="date"
-              value={dateFilter}
-              onChange={(e) => setDateFilter(e.target.value)}
-            />
+              <div className="mb-4 flex flex-wrap gap-2">
+                {[
+                  { key: "todos", label: "Todos" },
+                  { key: "nuevos", label: "Nuevos" },
+                  { key: "pendientes", label: "Pendientes" },
+                  { key: "interesados", label: "Interesados" },
+                  { key: "agendados", label: "Agendados" },
+                  { key: "no_asistio", label: "No asistió" },
+                  { key: "cerrados", label: "Cerrados" },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setQuickFilter(item.key as QuickFilter)}
+                    className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                      quickFilter === item.key
+                        ? "bg-slate-900 text-white"
+                        : "border border-slate-300 text-slate-700"
+                    }`}
+                  >
+                    {item.label}
+                  </button>
+                ))}
+              </div>
 
-            <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
-              type="text"
-              placeholder={
-                showCreatorColumn
-                  ? "Buscar por nombre, teléfono u OPC"
-                  : "Buscar por nombre o teléfono"
-              }
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
-          </div>
+              <div className="mb-6 grid gap-3">
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
+                />
 
-          {loading ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              Cargando leads...
-            </div>
-          ) : leadsFiltrados.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              No hay leads visibles con esos filtros.
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full border-separate border-spacing-y-3">
-                <thead>
-                  <tr className="text-left text-sm text-slate-500">
-                    <th className="px-4">Nombre</th>
-                    <th className="px-4">Teléfono</th>
-                    <th className="px-4">Ciudad</th>
-                    <th className="px-4">Servicio</th>
-                    <th className="px-4">Origen</th>
-                    <th className="px-4">Captación</th>
-                    {showCreatorColumn && <th className="px-4">OPC</th>}
-                    <th className="px-4">Estado</th>
-                    <th className="px-4">Creado</th>
-                    <th className="px-4">Acciones</th>
-                  </tr>
-                </thead>
-                <tbody>
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="text"
+                  placeholder="Buscar por nombre, teléfono u OPC"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
+
+              {loading ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  Cargando leads...
+                </div>
+              ) : leadsFiltrados.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  No hay leads visibles con esos filtros.
+                </div>
+              ) : (
+                <div className="space-y-4">
                   {leadsFiltrados.map((lead) => {
                     const estadoVisible = getVisibleStatus(lead);
 
                     return (
-                      <tr key={lead.id} className="rounded-2xl bg-slate-50">
-                        <td className="rounded-l-2xl px-4 py-4 font-semibold text-slate-900">
-                          {lead.full_name?.trim() ||
-                            `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
-                            "Sin nombre"}
-                        </td>
+                      <div key={lead.id} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-semibold text-slate-900">
+                              {lead.full_name?.trim() ||
+                                `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+                                "Sin nombre"}
+                            </h3>
 
-                        <td className="px-4 py-4 text-sm text-slate-700">
-                          {lead.phone}
-                        </td>
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                                estadoVisible
+                              )}`}
+                            >
+                              {translateStatus(estadoVisible)}
+                            </span>
+                          </div>
 
-                        <td className="px-4 py-4 text-sm text-slate-700">
-                          {lead.city || "Sin ciudad"}
-                        </td>
+                          <p className="text-sm text-slate-700">
+                            {lead.phone} · {lead.city || "Sin ciudad"}
+                          </p>
 
-                        <td className="px-4 py-4 text-sm text-slate-700">
-                          {translateService(lead.interest_service)}
-                        </td>
+                          <p className="text-sm text-slate-700">
+                            Servicio: {translateService(lead.interest_service)}
+                          </p>
 
-                        <td className="px-4 py-4 text-sm text-slate-700">
-                          {translateSource(lead.source)}
-                        </td>
+                          <p className="text-sm text-slate-700">
+                            Origen: {translateSource(lead.source)}
+                          </p>
 
-                        <td className="px-4 py-4 text-sm text-slate-700">
-                          {lead.capture_location || "Sin lugar"}
-                        </td>
+                          <p className="text-sm text-slate-700">
+                            Captación: {lead.capture_location || "Sin lugar"}
+                          </p>
 
-                        {showCreatorColumn && (
-                          <td className="px-4 py-4 text-sm text-slate-700">
-                            {getCreatorName(lead.created_by_user_id)}
-                          </td>
-                        )}
+                          <p className="text-sm text-slate-700">
+                            OPC: {getCreatorName(lead.created_by_user_id)}
+                          </p>
 
-                        <td className="px-4 py-4 text-sm">
-                          <span
-                            className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
-                              estadoVisible
-                            )}`}
-                          >
-                            {translateStatus(estadoVisible)}
-                          </span>
-                        </td>
+                          <p className="text-sm text-slate-500">
+                            Creado: {formatDate(lead.created_at)}
+                          </p>
 
-                        <td className="px-4 py-4 text-sm text-slate-500">
-                          {formatDate(lead.created_at)}
-                        </td>
-
-                        <td className="rounded-r-2xl px-4 py-4">
-                          <a
-                            href={`/leads/${lead.id}`}
-                            className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
-                          >
-                            Ver / editar
-                          </a>
-                        </td>
-                      </tr>
+                          <div>
+                            <a
+                              href={`/leads/${lead.id}`}
+                              className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                            >
+                              Ver / editar
+                            </a>
+                          </div>
+                        </div>
+                      </div>
                     );
                   })}
-                </tbody>
-              </table>
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="mb-5">
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Citas agendadas del equipo
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Filtra las citas por fecha para ver la agenda futura del equipo OPC.
+                </p>
+              </div>
+
+              <div className="mb-6 grid gap-3">
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="date"
+                  value={appointmentsDateFilter}
+                  onChange={(e) => setAppointmentsDateFilter(e.target.value)}
+                />
+
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="text"
+                  placeholder="Buscar por nombre o teléfono"
+                  value={appointmentsSearch}
+                  onChange={(e) => setAppointmentsSearch(e.target.value)}
+                />
+              </div>
+
+              {loading ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  Cargando citas...
+                </div>
+              ) : citasFiltradas.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  No hay citas del equipo con esos filtros.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {citasFiltradas.map((appointment) => {
+                    const leadRelacionado = leads.find((lead) => lead.id === appointment.lead_id);
+
+                    return (
+                      <div key={appointment.id} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-semibold text-slate-900">
+                              {appointment.patient_name || "Sin nombre"}
+                            </h3>
+
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                                appointment.status
+                              )}`}
+                            >
+                              {translateStatus(appointment.status)}
+                            </span>
+                          </div>
+
+                          <p className="text-sm text-slate-700">
+                            {appointment.phone || "Sin teléfono"} · {appointment.city || "Sin ciudad"}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            Servicio: {translateService(appointment.service_type)}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            Fecha: {appointment.appointment_date} · Hora: {appointment.appointment_time?.slice(0, 5)}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            OPC:{" "}
+                            {leadRelacionado
+                              ? getCreatorName(leadRelacionado.created_by_user_id)
+                              : "Sin OPC"}
+                          </p>
+
+                          {leadRelacionado ? (
+                            <div>
+                              <a
+                                href={`/leads/${leadRelacionado.id}`}
+                                className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                              >
+                                Ver lead
+                              </a>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </section>
+        ) : (
+          <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Leads visibles para tu rol
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {showCreatorColumn
+                    ? "Busca por nombre, teléfono o nombre del OPC y filtra por fecha."
+                    : "Busca por nombre o teléfono y filtra por fecha."}
+                </p>
+              </div>
+
+              <button
+                onClick={cargarLeads}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Actualizar
+              </button>
             </div>
-          )}
-        </section>
+
+            <div className="mb-6 grid gap-3 md:grid-cols-2">
+              <input
+                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+              />
+
+              <input
+                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                type="text"
+                placeholder={
+                  showCreatorColumn
+                    ? "Buscar por nombre, teléfono u OPC"
+                    : "Buscar por nombre o teléfono"
+                }
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            {loading ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                Cargando leads...
+              </div>
+            ) : leadsFiltrados.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                No hay leads visibles con esos filtros.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-y-3">
+                  <thead>
+                    <tr className="text-left text-sm text-slate-500">
+                      <th className="px-4">Nombre</th>
+                      <th className="px-4">Teléfono</th>
+                      <th className="px-4">Ciudad</th>
+                      <th className="px-4">Servicio</th>
+                      <th className="px-4">Origen</th>
+                      <th className="px-4">Captación</th>
+                      {showCreatorColumn && <th className="px-4">OPC</th>}
+                      <th className="px-4">Estado</th>
+                      <th className="px-4">Creado</th>
+                      <th className="px-4">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leadsFiltrados.map((lead) => {
+                      const estadoVisible = getVisibleStatus(lead);
+
+                      return (
+                        <tr key={lead.id} className="rounded-2xl bg-slate-50">
+                          <td className="rounded-l-2xl px-4 py-4 font-semibold text-slate-900">
+                            {lead.full_name?.trim() ||
+                              `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+                              "Sin nombre"}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {lead.phone}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {lead.city || "Sin ciudad"}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {translateService(lead.interest_service)}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {translateSource(lead.source)}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {lead.capture_location || "Sin lugar"}
+                          </td>
+
+                          {showCreatorColumn && (
+                            <td className="px-4 py-4 text-sm text-slate-700">
+                              {getCreatorName(lead.created_by_user_id)}
+                            </td>
+                          )}
+
+                          <td className="px-4 py-4 text-sm">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                                estadoVisible
+                              )}`}
+                            >
+                              {translateStatus(estadoVisible)}
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-500">
+                            {formatDate(lead.created_at)}
+                          </td>
+
+                          <td className="rounded-r-2xl px-4 py-4">
+                            <a
+                              href={`/leads/${lead.id}`}
+                              className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                            >
+                              Ver / editar
+                            </a>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </main>
   );
