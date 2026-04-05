@@ -49,6 +49,8 @@ type SlotOption = {
   label: string;
 };
 
+type ReceptionSection = "agenda" | "especialistas" | "tratamientos";
+
 const allowedRoles = [
   "super_user",
   "recepcion",
@@ -69,10 +71,50 @@ const appointmentStatusOptions = [
   { value: "finalizada", label: "Finalizada" },
 ];
 
-const serviceOptions = [
+const generalServiceOptions = [
   { value: "valoracion", label: "Valoración" },
   { value: "otro", label: "Otro" },
 ];
+
+const specialistOptions = [
+  { value: "nutricion", label: "Nutrición" },
+  { value: "medico", label: "Médico" },
+];
+
+const treatmentOptions = [
+  { value: "fisioterapia", label: "Fisioterapia" },
+  { value: "sueroterapia", label: "Sueroterapia" },
+  { value: "detox", label: "Detox" },
+];
+
+
+const specialistValues = new Set(specialistOptions.map((item) => item.value));
+const treatmentValues = new Set(treatmentOptions.map((item) => item.value));
+
+function getSectionForService(serviceType: string | null | undefined): ReceptionSection {
+  const value = (serviceType || "").trim().toLowerCase();
+  if (specialistValues.has(value)) return "especialistas";
+  if (treatmentValues.has(value)) return "tratamientos";
+  return "agenda";
+}
+
+function getSectionLabel(section: ReceptionSection) {
+  if (section === "especialistas") return "Especialistas";
+  if (section === "tratamientos") return "Tratamientos";
+  return "Agenda";
+}
+
+function getServiceFieldLabel(section: ReceptionSection) {
+  if (section === "especialistas") return "Especialista";
+  if (section === "tratamientos") return "Tratamiento";
+  return "Servicio";
+}
+
+function getServiceOptionsBySection(section: ReceptionSection) {
+  if (section === "especialistas") return specialistOptions;
+  if (section === "tratamientos") return treatmentOptions;
+  return generalServiceOptions;
+}
 
 const manualSourceOptions = [
   { value: "opc", label: "OPC" },
@@ -246,6 +288,7 @@ function RecepcionContent() {
   const [slotBlockedInputs, setSlotBlockedInputs] = useState<Record<string, boolean>>({});
 
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
+  const [activeSection, setActiveSection] = useState<ReceptionSection>("agenda");
 
   const [form, setForm] = useState({
     mode: leadIdFromUrl ? "lead" : "lead",
@@ -263,6 +306,10 @@ function RecepcionContent() {
 
   const isReadOnlyAgendaForCall =
     currentRoleCode === "tmk" || currentRoleCode === "confirmador";
+
+  const serviceOptions = useMemo(() => getServiceOptionsBySection(activeSection), [activeSection]);
+  const serviceFieldLabel = useMemo(() => getServiceFieldLabel(activeSection), [activeSection]);
+  const sectionLabel = useMemo(() => getSectionLabel(activeSection), [activeSection]);
 
   const canManageAgendaConfig =
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
@@ -432,6 +479,21 @@ function RecepcionContent() {
     }));
   }, [form.lead_id, leads]);
 
+  function cambiarSeccion(section: ReceptionSection) {
+    setActiveSection(section);
+    setEditingAppointmentId(null);
+    setMensaje("");
+    setError("");
+    setForm((prev) => ({
+      ...prev,
+      service_type: "",
+    }));
+  }
+
+  function appointmentMatchesActiveSection(item: AppointmentRow) {
+    return getSectionForService(item.service_type) === activeSection;
+  }
+
   useEffect(() => {
     const daySetting = daySettings[form.appointment_date];
     setDailyCapacityInput(
@@ -455,9 +517,9 @@ function RecepcionContent() {
 
   const appointmentsForSelectedDate = useMemo(() => {
     return appointments.filter(
-      (item) => item.appointment_date === form.appointment_date
+      (item) => item.appointment_date === form.appointment_date && appointmentMatchesActiveSection(item)
     );
-  }, [appointments, form.appointment_date]);
+  }, [appointments, form.appointment_date, activeSection]);
 
   const activeAppointmentsForSelectedDate = useMemo(() => {
     return appointmentsForSelectedDate.filter((item) =>
@@ -507,7 +569,7 @@ function RecepcionContent() {
         const nombre = (item.patient_name || "").toLowerCase();
         const telefono = (item.phone || "").toLowerCase();
         const busquedaOk = q ? nombre.includes(q) || telefono.includes(q) : true;
-        return fechaOk && busquedaOk;
+        return fechaOk && busquedaOk && appointmentMatchesActiveSection(item);
       })
       .sort((a, b) => {
         if (a.appointment_date !== b.appointment_date) {
@@ -515,10 +577,10 @@ function RecepcionContent() {
         }
         return normalizarHora(a.appointment_time).localeCompare(normalizarHora(b.appointment_time));
       });
-  }, [appointments, fechaFiltro, busquedaAgenda]);
+  }, [appointments, fechaFiltro, busquedaAgenda, activeSection]);
 
   const resumen = useMemo(() => {
-    const delDia = appointments.filter((item) => item.appointment_date === fechaFiltro);
+    const delDia = appointments.filter((item) => item.appointment_date === fechaFiltro && appointmentMatchesActiveSection(item));
 
     return {
       total: delDia.length,
@@ -527,7 +589,7 @@ function RecepcionContent() {
       asistio: delDia.filter((x) => x.status === "asistio").length,
       noAsistio: delDia.filter((x) => x.status === "no_asistio").length,
     };
-  }, [appointments, fechaFiltro]);
+  }, [appointments, fechaFiltro, activeSection]);
 
   const selectedDaySetting = daySettings[form.appointment_date];
   const selectedDateDailyCapacity =
@@ -602,6 +664,7 @@ function RecepcionContent() {
     if (isReadOnlyAgendaForCall) return;
 
     setEditingAppointmentId(item.id);
+    setActiveSection(getSectionForService(item.service_type));
     setForm({
       mode: item.lead_id ? "lead" : "manual",
       lead_id: item.lead_id || "",
@@ -714,6 +777,11 @@ function RecepcionContent() {
 
     if (!currentUserId) {
       setError("No se encontró el usuario actual.");
+      return;
+    }
+
+    if ((activeSection === "especialistas" || activeSection === "tratamientos") && !form.service_type.trim()) {
+      setError(`Debes seleccionar ${activeSection === "especialistas" ? "un especialista" : "un tratamiento"}.`);
       return;
     }
 
@@ -967,6 +1035,31 @@ function RecepcionContent() {
               Inicio
             </a>
 
+            {!isReadOnlyAgendaForCall && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => cambiarSeccion("agenda")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "agenda" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                >
+                  Agenda
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cambiarSeccion("especialistas")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "especialistas" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                >
+                  Especialistas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => cambiarSeccion("tratamientos")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "tratamientos" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                >
+                  Tratamientos
+                </button>
+              </>
+            )}
           </div>
         </section>
 
@@ -984,7 +1077,7 @@ function RecepcionContent() {
 
         {!isReadOnlyAgendaForCall && (
           <section className="mb-6 grid gap-4 md:grid-cols-5">
-            <StatCard title="Citas del día" value={String(resumen.total)} />
+            <StatCard title={`${sectionLabel} del día`} value={String(resumen.total)} />
             <StatCard title="Agendadas" value={String(resumen.agendadas)} />
             <StatCard title="En espera" value={String(resumen.espera)} />
             <StatCard title="Asistió" value={String(resumen.asistio)} />
@@ -1120,6 +1213,11 @@ function RecepcionContent() {
                     ? "Esta cita se está creando desde un lead específico."
                     : "Puedes elegir un lead existente o ingresar el cliente manualmente."}
                 </p>
+                {!isReadOnlyAgendaForCall ? (
+                  <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+                    Módulo activo: {sectionLabel}
+                  </p>
+                ) : null}
               </div>
 
               {editingAppointmentId ? (
@@ -1265,7 +1363,7 @@ function RecepcionContent() {
                 />
 
                 <Field
-                  label="Servicio"
+                  label={serviceFieldLabel}
                   input={
                     <select
                       className={inputClass}
@@ -1363,7 +1461,7 @@ function RecepcionContent() {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Agenda visible</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Busca por nombre o teléfono y filtra por fecha.
+                    {`Vista de ${sectionLabel.toLowerCase()} por nombre, teléfono y fecha.`}
                   </p>
                 </div>
 
@@ -1438,7 +1536,7 @@ function RecepcionContent() {
                             </p>
 
                             <p className="mt-1 text-sm text-slate-600">
-                              Servicio: {item.service_type || "Sin servicio"}
+                              {getServiceFieldLabel(getSectionForService(item.service_type))}: {item.service_type || "Sin dato"}
                             </p>
 
                             {item.notes ? (
