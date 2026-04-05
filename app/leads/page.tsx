@@ -21,6 +21,11 @@ type LeadRow = {
   assigned_to_user_id: string | null;
 };
 
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+};
+
 const allowedRoles = [
   "super_user",
   "promotor_opc",
@@ -57,9 +62,15 @@ export default function LeadsPage() {
   const [roleCode, setRoleCode] = useState<string | null>(null);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState(hoyISO());
+
+  const showCreatorColumn =
+    roleCode === "super_user" ||
+    roleCode === "supervisor_opc" ||
+    roleCode === "supervisor_call_center";
 
   async function validarAcceso() {
     try {
@@ -117,7 +128,36 @@ export default function LeadsPage() {
 
       if (error) throw error;
 
-      setLeads((data as LeadRow[]) || []);
+      const leadsData = (data as LeadRow[]) || [];
+      setLeads(leadsData);
+
+      const creatorIds = Array.from(
+        new Set(
+          leadsData
+            .map((lead) => lead.created_by_user_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+
+      if (creatorIds.length === 0) {
+        setCreatorNames({});
+        return;
+      }
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", creatorIds);
+
+      if (profilesError) throw profilesError;
+
+      const namesMap: Record<string, string> = {};
+
+      ((profilesData as ProfileRow[]) || []).forEach((profile) => {
+        namesMap[profile.id] = profile.full_name?.trim() || "Sin nombre";
+      });
+
+      setCreatorNames(namesMap);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los leads.");
     } finally {
@@ -176,13 +216,18 @@ export default function LeadsPage() {
 
       const telefono = (lead.phone || "").toLowerCase();
 
+      const creador =
+        (creatorNames[lead.created_by_user_id] || "").toLowerCase();
+
       const busquedaOk = q
-        ? nombreCompleto.includes(q) || telefono.includes(q)
+        ? nombreCompleto.includes(q) ||
+          telefono.includes(q) ||
+          creador.includes(q)
         : true;
 
       return fechaOk && busquedaOk;
     });
-  }, [leadsPorRol, search, dateFilter]);
+  }, [leadsPorRol, search, dateFilter, creatorNames]);
 
   function formatDate(dateString: string) {
     try {
@@ -241,6 +286,10 @@ export default function LeadsPage() {
     return map[source] || source;
   }
 
+  function getCreatorName(userId: string) {
+    return creatorNames[userId] || "Sin nombre";
+  }
+
   if (loadingAuth) {
     return (
       <main className="min-h-screen bg-slate-100 p-6 md:p-8">
@@ -273,9 +322,6 @@ export default function LeadsPage() {
               <h1 className="mt-2 text-3xl font-bold text-slate-900">
                 Gestión de leads
               </h1>
-              <p className="mt-3 text-sm text-slate-600">
-                Consulta los leads según tu rol dentro del CRM.
-              </p>
             </div>
 
             <SessionBadge />
@@ -317,7 +363,7 @@ export default function LeadsPage() {
                 Leads visibles para tu rol
               </h2>
               <p className="mt-1 text-sm text-slate-500">
-                Busca por nombre o teléfono y filtra por fecha.
+                Busca por nombre, teléfono o nombre del OPC y filtra por fecha.
               </p>
             </div>
 
@@ -340,7 +386,11 @@ export default function LeadsPage() {
             <input
               className="rounded-2xl border border-slate-300 p-4 outline-none"
               type="text"
-              placeholder="Buscar por nombre o teléfono"
+              placeholder={
+                showCreatorColumn
+                  ? "Buscar por nombre, teléfono u OPC"
+                  : "Buscar por nombre o teléfono"
+              }
               value={search}
               onChange={(e) => setSearch(e.target.value)}
             />
@@ -365,6 +415,7 @@ export default function LeadsPage() {
                     <th className="px-4">Servicio</th>
                     <th className="px-4">Origen</th>
                     <th className="px-4">Captación</th>
+                    {showCreatorColumn && <th className="px-4">OPC</th>}
                     <th className="px-4">Estado</th>
                     <th className="px-4">Creado</th>
                     <th className="px-4">Acciones</th>
@@ -378,28 +429,46 @@ export default function LeadsPage() {
                           `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
                           "Sin nombre"}
                       </td>
+
                       <td className="px-4 py-4 text-sm text-slate-700">
                         {lead.phone}
                       </td>
+
                       <td className="px-4 py-4 text-sm text-slate-700">
                         {lead.city || "Sin ciudad"}
                       </td>
+
                       <td className="px-4 py-4 text-sm text-slate-700">
                         {translateService(lead.interest_service)}
                       </td>
+
                       <td className="px-4 py-4 text-sm text-slate-700">
                         {translateSource(lead.source)}
                       </td>
+
                       <td className="px-4 py-4 text-sm text-slate-700">
                         {lead.capture_location || "Sin lugar"}
                       </td>
+
+                      {showCreatorColumn && (
+                        <td className="px-4 py-4 text-sm text-slate-700">
+                          {getCreatorName(lead.created_by_user_id)}
+                        </td>
+                      )}
+
                       <td className="px-4 py-4 text-sm text-slate-700">
                         {translateStatus(lead.status)}
                       </td>
+
                       <td className="px-4 py-4 text-sm text-slate-500">
                         {formatDate(lead.created_at)}
                       </td>
-                      <td className="rounded-r-2xl px-4 py-4">
+
+                      <td
+                        className={`px-4 py-4 ${
+                          showCreatorColumn ? "rounded-r-2xl" : "rounded-r-2xl"
+                        }`}
+                      >
                         <a
                           href={`/leads/${lead.id}`}
                           className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
