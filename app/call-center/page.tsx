@@ -34,6 +34,14 @@ type ProfileRow = {
   full_name: string | null;
 };
 
+type AppointmentRow = {
+  id: string;
+  lead_id: string | null;
+  status: string;
+  appointment_date: string;
+  appointment_time: string;
+};
+
 const statusOptions = [
   { value: "nuevo", label: "Nuevo" },
   { value: "pendiente_contacto", label: "Pendiente" },
@@ -54,6 +62,14 @@ const allowedRoles = [
   "supervisor_call_center",
   "confirmador",
   "tmk",
+];
+
+const ACTIVE_APPOINTMENT_STATUSES = [
+  "agendada",
+  "confirmada",
+  "en_espera",
+  "reagendada",
+  "en_atencion",
 ];
 
 function hoyISO() {
@@ -151,6 +167,7 @@ function traducirOrigen(source: string | null) {
 
 export default function CallCenterPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [callCenterUsers, setCallCenterUsers] = useState<CallCenterUser[]>([]);
   const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [cargando, setCargando] = useState(true);
@@ -166,6 +183,7 @@ export default function CallCenterPage() {
   const [selectedStatuses, setSelectedStatuses] = useState<Record<string, string>>({});
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [savingStatusLeadId, setSavingStatusLeadId] = useState<string | null>(null);
+  const [cancelingAppointmentId, setCancelingAppointmentId] = useState<string | null>(null);
 
   async function cargarLeads() {
     const { data, error } = await supabase
@@ -181,6 +199,19 @@ export default function CallCenterPage() {
     }
 
     return (data as Lead[]) || [];
+  }
+
+  async function cargarCitas() {
+    const { data, error } = await supabase
+      .from("appointments")
+      .select("id, lead_id, status, appointment_date, appointment_time");
+
+    if (error) {
+      console.error("Error cargando citas:", error);
+      throw new Error("No se pudieron cargar las citas.");
+    }
+
+    return (data as AppointmentRow[]) || [];
   }
 
   async function cargarUsuariosCallCenter() {
@@ -260,12 +291,14 @@ export default function CallCenterPage() {
       setMensaje("");
       setError("");
 
-      const [leadsData, usersData] = await Promise.all([
+      const [leadsData, appointmentsData, usersData] = await Promise.all([
         cargarLeads(),
+        cargarCitas(),
         cargarUsuariosCallCenter(),
       ]);
 
       setLeads(leadsData);
+      setAppointments(appointmentsData);
       setCallCenterUsers(usersData);
       await cargarNombresCreadores(leadsData);
 
@@ -400,10 +433,84 @@ export default function CallCenterPage() {
     }
   }
 
+  async function cancelarCita(lead: Lead, appointment: AppointmentRow) {
+    try {
+      setCancelingAppointmentId(appointment.id);
+      setMensaje("");
+      setError("");
+
+      const { error: appointmentError } = await supabase
+        .from("appointments")
+        .update({
+          status: "cancelada",
+        })
+        .eq("id", appointment.id);
+
+      if (appointmentError) {
+        throw appointmentError;
+      }
+
+      const { error: leadError } = await supabase
+        .from("leads")
+        .update({
+          status: "contactado",
+        })
+        .eq("id", lead.id);
+
+      if (leadError) {
+        throw leadError;
+      }
+
+      setAppointments((prev) =>
+        prev.map((item) =>
+          item.id === appointment.id ? { ...item, status: "cancelada" } : item
+        )
+      );
+
+      setLeads((prev) =>
+        prev.map((item) =>
+          item.id === lead.id ? { ...item, status: "contactado" } : item
+        )
+      );
+
+      setSelectedStatuses((prev) => ({
+        ...prev,
+        [lead.id]: "contactado",
+      }));
+
+      setMensaje("Cita cancelada correctamente. El cupo quedó liberado.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo cancelar la cita.");
+    } finally {
+      setCancelingAppointmentId(null);
+    }
+  }
+
+  const activeAppointmentByLeadId = useMemo(() => {
+    const map: Record<string, AppointmentRow> = {};
+
+    appointments.forEach((appointment) => {
+      if (
+        appointment.lead_id &&
+        ACTIVE_APPOINTMENT_STATUSES.includes(appointment.status)
+      ) {
+        map[appointment.lead_id] = appointment;
+      }
+    });
+
+    return map;
+  }, [appointments]);
+
+  function obtenerEstadoVisible(lead: Lead) {
+    const hasActiveAppointment = !!activeAppointmentByLeadId[lead.id];
+    if (hasActiveAppointment) return "agendado";
+    return lead.status || "nuevo";
+  }
+
   const leadsBasePorRol = useMemo(() => {
     let base = leads;
 
-    if (currentRoleCode === "confirmador" || currentRoleCode === "tmk") {
+    if (currentRoleCode === "tmk") {
       base = base.filter(
         (lead) =>
           lead.assigned_to_user_id === currentUserId ||
@@ -447,45 +554,38 @@ export default function CallCenterPage() {
 
     return {
       total: delDia.length,
-      pendientes: delDia.filter(
-        (lead) =>
-          lead.status === "nuevo" ||
-          lead.status === "pendiente_contacto" ||
-          lead.status === "no_responde"
-      ).length,
-      interesados: delDia.filter(
-        (lead) =>
-          lead.status === "interesado" || lead.status === "contactado"
-      ).length,
-      agendados: delDia.filter(
-        (lead) =>
-          lead.status === "agendado" || lead.status === "reagendar"
-      ).length,
-      cerrados: delDia.filter(
-        (lead) =>
-          lead.status === "vendido" ||
-          lead.status === "cerrado" ||
-          lead.status === "descartado"
-      ).length,
+      pendientes: delDia.filter((lead) => {
+        const estado = obtenerEstadoVisible(lead);
+        return (
+          estado === "nuevo" ||
+          estado === "pendiente_contacto" ||
+          estado === "no_responde"
+        );
+      }).length,
+      interesados: delDia.filter((lead) => {
+        const estado = obtenerEstadoVisible(lead);
+        return estado === "interesado" || estado === "contactado";
+      }).length,
+      agendados: delDia.filter((lead) => {
+        const estado = obtenerEstadoVisible(lead);
+        return estado === "agendado" || estado === "reagendar";
+      }).length,
+      cerrados: delDia.filter((lead) => {
+        const estado = obtenerEstadoVisible(lead);
+        return (
+          estado === "vendido" ||
+          estado === "cerrado" ||
+          estado === "descartado"
+        );
+      }).length,
     };
-  }, [leadsBasePorRol, fechaFiltro]);
+  }, [leadsBasePorRol, fechaFiltro, activeAppointmentByLeadId]);
 
   function obtenerNombreAsignado(lead: Lead) {
-    if (lead.assigned_to_user_id) {
-      const user = callCenterUsers.find((u) => u.id === lead.assigned_to_user_id);
-      return user ? `${user.full_name} · ${user.role_name}` : "Asignado";
-    }
+    if (!lead.assigned_to_user_id) return "Sin asignar";
 
-    if (lead.created_by_user_id && lead.created_by_user_id === currentUserId) {
-      return "Tú (por creación del lead)";
-    }
-
-    if (lead.created_by_user_id) {
-      const creador = creatorNames[lead.created_by_user_id];
-      if (creador) return `${creador} · Creador`;
-    }
-
-    return "Sin asignar";
+    const user = callCenterUsers.find((u) => u.id === lead.assigned_to_user_id);
+    return user ? `${user.full_name} · ${user.role_name}` : "Asignado";
   }
 
   if (loadingAuth) {
@@ -520,8 +620,10 @@ export default function CallCenterPage() {
               <h1 className="text-3xl font-bold text-slate-900">Gestión de leads</h1>
               <p className="mt-2 text-slate-600">
                 {currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user"
-                  ? "Puedes consultar, asignar y actualizar el estado de los leads."
-                  : "Puedes consultar tus leads asignados o creados por ti y actualizar su estado."}
+                  ? "Puedes consultar, asignar, cancelar citas y actualizar el estado de los leads."
+                  : currentRoleCode === "confirmador"
+                  ? "Puedes consultar todos los leads, cancelar citas y actualizar su estado."
+                  : "Puedes consultar tus leads asignados o creados por ti, cancelar citas y actualizar su estado."}
               </p>
             </div>
 
@@ -616,6 +718,10 @@ export default function CallCenterPage() {
                   currentRoleCode === "confirmador" ||
                   currentRoleCode === "tmk";
 
+                const activeAppointment = activeAppointmentByLeadId[lead.id];
+                const hasActiveAppointment = !!activeAppointment;
+                const estadoVisible = obtenerEstadoVisible(lead);
+
                 return (
                   <div
                     key={lead.id}
@@ -631,10 +737,10 @@ export default function CallCenterPage() {
 
                             <span
                               className={`rounded-full px-3 py-1 text-xs ${estadoBadge(
-                                lead.status
+                                estadoVisible
                               )}`}
                             >
-                              {traducirEstado(lead.status)}
+                              {traducirEstado(estadoVisible)}
                             </span>
 
                             <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
@@ -673,6 +779,13 @@ export default function CallCenterPage() {
                             <span className="font-medium">Asignado a:</span>{" "}
                             {obtenerNombreAsignado(lead)}
                           </p>
+
+                          {activeAppointment ? (
+                            <p className="mt-1 text-sm text-slate-700">
+                              <span className="font-medium">Cita activa:</span>{" "}
+                              {activeAppointment.appointment_date} · {activeAppointment.appointment_time}
+                            </p>
+                          ) : null}
                         </div>
 
                         <div className="flex flex-wrap gap-2">
@@ -687,8 +800,21 @@ export default function CallCenterPage() {
                             href={`/recepcion?leadId=${lead.id}`}
                             className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 text-center"
                           >
-                            Agendar cita
+                            {hasActiveAppointment ? "Reagendar cita" : "Agendar cita"}
                           </a>
+
+                          {hasActiveAppointment && activeAppointment ? (
+                            <button
+                              type="button"
+                              onClick={() => cancelarCita(lead, activeAppointment)}
+                              disabled={cancelingAppointmentId === activeAppointment.id}
+                              className="rounded-2xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-60"
+                            >
+                              {cancelingAppointmentId === activeAppointment.id
+                                ? "Cancelando..."
+                                : "Cancelar cita"}
+                            </button>
+                          ) : null}
                         </div>
                       </div>
 
