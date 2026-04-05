@@ -98,6 +98,8 @@ function soloFecha(fecha: string | null | undefined) {
 
 function estadoBadge(estado: string | null) {
   switch (estado) {
+    case "asignado":
+      return "bg-emerald-100 text-emerald-700";
     case "nuevo":
       return "bg-slate-100 text-slate-700";
     case "pendiente_contacto":
@@ -129,6 +131,7 @@ function estadoBadge(estado: string | null) {
 
 function traducirEstado(estado: string | null) {
   const map: Record<string, string> = {
+    asignado: "Asignado",
     nuevo: "Nuevo",
     pendiente_contacto: "Pendiente",
     interesado: "Interesado",
@@ -514,18 +517,18 @@ export default function CallCenterPage() {
     return map;
   }, [appointments]);
 
-  function obtenerEstadoVisible(lead: Lead) {
-    const hasActiveAppointment = !!activeAppointmentByLeadId[lead.id];
-    if (hasActiveAppointment) return "agendado";
-    return lead.status || "nuevo";
-  }
-
   function tieneCitaActiva(lead: Lead) {
     return !!activeAppointmentByLeadId[lead.id];
   }
 
   function estaAsignado(lead: Lead) {
     return !!lead.assigned_to_user_id;
+  }
+
+  function obtenerEstadoVisible(lead: Lead) {
+    if (tieneCitaActiva(lead)) return "agendado";
+    if (estaAsignado(lead) && lead.status === "nuevo") return "asignado";
+    return lead.status || "nuevo";
   }
 
   function esPendiente(lead: Lead) {
@@ -577,7 +580,7 @@ export default function CallCenterPage() {
       total: delDia.length,
       nuevos: delDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo").length,
       sinAsignar: delDia.filter((lead) => !estaAsignado(lead)).length,
-      asignados: delDia.filter((lead) => estaAsignado(lead)).length,
+      asignados: delDia.filter((lead) => obtenerEstadoVisible(lead) === "asignado").length,
       pendientes: delDia.filter((lead) => esPendiente(lead)).length,
       pendientesCita: delDia.filter((lead) => esPendienteDeCita(lead)).length,
       agendados: delDia.filter((lead) => tieneCitaActiva(lead)).length,
@@ -602,7 +605,7 @@ export default function CallCenterPage() {
     }
 
     if (quickFilter === "asignados") {
-      base = base.filter((lead) => estaAsignado(lead));
+      base = base.filter((lead) => obtenerEstadoVisible(lead) === "asignado");
     }
 
     if (quickFilter === "pendientes") {
@@ -820,7 +823,7 @@ export default function CallCenterPage() {
                             </h3>
 
                             <span
-                              className={`rounded-full px-3 py-1 text-xs ${estadoBadge(
+                              className={`rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
                                 estadoVisible
                               )}`}
                             >
