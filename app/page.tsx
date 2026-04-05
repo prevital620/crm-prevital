@@ -101,6 +101,19 @@ const quickActions: QuickAction[] = [
   },
 ];
 
+function hoyISO() {
+  const hoy = new Date();
+  const y = hoy.getFullYear();
+  const m = String(hoy.getMonth() + 1).padStart(2, "0");
+  const d = String(hoy.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function soloFecha(fecha: string | null | undefined) {
+  if (!fecha) return "";
+  return fecha.slice(0, 10);
+}
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -159,7 +172,7 @@ export default function HomePage() {
         .from("leads")
         .select("id, full_name, first_name, last_name, phone, city, status, created_at")
         .order("created_at", { ascending: false })
-        .limit(6);
+        .limit(20);
 
       if (effectiveRole === "promotor_opc" && effectiveUserId) {
         leadsQuery = supabase
@@ -167,7 +180,7 @@ export default function HomePage() {
           .select("id, full_name, first_name, last_name, phone, city, status, created_at")
           .eq("created_by_user_id", effectiveUserId)
           .order("created_at", { ascending: false })
-          .limit(6);
+          .limit(20);
       }
 
       if ((effectiveRole === "confirmador" || effectiveRole === "tmk") && effectiveUserId) {
@@ -176,7 +189,7 @@ export default function HomePage() {
           .select("id, full_name, first_name, last_name, phone, city, status, created_at")
           .or(`assigned_to_user_id.eq.${effectiveUserId},created_by_user_id.eq.${effectiveUserId}`)
           .order("created_at", { ascending: false })
-          .limit(6);
+          .limit(20);
       }
 
       const [leadsResult, departmentsResult, rolesResult, profilesResult] =
@@ -215,7 +228,26 @@ export default function HomePage() {
     return quickActions.filter((action) => action.roles.includes(currentRoleCode));
   }, [currentRoleCode]);
 
-  const totalLeads = leads.length;
+  const isSuperUser = currentRoleCode === "super_user";
+  const isPromotorOpc = currentRoleCode === "promotor_opc";
+
+  const today = hoyISO();
+
+  const leadsDelDia = useMemo(() => {
+    return leads.filter((lead) => soloFecha(lead.created_at) === today);
+  }, [leads, today]);
+
+  const leadsRecientesParaVista = useMemo(() => {
+    if (isPromotorOpc) {
+      return leads
+        .filter((lead) => soloFecha(lead.created_at) === today)
+        .slice(0, 10);
+    }
+
+    return leads.slice(0, 6);
+  }, [leads, isPromotorOpc, today]);
+
+  const totalLeads = isPromotorOpc ? leadsDelDia.length : leads.length;
   const totalDepartments = departments.length;
   const totalRoles = roles.length;
   const totalUsers = profiles.length;
@@ -296,33 +328,43 @@ export default function HomePage() {
           </div>
         ) : null}
 
-        <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <DashboardCard
-            title="Leads visibles"
-            value={loading ? "..." : String(totalLeads)}
-            subtitle="Según tu rol"
-          />
-          <DashboardCard
-            title="Departamentos"
-            value={loading ? "..." : String(totalDepartments)}
-            subtitle="Estructura base"
-          />
-          <DashboardCard
-            title="Roles"
-            value={loading ? "..." : String(totalRoles)}
-            subtitle="Roles configurados"
-          />
-          <DashboardCard
-            title="Usuarios"
-            value={loading ? "..." : String(totalUsers)}
-            subtitle="Perfiles internos"
-          />
-          <DashboardCard
-            title="Usuarios activos"
-            value={loading ? "..." : String(activeUsers)}
-            subtitle="Perfiles habilitados"
-          />
-        </section>
+        {isSuperUser ? (
+          <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <DashboardCard
+              title="Leads visibles"
+              value={loading ? "..." : String(totalLeads)}
+              subtitle="Según tu rol"
+            />
+            <DashboardCard
+              title="Departamentos"
+              value={loading ? "..." : String(totalDepartments)}
+              subtitle="Estructura base"
+            />
+            <DashboardCard
+              title="Roles"
+              value={loading ? "..." : String(totalRoles)}
+              subtitle="Roles configurados"
+            />
+            <DashboardCard
+              title="Usuarios"
+              value={loading ? "..." : String(totalUsers)}
+              subtitle="Perfiles internos"
+            />
+            <DashboardCard
+              title="Usuarios activos"
+              value={loading ? "..." : String(activeUsers)}
+              subtitle="Perfiles habilitados"
+            />
+          </section>
+        ) : (
+          <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+            <DashboardCard
+              title={isPromotorOpc ? "Leads del día" : "Leads visibles"}
+              value={loading ? "..." : String(totalLeads)}
+              subtitle={isPromotorOpc ? "Creados por ti hoy" : "Según tu rol"}
+            />
+          </section>
+        )}
 
         <section className="mb-8 rounded-3xl bg-white p-6 shadow-sm">
           <div className="mb-5 flex items-center justify-between gap-3">
@@ -375,117 +417,169 @@ export default function HomePage() {
           )}
         </section>
 
-        <section className="grid gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2">
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
-              <div className="mb-5">
-                <h2 className="text-2xl font-bold text-slate-900">
-                  Leads recientes
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Vista rápida según tu rol.
-                </p>
+        {isSuperUser ? (
+          <section className="grid gap-6 xl:grid-cols-3">
+            <div className="xl:col-span-2">
+              <div className="rounded-3xl bg-white p-6 shadow-sm">
+                <div className="mb-5">
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    Leads recientes
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Vista rápida según tu rol.
+                  </p>
+                </div>
+
+                {loading ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                    Cargando leads...
+                  </div>
+                ) : leadsRecientesParaVista.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                    No hay leads visibles para este usuario.
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {leadsRecientesParaVista.map((lead) => (
+                      <LeadCard
+                        key={lead.id}
+                        lead={lead}
+                        translateLeadStatus={translateLeadStatus}
+                        formatDate={formatDate}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
+            </div>
 
-              {loading ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                  Cargando leads...
-                </div>
-              ) : leads.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                  No hay leads visibles para este usuario.
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {leads.map((lead) => (
-                    <div
-                      key={lead.id}
-                      className="rounded-2xl border border-slate-200 p-4"
-                    >
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-900">
-                            {lead.full_name?.trim() ||
-                              `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
-                              "Sin nombre"}
-                          </h3>
+            <div className="space-y-6">
+              <div className="rounded-3xl bg-white p-6 shadow-sm">
+                <h2 className="text-2xl font-bold text-slate-900">Departamentos</h2>
+                <p className="mt-1 text-sm text-slate-500">Resumen general.</p>
 
-                          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
-                            <span>📞 {lead.phone || "Sin teléfono"}</span>
-                            <span>📍 {lead.city || "Sin ciudad"}</span>
-                          </div>
-                        </div>
-
-                        <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-                          {translateLeadStatus(lead.status)}
-                        </span>
+                <div className="mt-5 space-y-3">
+                  {loading ? (
+                    <p className="text-sm text-slate-500">Cargando...</p>
+                  ) : departments.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      No hay departamentos registrados.
+                    </p>
+                  ) : (
+                    departments.map((department) => (
+                      <div
+                        key={department.id}
+                        className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700"
+                      >
+                        {department.name}
                       </div>
-
-                      <p className="mt-3 text-xs text-slate-500">
-                        Creado: {formatDate(lead.created_at)}
-                      </p>
-                    </div>
-                  ))}
+                    ))
+                  )}
                 </div>
-              )}
-            </div>
-          </div>
+              </div>
 
-          <div className="space-y-6">
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">Departamentos</h2>
-              <p className="mt-1 text-sm text-slate-500">Resumen general.</p>
+              <div className="rounded-3xl bg-white p-6 shadow-sm">
+                <h2 className="text-2xl font-bold text-slate-900">Roles</h2>
+                <p className="mt-1 text-sm text-slate-500">Estructura configurada.</p>
 
-              <div className="mt-5 space-y-3">
-                {loading ? (
-                  <p className="text-sm text-slate-500">Cargando...</p>
-                ) : departments.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    No hay departamentos registrados.
-                  </p>
-                ) : (
-                  departments.map((department) => (
-                    <div
-                      key={department.id}
-                      className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700"
-                    >
-                      {department.name}
-                    </div>
-                  ))
-                )}
+                <div className="mt-5 max-h-[320px] space-y-3 overflow-auto pr-1">
+                  {loading ? (
+                    <p className="text-sm text-slate-500">Cargando...</p>
+                  ) : roles.length === 0 ? (
+                    <p className="text-sm text-slate-500">
+                      No hay roles registrados.
+                    </p>
+                  ) : (
+                    roles.map((role) => (
+                      <div
+                        key={role.id}
+                        className="rounded-xl border border-slate-200 px-4 py-3"
+                      >
+                        <p className="text-sm font-semibold text-slate-900">
+                          {role.name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">{role.code}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
-
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">Roles</h2>
-              <p className="mt-1 text-sm text-slate-500">Estructura configurada.</p>
-
-              <div className="mt-5 max-h-[320px] space-y-3 overflow-auto pr-1">
-                {loading ? (
-                  <p className="text-sm text-slate-500">Cargando...</p>
-                ) : roles.length === 0 ? (
-                  <p className="text-sm text-slate-500">
-                    No hay roles registrados.
-                  </p>
-                ) : (
-                  roles.map((role) => (
-                    <div
-                      key={role.id}
-                      className="rounded-xl border border-slate-200 px-4 py-3"
-                    >
-                      <p className="text-sm font-semibold text-slate-900">
-                        {role.name}
-                      </p>
-                      <p className="mt-1 text-xs text-slate-500">{role.code}</p>
-                    </div>
-                  ))
-                )}
-              </div>
+          </section>
+        ) : (
+          <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="mb-5">
+              <h2 className="text-2xl font-bold text-slate-900">
+                {isPromotorOpc ? "Tus leads de hoy" : "Leads recientes"}
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                {isPromotorOpc
+                  ? "Solo ves los leads creados por ti en el día actual."
+                  : "Vista rápida según tu rol."}
+              </p>
             </div>
-          </div>
-        </section>
+
+            {loading ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                Cargando leads...
+              </div>
+            ) : leadsRecientesParaVista.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                No hay leads visibles para este usuario.
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {leadsRecientesParaVista.map((lead) => (
+                  <LeadCard
+                    key={lead.id}
+                    lead={lead}
+                    translateLeadStatus={translateLeadStatus}
+                    formatDate={formatDate}
+                  />
+                ))}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </main>
+  );
+}
+
+function LeadCard({
+  lead,
+  translateLeadStatus,
+  formatDate,
+}: {
+  lead: Lead;
+  translateLeadStatus: (status: string) => string;
+  formatDate: (dateString: string) => string;
+}) {
+  return (
+    <div className="rounded-2xl border border-slate-200 p-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="text-lg font-semibold text-slate-900">
+            {lead.full_name?.trim() ||
+              `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+              "Sin nombre"}
+          </h3>
+
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
+            <span>📞 {lead.phone || "Sin teléfono"}</span>
+            <span>📍 {lead.city || "Sin ciudad"}</span>
+          </div>
+        </div>
+
+        <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+          {translateLeadStatus(lead.status)}
+        </span>
+      </div>
+
+      <p className="mt-3 text-xs text-slate-500">
+        Creado: {formatDate(lead.created_at)}
+      </p>
+    </div>
   );
 }
 
