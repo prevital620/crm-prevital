@@ -215,6 +215,49 @@ export default function CallCenterPage() {
   }
 
   async function cargarUsuariosCallCenter() {
+  const { data, error } = await supabase
+    .from("user_roles")
+    .select(`
+      user_id,
+      profiles!user_roles_user_id_fkey (
+        id,
+        full_name
+      ),
+      roles!user_roles_role_id_fkey (
+        name,
+        code
+      )
+    `);
+
+  if (error) {
+    console.error("Error cargando usuarios call center:", error);
+    throw new Error("No se pudieron cargar los usuarios de Call Center.");
+  }
+
+  const rows = (data || []) as any[];
+
+  const filtered: CallCenterUser[] = rows
+    .map((row) => ({
+      id: row.profiles?.id || row.user_id,
+      full_name: row.profiles?.full_name || "Sin nombre",
+      role_name: row.roles?.name || "",
+      role_code: row.roles?.code || "",
+    }))
+    .filter((user) =>
+      ["supervisor_call_center", "confirmador", "tmk"].includes(user.role_code)
+    )
+    .sort((a, b) => a.full_name.localeCompare(b.full_name));
+
+  const uniqueMap = new Map<string, CallCenterUser>();
+
+  filtered.forEach((user) => {
+    if (!uniqueMap.has(user.id)) {
+      uniqueMap.set(user.id, user);
+    }
+  });
+
+  return Array.from(uniqueMap.values());
+}
     const { data, error } = await supabase
       .from("profiles")
       .select(`
