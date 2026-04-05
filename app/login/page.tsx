@@ -85,7 +85,6 @@ export default function LoginPage() {
 
       if (!user) {
         setError("No se pudo obtener el usuario autenticado.");
-        setLoading(false);
         return;
       }
 
@@ -122,50 +121,21 @@ export default function LoginPage() {
   }
 
   return (
-    <main className="min-h-screen px-4 py-6 md:px-6 md:py-10">
-      <div className="mx-auto grid max-w-5xl items-stretch gap-6 lg:grid-cols-[1fr_0.95fr]">
-        <section className="hidden overflow-hidden rounded-[2rem] border border-[#d7e2da] bg-white/90 p-10 shadow-sm lg:block">
-          <div className="flex items-center gap-5">
-            <div className="flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#d7e2da]">
-              <Image
-                src="/prevital-logo.jpeg"
-                alt="Prevital"
-                width={96}
-                height={96}
-                className="h-full w-full object-contain"
-                priority
-              />
-            </div>
+    <main className="flex min-h-screen items-center justify-center px-4 py-6 md:px-6">
+      <section className="relative w-full max-w-xl overflow-hidden rounded-[2rem] border border-[#d7e2da] bg-white p-6 shadow-sm md:p-8">
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.06]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Marca de agua Prevital"
+            width={420}
+            height={420}
+            className="h-auto w-[72%] max-w-[340px] object-contain"
+            priority
+          />
+        </div>
 
-            <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#7fa287]">
-                Medicina preventiva
-              </p>
-              <h1 className="mt-2 text-4xl font-bold text-slate-900">
-                CRM Prevital
-              </h1>
-            </div>
-          </div>
-
-          <div className="mt-10 max-w-xl">
-            <p className="text-lg leading-8 text-slate-600">
-              Sistema interno para gestionar usuarios, leads, recepción y
-              seguimiento comercial de Prevital.
-            </p>
-          </div>
-
-          <div className="mt-10 rounded-3xl border border-[#d7e2da] bg-[#f7faf7] p-6">
-            <p className="text-sm font-semibold text-slate-800">
-              Acceso exclusivo para personal autorizado
-            </p>
-            <p className="mt-2 text-sm leading-6 text-slate-600">
-              Ingresa con tu usuario institucional para acceder al CRM.
-            </p>
-          </div>
-        </section>
-
-        <section className="rounded-[2rem] border border-[#d7e2da] bg-white p-6 shadow-sm md:p-8">
-          <div className="mb-6 text-center lg:hidden">
+        <div className="relative z-10">
+          <div className="mb-6 text-center">
             <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#d7e2da]">
               <Image
                 src="/prevital-logo.jpeg"
@@ -177,24 +147,14 @@ export default function LoginPage() {
               />
             </div>
 
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#7fa287]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.24em] text-[#7fa287]">
               Medicina preventiva
             </p>
-            <h1 className="mt-2 text-3xl font-bold text-slate-900">
+            <h1 className="mt-2 text-3xl font-bold text-slate-900 md:text-4xl">
               CRM Prevital
             </h1>
             <p className="mt-3 text-sm leading-6 text-slate-600">
-              Acceso al sistema interno.
-            </p>
-          </div>
-
-          <div className="mb-6 hidden lg:block">
-            <p className="text-sm font-medium text-[#7fa287]">Bienvenido</p>
-            <h2 className="mt-2 text-3xl font-bold text-slate-900">
-              Iniciar sesión
-            </h2>
-            <p className="mt-3 text-sm leading-6 text-slate-600">
-              Ingresa con tu usuario y contraseña para entrar al CRM.
+              Acceso al sistema interno de Prevital.
             </p>
           </div>
 
@@ -204,7 +164,7 @@ export default function LoginPage() {
                 Usuario de acceso
               </span>
               <input
-                className="rounded-2xl border border-slate-300 bg-white px-4 py-4 outline-none transition focus:border-[#7fa287]"
+                className="rounded-2xl border border-slate-300 bg-white/95 px-4 py-4 outline-none transition focus:border-[#7fa287]"
                 type="email"
                 placeholder="correo@prevital.co"
                 value={form.email}
@@ -219,7 +179,7 @@ export default function LoginPage() {
               </span>
               <div className="relative">
                 <input
-                  className="w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 pr-20 outline-none transition focus:border-[#7fa287]"
+                  className="w-full rounded-2xl border border-slate-300 bg-white/95 px-4 py-4 pr-20 outline-none transition focus:border-[#7fa287]"
                   type={showPassword ? "text" : "password"}
                   placeholder="Ingresa tu contraseña"
                   value={form.password}
@@ -254,13 +214,13 @@ export default function LoginPage() {
             ) : null}
           </form>
 
-          <div className="mt-6 rounded-2xl bg-[#f3f7f4] p-4">
+          <div className="mt-5 rounded-2xl bg-[#f3f7f4]/95 p-4 text-center">
             <p className="text-xs leading-5 text-slate-600">
               Uso exclusivo para personal autorizado de Prevital.
             </p>
           </div>
-        </section>
-      </div>
+        </div>
+      </section>
     </main>
   );
 }
