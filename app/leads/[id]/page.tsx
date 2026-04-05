@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -66,6 +66,28 @@ const opcVisibleStatuses = [
   "contactado",
   "agendado",
 ];
+
+const inputClass =
+  "w-full rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm text-slate-900 outline-none transition focus:border-slate-400 focus:ring-2 focus:ring-slate-200 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500";
+
+function Field({
+  label,
+  required = false,
+  input,
+}: {
+  label: string;
+  required?: boolean;
+  input: ReactNode;
+}) {
+  return (
+    <label className="block space-y-2">
+      <span className="text-sm font-medium text-slate-700">
+        {label} {required ? <span className="text-red-500">*</span> : null}
+      </span>
+      {input}
+    </label>
+  );
+}
 
 export default function EditarLeadPage() {
   const params = useParams();
@@ -208,8 +230,7 @@ export default function EditarLeadPage() {
         phone: lead.phone || "",
         age: lead.age ? String(lead.age) : "",
         marital_status: lead.marital_status || "",
-        has_eps:
-          lead.has_eps === null ? "" : lead.has_eps ? "si" : "no",
+        has_eps: lead.has_eps === null ? "" : lead.has_eps ? "si" : "no",
         affiliation_type: lead.affiliation_type || "",
         capture_location: lead.capture_location || "",
         interest_service: lead.interest_service || "",
@@ -347,7 +368,8 @@ export default function EditarLeadPage() {
 
         {!canEdit ? (
           <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-700">
-            Puedes ver este lead, pero no editarlo con tu rol actual o por la regla del mismo día.
+            Puedes ver este lead, pero no editarlo con tu rol actual o por la
+            regla del mismo día.
           </div>
         ) : null}
 
@@ -559,7 +581,9 @@ export default function EditarLeadPage() {
                     disabled={!canEdit}
                   >
                     <option value="nuevo">Nuevo</option>
-                    <option value="pendiente_contacto">Pendiente de contacto</option>
+                    <option value="pendiente_contacto">
+                      Pendiente de contacto
+                    </option>
                     <option value="contactado">Contactado</option>
                     <option value="agendado">Agendado</option>
                     <option value="asistio">Asistió</option>

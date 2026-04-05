@@ -12,15 +12,10 @@ type UserRow = {
   job_title: string | null;
   is_active: boolean;
   created_at: string;
-  departments: {
-    name: string;
-  } | null;
+  departments: { name: string }[] | null;
   user_roles: {
-    roles: {
-      name: string;
-      code: string;
-    } | null;
-  }[];
+    roles: { name: string; code: string }[] | null;
+  }[] | null;
 };
 
 export default function UsuariosPage() {
@@ -68,7 +63,7 @@ export default function UsuariosPage() {
 
       if (error) throw error;
 
-      setUsers((data as UserRow[]) || []);
+      setUsers((data ?? []) as UserRow[]);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los usuarios.");
     } finally {
@@ -175,7 +170,8 @@ export default function UsuariosPage() {
                   </thead>
                   <tbody>
                     {users.map((user) => {
-                      const firstRole = user.user_roles?.[0]?.roles;
+                      const firstDepartment = user.departments?.[0];
+                      const firstRole = user.user_roles?.[0]?.roles?.[0];
 
                       return (
                         <tr key={user.id} className="rounded-2xl bg-slate-50">
@@ -189,7 +185,7 @@ export default function UsuariosPage() {
                             {user.job_title || "Sin cargo"}
                           </td>
                           <td className="px-4 py-4 text-sm text-slate-700">
-                            {user.departments?.name || "Sin departamento"}
+                            {firstDepartment?.name || "Sin departamento"}
                           </td>
                           <td className="px-4 py-4 text-sm text-slate-700">
                             {firstRole?.name || "Sin rol"}

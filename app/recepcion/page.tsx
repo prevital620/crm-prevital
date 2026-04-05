@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
@@ -142,7 +142,7 @@ function traducirEstado(status: string) {
   return map[status] || status;
 }
 
-export default function RecepcionPage() {
+function RecepcionContent() {
   const searchParams = useSearchParams();
   const leadIdFromUrl = searchParams.get("leadId");
 
@@ -280,7 +280,7 @@ export default function RecepcionPage() {
 
       const specialistList: SpecialistOption[] = profileRows
         .map((row) => {
-          const role = row.user_roles?.[0]?.roles;
+          const role = row.user_roles?.[0]?.roles?.[0];
           return {
             id: row.id,
             full_name: row.full_name,
@@ -1071,6 +1071,22 @@ export default function RecepcionPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+export default function RecepcionPage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-100 p-6 md:p-8">
+          <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+            <p className="text-sm text-slate-500">Cargando recepción...</p>
+          </div>
+        </main>
+      }
+    >
+      <RecepcionContent />
+    </Suspense>
   );
 }
 
