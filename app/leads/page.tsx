@@ -281,20 +281,27 @@ export default function LeadsPage() {
             <SessionBadge />
           </div>
 
-          {(roleCode === "super_user" ||
-            roleCode === "promotor_opc" ||
-            roleCode === "supervisor_opc" ||
-            roleCode === "confirmador" ||
-            roleCode === "tmk") && (
-            <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              href="/"
+              className="inline-flex rounded-2xl border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700"
+            >
+              Inicio
+            </a>
+
+            {(roleCode === "super_user" ||
+              roleCode === "promotor_opc" ||
+              roleCode === "supervisor_opc" ||
+              roleCode === "confirmador" ||
+              roleCode === "tmk") && (
               <a
                 href="/leads/nuevo"
                 className="inline-flex rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white"
               >
                 Nuevo lead
               </a>
-            </div>
-          )}
+            )}
+          </div>
         </section>
 
         {error ? (

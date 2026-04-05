@@ -226,12 +226,21 @@ export default function NuevoLeadPage() {
               </p>
             </div>
 
-            <a
-              href="/leads"
-              className="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700"
-            >
-              Ver leads
-            </a>
+            <div className="flex flex-wrap gap-3">
+              <a
+                href="/"
+                className="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700"
+              >
+                Inicio
+              </a>
+
+              <a
+                href="/leads"
+                className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white"
+              >
+                Consultar leads
+              </a>
+            </div>
           </div>
         </section>
 

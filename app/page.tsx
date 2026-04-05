@@ -45,16 +45,10 @@ type QuickAction = {
 
 const quickActions: QuickAction[] = [
   {
-    title: "Crear usuario",
-    subtitle: "Registrar usuario y asignar departamento y rol.",
-    href: "/usuarios/nuevo",
-    roles: ["super_user"],
-  },
-  {
-    title: "Usuarios y roles",
-    subtitle: "Consultar usuarios creados en el sistema.",
-    href: "/usuarios",
-    roles: ["super_user"],
+    title: "Nuevo lead",
+    subtitle: "Registrar un lead nuevo.",
+    href: "/leads/nuevo",
+    roles: ["super_user", "promotor_opc", "supervisor_opc", "confirmador", "tmk"],
   },
   {
     title: "Consultar leads",
@@ -70,10 +64,16 @@ const quickActions: QuickAction[] = [
     ],
   },
   {
-    title: "Nuevo lead",
-    subtitle: "Registrar un lead nuevo.",
-    href: "/leads/nuevo",
-    roles: ["super_user", "promotor_opc", "supervisor_opc", "confirmador", "tmk"],
+    title: "Crear usuario",
+    subtitle: "Registrar usuario y asignar departamento y rol.",
+    href: "/usuarios/nuevo",
+    roles: ["super_user"],
+  },
+  {
+    title: "Usuarios y roles",
+    subtitle: "Consultar usuarios creados en el sistema.",
+    href: "/usuarios",
+    roles: ["super_user"],
   },
   {
     title: "Call Center",
@@ -100,19 +100,6 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "gerencia_comercial"],
   },
 ];
-
-function hoyISO() {
-  const hoy = new Date();
-  const y = hoy.getFullYear();
-  const m = String(hoy.getMonth() + 1).padStart(2, "0");
-  const d = String(hoy.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function soloFecha(fecha: string | null | undefined) {
-  if (!fecha) return "";
-  return fecha.slice(0, 10);
-}
 
 export default function HomePage() {
   const router = useRouter();
@@ -225,29 +212,26 @@ export default function HomePage() {
 
   const visibleQuickActions = useMemo(() => {
     if (!currentRoleCode) return [];
-    return quickActions.filter((action) => action.roles.includes(currentRoleCode));
+
+    const base = quickActions.filter((action) => action.roles.includes(currentRoleCode));
+
+    if (currentRoleCode === "promotor_opc") {
+      return base.sort((a, b) => {
+        const order: Record<string, number> = {
+          "/leads/nuevo": 1,
+          "/leads": 2,
+        };
+        return (order[a.href] ?? 99) - (order[b.href] ?? 99);
+      });
+    }
+
+    return base;
   }, [currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
   const isPromotorOpc = currentRoleCode === "promotor_opc";
 
-  const today = hoyISO();
-
-  const leadsDelDia = useMemo(() => {
-    return leads.filter((lead) => soloFecha(lead.created_at) === today);
-  }, [leads, today]);
-
-  const leadsRecientesParaVista = useMemo(() => {
-    if (isPromotorOpc) {
-      return leads
-        .filter((lead) => soloFecha(lead.created_at) === today)
-        .slice(0, 10);
-    }
-
-    return leads.slice(0, 6);
-  }, [leads, isPromotorOpc, today]);
-
-  const totalLeads = isPromotorOpc ? leadsDelDia.length : leads.length;
+  const totalLeads = leads.length;
   const totalDepartments = departments.length;
   const totalRoles = roles.length;
   const totalUsers = profiles.length;
@@ -255,33 +239,6 @@ export default function HomePage() {
   const activeUsers = useMemo(() => {
     return profiles.filter((item) => item.is_active).length;
   }, [profiles]);
-
-  function formatDate(dateString: string) {
-    try {
-      return new Date(dateString).toLocaleString("es-CO", {
-        dateStyle: "medium",
-        timeStyle: "short",
-      });
-    } catch {
-      return dateString;
-    }
-  }
-
-  function translateLeadStatus(status: string) {
-    const map: Record<string, string> = {
-      nuevo: "Nuevo",
-      pendiente_contacto: "Pendiente de contacto",
-      contactado: "Contactado",
-      agendado: "Agendado",
-      asistio: "Asistió",
-      no_asistio: "No asistió",
-      vendido: "Vendido",
-      cerrado: "Cerrado",
-      descartado: "Descartado",
-    };
-
-    return map[status] || status;
-  }
 
   if (checkingSession) {
     return (
@@ -329,213 +286,215 @@ export default function HomePage() {
         ) : null}
 
         {isSuperUser ? (
-          <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <DashboardCard
-              title="Leads visibles"
-              value={loading ? "..." : String(totalLeads)}
-              subtitle="Según tu rol"
-            />
-            <DashboardCard
-              title="Departamentos"
-              value={loading ? "..." : String(totalDepartments)}
-              subtitle="Estructura base"
-            />
-            <DashboardCard
-              title="Roles"
-              value={loading ? "..." : String(totalRoles)}
-              subtitle="Roles configurados"
-            />
-            <DashboardCard
-              title="Usuarios"
-              value={loading ? "..." : String(totalUsers)}
-              subtitle="Perfiles internos"
-            />
-            <DashboardCard
-              title="Usuarios activos"
-              value={loading ? "..." : String(activeUsers)}
-              subtitle="Perfiles habilitados"
-            />
-          </section>
-        ) : (
-          <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-2">
-            <DashboardCard
-              title={isPromotorOpc ? "Leads del día" : "Leads visibles"}
-              value={loading ? "..." : String(totalLeads)}
-              subtitle={isPromotorOpc ? "Creados por ti hoy" : "Según tu rol"}
-            />
-          </section>
-        )}
+          <>
+            <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <DashboardCard
+                title="Leads visibles"
+                value={loading ? "..." : String(totalLeads)}
+                subtitle="Según tu rol"
+              />
+              <DashboardCard
+                title="Departamentos"
+                value={loading ? "..." : String(totalDepartments)}
+                subtitle="Estructura base"
+              />
+              <DashboardCard
+                title="Roles"
+                value={loading ? "..." : String(totalRoles)}
+                subtitle="Roles configurados"
+              />
+              <DashboardCard
+                title="Usuarios"
+                value={loading ? "..." : String(totalUsers)}
+                subtitle="Perfiles internos"
+              />
+              <DashboardCard
+                title="Usuarios activos"
+                value={loading ? "..." : String(activeUsers)}
+                subtitle="Perfiles habilitados"
+              />
+            </section>
 
-        <section className="mb-8 rounded-3xl bg-white p-6 shadow-sm">
-          <div className="mb-5 flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">
-                Accesos disponibles
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Solo ves los módulos permitidos para tu rol.
-              </p>
-            </div>
-
-            <button
-              onClick={() => loadDashboard(currentRoleCode, currentUserId)}
-              className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-            >
-              Actualizar
-            </button>
-          </div>
-
-          {visibleQuickActions.length === 0 ? (
-            <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              No hay accesos configurados para este rol.
-            </div>
-          ) : (
-            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-              {visibleQuickActions.map((action) => (
-                <a
-                  key={action.title}
-                  href={action.href}
-                  className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition hover:border-slate-300 hover:bg-white"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-900">
-                        {action.title}
-                      </h3>
-                      <p className="mt-2 text-sm text-slate-600">
-                        {action.subtitle}
-                      </p>
-                    </div>
-
-                    <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                      Abrir
-                    </span>
-                  </div>
-                </a>
-              ))}
-            </div>
-          )}
-        </section>
-
-        {isSuperUser ? (
-          <section className="grid gap-6 xl:grid-cols-3">
-            <div className="xl:col-span-2">
-              <div className="rounded-3xl bg-white p-6 shadow-sm">
-                <div className="mb-5">
+            <section className="mb-8 rounded-3xl bg-white p-6 shadow-sm">
+              <div className="mb-5 flex items-center justify-between gap-3">
+                <div>
                   <h2 className="text-2xl font-bold text-slate-900">
-                    Leads recientes
+                    Accesos disponibles
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Vista rápida según tu rol.
+                    Solo ves los módulos permitidos para tu rol.
                   </p>
                 </div>
 
-                {loading ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                    Cargando leads...
-                  </div>
-                ) : leadsRecientesParaVista.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                    No hay leads visibles para este usuario.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    {leadsRecientesParaVista.map((lead) => (
-                      <LeadCard
-                        key={lead.id}
-                        lead={lead}
-                        translateLeadStatus={translateLeadStatus}
-                        formatDate={formatDate}
-                      />
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="space-y-6">
-              <div className="rounded-3xl bg-white p-6 shadow-sm">
-                <h2 className="text-2xl font-bold text-slate-900">Departamentos</h2>
-                <p className="mt-1 text-sm text-slate-500">Resumen general.</p>
-
-                <div className="mt-5 space-y-3">
-                  {loading ? (
-                    <p className="text-sm text-slate-500">Cargando...</p>
-                  ) : departments.length === 0 ? (
-                    <p className="text-sm text-slate-500">
-                      No hay departamentos registrados.
-                    </p>
-                  ) : (
-                    departments.map((department) => (
-                      <div
-                        key={department.id}
-                        className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700"
-                      >
-                        {department.name}
-                      </div>
-                    ))
-                  )}
-                </div>
+                <button
+                  onClick={() => loadDashboard(currentRoleCode, currentUserId)}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                >
+                  Actualizar
+                </button>
               </div>
 
-              <div className="rounded-3xl bg-white p-6 shadow-sm">
-                <h2 className="text-2xl font-bold text-slate-900">Roles</h2>
-                <p className="mt-1 text-sm text-slate-500">Estructura configurada.</p>
-
-                <div className="mt-5 max-h-[320px] space-y-3 overflow-auto pr-1">
-                  {loading ? (
-                    <p className="text-sm text-slate-500">Cargando...</p>
-                  ) : roles.length === 0 ? (
-                    <p className="text-sm text-slate-500">
-                      No hay roles registrados.
-                    </p>
-                  ) : (
-                    roles.map((role) => (
-                      <div
-                        key={role.id}
-                        className="rounded-xl border border-slate-200 px-4 py-3"
-                      >
-                        <p className="text-sm font-semibold text-slate-900">
-                          {role.name}
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {visibleQuickActions.map((action) => (
+                  <a
+                    key={action.title}
+                    href={action.href}
+                    className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition hover:border-slate-300 hover:bg-white"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-900">
+                          {action.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-slate-600">
+                          {action.subtitle}
                         </p>
-                        <p className="mt-1 text-xs text-slate-500">{role.code}</p>
                       </div>
-                    ))
+
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                        Abrir
+                      </span>
+                    </div>
+                  </a>
+                ))}
+              </div>
+            </section>
+
+            <section className="grid gap-6 xl:grid-cols-3">
+              <div className="xl:col-span-2">
+                <div className="rounded-3xl bg-white p-6 shadow-sm">
+                  <div className="mb-5">
+                    <h2 className="text-2xl font-bold text-slate-900">
+                      Leads recientes
+                    </h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Vista rápida según tu rol.
+                    </p>
+                  </div>
+
+                  {loading ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                      Cargando leads...
+                    </div>
+                  ) : leads.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                      No hay leads visibles para este usuario.
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      {leads.slice(0, 6).map((lead) => (
+                        <LeadCard
+                          key={lead.id}
+                          lead={lead}
+                          formatDate={formatDate}
+                        />
+                      ))}
+                    </div>
                   )}
                 </div>
               </div>
-            </div>
-          </section>
+
+              <div className="space-y-6">
+                <div className="rounded-3xl bg-white p-6 shadow-sm">
+                  <h2 className="text-2xl font-bold text-slate-900">Departamentos</h2>
+                  <p className="mt-1 text-sm text-slate-500">Resumen general.</p>
+
+                  <div className="mt-5 space-y-3">
+                    {loading ? (
+                      <p className="text-sm text-slate-500">Cargando...</p>
+                    ) : departments.length === 0 ? (
+                      <p className="text-sm text-slate-500">
+                        No hay departamentos registrados.
+                      </p>
+                    ) : (
+                      departments.map((department) => (
+                        <div
+                          key={department.id}
+                          className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700"
+                        >
+                          {department.name}
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+
+                <div className="rounded-3xl bg-white p-6 shadow-sm">
+                  <h2 className="text-2xl font-bold text-slate-900">Roles</h2>
+                  <p className="mt-1 text-sm text-slate-500">Estructura configurada.</p>
+
+                  <div className="mt-5 max-h-[320px] space-y-3 overflow-auto pr-1">
+                    {loading ? (
+                      <p className="text-sm text-slate-500">Cargando...</p>
+                    ) : roles.length === 0 ? (
+                      <p className="text-sm text-slate-500">
+                        No hay roles registrados.
+                      </p>
+                    ) : (
+                      roles.map((role) => (
+                        <div
+                          key={role.id}
+                          className="rounded-xl border border-slate-200 px-4 py-3"
+                        >
+                          <p className="text-sm font-semibold text-slate-900">
+                            {role.name}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-500">{role.code}</p>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              </div>
+            </section>
+          </>
         ) : (
           <section className="rounded-3xl bg-white p-6 shadow-sm">
-            <div className="mb-5">
-              <h2 className="text-2xl font-bold text-slate-900">
-                {isPromotorOpc ? "Tus leads de hoy" : "Leads recientes"}
-              </h2>
-              <p className="mt-1 text-sm text-slate-500">
-                {isPromotorOpc
-                  ? "Solo ves los leads creados por ti en el día actual."
-                  : "Vista rápida según tu rol."}
-              </p>
+            <div className="mb-5 flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Accesos disponibles
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Solo ves los módulos permitidos para tu rol.
+                </p>
+              </div>
+
+              <button
+                onClick={() => loadDashboard(currentRoleCode, currentUserId)}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+              >
+                Actualizar
+              </button>
             </div>
 
-            {loading ? (
+            {visibleQuickActions.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                Cargando leads...
-              </div>
-            ) : leadsRecientesParaVista.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                No hay leads visibles para este usuario.
+                No hay accesos configurados para este rol.
               </div>
             ) : (
-              <div className="space-y-4">
-                {leadsRecientesParaVista.map((lead) => (
-                  <LeadCard
-                    key={lead.id}
-                    lead={lead}
-                    translateLeadStatus={translateLeadStatus}
-                    formatDate={formatDate}
-                  />
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+                {visibleQuickActions.map((action) => (
+                  <a
+                    key={action.title}
+                    href={action.href}
+                    className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition hover:border-slate-300 hover:bg-white"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <h3 className="text-lg font-semibold text-slate-900">
+                          {action.title}
+                        </h3>
+                        <p className="mt-2 text-sm text-slate-600">
+                          {action.subtitle}
+                        </p>
+                      </div>
+
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
+                        Abrir
+                      </span>
+                    </div>
+                  </a>
                 ))}
               </div>
             )}
@@ -548,11 +507,9 @@ export default function HomePage() {
 
 function LeadCard({
   lead,
-  translateLeadStatus,
   formatDate,
 }: {
   lead: Lead;
-  translateLeadStatus: (status: string) => string;
   formatDate: (dateString: string) => string;
 }) {
   return (
@@ -572,7 +529,7 @@ function LeadCard({
         </div>
 
         <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-          {translateLeadStatus(lead.status)}
+          {lead.status}
         </span>
       </div>
 
@@ -599,4 +556,15 @@ function DashboardCard({
       <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
     </div>
   );
+}
+
+function formatDate(dateString: string) {
+  try {
+    return new Date(dateString).toLocaleString("es-CO", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return dateString;
+  }
 }
