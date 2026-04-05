@@ -42,6 +42,17 @@ type AppointmentRow = {
   appointment_time: string;
 };
 
+type QuickFilter =
+  | "todos"
+  | "nuevos"
+  | "sin_asignar"
+  | "asignados"
+  | "pendientes"
+  | "pendientes_cita"
+  | "agendados"
+  | "no_asistio"
+  | "cerrados";
+
 const statusOptions = [
   { value: "nuevo", label: "Nuevo" },
   { value: "pendiente_contacto", label: "Pendiente" },
@@ -184,6 +195,7 @@ export default function CallCenterPage() {
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [savingStatusLeadId, setSavingStatusLeadId] = useState<string | null>(null);
   const [cancelingAppointmentId, setCancelingAppointmentId] = useState<string | null>(null);
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
 
   async function cargarLeads() {
     const { data, error } = await supabase
@@ -508,6 +520,40 @@ export default function CallCenterPage() {
     return lead.status || "nuevo";
   }
 
+  function tieneCitaActiva(lead: Lead) {
+    return !!activeAppointmentByLeadId[lead.id];
+  }
+
+  function estaAsignado(lead: Lead) {
+    return !!lead.assigned_to_user_id;
+  }
+
+  function esPendiente(lead: Lead) {
+    const estado = obtenerEstadoVisible(lead);
+    return (
+      estado === "pendiente_contacto" ||
+      estado === "no_responde" ||
+      estado === "interesado"
+    );
+  }
+
+  function esPendienteDeCita(lead: Lead) {
+    const estado = obtenerEstadoVisible(lead);
+    return (
+      !tieneCitaActiva(lead) &&
+      (estado === "contactado" || estado === "reagendar")
+    );
+  }
+
+  function esCerrado(lead: Lead) {
+    const estado = obtenerEstadoVisible(lead);
+    return (
+      estado === "vendido" ||
+      estado === "cerrado" ||
+      estado === "descartado"
+    );
+  }
+
   const leadsBasePorRol = useMemo(() => {
     let base = leads;
 
@@ -522,32 +568,6 @@ export default function CallCenterPage() {
     return base;
   }, [leads, currentRoleCode, currentUserId]);
 
-  const leadsFiltrados = useMemo(() => {
-    const q = busqueda.trim().toLowerCase();
-
-    let base = leadsBasePorRol;
-
-    if (!q) {
-      base = base.filter((lead) => soloFecha(lead.created_at) === fechaFiltro);
-    }
-
-    return base.filter((lead) => {
-      if (!q) return true;
-
-      const nombre =
-        lead.full_name?.toLowerCase() ||
-        `${lead.first_name || ""} ${lead.last_name || ""}`.trim().toLowerCase();
-
-      const creador = (creatorNames[lead.created_by_user_id || ""] || "").toLowerCase();
-
-      return (
-        (lead.phone || "").toLowerCase().includes(q) ||
-        nombre.includes(q) ||
-        creador.includes(q)
-      );
-    });
-  }, [leadsBasePorRol, fechaFiltro, busqueda, creatorNames]);
-
   const resumen = useMemo(() => {
     const delDia = leadsBasePorRol.filter(
       (lead) => soloFecha(lead.created_at) === fechaFiltro
@@ -555,32 +575,84 @@ export default function CallCenterPage() {
 
     return {
       total: delDia.length,
-      pendientes: delDia.filter((lead) => {
-        const estado = obtenerEstadoVisible(lead);
-        return (
-          estado === "nuevo" ||
-          estado === "pendiente_contacto" ||
-          estado === "no_responde"
-        );
-      }).length,
-      interesados: delDia.filter((lead) => {
-        const estado = obtenerEstadoVisible(lead);
-        return estado === "interesado" || estado === "contactado";
-      }).length,
-      agendados: delDia.filter((lead) => {
-        const estado = obtenerEstadoVisible(lead);
-        return estado === "agendado" || estado === "reagendar";
-      }).length,
-      cerrados: delDia.filter((lead) => {
-        const estado = obtenerEstadoVisible(lead);
-        return (
-          estado === "vendido" ||
-          estado === "cerrado" ||
-          estado === "descartado"
-        );
-      }).length,
+      nuevos: delDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo").length,
+      sinAsignar: delDia.filter((lead) => !estaAsignado(lead)).length,
+      asignados: delDia.filter((lead) => estaAsignado(lead)).length,
+      pendientes: delDia.filter((lead) => esPendiente(lead)).length,
+      pendientesCita: delDia.filter((lead) => esPendienteDeCita(lead)).length,
+      agendados: delDia.filter((lead) => tieneCitaActiva(lead)).length,
+      noAsistio: delDia.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio").length,
+      cerrados: delDia.filter((lead) => esCerrado(lead)).length,
     };
   }, [leadsBasePorRol, fechaFiltro, activeAppointmentByLeadId]);
+
+  const leadsFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+
+    let base = leadsBasePorRol.filter(
+      (lead) => soloFecha(lead.created_at) === fechaFiltro
+    );
+
+    if (quickFilter === "nuevos") {
+      base = base.filter((lead) => obtenerEstadoVisible(lead) === "nuevo");
+    }
+
+    if (quickFilter === "sin_asignar") {
+      base = base.filter((lead) => !estaAsignado(lead));
+    }
+
+    if (quickFilter === "asignados") {
+      base = base.filter((lead) => estaAsignado(lead));
+    }
+
+    if (quickFilter === "pendientes") {
+      base = base.filter((lead) => esPendiente(lead));
+    }
+
+    if (quickFilter === "pendientes_cita") {
+      base = base.filter((lead) => esPendienteDeCita(lead));
+    }
+
+    if (quickFilter === "agendados") {
+      base = base.filter((lead) => tieneCitaActiva(lead));
+    }
+
+    if (quickFilter === "no_asistio") {
+      base = base.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio");
+    }
+
+    if (quickFilter === "cerrados") {
+      base = base.filter((lead) => esCerrado(lead));
+    }
+
+    if (!q) return base;
+
+    return base.filter((lead) => {
+      const nombre =
+        lead.full_name?.toLowerCase() ||
+        `${lead.first_name || ""} ${lead.last_name || ""}`.trim().toLowerCase();
+
+      const creador = (creatorNames[lead.created_by_user_id || ""] || "").toLowerCase();
+      const asignado = (
+        callCenterUsers.find((u) => u.id === lead.assigned_to_user_id)?.full_name || ""
+      ).toLowerCase();
+
+      return (
+        (lead.phone || "").toLowerCase().includes(q) ||
+        nombre.includes(q) ||
+        creador.includes(q) ||
+        asignado.includes(q)
+      );
+    });
+  }, [
+    leadsBasePorRol,
+    fechaFiltro,
+    busqueda,
+    quickFilter,
+    creatorNames,
+    callCenterUsers,
+    activeAppointmentByLeadId,
+  ]);
 
   function obtenerNombreAsignado(lead: Lead) {
     if (!lead.assigned_to_user_id) return "Sin asignar";
@@ -621,7 +693,7 @@ export default function CallCenterPage() {
               <h1 className="text-3xl font-bold text-slate-900">Gestión de leads</h1>
               <p className="mt-2 text-slate-600">
                 {currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user"
-                  ? "Puedes consultar, asignar, cancelar citas y actualizar el estado de los leads."
+                  ? "Puedes consultar, asignar, organizar por bloques, cancelar citas y actualizar el estado de los leads."
                   : currentRoleCode === "confirmador"
                   ? "Puedes consultar todos los leads, cancelar citas y actualizar su estado."
                   : "Puedes consultar tus leads asignados o creados por ti, cancelar citas y actualizar su estado."}
@@ -653,34 +725,45 @@ export default function CallCenterPage() {
           </div>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-5">
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Leads del día</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{resumen.total}</p>
-          </div>
-
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Pendientes</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{resumen.pendientes}</p>
-          </div>
-
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Interesados/Contactados</p>
-            <p className="mt-2 text-3xl font-bold text-amber-700">{resumen.interesados}</p>
-          </div>
-
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Agendados/Reagendar</p>
-            <p className="mt-2 text-3xl font-bold text-emerald-700">{resumen.agendados}</p>
-          </div>
-
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Cerrados/Vendidos</p>
-            <p className="mt-2 text-3xl font-bold text-green-700">{resumen.cerrados}</p>
-          </div>
+        <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
+          <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
+          <StatCard title="Nuevos" value={resumen.nuevos} active={quickFilter === "nuevos"} onClick={() => setQuickFilter("nuevos")} />
+          <StatCard title="Sin asignar" value={resumen.sinAsignar} active={quickFilter === "sin_asignar"} onClick={() => setQuickFilter("sin_asignar")} />
+          <StatCard title="Asignados" value={resumen.asignados} active={quickFilter === "asignados"} onClick={() => setQuickFilter("asignados")} />
+          <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
+          <StatCard title="Pendientes de cita" value={resumen.pendientesCita} active={quickFilter === "pendientes_cita"} onClick={() => setQuickFilter("pendientes_cita")} />
+          <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
+          <StatCard title="No asistió" value={resumen.noAsistio} active={quickFilter === "no_asistio"} onClick={() => setQuickFilter("no_asistio")} />
         </section>
 
         <section className="rounded-3xl bg-white p-6 shadow-sm">
+          <div className="mb-4 flex flex-wrap gap-2">
+            {[
+              { key: "todos", label: "Todos" },
+              { key: "nuevos", label: "Nuevos" },
+              { key: "sin_asignar", label: "Sin asignar" },
+              { key: "asignados", label: "Asignados" },
+              { key: "pendientes", label: "Pendientes" },
+              { key: "pendientes_cita", label: "Pendientes de cita" },
+              { key: "agendados", label: "Agendados" },
+              { key: "no_asistio", label: "No asistió" },
+              { key: "cerrados", label: "Cerrados" },
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setQuickFilter(item.key as QuickFilter)}
+                className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                  quickFilter === item.key
+                    ? "bg-slate-900 text-white"
+                    : "border border-slate-300 text-slate-700"
+                }`}
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
+
           <div className="grid gap-3 md:grid-cols-2">
             <input
               className="rounded-2xl border border-slate-300 p-4 outline-none"
@@ -691,7 +774,7 @@ export default function CallCenterPage() {
 
             <input
               className="rounded-2xl border border-slate-300 p-4 outline-none"
-              placeholder="Buscar por teléfono, nombre o creador"
+              placeholder="Buscar por teléfono, nombre, creador o asignado"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
@@ -700,7 +783,7 @@ export default function CallCenterPage() {
           {cargando ? (
             <p className="mt-6 text-slate-600">Cargando leads...</p>
           ) : leadsFiltrados.length === 0 ? (
-            <p className="mt-6 text-slate-600">No hay leads para el filtro actual.</p>
+            <p className="mt-6 text-slate-600">No hay leads para ese bloque o filtro.</p>
           ) : (
             <div className="mt-6 space-y-4">
               {leadsFiltrados.map((lead) => {
@@ -769,14 +852,7 @@ export default function CallCenterPage() {
                             Creado por: {creatorNames[lead.created_by_user_id || ""] || "Sin nombre"}
                           </p>
 
-                          {lead.observations && (
-                            <p className="mt-2 text-sm text-slate-600">
-                              <span className="font-medium text-slate-800">Observaciones:</span>{" "}
-                              {lead.observations}
-                            </p>
-                          )}
-
-                          <p className="mt-2 text-sm text-slate-700">
+                          <p className="mt-1 text-sm text-slate-700">
                             <span className="font-medium">Asignado a:</span>{" "}
                             {obtenerNombreAsignado(lead)}
                           </p>
@@ -785,6 +861,13 @@ export default function CallCenterPage() {
                             <p className="mt-1 text-sm text-slate-700">
                               <span className="font-medium">Cita activa:</span>{" "}
                               {activeAppointment.appointment_date} · {activeAppointment.appointment_time}
+                            </p>
+                          ) : null}
+
+                          {lead.observations ? (
+                            <p className="mt-2 text-sm text-slate-600">
+                              <span className="font-medium text-slate-800">Observaciones:</span>{" "}
+                              {lead.observations}
                             </p>
                           ) : null}
                         </div>
@@ -904,5 +987,30 @@ export default function CallCenterPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function StatCard({
+  title,
+  value,
+  active,
+  onClick,
+}: {
+  title: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-3xl bg-white p-5 text-left shadow-sm transition ${
+        active ? "ring-2 ring-slate-900" : ""
+      }`}
+    >
+      <p className="text-sm text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+    </button>
   );
 }
