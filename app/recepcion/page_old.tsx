@@ -16,6 +16,13 @@ type LeadOption = {
   status: string;
 };
 
+type SpecialistOption = {
+  id: string;
+  full_name: string;
+  role_name: string;
+  role_code: string;
+};
+
 type AppointmentRow = {
   id: string;
   lead_id: string | null;
@@ -26,7 +33,10 @@ type AppointmentRow = {
   appointment_time: string;
   status: string;
   service_type: string | null;
+  treatment_type: string | null;
+  specialist_user_id: string | null;
   notes: string | null;
+  instructions_text: string | null;
   checked_in_at: string | null;
   attended_at: string | null;
 };
@@ -71,17 +81,11 @@ const appointmentStatusOptions = [
 
 const serviceOptions = [
   { value: "valoracion", label: "Valoración" },
-  { value: "otro", label: "Otro" },
-];
-
-const manualSourceOptions = [
-  { value: "opc", label: "OPC" },
-  { value: "tmk", label: "TMK" },
-  { value: "redes", label: "Redes" },
-  { value: "referido", label: "Referido" },
-  { value: "lugar", label: "Lugar" },
-  { value: "evento", label: "Evento" },
-  { value: "cliente_directo", label: "Cliente directo" },
+  { value: "detox", label: "Detox" },
+  { value: "sueroterapia", label: "Sueroterapia" },
+  { value: "nutricion", label: "Nutrición" },
+  { value: "fisioterapia", label: "Fisioterapia" },
+  { value: "medicina_general", label: "Medicina general" },
   { value: "otro", label: "Otro" },
 ];
 
@@ -129,45 +133,6 @@ function fullLeadName(lead: LeadOption) {
     "Sin nombre"
   );
 }
-
-function traducirFuenteManual(value: string) {
-  const found = manualSourceOptions.find((item) => item.value === value);
-  return found?.label || value || "Sin fuente";
-}
-
-function extraerFuenteManualDesdeNotas(notes: string | null | undefined) {
-  if (!notes) return "";
-  const match = notes.match(/^Fuente:\s*(.+)$/im);
-  if (!match?.[1]) return "";
-
-  const normalized = match[1].trim().toLowerCase();
-  const found = manualSourceOptions.find(
-    (item) => item.value.toLowerCase() === normalized || item.label.toLowerCase() === normalized
-  );
-
-  return found?.value || normalized;
-}
-
-function limpiarFuenteManualDeNotas(notes: string | null | undefined) {
-  if (!notes) return "";
-
-  return notes
-    .split("\n")
-    .filter((line) => !/^Fuente:\s*/i.test(line.trim()))
-    .join("\n")
-    .trim();
-}
-
-function construirNotasConFuente(notes: string, manualSource: string) {
-  const cleanNotes = limpiarFuenteManualDeNotas(notes);
-  const sourceLabel = traducirFuenteManual(manualSource);
-
-  if (!manualSource) return cleanNotes;
-  if (!cleanNotes) return `Fuente: ${sourceLabel}`;
-
-  return `Fuente: ${sourceLabel}\n${cleanNotes}`;
-}
-
 
 function badgeEstado(status: string) {
   switch (status) {
@@ -236,6 +201,7 @@ function RecepcionContent() {
 
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [leads, setLeads] = useState<LeadOption[]>([]);
+  const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
   const [statusById, setStatusById] = useState<Record<string, string>>({});
 
   const [daySettings, setDaySettings] = useState<Record<string, AgendaDaySetting>>({});
@@ -253,12 +219,14 @@ function RecepcionContent() {
     patient_name: "",
     phone: "",
     city: "",
-    manual_source: "",
     appointment_date: hoyISO(),
     appointment_time: "08:00",
     status: "agendada",
     service_type: "",
+    treatment_type: "",
+    specialist_user_id: "",
     notes: "",
+    instructions_text: "",
   });
 
   const isReadOnlyAgendaForCall =
@@ -306,6 +274,7 @@ function RecepcionContent() {
       const [
         appointmentsResult,
         leadsResult,
+        specialistsResult,
         daySettingsResult,
         slotSettingsResult,
       ] = await Promise.all([
@@ -321,7 +290,10 @@ function RecepcionContent() {
             appointment_time,
             status,
             service_type,
+            treatment_type,
+            specialist_user_id,
             notes,
+            instructions_text,
             checked_in_at,
             attended_at
           `)
@@ -343,6 +315,19 @@ function RecepcionContent() {
           .limit(300),
 
         supabase
+          .from("profiles")
+          .select(`
+            id,
+            full_name,
+            user_roles!user_roles_user_id_fkey (
+              roles (
+                name,
+                code
+              )
+            )
+          `),
+
+        supabase
           .from("agenda_day_settings")
           .select("agenda_date, daily_capacity, is_closed"),
 
@@ -353,14 +338,30 @@ function RecepcionContent() {
 
       if (appointmentsResult.error) throw appointmentsResult.error;
       if (leadsResult.error) throw leadsResult.error;
+      if (specialistsResult.error) throw specialistsResult.error;
       if (daySettingsResult.error) throw daySettingsResult.error;
       if (slotSettingsResult.error) throw slotSettingsResult.error;
 
       const appointmentsData = (appointmentsResult.data as AppointmentRow[]) || [];
       const leadsData = (leadsResult.data as LeadOption[]) || [];
+      const profileRows = (specialistsResult.data as any[]) || [];
       const dayRows = (daySettingsResult.data as AgendaDaySetting[]) || [];
       const slotRows = (slotSettingsResult.data as AgendaSlotSetting[]) || [];
 
+      const specialistList: SpecialistOption[] = profileRows
+        .map((row) => {
+          const role = row.user_roles?.[0]?.roles?.[0];
+          return {
+            id: row.id,
+            full_name: row.full_name,
+            role_name: role?.name || "",
+            role_code: role?.code || "",
+          };
+        })
+        .filter((item) =>
+          ["nutricionista", "medico_general", "fisioterapeuta"].includes(item.role_code)
+        )
+        .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
       const nextStatuses: Record<string, string> = {};
       appointmentsData.forEach((item) => {
@@ -382,6 +383,7 @@ function RecepcionContent() {
 
       setAppointments(appointmentsData);
       setLeads(leadsData);
+      setSpecialists(specialistList);
       setStatusById(nextStatuses);
       setDaySettings(dayMap);
       setSlotSettings(slotMap);
@@ -501,20 +503,13 @@ function RecepcionContent() {
   const agendaFiltrada = useMemo(() => {
     const q = busquedaAgenda.trim().toLowerCase();
 
-    return appointments
-      .filter((item) => {
-        const fechaOk = fechaFiltro ? item.appointment_date === fechaFiltro : true;
-        const nombre = (item.patient_name || "").toLowerCase();
-        const telefono = (item.phone || "").toLowerCase();
-        const busquedaOk = q ? nombre.includes(q) || telefono.includes(q) : true;
-        return fechaOk && busquedaOk;
-      })
-      .sort((a, b) => {
-        if (a.appointment_date !== b.appointment_date) {
-          return a.appointment_date.localeCompare(b.appointment_date);
-        }
-        return normalizarHora(a.appointment_time).localeCompare(normalizarHora(b.appointment_time));
-      });
+    return appointments.filter((item) => {
+      const fechaOk = fechaFiltro ? item.appointment_date === fechaFiltro : true;
+      const nombre = (item.patient_name || "").toLowerCase();
+      const telefono = (item.phone || "").toLowerCase();
+      const busquedaOk = q ? nombre.includes(q) || telefono.includes(q) : true;
+      return fechaOk && busquedaOk;
+    });
   }, [appointments, fechaFiltro, busquedaAgenda]);
 
   const resumen = useMemo(() => {
@@ -588,12 +583,14 @@ function RecepcionContent() {
       patient_name: "",
       phone: "",
       city: "",
-      manual_source: "",
       appointment_date: hoyISO(),
       appointment_time: "08:00",
       status: "agendada",
       service_type: "",
+      treatment_type: "",
+      specialist_user_id: "",
       notes: "",
+      instructions_text: "",
     });
     setBusquedaLead("");
   }
@@ -608,12 +605,14 @@ function RecepcionContent() {
       patient_name: item.patient_name || "",
       phone: item.phone || "",
       city: item.city || "",
-      manual_source: item.lead_id ? "" : extraerFuenteManualDesdeNotas(item.notes),
       appointment_date: item.appointment_date,
       appointment_time: normalizarHora(item.appointment_time),
       status: item.status || "agendada",
       service_type: item.service_type || "",
-      notes: limpiarFuenteManualDeNotas(item.notes),
+      treatment_type: item.treatment_type || "",
+      specialist_user_id: item.specialist_user_id || "",
+      notes: item.notes || "",
+      instructions_text: item.instructions_text || "",
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -697,11 +696,6 @@ function RecepcionContent() {
       return;
     }
 
-    if (form.mode === "manual" && !form.manual_source) {
-      setError("Debes seleccionar la fuente cuando la cita es manual.");
-      return;
-    }
-
     if (!form.appointment_date) {
       setError("Debes seleccionar la fecha.");
       return;
@@ -762,10 +756,10 @@ function RecepcionContent() {
         appointment_time: form.appointment_time,
         status: form.status,
         service_type: form.service_type || null,
-        notes:
-          form.mode === "manual"
-            ? construirNotasConFuente(form.notes, form.manual_source).trim() || null
-            : form.notes.trim() || null,
+        treatment_type: isReadOnlyAgendaForCall ? null : form.treatment_type || null,
+        specialist_user_id: isReadOnlyAgendaForCall ? null : form.specialist_user_id || null,
+        notes: form.notes.trim() || null,
+        instructions_text: form.instructions_text.trim() || null,
         updated_by_user_id: currentUserId,
       };
 
@@ -1155,7 +1149,6 @@ function RecepcionContent() {
                           patient_name: "",
                           phone: "",
                           city: "",
-                          manual_source: "",
                         }))
                       }
                     >
@@ -1164,35 +1157,16 @@ function RecepcionContent() {
                     </select>
                   </label>
 
-                  {form.mode === "lead" ? (
-                    <label className="rounded-2xl border border-slate-300 p-4 text-sm">
-                      <div className="mb-2 font-medium text-slate-700">Buscar lead</div>
-                      <input
-                        className="w-full outline-none"
-                        placeholder="Nombre o teléfono"
-                        value={busquedaLead}
-                        onChange={(e) => setBusquedaLead(e.target.value)}
-                      />
-                    </label>
-                  ) : (
-                    <label className="rounded-2xl border border-slate-300 p-4 text-sm">
-                      <div className="mb-2 font-medium text-slate-700">Fuente</div>
-                      <select
-                        className="w-full outline-none"
-                        value={form.manual_source}
-                        onChange={(e) =>
-                          setForm((prev) => ({ ...prev, manual_source: e.target.value }))
-                        }
-                      >
-                        <option value="">Selecciona</option>
-                        {manualSourceOptions.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  )}
+                  <label className="rounded-2xl border border-slate-300 p-4 text-sm">
+                    <div className="mb-2 font-medium text-slate-700">Buscar lead</div>
+                    <input
+                      className="w-full outline-none"
+                      placeholder="Nombre o teléfono"
+                      value={busquedaLead}
+                      onChange={(e) => setBusquedaLead(e.target.value)}
+                      disabled={form.mode !== "lead"}
+                    />
+                  </label>
                 </div>
               ) : null}
 
@@ -1335,6 +1309,45 @@ function RecepcionContent() {
                 />
               </div>
 
+              {!isReadOnlyAgendaForCall ? (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field
+                    label="Especialista"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={form.specialist_user_id}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            specialist_user_id: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Selecciona</option>
+                        {specialists.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.full_name} · {item.role_name}
+                          </option>
+                        ))}
+                      </select>
+                    }
+                  />
+
+                  <Field
+                    label="Tratamiento"
+                    input={
+                      <input
+                        className={inputClass}
+                        value={form.treatment_type}
+                        onChange={(e) =>
+                          setForm((prev) => ({ ...prev, treatment_type: e.target.value }))
+                        }
+                      />
+                    }
+                  />
+                </div>
+              ) : null}
 
               <Field
                 label="Notas"
@@ -1440,17 +1453,13 @@ function RecepcionContent() {
                             </p>
 
                             <p className="mt-1 text-sm text-slate-600">
-                              Fuente: {item.lead_id ? "Lead existente" : traducirFuenteManual(extraerFuenteManualDesdeNotas(item.notes))}
-                            </p>
-
-                            <p className="mt-1 text-sm text-slate-600">
                               Servicio: {item.service_type || "Sin servicio"}
                             </p>
 
                             {item.notes ? (
                               <p className="mt-2 text-sm text-slate-600">
                                 <span className="font-medium text-slate-800">Notas:</span>{" "}
-                                {limpiarFuenteManualDeNotas(item.notes)}
+                                {item.notes}
                               </p>
                             ) : null}
                           </div>
