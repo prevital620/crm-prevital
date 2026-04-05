@@ -143,8 +143,7 @@ export default function CallCenterPage() {
 
     if (error) {
       console.error("Error cargando leads:", error);
-      setMensaje("No se pudieron cargar los leads.");
-      return [];
+      throw new Error("No se pudieron cargar los leads.");
     }
 
     return (data as Lead[]) || [];
@@ -166,18 +165,17 @@ export default function CallCenterPage() {
 
     if (error) {
       console.error("Error cargando usuarios call center:", error);
-      setMensaje("No se pudieron cargar los usuarios de Call Center.");
-      return [];
+      throw new Error("No se pudieron cargar los usuarios de Call Center.");
     }
 
     const rows = (data || []) as any[];
 
     const filtered: CallCenterUser[] = rows
       .map((row) => {
-        const role = row.user_roles?.[0]?.roles;
+        const role = row.user_roles?.[0]?.roles?.[0];
         return {
           id: row.id,
-          full_name: row.full_name,
+          full_name: row.full_name || "Sin nombre",
           role_name: role?.name || "",
           role_code: role?.code || "",
         };
@@ -191,29 +189,34 @@ export default function CallCenterPage() {
   }
 
   async function cargarTodo() {
-    setCargando(true);
-    setMensaje("");
+    try {
+      setCargando(true);
+      setMensaje("");
+      setError("");
 
-    const [leadsData, usersData] = await Promise.all([
-      cargarLeads(),
-      cargarUsuariosCallCenter(),
-    ]);
+      const [leadsData, usersData] = await Promise.all([
+        cargarLeads(),
+        cargarUsuariosCallCenter(),
+      ]);
 
-    setLeads(leadsData);
-    setCallCenterUsers(usersData);
+      setLeads(leadsData);
+      setCallCenterUsers(usersData);
 
-    const assignments: Record<string, string> = {};
-    const statuses: Record<string, string> = {};
+      const assignments: Record<string, string> = {};
+      const statuses: Record<string, string> = {};
 
-    leadsData.forEach((lead) => {
-      assignments[lead.id] = lead.assigned_to_user_id || "";
-      statuses[lead.id] = lead.status || "nuevo";
-    });
+      leadsData.forEach((lead) => {
+        assignments[lead.id] = lead.assigned_to_user_id || "";
+        statuses[lead.id] = lead.status || "nuevo";
+      });
 
-    setSelectedAssignments(assignments);
-    setSelectedStatuses(statuses);
-
-    setCargando(false);
+      setSelectedAssignments(assignments);
+      setSelectedStatuses(statuses);
+    } catch (err: any) {
+      setError(err?.message || "No se pudieron cargar los datos del módulo.");
+    } finally {
+      setCargando(false);
+    }
   }
 
   async function validarAcceso() {
@@ -257,63 +260,77 @@ export default function CallCenterPage() {
   }, [authorized]);
 
   async function guardarAsignacion(leadId: string) {
-    const assignedUserId = selectedAssignments[leadId] || null;
+    try {
+      const assignedUserId = selectedAssignments[leadId] || null;
 
-    setSavingLeadId(leadId);
-    setMensaje("");
+      setSavingLeadId(leadId);
+      setMensaje("");
+      setError("");
 
-    const { error } = await supabase
-      .from("leads")
-      .update({
-        assigned_to_user_id: assignedUserId,
-      })
-      .eq("id", leadId);
+      const { error } = await supabase
+        .from("leads")
+        .update({
+          assigned_to_user_id: assignedUserId,
+        })
+        .eq("id", leadId);
 
-    if (error) {
-      console.error("Error guardando asignación:", error);
-      setMensaje("No se pudo guardar la asignación.");
+      if (error) {
+        console.error("Error guardando asignación:", error);
+        throw new Error(error.message || "No se pudo guardar la asignación.");
+      }
+
+      setLeads((prev) =>
+        prev.map((lead) =>
+          lead.id === leadId
+            ? { ...lead, assigned_to_user_id: assignedUserId }
+            : lead
+        )
+      );
+
+      setMensaje(
+        assignedUserId
+          ? "Asignación guardada correctamente."
+          : "Se quitó la asignación correctamente."
+      );
+    } catch (err: any) {
+      setError(err?.message || "No se pudo guardar la asignación.");
+    } finally {
       setSavingLeadId(null);
-      return;
     }
-
-    setMensaje("Asignación guardada correctamente.");
-    setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === leadId
-          ? { ...lead, assigned_to_user_id: assignedUserId }
-          : lead
-      )
-    );
-    setSavingLeadId(null);
   }
 
   async function guardarEstado(leadId: string) {
-    const newStatus = selectedStatuses[leadId] || "nuevo";
+    try {
+      const newStatus = selectedStatuses[leadId] || "nuevo";
 
-    setSavingStatusLeadId(leadId);
-    setMensaje("");
+      setSavingStatusLeadId(leadId);
+      setMensaje("");
+      setError("");
 
-    const { error } = await supabase
-      .from("leads")
-      .update({
-        status: newStatus,
-      })
-      .eq("id", leadId);
+      const { error } = await supabase
+        .from("leads")
+        .update({
+          status: newStatus,
+        })
+        .eq("id", leadId);
 
-    if (error) {
-      console.error("Error guardando estado:", error);
-      setMensaje("No se pudo actualizar el estado.");
+      if (error) {
+        console.error("Error guardando estado:", error);
+        throw new Error(error.message || "No se pudo actualizar el estado.");
+      }
+
+      setLeads((prev) =>
+        prev.map((lead) =>
+          lead.id === leadId ? { ...lead, status: newStatus } : lead
+        )
+      );
+
+      setMensaje("Estado actualizado correctamente.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo actualizar el estado.");
+    } finally {
       setSavingStatusLeadId(null);
-      return;
     }
-
-    setMensaje("Estado actualizado correctamente.");
-    setLeads((prev) =>
-      prev.map((lead) =>
-        lead.id === leadId ? { ...lead, status: newStatus } : lead
-      )
-    );
-    setSavingStatusLeadId(null);
   }
 
   const leadsFiltrados = useMemo(() => {
@@ -426,6 +443,18 @@ export default function CallCenterPage() {
             </a>
           </div>
         </section>
+
+        {error ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
+
+        {mensaje ? (
+          <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+            {mensaje}
+          </div>
+        ) : null}
 
         <section className="grid gap-4 md:grid-cols-5">
           <div className="rounded-3xl bg-white p-5 shadow-sm">
@@ -643,8 +672,6 @@ export default function CallCenterPage() {
               })}
             </div>
           )}
-
-          {mensaje && <p className="mt-4 text-sm text-slate-600">{mensaje}</p>}
         </section>
       </div>
     </main>
