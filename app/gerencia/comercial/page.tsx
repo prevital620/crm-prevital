@@ -29,6 +29,8 @@ type CommercialUser = {
   role_code: string;
 };
 
+type GerenciaTab = "pendientes" | "comerciales" | "en_gestion" | "finalizados";
+
 const allowedRoles = ["super_user", "gerente"];
 
 const activeCommercialStatuses = [
@@ -37,17 +39,9 @@ const activeCommercialStatuses = [
   "seguimiento_comercial",
 ];
 
-const caseStatusOptions = [
-  { value: "pendiente_asignacion_comercial", label: "Pendiente asignación" },
-  { value: "asignado_comercial", label: "Asignado" },
-  { value: "en_atencion_comercial", label: "En atención" },
-  { value: "seguimiento_comercial", label: "Seguimiento" },
-  { value: "finalizado", label: "Finalizado" },
-];
-
 function traducirEstado(status: string | null) {
   const map: Record<string, string> = {
-    pendiente_asignacion_comercial: "Pendiente asignación",
+    pendiente_asignacion_comercial: "Pendiente de asignación",
     asignado_comercial: "Asignado",
     en_atencion_comercial: "En atención",
     seguimiento_comercial: "Seguimiento",
@@ -77,6 +71,7 @@ function estadoBadge(status: string | null) {
 
 function formatDate(dateString: string | null | undefined) {
   if (!dateString) return "Sin fecha";
+
   try {
     return new Date(dateString).toLocaleString("es-CO", {
       dateStyle: "medium",
@@ -87,9 +82,38 @@ function formatDate(dateString: string | null | undefined) {
   }
 }
 
+function formatHour(dateString: string | null | undefined) {
+  if (!dateString) return "Sin hora";
+
+  try {
+    return new Date(dateString).toLocaleTimeString("es-CO", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return dateString;
+  }
+}
+
+function minutosEspera(dateString: string | null | undefined) {
+  if (!dateString) return "-";
+
+  const createdAt = new Date(dateString).getTime();
+  if (Number.isNaN(createdAt)) return "-";
+
+  const diffMinutes = Math.max(0, Math.round((Date.now() - createdAt) / 60000));
+
+  if (diffMinutes < 60) return `${diffMinutes} min`;
+
+  const hours = Math.floor(diffMinutes / 60);
+  const minutes = diffMinutes % 60;
+  return `${hours} h ${minutes} min`;
+}
+
 function esVentaReal(item: CommercialCase) {
   return !!(
     item.purchased_service ||
+    item.sale_result === "venta_realizada" ||
     (item.sale_value && Number(item.sale_value) > 0)
   );
 }
@@ -103,16 +127,12 @@ export default function GerenciaComercialPage() {
   const [mensaje, setMensaje] = useState("");
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
-
   const [cases, setCases] = useState<CommercialCase[]>([]);
   const [commercialUsers, setCommercialUsers] = useState<CommercialUser[]>([]);
 
+  const [activeTab, setActiveTab] = useState<GerenciaTab>("pendientes");
   const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("");
-
-  const [selectedCommercialByCase, setSelectedCommercialByCase] = useState<
-    Record<string, string>
-  >({});
+  const [selectedCommercialByCase, setSelectedCommercialByCase] = useState<Record<string, string>>({});
   const [savingCaseId, setSavingCaseId] = useState<string | null>(null);
 
   async function validarAcceso() {
@@ -196,7 +216,7 @@ export default function GerenciaComercialPage() {
           const role = row.user_roles?.[0]?.roles;
           return {
             id: row.id,
-            full_name: row.full_name,
+            full_name: row.full_name || "Sin nombre",
             role_name: role?.name || "",
             role_code: role?.code || "",
           };
@@ -233,76 +253,114 @@ export default function GerenciaComercialPage() {
     const map: Record<string, number> = {};
 
     cases.forEach((item) => {
-      if (
-        item.assigned_commercial_user_id &&
-        activeCommercialStatuses.includes(item.status)
-      ) {
-        map[item.assigned_commercial_user_id] =
-          (map[item.assigned_commercial_user_id] || 0) + 1;
+      if (item.assigned_commercial_user_id && activeCommercialStatuses.includes(item.status)) {
+        map[item.assigned_commercial_user_id] = (map[item.assigned_commercial_user_id] || 0) + 1;
       }
     });
 
     return map;
   }, [cases]);
 
-  const filteredCases = useMemo(() => {
-    const q = search.trim().toLowerCase();
+  const finishedTodayByCommercial = useMemo(() => {
+    const today = new Date().toDateString();
+    const map: Record<string, number> = {};
 
-    return cases.filter((item) => {
-      const searchOk = q
-        ? (item.customer_name || "").toLowerCase().includes(q) ||
-          (item.phone || "").toLowerCase().includes(q)
-        : true;
+    cases.forEach((item) => {
+      if (!item.assigned_commercial_user_id) return;
+      if (item.status !== "finalizado") return;
+      if (new Date(item.created_at).toDateString() !== today) return;
 
-      const statusOk = statusFilter ? item.status === statusFilter : true;
-
-      return searchOk && statusOk;
+      map[item.assigned_commercial_user_id] = (map[item.assigned_commercial_user_id] || 0) + 1;
     });
-  }, [cases, search, statusFilter]);
+
+    return map;
+  }, [cases]);
+
+  const salesTodayByCommercial = useMemo(() => {
+    const today = new Date().toDateString();
+    const map: Record<string, number> = {};
+
+    cases.forEach((item) => {
+      if (!item.assigned_commercial_user_id) return;
+      if (item.status !== "finalizado") return;
+      if (!esVentaReal(item)) return;
+      if (new Date(item.created_at).toDateString() !== today) return;
+
+      map[item.assigned_commercial_user_id] = (map[item.assigned_commercial_user_id] || 0) + 1;
+    });
+
+    return map;
+  }, [cases]);
+
+  const pendingCases = useMemo(
+    () => cases.filter((item) => item.status === "pendiente_asignacion_comercial"),
+    [cases]
+  );
+
+  const inProgressCases = useMemo(
+    () => cases.filter((item) => activeCommercialStatuses.includes(item.status)),
+    [cases]
+  );
+
+  const finalizadosCases = useMemo(
+    () => cases.filter((item) => item.status === "finalizado"),
+    [cases]
+  );
 
   const resumen = useMemo(() => {
     return {
-      total: cases.length,
-      pendientes: cases.filter(
-        (x) => x.status === "pendiente_asignacion_comercial"
-      ).length,
-      activos: cases.filter((x) =>
-        activeCommercialStatuses.includes(x.status)
-      ).length,
-      vendidos: cases.filter(
-        (x) => x.status === "finalizado" && esVentaReal(x)
-      ).length,
-      noVendidos: cases.filter(
-        (x) => x.status === "finalizado" && !esVentaReal(x)
-      ).length,
+      pendientes: pendingCases.length,
+      enAtencion: inProgressCases.length,
+      finalizados: finalizadosCases.length,
+      ventas: finalizadosCases.filter(esVentaReal).length,
+      seguimientos: cases.filter((x) => x.status === "seguimiento_comercial").length,
+      disponibles: commercialUsers.filter((user) => (activeCasesByCommercial[user.id] || 0) === 0).length,
     };
-  }, [cases]);
+  }, [pendingCases, inProgressCases, finalizadosCases, cases, commercialUsers, activeCasesByCommercial]);
+
+  const visibleCases = useMemo(() => {
+    const source =
+      activeTab === "pendientes"
+        ? pendingCases
+        : activeTab === "en_gestion"
+          ? inProgressCases
+          : activeTab === "finalizados"
+            ? finalizadosCases
+            : cases;
+
+    const q = search.trim().toLowerCase();
+    if (!q) return source;
+
+    return source.filter((item) => {
+      return (
+        (item.customer_name || "").toLowerCase().includes(q) ||
+        (item.phone || "").toLowerCase().includes(q) ||
+        (item.city || "").toLowerCase().includes(q)
+      );
+    });
+  }, [activeTab, pendingCases, inProgressCases, finalizadosCases, cases, search]);
 
   function nombreComercial(userId: string | null) {
     if (!userId) return "Sin asignar";
     const found = commercialUsers.find((x) => x.id === userId);
-    return found ? found.full_name : "Sin asignar";
+    return found ? found.full_name : userId === currentUserId ? "Gerente" : "Asignado";
   }
 
   function disponibilidadComercial(userId: string) {
     const activeCount = activeCasesByCommercial[userId] || 0;
-    return activeCount === 0 ? "Disponible" : `Ocupado (${activeCount})`;
+    return activeCount === 0 ? "Disponible" : "Atendiendo";
   }
 
   function disponibilidadBadge(userId: string) {
     const activeCount = activeCasesByCommercial[userId] || 0;
-    return activeCount === 0
-      ? "bg-green-100 text-green-700"
-      : "bg-amber-100 text-amber-700";
+    return activeCount === 0 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700";
   }
 
-  async function asignarComercial(caseId: string) {
+  async function asignarCaso(caseId: string, commercialId: string) {
     if (!currentUserId) {
       setError("No se encontró el usuario actual.");
       return;
     }
-
-    const commercialId = selectedCommercialByCase[caseId] || null;
 
     if (!commercialId) {
       setError("Debes seleccionar un comercial.");
@@ -313,24 +371,24 @@ export default function GerenciaComercialPage() {
     setError("");
     setMensaje("");
 
-    const { error } = await supabase
+    const assignedAt = new Date().toISOString();
+
+    const { error: updateError } = await supabase
       .from("commercial_cases")
       .update({
         assigned_commercial_user_id: commercialId,
         assigned_by_user_id: currentUserId,
-        assigned_at: new Date().toISOString(),
+        assigned_at: assignedAt,
         status: "asignado_comercial",
         updated_by_user_id: currentUserId,
       })
       .eq("id", caseId);
 
-    if (error) {
-      setError("No se pudo asignar el comercial.");
+    if (updateError) {
+      setError("No se pudo asignar el caso.");
       setSavingCaseId(null);
       return;
     }
-
-    setMensaje("Comercial asignado correctamente.");
 
     setCases((prev) =>
       prev.map((item) =>
@@ -339,14 +397,159 @@ export default function GerenciaComercialPage() {
               ...item,
               assigned_commercial_user_id: commercialId,
               assigned_by_user_id: currentUserId,
-              assigned_at: new Date().toISOString(),
+              assigned_at: assignedAt,
               status: "asignado_comercial",
             }
           : item
       )
     );
 
+    setSelectedCommercialByCase((prev) => ({ ...prev, [caseId]: commercialId }));
+    setMensaje(commercialId === currentUserId ? "Te asignaste este cliente correctamente." : "Cliente asignado correctamente.");
     setSavingCaseId(null);
+  }
+
+  async function atenderYo(caseId: string) {
+    if (!currentUserId) {
+      setError("No se encontró el usuario actual.");
+      return;
+    }
+
+    await asignarCaso(caseId, currentUserId);
+  }
+
+  function renderCaseList(title: string, description: string, items: CommercialCase[]) {
+    return (
+      <div className="rounded-3xl bg-white p-6 shadow-sm">
+        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+          <div>
+            <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
+            <p className="mt-1 text-sm text-slate-500">{description}</p>
+          </div>
+
+          <button
+            onClick={cargarDatos}
+            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+          >
+            Actualizar
+          </button>
+        </div>
+
+        <div className="mb-6">
+          <input
+            className="w-full rounded-2xl border border-slate-300 p-4 outline-none"
+            placeholder="Buscar por nombre, teléfono o ciudad"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {loading ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+            Cargando información...
+          </div>
+        ) : items.length === 0 ? (
+          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+            No hay registros para esta vista.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {items.map((item) => (
+              <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="text-lg font-semibold text-slate-900">{item.customer_name}</h3>
+                      <span className={`rounded-full px-3 py-1 text-xs ${estadoBadge(item.status)}`}>
+                        {traducirEstado(item.status)}
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
+                      <p><span className="font-medium text-slate-700">Teléfono:</span> {item.phone || "Sin teléfono"}</p>
+                      <p><span className="font-medium text-slate-700">Ciudad:</span> {item.city || "Sin ciudad"}</p>
+                      <p><span className="font-medium text-slate-700">Ingreso:</span> {formatDate(item.created_at)}</p>
+                      <p><span className="font-medium text-slate-700">Hora:</span> {formatHour(item.created_at)}</p>
+                      <p><span className="font-medium text-slate-700">Comercial:</span> {nombreComercial(item.assigned_commercial_user_id)}</p>
+                      <p><span className="font-medium text-slate-700">Espera:</span> {minutosEspera(item.created_at)}</p>
+                    </div>
+
+                    {item.status === "finalizado" ? (
+                      <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
+                        <p>
+                          <span className="font-medium text-slate-700">Resultado:</span>{" "}
+                          {esVentaReal(item) ? "Venta realizada" : "Sin venta"}
+                        </p>
+                        <p>
+                          <span className="font-medium text-slate-700">Valor:</span>{" "}
+                          {item.sale_value ? `$${item.sale_value.toLocaleString("es-CO")}` : "No registrado"}
+                        </p>
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="w-full rounded-2xl bg-slate-50 p-4 lg:w-[360px]">
+                    <p className="mb-3 text-sm font-medium text-slate-700">
+                      {item.assigned_commercial_user_id ? "Reasignar o editar" : "Asignar atención"}
+                    </p>
+
+                    <div className="space-y-3">
+                      <select
+                        className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
+                        value={selectedCommercialByCase[item.id] || ""}
+                        onChange={(e) =>
+                          setSelectedCommercialByCase((prev) => ({
+                            ...prev,
+                            [item.id]: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Selecciona un comercial</option>
+                        {commercialUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.full_name} · {disponibilidadComercial(user.id)}
+                          </option>
+                        ))}
+                      </select>
+
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const commercialId = selectedCommercialByCase[item.id] || "";
+                            void asignarCaso(item.id, commercialId);
+                          }}
+                          disabled={savingCaseId === item.id}
+                          className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                        >
+                          {savingCaseId === item.id ? "Guardando..." : item.assigned_commercial_user_id ? "Reasignar" : "Asignar"}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => void atenderYo(item.id)}
+                          disabled={savingCaseId === item.id}
+                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 disabled:opacity-60"
+                        >
+                          Atender yo
+                        </button>
+
+                        <a
+                          href={`/comercial?caseId=${item.id}`}
+                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700"
+                        >
+                          Editar gestión
+                        </a>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   }
 
   if (loadingAuth) {
@@ -363,9 +566,7 @@ export default function GerenciaComercialPage() {
     return (
       <main className="min-h-screen bg-slate-100 p-6 md:p-8">
         <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-red-700">
-            {error || "No tienes permiso para entrar a este módulo."}
-          </p>
+          <p className="text-sm font-medium text-red-700">{error || "No tienes permiso para entrar a este módulo."}</p>
         </div>
       </main>
     );
@@ -377,12 +578,10 @@ export default function GerenciaComercialPage() {
         <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">Gerencia</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">
-                Asignación comercial
-              </h1>
+              <p className="text-sm font-medium text-slate-500">Gerencia comercial</p>
+              <h1 className="mt-2 text-3xl font-bold text-slate-900">Centro de control comercial</h1>
               <p className="mt-3 text-sm text-slate-600">
-                Asigna comerciales, revisa disponibilidad y controla los casos activos.
+                Asigna clientes, revisa disponibilidad del equipo y entra a la gestión solo cuando lo necesites.
               </p>
             </div>
 
@@ -400,34 +599,99 @@ export default function GerenciaComercialPage() {
         </section>
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
         ) : null}
 
         {mensaje ? (
-          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-            {mensaje}
-          </div>
+          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">{mensaje}</div>
         ) : null}
 
-        <section className="mb-6 grid gap-4 md:grid-cols-5">
-          <StatCard title="Casos" value={String(resumen.total)} />
+        <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <StatCard title="Pendientes" value={String(resumen.pendientes)} />
-          <StatCard title="Activos" value={String(resumen.activos)} />
-          <StatCard title="Vendidos" value={String(resumen.vendidos)} />
-          <StatCard title="No vendidos" value={String(resumen.noVendidos)} />
+          <StatCard title="En atención" value={String(resumen.enAtencion)} />
+          <StatCard title="Finalizados" value={String(resumen.finalizados)} />
+          <StatCard title="Ventas" value={String(resumen.ventas)} />
+          <StatCard title="Seguimientos" value={String(resumen.seguimientos)} />
+          <StatCard title="Disponibles" value={String(resumen.disponibles)} />
         </section>
 
-        <section className="mb-6 grid gap-6 xl:grid-cols-3">
-          <div className="xl:col-span-2 rounded-3xl bg-white p-6 shadow-sm">
+        <section className="mb-6 rounded-3xl bg-white p-4 shadow-sm">
+          <div className="flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab("pendientes")}
+              className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                activeTab === "pendientes"
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-300 text-slate-700"
+              }`}
+            >
+              Pendientes
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("comerciales")}
+              className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                activeTab === "comerciales"
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-300 text-slate-700"
+              }`}
+            >
+              Comerciales
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("en_gestion")}
+              className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                activeTab === "en_gestion"
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-300 text-slate-700"
+              }`}
+            >
+              En gestión
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab("finalizados")}
+              className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                activeTab === "finalizados"
+                  ? "bg-slate-900 text-white"
+                  : "border border-slate-300 text-slate-700"
+              }`}
+            >
+              Finalizados
+            </button>
+          </div>
+        </section>
+
+        {activeTab === "pendientes" &&
+          renderCaseList(
+            "Clientes pendientes",
+            "Aquí ves quién llegó al área comercial y todavía no tiene atención asignada.",
+            visibleCases
+          )}
+
+        {activeTab === "en_gestion" &&
+          renderCaseList(
+            "Clientes en gestión",
+            "Casos ya asignados o en atención. El gerente puede corregir, reasignar o atender directamente.",
+            visibleCases
+          )}
+
+        {activeTab === "finalizados" &&
+          renderCaseList(
+            "Gestiones finalizadas",
+            "Resumen de clientes cerrados hoy, con o sin venta, para control operativo.",
+            visibleCases
+          )}
+
+        {activeTab === "comerciales" && (
+          <section className="rounded-3xl bg-white p-6 shadow-sm">
             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">
-                  Casos comerciales
-                </h2>
+                <h2 className="text-2xl font-bold text-slate-900">Comerciales del día</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Busca por cliente o teléfono y filtra por estado.
+                  Revisa en tiempo real quién está disponible y cuántos clientes ha movido hoy.
                 </p>
               </div>
 
@@ -439,186 +703,65 @@ export default function GerenciaComercialPage() {
               </button>
             </div>
 
-            <div className="mb-6 grid gap-3 md:grid-cols-2">
-              <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
-                placeholder="Buscar por cliente o teléfono"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-
-              <select
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value)}
-              >
-                <option value="">Todos los estados</option>
-                {caseStatusOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
-              </select>
-            </div>
-
             {loading ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                Cargando casos comerciales...
+                Cargando comerciales...
               </div>
-            ) : filteredCases.length === 0 ? (
+            ) : commercialUsers.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                No hay casos con esos filtros.
+                No hay usuarios con rol comercial.
               </div>
             ) : (
-              <div className="space-y-4">
-                {filteredCases.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-2xl border border-slate-200 p-4"
-                  >
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+              <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                {commercialUsers.map((user) => {
+                  const activeCount = activeCasesByCommercial[user.id] || 0;
+                  const finishedCount = finishedTodayByCommercial[user.id] || 0;
+                  const salesCount = salesTodayByCommercial[user.id] || 0;
+
+                  return (
+                    <div key={user.id} className="rounded-2xl border border-slate-200 p-5">
+                      <div className="flex items-start justify-between gap-3">
                         <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-900">
-                              {item.customer_name}
-                            </h3>
-
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs ${estadoBadge(
-                                item.status
-                              )}`}
-                            >
-                              {traducirEstado(item.status)}
-                            </span>
-                          </div>
-
-                          <p className="mt-2 text-sm text-slate-600">
-                            {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-600">
-                            Comercial: {nombreComercial(item.assigned_commercial_user_id)}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-600">
-                            Asignado: {formatDate(item.assigned_at)}
-                          </p>
-
-                          {item.purchased_service ? (
-                            <p className="mt-1 text-sm text-slate-600">
-                              Servicio adquirido: {item.purchased_service}
-                            </p>
-                          ) : null}
-
-                          {item.sale_value ? (
-                            <p className="mt-1 text-sm text-slate-600">
-                              Valor: ${item.sale_value.toLocaleString("es-CO")}
-                            </p>
-                          ) : null}
+                          <p className="font-semibold text-slate-900">{user.full_name}</p>
+                          <p className="mt-1 text-xs text-slate-500">{user.role_name || "Comercial"}</p>
                         </div>
+
+                        <span className={`rounded-full px-3 py-1 text-xs font-semibold ${disponibilidadBadge(user.id)}`}>
+                          {disponibilidadComercial(user.id)}
+                        </span>
                       </div>
 
-                      <div className="rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-3 text-sm font-medium text-slate-700">
-                          Asignar o reasignar comercial
-                        </p>
-
-                        <div className="flex flex-col gap-3 md:flex-row">
-                          <select
-                            className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
-                            value={selectedCommercialByCase[item.id] || ""}
-                            onChange={(e) =>
-                              setSelectedCommercialByCase((prev) => ({
-                                ...prev,
-                                [item.id]: e.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">Selecciona un comercial</option>
-                            {commercialUsers.map((user) => (
-                              <option key={user.id} value={user.id}>
-                                {user.full_name} · {disponibilidadComercial(user.id)}
-                              </option>
-                            ))}
-                          </select>
-
-                          <button
-                            type="button"
-                            onClick={() => asignarComercial(item.id)}
-                            disabled={savingCaseId === item.id}
-                            className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white disabled:opacity-60"
-                          >
-                            {savingCaseId === item.id
-                              ? "Guardando..."
-                              : "Asignar"}
-                          </button>
-                        </div>
+                      <div className="mt-4 grid grid-cols-3 gap-3 text-center">
+                        <MiniStat label="Activos" value={String(activeCount)} />
+                        <MiniStat label="Finalizados" value={String(finishedCount)} />
+                        <MiniStat label="Ventas" value={String(salesCount)} />
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
-          </div>
-
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-bold text-slate-900">Comerciales</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Disponibilidad calculada según casos activos.
-            </p>
-
-            <div className="mt-5 space-y-3">
-              {commercialUsers.length === 0 ? (
-                <p className="text-sm text-slate-500">
-                  No hay usuarios con rol comercial.
-                </p>
-              ) : (
-                commercialUsers.map((user) => (
-                  <div
-                    key={user.id}
-                    className="rounded-2xl border border-slate-200 p-4"
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <p className="font-semibold text-slate-900">
-                          {user.full_name}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-500">
-                          {user.role_name}
-                        </p>
-                      </div>
-
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${disponibilidadBadge(
-                          user.id
-                        )}`}
-                      >
-                        {disponibilidadComercial(user.id)}
-                      </span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </section>
+          </section>
+        )}
       </div>
     </main>
   );
 }
 
-function StatCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
+function StatCard({ title, value }: { title: string; value: string }) {
   return (
     <div className="rounded-3xl bg-white p-5 shadow-sm">
       <p className="text-sm text-slate-500">{title}</p>
       <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+    </div>
+  );
+}
+
+function MiniStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-2xl bg-slate-50 p-3">
+      <p className="text-xs text-slate-500">{label}</p>
+      <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
     </div>
   );
 }
