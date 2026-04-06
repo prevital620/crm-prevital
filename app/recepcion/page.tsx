@@ -168,6 +168,7 @@ function getServiceOptionsBySection(section: ReceptionSection) {
 }
 
 const manualSourceOptions = [
+  { value: "lead_existente", label: "Lead existente" },
   { value: "opc", label: "OPC" },
   { value: "tmk", label: "TMK" },
   { value: "redes", label: "Redes" },
@@ -387,6 +388,7 @@ function RecepcionContent() {
 
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
   const [selectedQuickAppointmentId, setSelectedQuickAppointmentId] = useState<string | null>(null);
+  const [selectedCommercialAppointmentId, setSelectedCommercialAppointmentId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<ReceptionSection>("agenda");
   const [deliveryLogs, setDeliveryLogs] = useState<DeliveryLog[]>([]);
   const [printSearch, setPrintSearch] = useState("");
@@ -1133,6 +1135,7 @@ function RecepcionContent() {
 
 
   function resetCommercialForm() {
+    setSelectedCommercialAppointmentId(null);
     setCommercialForm({
       customer_name: "",
       phone: "",
@@ -1170,7 +1173,10 @@ function RecepcionContent() {
 
       const yaExiste = commercialCases.find(
         (item) =>
-          (item.phone || "").trim() === commercialForm.phone.trim() &&
+          (
+            (selectedCommercialAppointmentId && item.appointment_id === selectedCommercialAppointmentId) ||
+            (!selectedCommercialAppointmentId && (item.phone || "").trim() === commercialForm.phone.trim())
+          ) &&
           ["pendiente_asignacion_comercial", "asignado_comercial", "en_atencion_comercial"].includes(item.status)
       );
 
@@ -1232,10 +1238,33 @@ function RecepcionContent() {
         commercialForm.observaciones ? `Observaciones recepción: ${commercialForm.observaciones}` : "",
       ].filter(Boolean).join(" | ");
 
+      const appointmentContext = selectedCommercialAppointmentId
+        ? appointments.find((item) => item.id === selectedCommercialAppointmentId) || null
+        : null;
+
+      if (appointmentContext) {
+        const payload: any = {
+          status: "asistio",
+          attended_at: new Date().toISOString(),
+          updated_by_user_id: currentUserId,
+        };
+
+        const { error: appointmentError } = await supabase
+          .from("appointments")
+          .update(payload)
+          .eq("id", appointmentContext.id);
+
+        if (appointmentError) throw appointmentError;
+
+        if (appointmentContext.lead_id) {
+          await actualizarEstadoLeadPorCita(appointmentContext.lead_id, "asistio");
+        }
+      }
+
       const { error: insertError } = await supabase.from("commercial_cases").insert([
         {
-          lead_id: null,
-          appointment_id: null,
+          lead_id: appointmentContext?.lead_id || null,
+          appointment_id: appointmentContext?.id || null,
           customer_name: commercialForm.customer_name.trim(),
           phone: commercialForm.phone.trim(),
           city: commercialForm.city.trim() || null,
@@ -1250,7 +1279,11 @@ function RecepcionContent() {
 
       resetCommercialForm();
       setActiveSection("comercial");
-      setMensaje("Ingreso comercial registrado correctamente. Ya quedó disponible para asignación del gerente.");
+      setMensaje(
+        appointmentContext
+          ? "Cliente registrado en comercial y la cita quedó como asistió. Ya está disponible para asignación del gerente."
+          : "Ingreso comercial registrado correctamente. Ya quedó disponible para asignación del gerente."
+      );
       await cargarTodo();
     } catch (err: any) {
       setError(err?.message || "No se pudo registrar el ingreso comercial.");
@@ -1304,6 +1337,31 @@ function RecepcionContent() {
     setSelectedQuickAppointmentId(item.id);
     setFechaFiltro(item.appointment_date);
     setBusquedaAgenda(item.patient_name || item.phone || "");
+  }
+
+  function abrirIngresoComercialDesdeCita(item: AppointmentRow) {
+    setSelectedQuickAppointmentId(item.id);
+    setSelectedCommercialAppointmentId(item.id);
+    setFechaFiltro(item.appointment_date);
+    setBusquedaAgenda(item.patient_name || item.phone || "");
+    setCommercialForm({
+      customer_name: item.patient_name || "",
+      phone: item.phone || "",
+      city: item.city || "",
+      documento: "",
+      fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
+      observaciones: limpiarFuenteManualDeNotas(item.notes),
+      afiliacion: "",
+      ocupacion: "",
+      edad: "",
+      celular_inteligente: "si",
+      antecedente_quirurgico: "no",
+      enfermedad_base: "no",
+      clasificacion_inicial: "No Q",
+      referido_por: "",
+    });
+    setActiveSection("comercial");
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function actualizarEstadoLeadPorCita(
@@ -1875,6 +1933,16 @@ function RecepcionContent() {
                   </p>
                 </div>
               </div>
+
+              {selectedCommercialAppointmentId ? (
+                <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+                  <p className="font-semibold">Cita seleccionada para ingreso comercial</p>
+                  <p className="mt-1">
+                    Al guardar este registro, la cita quedará automáticamente como <strong>Asistió</strong>.
+                    Si luego hace falta, desde agenda todavía la podrás cambiar a <strong>No asistió</strong>.
+                  </p>
+                </div>
+              ) : null}
 
               <form onSubmit={registrarIngresoComercial} className="mt-5 space-y-4">
                 <div className="grid gap-4 md:grid-cols-2">
@@ -2803,7 +2871,7 @@ function RecepcionContent() {
                     return (
                     <div
                       key={item.id}
-                      onDoubleClick={() => seleccionarCitaRapida(item)}
+                      onDoubleClick={() => abrirIngresoComercialDesdeCita(item)}
                       className={`rounded-2xl border p-4 transition ${isSelected ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}
                     >
                       <div className="flex flex-col gap-4">
@@ -2860,28 +2928,19 @@ function RecepcionContent() {
                           <div className="flex flex-wrap gap-2">
                             <button
                               type="button"
-                              onClick={() => seleccionarCitaRapida(item)}
-                              className={`rounded-2xl px-4 py-2 text-sm font-medium ${isSelected ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                              onClick={() => abrirIngresoComercialDesdeCita(item)}
+                              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
                             >
-                              Seleccionar
+                              Registro comercial
                             </button>
 
                             <button
                               type="button"
-                              onClick={() => actualizarEstadoCita(item.id, "en_espera")}
+                              onClick={() => actualizarEstadoCita(item.id, "no_asistio")}
                               disabled={savingStatusId === item.id}
-                              className="rounded-2xl border border-amber-300 px-4 py-2 text-sm font-medium text-amber-700 disabled:opacity-60"
+                              className="rounded-2xl border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 disabled:opacity-60"
                             >
-                              Registrar llegada
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => actualizarEstadoCita(item.id, "asistio")}
-                              disabled={savingStatusId === item.id}
-                              className="rounded-2xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 disabled:opacity-60"
-                            >
-                              Pasar a comercial
+                              No asistió
                             </button>
 
                             <button
