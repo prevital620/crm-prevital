@@ -386,6 +386,7 @@ function RecepcionContent() {
   const [slotBlockedInputs, setSlotBlockedInputs] = useState<Record<string, boolean>>({});
 
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
+  const [selectedQuickAppointmentId, setSelectedQuickAppointmentId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<ReceptionSection>("agenda");
   const [deliveryLogs, setDeliveryLogs] = useState<DeliveryLog[]>([]);
   const [printSearch, setPrintSearch] = useState("");
@@ -692,6 +693,7 @@ function RecepcionContent() {
   function cambiarSeccion(section: ReceptionSection) {
     setActiveSection(section);
     setEditingAppointmentId(null);
+    setSelectedQuickAppointmentId(null);
     setMensaje("");
     setError("");
     setForm((prev) => ({
@@ -1259,6 +1261,7 @@ function RecepcionContent() {
 
   function resetForm() {
     setEditingAppointmentId(null);
+    setSelectedQuickAppointmentId(null);
     setForm({
       mode: leadIdFromUrl ? "lead" : "lead",
       lead_id: leadIdFromUrl || "",
@@ -1279,6 +1282,7 @@ function RecepcionContent() {
     if (isReadOnlyAgendaForCall) return;
 
     setEditingAppointmentId(item.id);
+    setSelectedQuickAppointmentId(item.id);
     setActiveSection(getSectionForService(item.service_type));
     setForm({
       mode: item.lead_id ? "lead" : "manual",
@@ -1294,6 +1298,12 @@ function RecepcionContent() {
       notes: limpiarFuenteManualDeNotas(item.notes),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function seleccionarCitaRapida(item: AppointmentRow) {
+    setSelectedQuickAppointmentId(item.id);
+    setFechaFiltro(item.appointment_date);
+    setBusquedaAgenda(item.patient_name || item.phone || "");
   }
 
   async function actualizarEstadoLeadPorCita(
@@ -1521,10 +1531,10 @@ function RecepcionContent() {
     return true;
   }
 
-  async function guardarEstado(id: string) {
+  async function actualizarEstadoCita(id: string, forcedStatus?: string) {
     if (isReadOnlyAgendaForCall) return;
 
-    const nuevoEstado = statusById[id];
+    const nuevoEstado = forcedStatus || statusById[id];
     if (!nuevoEstado || !currentUserId) return;
 
     setSavingStatusId(id);
@@ -1599,6 +1609,10 @@ function RecepcionContent() {
 
     setMensaje(mensajeFinal);
     setSavingStatusId(null);
+  }
+
+  async function guardarEstado(id: string) {
+    return actualizarEstadoCita(id);
   }
 
   if (loadingAuth) {
@@ -2784,8 +2798,14 @@ function RecepcionContent() {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {agendaFiltrada.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                  {agendaFiltrada.map((item) => {
+                    const isSelected = selectedQuickAppointmentId === item.id;
+                    return (
+                    <div
+                      key={item.id}
+                      onDoubleClick={() => seleccionarCitaRapida(item)}
+                      className={`rounded-2xl border p-4 transition ${isSelected ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}
+                    >
                       <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                           <div>
@@ -2809,6 +2829,12 @@ function RecepcionContent() {
                               <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
                                 {formatHora(item.appointment_time)}
                               </span>
+
+                              {isSelected ? (
+                                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">
+                                  Seleccionada
+                                </span>
+                              ) : null}
                             </div>
 
                             <p className="mt-2 text-sm text-slate-600">
@@ -2831,13 +2857,41 @@ function RecepcionContent() {
                             ) : null}
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => cargarCitaParaEditar(item)}
-                            className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-                          >
-                            Reagendar
-                          </button>
+                          <div className="flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => seleccionarCitaRapida(item)}
+                              className={`rounded-2xl px-4 py-2 text-sm font-medium ${isSelected ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                            >
+                              Seleccionar
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => actualizarEstadoCita(item.id, "en_espera")}
+                              disabled={savingStatusId === item.id}
+                              className="rounded-2xl border border-amber-300 px-4 py-2 text-sm font-medium text-amber-700 disabled:opacity-60"
+                            >
+                              Registrar llegada
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => actualizarEstadoCita(item.id, "asistio")}
+                              disabled={savingStatusId === item.id}
+                              className="rounded-2xl border border-emerald-300 px-4 py-2 text-sm font-medium text-emerald-700 disabled:opacity-60"
+                            >
+                              Pasar a comercial
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => cargarCitaParaEditar(item)}
+                              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+                            >
+                              Reagendar
+                            </button>
+                          </div>
                         </div>
 
                         <div className="rounded-2xl bg-slate-50 p-4">
@@ -2877,8 +2931,8 @@ function RecepcionContent() {
                         </div>
                       </div>
                     </div>
-                  ))}
-                </div>
+                    );
+                  })}                </div>
               )}
             </div>
           )}
