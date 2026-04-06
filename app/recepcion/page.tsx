@@ -49,13 +49,32 @@ type SlotOption = {
   label: string;
 };
 
-type ReceptionSection = "agenda" | "especialistas" | "tratamientos" | "impresiones";
+type ReceptionSection = "agenda" | "especialistas" | "tratamientos" | "impresiones" | "inventario";
 
 type DeliveryLog = {
   id: string;
   patient_name: string;
   phone: string;
   product: string;
+  quantity: number;
+  notes: string;
+  created_at: string;
+};
+
+type InventoryItem = {
+  id: string;
+  name: string;
+  category: string;
+  stock: number;
+  min_stock: number;
+  updated_at: string;
+};
+
+type InventoryMovement = {
+  id: string;
+  product_id: string;
+  product_name: string;
+  type: "entrada" | "salida" | "ajuste";
   quantity: number;
   notes: string;
   created_at: string;
@@ -112,20 +131,21 @@ function getSectionLabel(section: ReceptionSection) {
   if (section === "especialistas") return "Especialistas";
   if (section === "tratamientos") return "Tratamientos";
   if (section === "impresiones") return "Impresiones y entregas";
+  if (section === "inventario") return "Inventario";
   return "Agenda";
 }
 
 function getServiceFieldLabel(section: ReceptionSection) {
   if (section === "especialistas") return "Especialista";
   if (section === "tratamientos") return "Tratamiento";
-  if (section === "impresiones") return "Servicio";
+  if (section === "impresiones" || section === "inventario") return "Servicio";
   return "Servicio";
 }
 
 function getServiceOptionsBySection(section: ReceptionSection) {
   if (section === "especialistas") return specialistOptions;
   if (section === "tratamientos") return treatmentOptions;
-  if (section === "impresiones") return [];
+  if (section === "impresiones" || section === "inventario") return [];
   return generalServiceOptions;
 }
 
@@ -307,6 +327,16 @@ function RecepcionContent() {
   const [deliveryProduct, setDeliveryProduct] = useState("");
   const [deliveryQuantity, setDeliveryQuantity] = useState("1");
   const [deliveryNotes, setDeliveryNotes] = useState("");
+  const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
+  const [inventoryMovements, setInventoryMovements] = useState<InventoryMovement[]>([]);
+  const [inventorySearch, setInventorySearch] = useState("");
+  const [inventoryProductId, setInventoryProductId] = useState("");
+  const [inventoryNewProduct, setInventoryNewProduct] = useState("");
+  const [inventoryCategory, setInventoryCategory] = useState("nutraceutico");
+  const [inventoryMovementType, setInventoryMovementType] = useState<"entrada" | "salida" | "ajuste">("entrada");
+  const [inventoryQuantity, setInventoryQuantity] = useState("1");
+  const [inventoryMinStock, setInventoryMinStock] = useState("5");
+  const [inventoryMovementNotes, setInventoryMovementNotes] = useState("");
 
   const [form, setForm] = useState({
     mode: leadIdFromUrl ? "lead" : "lead",
@@ -479,6 +509,27 @@ function RecepcionContent() {
     } catch {}
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const rawItems = window.localStorage.getItem("recepcion_inventory_items");
+      const rawMovements = window.localStorage.getItem("recepcion_inventory_movements");
+
+      if (rawItems) {
+        const parsedItems = JSON.parse(rawItems) as InventoryItem[];
+        if (Array.isArray(parsedItems)) {
+          setInventoryItems(parsedItems);
+        }
+      }
+
+      if (rawMovements) {
+        const parsedMovements = JSON.parse(rawMovements) as InventoryMovement[];
+        if (Array.isArray(parsedMovements)) {
+          setInventoryMovements(parsedMovements);
+        }
+      }
+    } catch {}
+  }, []);
 
   useEffect(() => {
     if (!leadIdFromUrl || leads.length === 0) return;
@@ -806,6 +857,123 @@ function RecepcionContent() {
     setDeliveryQuantity("1");
     setDeliveryNotes("");
     setMensaje("Entrega registrada correctamente en este dispositivo.");
+    setError("");
+  }
+
+  const inventoryFilteredItems = useMemo(() => {
+    const q = inventorySearch.trim().toLowerCase();
+    const base = [...inventoryItems].sort((a, b) => a.name.localeCompare(b.name));
+
+    if (!q) return base;
+
+    return base.filter((item) =>
+      item.name.toLowerCase().includes(q) || item.category.toLowerCase().includes(q)
+    );
+  }, [inventoryItems, inventorySearch]);
+
+  const inventoryRecentMovements = useMemo(() => {
+    return [...inventoryMovements]
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+      .slice(0, 20);
+  }, [inventoryMovements]);
+
+  function getInventoryStatus(item: InventoryItem) {
+    if (item.stock <= 0) {
+      return { label: "Agotado", className: "bg-red-100 text-red-700" };
+    }
+
+    if (item.stock <= item.min_stock) {
+      return { label: "Bajo", className: "bg-amber-100 text-amber-700" };
+    }
+
+    return { label: "Normal", className: "bg-emerald-100 text-emerald-700" };
+  }
+
+  function registrarMovimientoInventario() {
+    const quantity = Number(inventoryQuantity || "0");
+    if (!quantity || quantity < 1) {
+      setError("La cantidad del movimiento debe ser mayor que cero.");
+      return;
+    }
+
+    let selectedItem = inventoryItems.find((item) => item.id === inventoryProductId);
+
+    if (!selectedItem && !inventoryNewProduct.trim()) {
+      setError("Debes seleccionar un producto existente o escribir uno nuevo.");
+      return;
+    }
+
+    const now = new Date().toISOString();
+    const nextItems = [...inventoryItems];
+    let productId = inventoryProductId;
+    let productName = selectedItem?.name || inventoryNewProduct.trim();
+
+    if (!selectedItem && inventoryNewProduct.trim()) {
+      const nuevoItem: InventoryItem = {
+        id: `${Date.now()}`,
+        name: inventoryNewProduct.trim(),
+        category: inventoryCategory.trim() || "General",
+        stock: 0,
+        min_stock: Number(inventoryMinStock || "5") || 5,
+        updated_at: now,
+      };
+      nextItems.unshift(nuevoItem);
+      selectedItem = nuevoItem;
+      productId = nuevoItem.id;
+      productName = nuevoItem.name;
+    }
+
+    if (!selectedItem) {
+      setError("No se pudo identificar el producto.");
+      return;
+    }
+
+    const updatedItems = nextItems.map((item) => {
+      if (item.id !== selectedItem!.id) return item;
+
+      let nextStock = item.stock;
+      if (inventoryMovementType === "entrada") nextStock = item.stock + quantity;
+      if (inventoryMovementType === "salida") nextStock = Math.max(item.stock - quantity, 0);
+      if (inventoryMovementType === "ajuste") nextStock = quantity;
+
+      return {
+        ...item,
+        stock: nextStock,
+        min_stock:
+          item.id === selectedItem!.id && inventoryNewProduct.trim()
+            ? Number(inventoryMinStock || "5") || 5
+            : item.min_stock,
+        updated_at: now,
+      };
+    });
+
+    const nuevoMovimiento: InventoryMovement = {
+      id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      product_id: productId,
+      product_name: productName,
+      type: inventoryMovementType,
+      quantity,
+      notes: inventoryMovementNotes.trim(),
+      created_at: now,
+    };
+
+    const nextMovements = [nuevoMovimiento, ...inventoryMovements].slice(0, 100);
+
+    setInventoryItems(updatedItems);
+    setInventoryMovements(nextMovements);
+
+    if (typeof window !== "undefined") {
+      window.localStorage.setItem("recepcion_inventory_items", JSON.stringify(updatedItems));
+      window.localStorage.setItem("recepcion_inventory_movements", JSON.stringify(nextMovements));
+    }
+
+    setInventoryProductId("");
+    setInventoryNewProduct("");
+    setInventoryQuantity("1");
+    setInventoryMovementNotes("");
+    setInventoryCategory("nutraceutico");
+    setInventoryMinStock("5");
+    setMensaje("Movimiento de inventario registrado correctamente.");
     setError("");
   }
 
@@ -1235,6 +1403,13 @@ function RecepcionContent() {
                 >
                   Impresiones / Entregas
                 </button>
+                <button
+                  type="button"
+                  onClick={() => cambiarSeccion("inventario")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "inventario" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                >
+                  Inventario
+                </button>
               </>
             )}
           </div>
@@ -1262,7 +1437,7 @@ function RecepcionContent() {
           </section>
         )}
 
-        {canManageAgendaConfig && activeSection !== "impresiones" ? (
+        {canManageAgendaConfig && activeSection !== "impresiones" && activeSection !== "inventario" ? (
           <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
@@ -1543,6 +1718,217 @@ function RecepcionContent() {
                     </div>
                   ))
                 )}
+              </div>
+            </div>
+          </section>
+        ) : activeSection === "inventario" && !isReadOnlyAgendaForCall ? (
+          <section className="mb-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Inventario</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Control básico de nutracéuticos, entradas, salidas y alertas de stock.
+                  </p>
+                </div>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2">
+                <Field
+                  label="Producto existente"
+                  input={
+                    <select
+                      className={inputClass}
+                      value={inventoryProductId}
+                      onChange={(e) => setInventoryProductId(e.target.value)}
+                    >
+                      <option value="">Selecciona</option>
+                      {inventoryItems
+                        .slice()
+                        .sort((a, b) => a.name.localeCompare(b.name))
+                        .map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.name} · stock {item.stock}
+                          </option>
+                        ))}
+                    </select>
+                  }
+                />
+
+                <Field
+                  label="O crear producto nuevo"
+                  input={
+                    <input
+                      className={inputClass}
+                      placeholder="Ej: Magnesio quelado"
+                      value={inventoryNewProduct}
+                      onChange={(e) => setInventoryNewProduct(e.target.value)}
+                    />
+                  }
+                />
+
+                <Field
+                  label="Categoría"
+                  input={
+                    <input
+                      className={inputClass}
+                      value={inventoryCategory}
+                      onChange={(e) => setInventoryCategory(e.target.value)}
+                    />
+                  }
+                />
+
+                <Field
+                  label="Stock mínimo"
+                  input={
+                    <input
+                      className={inputClass}
+                      type="number"
+                      min="0"
+                      value={inventoryMinStock}
+                      onChange={(e) => setInventoryMinStock(e.target.value)}
+                    />
+                  }
+                />
+
+                <Field
+                  label="Tipo de movimiento"
+                  input={
+                    <select
+                      className={inputClass}
+                      value={inventoryMovementType}
+                      onChange={(e) => setInventoryMovementType(e.target.value as "entrada" | "salida" | "ajuste")}
+                    >
+                      <option value="entrada">Entrada</option>
+                      <option value="salida">Salida</option>
+                      <option value="ajuste">Ajuste de stock final</option>
+                    </select>
+                  }
+                />
+
+                <Field
+                  label={inventoryMovementType === "ajuste" ? "Stock final" : "Cantidad"}
+                  input={
+                    <input
+                      className={inputClass}
+                      type="number"
+                      min="1"
+                      value={inventoryQuantity}
+                      onChange={(e) => setInventoryQuantity(e.target.value)}
+                    />
+                  }
+                />
+              </div>
+
+              <div className="mt-4">
+                <Field
+                  label="Observaciones"
+                  input={
+                    <textarea
+                      className={`${inputClass} min-h-[110px] resize-none`}
+                      value={inventoryMovementNotes}
+                      onChange={(e) => setInventoryMovementNotes(e.target.value)}
+                    />
+                  }
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={registrarMovimientoInventario}
+                className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white"
+              >
+                Registrar movimiento
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="rounded-3xl bg-white p-6 shadow-sm">
+                <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-slate-900">Stock actual</h2>
+                    <p className="mt-1 text-sm text-slate-500">
+                      Vista rápida del inventario disponible en este dispositivo.
+                    </p>
+                  </div>
+
+                  <input
+                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none md:max-w-xs"
+                    placeholder="Buscar producto o categoría"
+                    value={inventorySearch}
+                    onChange={(e) => setInventorySearch(e.target.value)}
+                  />
+                </div>
+
+                <div className="mt-5 space-y-3">
+                  {inventoryFilteredItems.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                      Aún no hay productos registrados en el inventario.
+                    </div>
+                  ) : (
+                    inventoryFilteredItems.map((item) => {
+                      const inventoryStatus = getInventoryStatus(item);
+                      return (
+                        <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                          <div className="flex items-start justify-between gap-3">
+                            <div>
+                              <p className="text-base font-semibold text-slate-900">{item.name}</p>
+                              <p className="mt-1 text-sm text-slate-600">{item.category}</p>
+                              <p className="mt-2 text-sm text-slate-700">
+                                <span className="font-medium">Stock:</span> {item.stock}
+                              </p>
+                              <p className="mt-1 text-sm text-slate-700">
+                                <span className="font-medium">Mínimo:</span> {item.min_stock}
+                              </p>
+                            </div>
+                            <span className={`rounded-full px-3 py-1 text-xs ${inventoryStatus.className}`}>
+                              {inventoryStatus.label}
+                            </span>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-3xl bg-white p-6 shadow-sm">
+                <h2 className="text-2xl font-bold text-slate-900">Movimientos recientes</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Últimos registros de entrada, salida o ajuste.
+                </p>
+
+                <div className="mt-5 space-y-3">
+                  {inventoryRecentMovements.length === 0 ? (
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                      Aún no hay movimientos registrados.
+                    </div>
+                  ) : (
+                    inventoryRecentMovements.map((item) => (
+                      <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="text-base font-semibold text-slate-900">{item.product_name}</p>
+                            <p className="mt-1 text-sm text-slate-700">
+                              <span className="font-medium">Tipo:</span> {item.type}
+                            </p>
+                            <p className="mt-1 text-sm text-slate-700">
+                              <span className="font-medium">Cantidad:</span> {item.quantity}
+                            </p>
+                            {item.notes ? (
+                              <p className="mt-1 text-sm text-slate-700">
+                                <span className="font-medium">Observaciones:</span> {item.notes}
+                              </p>
+                            ) : null}
+                          </div>
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                            {new Date(item.created_at).toLocaleDateString()}
+                          </span>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
               </div>
             </div>
           </section>
