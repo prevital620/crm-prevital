@@ -1205,7 +1205,7 @@ function RecepcionContent() {
               Inicio
             </a>
 
-            {!isReadOnlyAgendaForCall && activeSection !== "impresiones" && (
+            {!isReadOnlyAgendaForCall && (
               <>
                 <button
                   type="button"
