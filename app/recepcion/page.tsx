@@ -1600,6 +1600,15 @@ function RecepcionContent() {
     setError("");
 
     const appointmentActual = appointments.find((item) => item.id === id);
+    const tieneIngresoComercial = commercialCases.some(
+      (item) => item.appointment_id === id
+    );
+
+    if (nuevoEstado === "no_asistio" && tieneIngresoComercial) {
+      setError("Esta cita ya fue registrada en ingreso comercial, así que no puede pasar a No asistió.");
+      setSavingStatusId(null);
+      return;
+    }
 
     const payload: any = {
       status: nuevoEstado,
@@ -1939,7 +1948,7 @@ function RecepcionContent() {
                   <p className="font-semibold">Cita seleccionada para ingreso comercial</p>
                   <p className="mt-1">
                     Al guardar este registro, la cita quedará automáticamente como <strong>Asistió</strong>.
-                    Si luego hace falta, desde agenda todavía la podrás cambiar a <strong>No asistió</strong>.
+                    Después de este paso ya no debería marcarse como <strong>No asistió</strong>, porque el cliente ya quedó recibido en Comercial.
                   </p>
                 </div>
               ) : null}
@@ -2868,6 +2877,9 @@ function RecepcionContent() {
                 <div className="space-y-4">
                   {agendaFiltrada.map((item) => {
                     const isSelected = selectedQuickAppointmentId === item.id;
+                    const hasCommercialRecord = commercialCases.some(
+                      (caseItem) => caseItem.appointment_id === item.id
+                    );
                     return (
                     <div
                       key={item.id}
@@ -2934,14 +2946,20 @@ function RecepcionContent() {
                               Registro comercial
                             </button>
 
-                            <button
-                              type="button"
-                              onClick={() => actualizarEstadoCita(item.id, "no_asistio")}
-                              disabled={savingStatusId === item.id}
-                              className="rounded-2xl border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 disabled:opacity-60"
-                            >
-                              No asistió
-                            </button>
+                            {!hasCommercialRecord ? (
+                              <button
+                                type="button"
+                                onClick={() => actualizarEstadoCita(item.id, "no_asistio")}
+                                disabled={savingStatusId === item.id}
+                                className="rounded-2xl border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 disabled:opacity-60"
+                              >
+                                No asistió
+                              </button>
+                            ) : (
+                              <span className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
+                                Ya registrada en comercial
+                              </span>
+                            )}
 
                             <button
                               type="button"
@@ -2969,7 +2987,9 @@ function RecepcionContent() {
                                 }))
                               }
                             >
-                              {appointmentStatusOptions.map((status) => (
+                              {appointmentStatusOptions
+                                .filter((status) => !(hasCommercialRecord && status.value === "no_asistio"))
+                                .map((status) => (
                                 <option key={status.value} value={status.value}>
                                   {status.label}
                                 </option>
