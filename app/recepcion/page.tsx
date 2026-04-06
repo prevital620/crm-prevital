@@ -49,7 +49,7 @@ type SlotOption = {
   label: string;
 };
 
-type ReceptionSection = "agenda" | "especialistas" | "tratamientos" | "impresiones" | "inventario";
+type ReceptionSection = "agenda" | "especialistas" | "tratamientos" | "impresiones" | "inventario" | "comercial";
 
 type DeliveryLog = {
   id: string;
@@ -77,6 +77,23 @@ type InventoryMovement = {
   type: "entrada" | "salida" | "ajuste";
   quantity: number;
   notes: string;
+  created_at: string;
+};
+
+type CommercialCaseRow = {
+  id: string;
+  lead_id: string | null;
+  appointment_id: string | null;
+  customer_name: string;
+  phone: string | null;
+  city: string | null;
+  assigned_commercial_user_id: string | null;
+  assigned_by_user_id: string | null;
+  assigned_at: string | null;
+  status: string;
+  sale_result: string | null;
+  purchased_service: string | null;
+  sale_value: number | null;
   created_at: string;
 };
 
@@ -132,20 +149,21 @@ function getSectionLabel(section: ReceptionSection) {
   if (section === "tratamientos") return "Tratamientos";
   if (section === "impresiones") return "Impresiones y entregas";
   if (section === "inventario") return "Inventario";
+  if (section === "comercial") return "Ingreso comercial";
   return "Agenda";
 }
 
 function getServiceFieldLabel(section: ReceptionSection) {
   if (section === "especialistas") return "Especialista";
   if (section === "tratamientos") return "Tratamiento";
-  if (section === "impresiones" || section === "inventario") return "Servicio";
+  if (section === "impresiones" || section === "inventario" || section === "comercial") return "Servicio";
   return "Servicio";
 }
 
 function getServiceOptionsBySection(section: ReceptionSection) {
   if (section === "especialistas") return specialistOptions;
   if (section === "tratamientos") return treatmentOptions;
-  if (section === "impresiones" || section === "inventario") return [];
+  if (section === "impresiones" || section === "inventario" || section === "comercial") return [];
   return generalServiceOptions;
 }
 
@@ -284,6 +302,53 @@ function traducirEstado(status: string) {
   return map[status] || status;
 }
 
+function traducirEstadoComercial(status: string | null | undefined) {
+  const map: Record<string, string> = {
+    pendiente_asignacion_comercial: "Pendiente de asignación",
+    asignado_comercial: "Asignado",
+    en_atencion_comercial: "En atención",
+    seguimiento: "Seguimiento",
+    finalizado: "Finalizado",
+  };
+  return map[status || ""] || status || "Sin estado";
+}
+
+function badgeEstadoComercial(status: string | null | undefined) {
+  switch (status) {
+    case "pendiente_asignacion_comercial":
+      return "bg-amber-100 text-amber-700";
+    case "asignado_comercial":
+      return "bg-blue-100 text-blue-700";
+    case "en_atencion_comercial":
+      return "bg-cyan-100 text-cyan-700";
+    case "seguimiento":
+      return "bg-violet-100 text-violet-700";
+    case "finalizado":
+      return "bg-emerald-100 text-emerald-700";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
+}
+
+function calcularClasificacionInicial(values: {
+  afiliacion: string;
+  ocupacion: string;
+  edad: string;
+  celular_inteligente: string;
+  antecedente_quirurgico: string;
+  enfermedad_base: string;
+}) {
+  let score = 0;
+  if (values.afiliacion === "cotizante") score += 2;
+  if (values.ocupacion === "empleado" || values.ocupacion === "independiente" || values.ocupacion === "pensionado") score += 2;
+  const edad = Number(values.edad || "0");
+  if (edad >= 35) score += 1;
+  if (values.celular_inteligente === "si") score += 1;
+  if (values.antecedente_quirurgico === "si") score += 1;
+  if (values.enfermedad_base === "si") score += 1;
+  return score >= 4 ? "Q" : "No Q";
+}
+
 function normalizarHora(value: string) {
   return value.slice(0, 5);
 }
@@ -337,6 +402,25 @@ function RecepcionContent() {
   const [inventoryQuantity, setInventoryQuantity] = useState("1");
   const [inventoryMinStock, setInventoryMinStock] = useState("5");
   const [inventoryMovementNotes, setInventoryMovementNotes] = useState("");
+  const [commercialCases, setCommercialCases] = useState<CommercialCaseRow[]>([]);
+  const [savingCommercialIntake, setSavingCommercialIntake] = useState(false);
+  const [commercialSearch, setCommercialSearch] = useState("");
+  const [commercialForm, setCommercialForm] = useState({
+    customer_name: "",
+    phone: "",
+    city: "",
+    documento: "",
+    fuente: "",
+    observaciones: "",
+    afiliacion: "",
+    ocupacion: "",
+    edad: "",
+    celular_inteligente: "si",
+    antecedente_quirurgico: "no",
+    enfermedad_base: "no",
+    clasificacion_inicial: "No Q",
+    referido_por: "",
+  });
 
   const [form, setForm] = useState({
     mode: leadIdFromUrl ? "lead" : "lead",
@@ -361,6 +445,28 @@ function RecepcionContent() {
 
   const canManageAgendaConfig =
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
+
+  useEffect(() => {
+    const clasificacion = calcularClasificacionInicial({
+      afiliacion: commercialForm.afiliacion,
+      ocupacion: commercialForm.ocupacion,
+      edad: commercialForm.edad,
+      celular_inteligente: commercialForm.celular_inteligente,
+      antecedente_quirurgico: commercialForm.antecedente_quirurgico,
+      enfermedad_base: commercialForm.enfermedad_base,
+    });
+
+    setCommercialForm((prev) =>
+      prev.clasificacion_inicial === clasificacion ? prev : { ...prev, clasificacion_inicial: clasificacion }
+    );
+  }, [
+    commercialForm.afiliacion,
+    commercialForm.ocupacion,
+    commercialForm.edad,
+    commercialForm.celular_inteligente,
+    commercialForm.antecedente_quirurgico,
+    commercialForm.enfermedad_base,
+  ]);
 
   async function validarAcceso() {
     try {
@@ -403,6 +509,7 @@ function RecepcionContent() {
         leadsResult,
         daySettingsResult,
         slotSettingsResult,
+        commercialCasesResult,
       ] = await Promise.all([
         supabase
           .from("appointments")
@@ -444,12 +551,33 @@ function RecepcionContent() {
         supabase
           .from("agenda_slot_settings")
           .select("agenda_date, slot_time, capacity, is_blocked"),
+
+        supabase
+          .from("commercial_cases")
+          .select(`
+            id,
+            lead_id,
+            appointment_id,
+            customer_name,
+            phone,
+            city,
+            assigned_commercial_user_id,
+            assigned_by_user_id,
+            assigned_at,
+            status,
+            sale_result,
+            purchased_service,
+            sale_value,
+            created_at
+          `)
+          .order("created_at", { ascending: false }),
       ]);
 
       if (appointmentsResult.error) throw appointmentsResult.error;
       if (leadsResult.error) throw leadsResult.error;
       if (daySettingsResult.error) throw daySettingsResult.error;
       if (slotSettingsResult.error) throw slotSettingsResult.error;
+      if (commercialCasesResult.error) throw commercialCasesResult.error;
 
       const appointmentsData = (appointmentsResult.data as AppointmentRow[]) || [];
       const leadsData = (leadsResult.data as LeadOption[]) || [];
@@ -776,6 +904,30 @@ function RecepcionContent() {
     return printCandidates[0] || null;
   }, [printCandidates]);
 
+  const commercialCasesFiltered = useMemo(() => {
+    const q = commercialSearch.trim().toLowerCase();
+    const base = [...commercialCases].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
+
+    if (!q) return base;
+
+    return base.filter((item) =>
+      (item.customer_name || "").toLowerCase().includes(q) ||
+      (item.phone || "").toLowerCase().includes(q)
+    );
+  }, [commercialCases, commercialSearch]);
+
+  const commercialSummary = useMemo(() => {
+    return {
+      total: commercialCases.length,
+      pendientes: commercialCases.filter((item) => item.status === "pendiente_asignacion_comercial").length,
+      asignados: commercialCases.filter((item) => item.status === "asignado_comercial").length,
+      atencion: commercialCases.filter((item) => item.status === "en_atencion_comercial").length,
+      finalizados: commercialCases.filter((item) => item.status === "finalizado").length,
+    };
+  }, [commercialCases]);
+
   function imprimirDocumento(tipo: "cita" | "instrucciones") {
     if (typeof window === "undefined") return;
 
@@ -975,6 +1127,134 @@ function RecepcionContent() {
     setInventoryMinStock("5");
     setMensaje("Movimiento de inventario registrado correctamente.");
     setError("");
+  }
+
+
+  function resetCommercialForm() {
+    setCommercialForm({
+      customer_name: "",
+      phone: "",
+      city: "",
+      documento: "",
+      fuente: "",
+      observaciones: "",
+      afiliacion: "",
+      ocupacion: "",
+      edad: "",
+      celular_inteligente: "si",
+      antecedente_quirurgico: "no",
+      enfermedad_base: "no",
+      clasificacion_inicial: "No Q",
+      referido_por: "",
+    });
+  }
+
+  async function registrarIngresoComercial(e: React.FormEvent) {
+    e.preventDefault();
+    if (!currentUserId) return;
+
+    setSavingCommercialIntake(true);
+    setError("");
+    setMensaje("");
+
+    try {
+      if (!commercialForm.customer_name.trim()) {
+        throw new Error("Debes escribir el nombre del cliente.");
+      }
+
+      if (!commercialForm.phone.trim()) {
+        throw new Error("Debes escribir el teléfono del cliente.");
+      }
+
+      const yaExiste = commercialCases.find(
+        (item) =>
+          (item.phone || "").trim() === commercialForm.phone.trim() &&
+          ["pendiente_asignacion_comercial", "asignado_comercial", "en_atencion_comercial"].includes(item.status)
+      );
+
+      if (yaExiste) {
+        throw new Error("Ese cliente ya tiene un ingreso comercial activo.");
+      }
+
+      const clasificacion = commercialForm.clasificacion_inicial || "No Q";
+
+      try {
+        const identifier = commercialForm.documento.trim() || commercialForm.phone.trim();
+        const { data: existingUsers } = await supabase
+          .from("users")
+          .select("id")
+          .or(`documento.eq.${commercialForm.documento.trim() || "___sin_documento___"},telefono.eq.${commercialForm.phone.trim()}`)
+          .limit(1);
+
+        if (existingUsers && existingUsers.length > 0) {
+          await supabase
+            .from("users")
+            .update({
+              nombre: commercialForm.customer_name.trim(),
+              documento: commercialForm.documento.trim() || null,
+              telefono: commercialForm.phone.trim() || null,
+              ciudad: commercialForm.city.trim() || null,
+              ocupacion: commercialForm.ocupacion || null,
+              estado_actual: "pendiente valoracion",
+              clasificacion_inicial: clasificacion,
+              clasificacion_final: clasificacion,
+              incentivo: commercialForm.fuente || null,
+            })
+            .eq("id", existingUsers[0].id);
+        } else if (identifier) {
+          await supabase.from("users").insert([
+            {
+              nombre: commercialForm.customer_name.trim(),
+              documento: commercialForm.documento.trim() || null,
+              telefono: commercialForm.phone.trim() || null,
+              ciudad: commercialForm.city.trim() || null,
+              ocupacion: commercialForm.ocupacion || null,
+              estado_actual: "pendiente valoracion",
+              clasificacion_inicial: clasificacion,
+              clasificacion_final: clasificacion,
+              incentivo: commercialForm.fuente || null,
+            },
+          ]);
+        }
+      } catch (syncErr) {
+        console.warn("No se pudo sincronizar ficha base del usuario", syncErr);
+      }
+
+      const notesParts = [
+        commercialForm.fuente ? `Fuente: ${commercialForm.fuente}` : "",
+        `Clasificación inicial: ${clasificacion}`,
+        commercialForm.afiliacion ? `Afiliación: ${commercialForm.afiliacion}` : "",
+        commercialForm.ocupacion ? `Ocupación: ${commercialForm.ocupacion}` : "",
+        commercialForm.edad ? `Edad: ${commercialForm.edad}` : "",
+        commercialForm.referido_por ? `Referido por: ${commercialForm.referido_por}` : "",
+        commercialForm.observaciones ? `Observaciones recepción: ${commercialForm.observaciones}` : "",
+      ].filter(Boolean).join(" | ");
+
+      const { error: insertError } = await supabase.from("commercial_cases").insert([
+        {
+          lead_id: null,
+          appointment_id: null,
+          customer_name: commercialForm.customer_name.trim(),
+          phone: commercialForm.phone.trim(),
+          city: commercialForm.city.trim() || null,
+          status: "pendiente_asignacion_comercial",
+          created_by_user_id: currentUserId,
+          updated_by_user_id: currentUserId,
+          sale_result: notesParts || null,
+        },
+      ]);
+
+      if (insertError) throw insertError;
+
+      resetCommercialForm();
+      setActiveSection("comercial");
+      setMensaje("Ingreso comercial registrado correctamente. Ya quedó disponible para asignación del gerente.");
+      await cargarTodo();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo registrar el ingreso comercial.");
+    } finally {
+      setSavingCommercialIntake(false);
+    }
   }
 
   function resetForm() {
@@ -1398,6 +1678,13 @@ function RecepcionContent() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => cambiarSeccion("comercial")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "comercial" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                >
+                  Ingreso comercial
+                </button>
+                <button
+                  type="button"
                   onClick={() => cambiarSeccion("impresiones")}
                   className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "impresiones" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
                 >
@@ -1428,16 +1715,26 @@ function RecepcionContent() {
         ) : null}
 
         {!isReadOnlyAgendaForCall && (
-          <section className="mb-6 grid gap-4 md:grid-cols-5">
-            <StatCard title={`${sectionLabel} del día`} value={String(resumen.total)} />
-            <StatCard title="Agendadas" value={String(resumen.agendadas)} />
-            <StatCard title="En espera" value={String(resumen.espera)} />
-            <StatCard title="Asistió" value={String(resumen.asistio)} />
-            <StatCard title="No asistió" value={String(resumen.noAsistio)} />
-          </section>
+          activeSection === "comercial" ? (
+            <section className="mb-6 grid gap-4 md:grid-cols-5">
+              <StatCard title="Ingresos comerciales" value={String(commercialSummary.total)} />
+              <StatCard title="Pendientes" value={String(commercialSummary.pendientes)} />
+              <StatCard title="Asignados" value={String(commercialSummary.asignados)} />
+              <StatCard title="En atención" value={String(commercialSummary.atencion)} />
+              <StatCard title="Finalizados" value={String(commercialSummary.finalizados)} />
+            </section>
+          ) : (
+            <section className="mb-6 grid gap-4 md:grid-cols-5">
+              <StatCard title={`${sectionLabel} del día`} value={String(resumen.total)} />
+              <StatCard title="Agendadas" value={String(resumen.agendadas)} />
+              <StatCard title="En espera" value={String(resumen.espera)} />
+              <StatCard title="Asistió" value={String(resumen.asistio)} />
+              <StatCard title="No asistió" value={String(resumen.noAsistio)} />
+            </section>
+          )
         )}
 
-        {canManageAgendaConfig && activeSection !== "impresiones" && activeSection !== "inventario" ? (
+        {canManageAgendaConfig && activeSection !== "impresiones" && activeSection !== "inventario" && activeSection !== "comercial" ? (
           <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
@@ -1553,7 +1850,260 @@ function RecepcionContent() {
           </section>
         ) : null}
 
-        {activeSection === "impresiones" && !isReadOnlyAgendaForCall ? (
+        {activeSection === "comercial" && !isReadOnlyAgendaForCall ? (
+          <section className="mb-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Ingreso comercial</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Registra la llegada del cliente al área comercial y déjalo disponible para asignación del gerente.
+                  </p>
+                </div>
+              </div>
+
+              <form onSubmit={registrarIngresoComercial} className="mt-5 space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field
+                    label="Cliente"
+                    input={
+                      <input
+                        className={inputClass}
+                        value={commercialForm.customer_name}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, customer_name: e.target.value }))}
+                      />
+                    }
+                  />
+                  <Field
+                    label="Teléfono"
+                    input={
+                      <input
+                        className={inputClass}
+                        value={commercialForm.phone}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, phone: e.target.value }))}
+                      />
+                    }
+                  />
+                  <Field
+                    label="Ciudad"
+                    input={
+                      <input
+                        className={inputClass}
+                        value={commercialForm.city}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, city: e.target.value }))}
+                      />
+                    }
+                  />
+                  <Field
+                    label="Documento"
+                    input={
+                      <input
+                        className={inputClass}
+                        value={commercialForm.documento}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, documento: e.target.value }))}
+                      />
+                    }
+                  />
+                  <Field
+                    label="Fuente"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.fuente}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, fuente: e.target.value }))}
+                      >
+                        <option value="">Selecciona</option>
+                        {manualSourceOptions.map((item) => (
+                          <option key={item.value} value={item.label}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    }
+                  />
+                  <Field
+                    label="Referido por"
+                    input={
+                      <input
+                        className={inputClass}
+                        placeholder="Opcional"
+                        value={commercialForm.referido_por}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, referido_por: e.target.value }))}
+                      />
+                    }
+                  />
+                  <Field
+                    label="Afiliación"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.afiliacion}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, afiliacion: e.target.value }))}
+                      >
+                        <option value="">Selecciona</option>
+                        <option value="cotizante">Cotizante</option>
+                        <option value="subsidiado">Subsidiado</option>
+                        <option value="particular">Particular</option>
+                      </select>
+                    }
+                  />
+                  <Field
+                    label="Ocupación"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.ocupacion}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, ocupacion: e.target.value }))}
+                      >
+                        <option value="">Selecciona</option>
+                        <option value="empleado">Empleado</option>
+                        <option value="independiente">Independiente</option>
+                        <option value="pensionado">Pensionado</option>
+                        <option value="hogar">Hogar</option>
+                        <option value="estudiante">Estudiante</option>
+                        <option value="otro">Otro</option>
+                      </select>
+                    }
+                  />
+                  <Field
+                    label="Edad"
+                    input={
+                      <input
+                        className={inputClass}
+                        type="number"
+                        min="0"
+                        value={commercialForm.edad}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, edad: e.target.value }))}
+                      />
+                    }
+                  />
+                  <Field
+                    label="Celular inteligente"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.celular_inteligente}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, celular_inteligente: e.target.value }))}
+                      >
+                        <option value="si">Sí</option>
+                        <option value="no">No</option>
+                      </select>
+                    }
+                  />
+                  <Field
+                    label="Cirugía previa"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.antecedente_quirurgico}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, antecedente_quirurgico: e.target.value }))}
+                      >
+                        <option value="no">No</option>
+                        <option value="si">Sí</option>
+                      </select>
+                    }
+                  />
+                  <Field
+                    label="Enfermedad base"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.enfermedad_base}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, enfermedad_base: e.target.value }))}
+                      >
+                        <option value="no">No</option>
+                        <option value="si">Sí</option>
+                      </select>
+                    }
+                  />
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <p className="text-sm font-medium text-slate-700">Clasificación inicial</p>
+                    <span className={`rounded-full px-3 py-1 text-xs ${commercialForm.clasificacion_inicial === "Q" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+                      {commercialForm.clasificacion_inicial}
+                    </span>
+                    <p className="text-xs text-slate-500">
+                      Si entra No Q y compra en Comercial, luego podrá pasar automáticamente a Q como clasificación final.
+                    </p>
+                  </div>
+                </div>
+
+                <Field
+                  label="Observaciones de recepción"
+                  input={
+                    <textarea
+                      className={`${inputClass} min-h-[110px] resize-none`}
+                      value={commercialForm.observaciones}
+                      onChange={(e) => setCommercialForm((prev) => ({ ...prev, observaciones: e.target.value }))}
+                    />
+                  }
+                />
+
+                <button
+                  type="submit"
+                  disabled={savingCommercialIntake}
+                  className="w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white disabled:opacity-60"
+                >
+                  {savingCommercialIntake ? "Registrando..." : "Registrar ingreso a comercial"}
+                </button>
+              </form>
+            </div>
+
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Ingresos comerciales del día</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Estos clientes deben aparecer después en la cola del gerente comercial.
+                  </p>
+                </div>
+
+                <input
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none md:max-w-xs"
+                  placeholder="Buscar por nombre o teléfono"
+                  value={commercialSearch}
+                  onChange={(e) => setCommercialSearch(e.target.value)}
+                />
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {commercialCasesFiltered.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                    Aún no hay ingresos comerciales registrados.
+                  </div>
+                ) : (
+                  commercialCasesFiltered.map((item) => (
+                    <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <div className="flex flex-wrap items-center gap-2">
+                            <p className="text-base font-semibold text-slate-900">{item.customer_name}</p>
+                            <span className={`rounded-full px-3 py-1 text-xs ${badgeEstadoComercial(item.status)}`}>
+                              {traducirEstadoComercial(item.status)}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            Ingreso: {new Date(item.created_at).toLocaleString()}
+                          </p>
+                          {item.sale_result ? (
+                            <p className="mt-2 text-sm text-slate-700">
+                              <span className="font-medium text-slate-800">Resumen:</span> {item.sale_result}
+                            </p>
+                          ) : null}
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </section>
+        ) : activeSection === "impresiones" && !isReadOnlyAgendaForCall ? (
           <section className="mb-6 grid gap-6 xl:grid-cols-[1.1fr_0.9fr]">
             <div className="rounded-3xl bg-white p-6 shadow-sm">
               <div className="flex items-start justify-between gap-4">
