@@ -1,71 +1,172 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
+import SessionBadge from "@/components/session-badge";
 
-const maritalStatusOptions = [
-  { value: "soltero", label: "Soltero(a)" },
-  { value: "casado", label: "Casado(a)" },
-  { value: "union_libre", label: "Unión libre" },
-  { value: "separado", label: "Separado(a)" },
-  { value: "viudo", label: "Viudo(a)" },
-];
+type LeadRow = {
+  id: string;
+  first_name: string;
+  last_name: string | null;
+  full_name: string | null;
+  phone: string;
+  city: string | null;
+  interest_service: string | null;
+  capture_location: string | null;
+  source: string | null;
+  status: string;
+  created_at: string;
+  created_by_user_id: string;
+  assigned_to_user_id: string | null;
+};
 
-const interestServiceOptions = [
-  { value: "detox", label: "Detox" },
-  { value: "sueroterapia", label: "Sueroterapia" },
-  { value: "valoracion", label: "Valoración" },
-  { value: "nutricion", label: "Nutrición" },
-  { value: "fisioterapia", label: "Fisioterapia" },
-  { value: "medicina_general", label: "Medicina general" },
-  { value: "otro", label: "Otro" },
-];
+type ProfileRow = {
+  id: string;
+  full_name: string | null;
+};
 
-const sourceOptions = [
-  { value: "opc", label: "OPC" },
-  { value: "redes_sociales", label: "Redes sociales" },
-  { value: "referido", label: "Referido" },
-  { value: "evento", label: "Evento" },
-  { value: "punto_fisico", label: "Punto físico" },
-  { value: "otro", label: "Otro" },
-];
+type AppointmentRow = {
+  id: string;
+  lead_id: string | null;
+  patient_name: string;
+  phone: string | null;
+  city: string | null;
+  appointment_date: string;
+  appointment_time: string;
+  status: string;
+  service_type: string | null;
+  notes: string | null;
+};
+
+type QuickFilter =
+  | "todos"
+  | "nuevos"
+  | "pendientes"
+  | "interesados"
+  | "agendados"
+  | "no_asistio"
+  | "cerrados";
 
 const allowedRoles = [
   "super_user",
   "promotor_opc",
   "supervisor_opc",
+  "supervisor_call_center",
   "confirmador",
   "tmk",
 ];
 
-export default function NuevoLeadPage() {
-  const [loading, setLoading] = useState(false);
+const opcVisibleStatuses = [
+  "nuevo",
+  "pendiente_contacto",
+  "interesado",
+  "no_responde",
+  "contactado",
+  "reagendar",
+  "agendado",
+  "no_asistio",
+  "asistio",
+  "vendido",
+  "cerrado",
+  "descartado",
+];
+
+const ACTIVE_APPOINTMENT_STATUSES = [
+  "agendada",
+  "confirmada",
+  "en_espera",
+  "reagendada",
+  "en_atencion",
+];
+
+function hoyISO() {
+  const hoy = new Date();
+  const y = hoy.getFullYear();
+  const m = String(hoy.getMonth() + 1).padStart(2, "0");
+  const d = String(hoy.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function soloFecha(fecha: string | null | undefined) {
+  if (!fecha) return "";
+  return fecha.slice(0, 10);
+}
+
+function estadoBadge(estado: string | null) {
+  switch (estado) {
+    case "nuevo":
+      return "bg-slate-100 text-slate-700";
+    case "pendiente_contacto":
+      return "bg-blue-100 text-blue-700";
+    case "interesado":
+      return "bg-amber-100 text-amber-700";
+    case "no_responde":
+      return "bg-orange-100 text-orange-700";
+    case "contactado":
+      return "bg-indigo-100 text-indigo-700";
+    case "reagendar":
+      return "bg-cyan-100 text-cyan-700";
+    case "agendado":
+      return "bg-emerald-100 text-emerald-700";
+    case "asistio":
+      return "bg-teal-100 text-teal-700";
+    case "no_asistio":
+      return "bg-rose-100 text-rose-700";
+    case "vendido":
+      return "bg-green-100 text-green-700";
+    case "cerrado":
+      return "bg-slate-200 text-slate-800";
+    case "descartado":
+      return "bg-red-100 text-red-700";
+    case "agendada":
+      return "bg-emerald-100 text-emerald-700";
+    case "confirmada":
+      return "bg-blue-100 text-blue-700";
+    case "en_espera":
+      return "bg-amber-100 text-amber-700";
+    case "reagendada":
+      return "bg-cyan-100 text-cyan-700";
+    case "en_atencion":
+      return "bg-indigo-100 text-indigo-700";
+    case "cancelada":
+      return "bg-red-100 text-red-700";
+    case "finalizada":
+      return "bg-slate-200 text-slate-800";
+    default:
+      return "bg-slate-100 text-slate-700";
+  }
+}
+
+export default function LeadsPage() {
+  const [loading, setLoading] = useState(true);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
-  const [currentUserId, setCurrentUserId] = useState("");
-  const [currentUserName, setCurrentUserName] = useState("");
-  const [currentRoleCode, setCurrentRoleCode] = useState("");
-  const [mensaje, setMensaje] = useState("");
+  const [roleCode, setRoleCode] = useState<string | null>(null);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [leads, setLeads] = useState<LeadRow[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
+  const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [error, setError] = useState("");
+  const [search, setSearch] = useState("");
+  const [dateFilter, setDateFilter] = useState(hoyISO());
+  const [appointmentsDateFilter, setAppointmentsDateFilter] = useState(hoyISO());
+  const [appointmentsSearch, setAppointmentsSearch] = useState("");
+  const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
 
-  const [form, setForm] = useState({
-    first_name: "",
-    last_name: "",
-    phone: "",
-    age: "",
-    marital_status: "",
-    has_eps: "",
-    affiliation_type: "",
-    capture_location: "",
-    interest_service: "",
-    source: "",
-    observations: "",
-    city: "",
-    status: "nuevo",
-  });
+  const showCreatorColumn =
+    roleCode === "super_user" ||
+    roleCode === "supervisor_opc" ||
+    roleCode === "supervisor_call_center";
 
-  async function cargarAcceso() {
+  const showSupervisorOpcTools =
+    roleCode === "supervisor_opc" || roleCode === "super_user";
+
+  const isSuperUser = roleCode === "super_user";
+
+  async function validarAcceso() {
     try {
       setLoadingAuth(true);
       setError("");
@@ -80,26 +181,13 @@ export default function NuevoLeadPage() {
 
       if (!allowedRoles.includes(auth.roleCode)) {
         setAuthorized(false);
-        setError("No tienes permiso para crear leads.");
-        return;
-      }
-
-      const { data: profile, error: profileError } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .eq("id", auth.user.id)
-        .single();
-
-      if (profileError || !profile) {
-        setAuthorized(false);
-        setError("No se pudo cargar el perfil del usuario actual.");
+        setError("No tienes permiso para entrar a este módulo.");
         return;
       }
 
       setAuthorized(true);
-      setCurrentUserId(profile.id);
-      setCurrentUserName(profile.full_name || "Usuario actual");
-      setCurrentRoleCode(auth.roleCode);
+      setRoleCode(auth.roleCode);
+      setCurrentUserId(auth.user.id);
     } catch (err: any) {
       setAuthorized(false);
       setError(err?.message || "No se pudo validar el acceso.");
@@ -108,98 +196,401 @@ export default function NuevoLeadPage() {
     }
   }
 
-  useEffect(() => {
-    cargarAcceso();
-  }, []);
-
-  async function crearLead(e: React.FormEvent) {
-    e.preventDefault();
-    setMensaje("");
-    setError("");
-
-    if (!form.first_name.trim()) {
-      setError("El nombre es obligatorio.");
-      return;
-    }
-
-    if (!form.phone.trim()) {
-      setError("El teléfono es obligatorio.");
-      return;
-    }
-
-    if (!currentUserId) {
-      setError("No se encontró el usuario actual.");
-      return;
-    }
-
-    setLoading(true);
-
+  async function cargarLeads() {
     try {
-      const debeAutoAsignarse =
-        currentRoleCode === "tmk" || currentRoleCode === "confirmador";
+      setLoading(true);
+      setError("");
 
-      const { error } = await supabase.from("leads").insert([
-        {
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim() || null,
-          phone: form.phone.trim(),
-          age: form.age ? Number(form.age) : null,
-          marital_status: form.marital_status || null,
-          has_eps:
-            form.has_eps === ""
-              ? null
-              : form.has_eps === "si"
-              ? true
-              : false,
-          affiliation_type: form.affiliation_type || null,
-          capture_location: form.capture_location.trim() || null,
-          interest_service: form.interest_service.trim() || null,
-          source: form.source || null,
-          observations: form.observations.trim() || null,
-          city: form.city.trim() || null,
-          status: form.status,
-          created_by_user_id: currentUserId,
-          assigned_to_user_id: debeAutoAsignarse ? currentUserId : null,
-        },
+      const [leadsResult, appointmentsResult] = await Promise.all([
+        supabase
+          .from("leads")
+          .select(`
+            id,
+            first_name,
+            last_name,
+            full_name,
+            phone,
+            city,
+            interest_service,
+            capture_location,
+            source,
+            status,
+            created_at,
+            created_by_user_id,
+            assigned_to_user_id
+          `)
+          .order("created_at", { ascending: false }),
+
+        supabase
+          .from("appointments")
+          .select(`
+            id,
+            lead_id,
+            patient_name,
+            phone,
+            city,
+            appointment_date,
+            appointment_time,
+            status,
+            service_type,
+            notes
+          `)
+          .order("appointment_date", { ascending: true })
+          .order("appointment_time", { ascending: true }),
       ]);
 
-      if (error) throw error;
+      if (leadsResult.error) throw leadsResult.error;
+      if (appointmentsResult.error) throw appointmentsResult.error;
 
-      setMensaje(
-        debeAutoAsignarse
-          ? "Lead creado y autoasignado correctamente."
-          : "Lead creado correctamente."
+      const leadsData = (leadsResult.data as LeadRow[]) || [];
+      const appointmentsData = (appointmentsResult.data as AppointmentRow[]) || [];
+
+      setLeads(leadsData);
+      setAppointments(appointmentsData);
+
+      const creatorIds = Array.from(
+        new Set(
+          leadsData
+            .map((lead) => lead.created_by_user_id)
+            .filter((id): id is string => Boolean(id))
+        )
       );
 
-      setForm({
-        first_name: "",
-        last_name: "",
-        phone: "",
-        age: "",
-        marital_status: "",
-        has_eps: "",
-        affiliation_type: "",
-        capture_location: "",
-        interest_service: "",
-        source: "",
-        observations: "",
-        city: "",
-        status: "nuevo",
+      if (creatorIds.length === 0) {
+        setCreatorNames({});
+        return;
+      }
+
+      const { data: profilesData, error: profilesError } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", creatorIds);
+
+      if (profilesError) throw profilesError;
+
+      const namesMap: Record<string, string> = {};
+      ((profilesData as ProfileRow[]) || []).forEach((profile) => {
+        namesMap[profile.id] = profile.full_name?.trim() || "Sin nombre";
       });
+
+      setCreatorNames(namesMap);
     } catch (err: any) {
-      setError(err?.message || "No se pudo crear el lead.");
+      setError(err?.message || "No se pudieron cargar los leads.");
     } finally {
       setLoading(false);
     }
   }
 
+
+  async function eliminarLead(lead: LeadRow) {
+    if (!isSuperUser) return;
+
+    const nombre =
+      lead.full_name?.trim() ||
+      `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+      "este lead";
+
+    const confirmado = window.confirm(
+      `¿Seguro que deseas borrar a ${nombre}? Esta acción eliminará también sus citas relacionadas y no se puede deshacer.`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      setDeletingLeadId(lead.id);
+      setError("");
+      setSuccessMessage("");
+
+      const { error: appointmentsDeleteError } = await supabase
+        .from("appointments")
+        .delete()
+        .eq("lead_id", lead.id);
+
+      if (appointmentsDeleteError) throw appointmentsDeleteError;
+
+      const { error: leadDeleteError } = await supabase
+        .from("leads")
+        .delete()
+        .eq("id", lead.id);
+
+      if (leadDeleteError) throw leadDeleteError;
+
+      setSuccessMessage("Lead eliminado correctamente.");
+      await cargarLeads();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo eliminar el lead.");
+    } finally {
+      setDeletingLeadId(null);
+    }
+  }
+
+  useEffect(() => {
+    validarAcceso();
+  }, []);
+
+  useEffect(() => {
+    if (authorized) {
+      cargarLeads();
+    }
+  }, [authorized]);
+
+  const activeAppointmentByLeadId = useMemo(() => {
+    const map: Record<string, AppointmentRow> = {};
+    appointments.forEach((appointment) => {
+      if (
+        appointment.lead_id &&
+        ACTIVE_APPOINTMENT_STATUSES.includes(appointment.status)
+      ) {
+        map[appointment.lead_id] = appointment;
+      }
+    });
+    return map;
+  }, [appointments]);
+
+  function getVisibleStatus(lead: LeadRow) {
+    const hasActiveAppointment = !!activeAppointmentByLeadId[lead.id];
+    if (hasActiveAppointment) return "agendado";
+    return lead.status || "nuevo";
+  }
+
+  const leadsPorRol = useMemo(() => {
+    if (!roleCode || !currentUserId) return [];
+
+    if (roleCode === "super_user") return leads;
+    if (roleCode === "supervisor_call_center") return leads;
+
+    if (roleCode === "supervisor_opc") {
+      return leads.filter((lead) => opcVisibleStatuses.includes(getVisibleStatus(lead)));
+    }
+
+    if (roleCode === "promotor_opc") {
+      return leads.filter(
+        (lead) =>
+          lead.created_by_user_id === currentUserId &&
+          opcVisibleStatuses.includes(getVisibleStatus(lead))
+      );
+    }
+
+    if (roleCode === "confirmador" || roleCode === "tmk") {
+      return leads.filter(
+        (lead) =>
+          lead.assigned_to_user_id === currentUserId ||
+          lead.created_by_user_id === currentUserId
+      );
+    }
+
+    return [];
+  }, [leads, roleCode, currentUserId, activeAppointmentByLeadId]);
+
+  function isPending(lead: LeadRow) {
+    const estado = getVisibleStatus(lead);
+    return estado === "pendiente_contacto" || estado === "no_responde";
+  }
+
+  function isInterested(lead: LeadRow) {
+    const estado = getVisibleStatus(lead);
+    return (
+      estado === "interesado" ||
+      estado === "contactado" ||
+      estado === "reagendar"
+    );
+  }
+
+  function isScheduled(lead: LeadRow) {
+    return getVisibleStatus(lead) === "agendado";
+  }
+
+  function isNoAsistio(lead: LeadRow) {
+    return getVisibleStatus(lead) === "no_asistio";
+  }
+
+  function isClosed(lead: LeadRow) {
+    const estado = getVisibleStatus(lead);
+    return (
+      estado === "vendido" ||
+      estado === "cerrado" ||
+      estado === "descartado"
+    );
+  }
+
+  const resumen = useMemo(() => {
+    const delDia = leadsPorRol.filter(
+      (lead) => soloFecha(lead.created_at) === dateFilter
+    );
+
+    return {
+      total: delDia.length,
+      nuevos: delDia.filter((lead) => getVisibleStatus(lead) === "nuevo").length,
+      pendientes: delDia.filter((lead) => isPending(lead)).length,
+      interesados: delDia.filter((lead) => isInterested(lead)).length,
+      agendados: delDia.filter((lead) => isScheduled(lead)).length,
+      noAsistio: delDia.filter((lead) => isNoAsistio(lead)).length,
+      cerrados: delDia.filter((lead) => isClosed(lead)).length,
+    };
+  }, [leadsPorRol, dateFilter, activeAppointmentByLeadId]);
+
+  const leadsFiltrados = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    let base = leadsPorRol.filter((lead) =>
+      dateFilter ? soloFecha(lead.created_at) === dateFilter : true
+    );
+
+    if (showSupervisorOpcTools) {
+      if (quickFilter === "nuevos") {
+        base = base.filter((lead) => getVisibleStatus(lead) === "nuevo");
+      }
+      if (quickFilter === "pendientes") {
+        base = base.filter((lead) => isPending(lead));
+      }
+      if (quickFilter === "interesados") {
+        base = base.filter((lead) => isInterested(lead));
+      }
+      if (quickFilter === "agendados") {
+        base = base.filter((lead) => isScheduled(lead));
+      }
+      if (quickFilter === "no_asistio") {
+        base = base.filter((lead) => isNoAsistio(lead));
+      }
+      if (quickFilter === "cerrados") {
+        base = base.filter((lead) => isClosed(lead));
+      }
+    }
+
+    return base.filter((lead) => {
+      if (!q) return true;
+
+      const nombreCompleto =
+        lead.full_name?.toLowerCase() ||
+        `${lead.first_name || ""} ${lead.last_name || ""}`.trim().toLowerCase();
+
+      const telefono = (lead.phone || "").toLowerCase();
+      const creador = (creatorNames[lead.created_by_user_id] || "").toLowerCase();
+
+      return (
+        nombreCompleto.includes(q) ||
+        telefono.includes(q) ||
+        creador.includes(q)
+      );
+    });
+  }, [
+    leadsPorRol,
+    search,
+    dateFilter,
+    creatorNames,
+    quickFilter,
+    showSupervisorOpcTools,
+    activeAppointmentByLeadId,
+  ]);
+
+  const citasSupervisorOpc = useMemo(() => {
+    if (!showSupervisorOpcTools) return [];
+
+    const leadsIdsEquipo = new Set(leadsPorRol.map((lead) => lead.id));
+
+    return appointments.filter(
+      (appointment) => appointment.lead_id && leadsIdsEquipo.has(appointment.lead_id)
+    );
+  }, [appointments, leadsPorRol, showSupervisorOpcTools]);
+
+  const citasFiltradas = useMemo(() => {
+    if (!showSupervisorOpcTools) return [];
+
+    const q = appointmentsSearch.trim().toLowerCase();
+
+    return citasSupervisorOpc.filter((appointment) => {
+      const fechaOk = appointmentsDateFilter
+        ? appointment.appointment_date === appointmentsDateFilter
+        : true;
+
+      const nombre = (appointment.patient_name || "").toLowerCase();
+      const telefono = (appointment.phone || "").toLowerCase();
+
+      const busquedaOk = q
+        ? nombre.includes(q) || telefono.includes(q)
+        : true;
+
+      return fechaOk && busquedaOk;
+    });
+  }, [citasSupervisorOpc, appointmentsDateFilter, appointmentsSearch, showSupervisorOpcTools]);
+
+  function formatDate(dateString: string) {
+    try {
+      return new Date(dateString).toLocaleString("es-CO", {
+        dateStyle: "medium",
+        timeStyle: "short",
+      });
+    } catch {
+      return dateString;
+    }
+  }
+
+  function translateStatus(status: string) {
+    const map: Record<string, string> = {
+      nuevo: "Nuevo",
+      pendiente_contacto: "Pendiente",
+      interesado: "Interesado",
+      no_responde: "No responde",
+      contactado: "Contactado",
+      reagendar: "Reagendar",
+      agendado: "Agendado",
+      asistio: "Asistió",
+      no_asistio: "No asistió",
+      vendido: "Vendido",
+      cerrado: "Cerrado",
+      descartado: "Descartado",
+      agendada: "Agendada",
+      confirmada: "Confirmada",
+      en_espera: "En espera",
+      reagendada: "Reagendada",
+      en_atencion: "En atención",
+      cancelada: "Cancelada",
+      finalizada: "Finalizada",
+    };
+
+    return map[status] || status;
+  }
+
+  function translateService(service: string | null) {
+    if (!service) return "Sin servicio";
+
+    const map: Record<string, string> = {
+      detox: "Detox",
+      sueroterapia: "Sueroterapia",
+      valoracion: "Valoración",
+      nutricion: "Nutrición",
+      fisioterapia: "Fisioterapia",
+      medicina_general: "Medicina general",
+      otro: "Otro",
+    };
+
+    return map[service] || service;
+  }
+
+  function translateSource(source: string | null) {
+    if (!source) return "Sin origen";
+
+    const map: Record<string, string> = {
+      opc: "OPC",
+      redes_sociales: "Redes sociales",
+      referido: "Referido",
+      punto_fisico: "Punto físico",
+      evento: "Evento",
+      otro: "Otro",
+    };
+
+    return map[source] || source;
+  }
+
+  function getCreatorName(userId: string) {
+    return creatorNames[userId] || "Sin nombre";
+  }
+
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-slate-100 pb-10">
-        <div className="mx-auto w-full max-w-3xl px-4 pt-4 sm:px-6 sm:pt-6">
-          <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
-            <p className="text-sm text-slate-500">Validando acceso...</p>
-          </section>
+      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">Validando acceso...</p>
         </div>
       </main>
     );
@@ -207,312 +598,493 @@ export default function NuevoLeadPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-slate-100 pb-10">
-        <div className="mx-auto w-full max-w-3xl px-4 pt-4 sm:px-6 sm:pt-6">
-          <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
-            <p className="text-sm font-medium text-red-700">
-              {error || "No tienes permiso para entrar a este módulo."}
-            </p>
-          </section>
+      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+          <p className="text-sm font-medium text-red-700">
+            {error || "No tienes permiso para entrar a este módulo."}
+          </p>
         </div>
       </main>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 pb-10">
-      <div className="mx-auto w-full max-w-3xl px-4 pt-4 sm:px-6 sm:pt-6">
-        <section className="mb-4 rounded-3xl bg-white p-5 shadow-sm sm:mb-6 sm:p-6">
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+    <main className="min-h-screen bg-slate-100 p-6 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Leads
-              </p>
-              <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
-                Nuevo lead
+              <p className="text-sm font-medium text-slate-500">Leads</p>
+              <h1 className="mt-2 text-3xl font-bold text-slate-900">
+                Gestión de leads
               </h1>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
-                Formulario rápido para captación en punto, calle, evento o visita.
-              </p>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <a
-                href="/"
-                className="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700"
-              >
-                Inicio
-              </a>
+            <SessionBadge />
+          </div>
 
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              href="/"
+              className="inline-flex rounded-2xl border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700"
+            >
+              Inicio
+            </a>
+
+            {(roleCode === "super_user" ||
+              roleCode === "promotor_opc" ||
+              roleCode === "supervisor_opc" ||
+              roleCode === "confirmador" ||
+              roleCode === "tmk") && (
               <a
-                href="/leads"
-                className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white"
+                href="/leads/nuevo"
+                className="inline-flex rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium !text-white"
               >
-                Consultar leads
+                Nuevo lead
               </a>
-            </div>
+            )}
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
-          <form onSubmit={crearLead} className="space-y-5">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                Captado por
-              </p>
-              <p className="mt-1 text-base font-semibold text-slate-900">
-                {currentUserName}
-              </p>
-              {(currentRoleCode === "tmk" || currentRoleCode === "confirmador") && (
-                <p className="mt-2 text-sm text-slate-600">
-                  Este lead se asignará automáticamente a tu usuario.
-                </p>
-              )}
-            </div>
+        {error ? (
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
+        ) : null}
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <Field
-                label="Nombre"
-                required
-                input={
-                  <input
-                    className={inputClass}
-                    placeholder="Ej: Ana"
-                    value={form.first_name}
-                    onChange={(e) =>
-                      setForm({ ...form, first_name: e.target.value })
-                    }
-                  />
-                }
-              />
+        {successMessage ? (
+          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            {successMessage}
+          </div>
+        ) : null}
 
-              <Field
-                label="Apellido"
-                input={
-                  <input
-                    className={inputClass}
-                    placeholder="Ej: Gómez"
-                    value={form.last_name}
-                    onChange={(e) =>
-                      setForm({ ...form, last_name: e.target.value })
-                    }
-                  />
-                }
-              />
+        {showSupervisorOpcTools ? (
+          <section className="mb-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+            <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
+            <StatCard title="Nuevos" value={resumen.nuevos} active={quickFilter === "nuevos"} onClick={() => setQuickFilter("nuevos")} />
+            <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
+            <StatCard title="Interesados" value={resumen.interesados} active={quickFilter === "interesados"} onClick={() => setQuickFilter("interesados")} />
+            <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
+            <StatCard title="No asistió" value={resumen.noAsistio} active={quickFilter === "no_asistio"} onClick={() => setQuickFilter("no_asistio")} />
+          </section>
+        ) : null}
 
-              <Field
-                label="Teléfono"
-                required
-                input={
-                  <input
-                    className={inputClass}
-                    placeholder="Ej: 3001234567"
-                    inputMode="numeric"
-                    value={form.phone}
-                    onChange={(e) =>
-                      setForm({ ...form, phone: e.target.value })
-                    }
-                  />
-                }
-              />
+        {showSupervisorOpcTools ? (
+          <section className="grid gap-6 xl:grid-cols-2">
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    Leads visibles para tu rol
+                  </h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Busca por nombre, teléfono o nombre del OPC y filtra por fecha.
+                  </p>
+                </div>
 
-              <Field
-                label="Edad"
-                input={
-                  <input
-                    className={inputClass}
-                    placeholder="Ej: 34"
-                    type="number"
-                    value={form.age}
-                    onChange={(e) =>
-                      setForm({ ...form, age: e.target.value })
-                    }
-                  />
-                }
-              />
+                <button
+                  onClick={cargarLeads}
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                >
+                  Actualizar
+                </button>
+              </div>
 
-              <Field
-                label="Estado civil"
-                input={
-                  <select
-                    className={inputClass}
-                    value={form.marital_status}
-                    onChange={(e) =>
-                      setForm({ ...form, marital_status: e.target.value })
-                    }
+              <div className="mb-4 flex flex-wrap gap-2">
+                {[
+                  { key: "todos", label: "Todos" },
+                  { key: "nuevos", label: "Nuevos" },
+                  { key: "pendientes", label: "Pendientes" },
+                  { key: "interesados", label: "Interesados" },
+                  { key: "agendados", label: "Agendados" },
+                  { key: "no_asistio", label: "No asistió" },
+                  { key: "cerrados", label: "Cerrados" },
+                ].map((item) => (
+                  <button
+                    key={item.key}
+                    type="button"
+                    onClick={() => setQuickFilter(item.key as QuickFilter)}
+                    className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                      quickFilter === item.key
+                        ? "bg-slate-900 text-white"
+                        : "border border-slate-300 text-slate-700"
+                    }`}
                   >
-                    <option value="">Selecciona</option>
-                    {maritalStatusOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                }
-              />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
 
-              <Field
-                label="Ciudad"
-                input={
-                  <input
-                    className={inputClass}
-                    placeholder="Ej: Medellín"
-                    value={form.city}
-                    onChange={(e) =>
-                      setForm({ ...form, city: e.target.value })
-                    }
-                  />
-                }
-              />
-
-              <Field
-                label="¿Tiene EPS?"
-                input={
-                  <select
-                    className={inputClass}
-                    value={form.has_eps}
-                    onChange={(e) =>
-                      setForm({ ...form, has_eps: e.target.value })
-                    }
-                  >
-                    <option value="">Selecciona</option>
-                    <option value="si">Sí</option>
-                    <option value="no">No</option>
-                  </select>
-                }
-              />
-
-              <Field
-                label="Tipo de afiliación"
-                input={
-                  <select
-                    className={inputClass}
-                    value={form.affiliation_type}
-                    onChange={(e) =>
-                      setForm({ ...form, affiliation_type: e.target.value })
-                    }
-                  >
-                    <option value="">Selecciona</option>
-                    <option value="cotizante">Cotizante</option>
-                    <option value="beneficiario">Beneficiario</option>
-                    <option value="subsidiado">Subsidiado</option>
-                  </select>
-                }
-              />
-
-              <Field
-                label="Lugar de captación"
-                input={
-                  <input
-                    className={inputClass}
-                    placeholder="Ej: Centro comercial, feria, calle"
-                    value={form.capture_location}
-                    onChange={(e) =>
-                      setForm({ ...form, capture_location: e.target.value })
-                    }
-                  />
-                }
-              />
-
-              <Field
-                label="Servicio de interés"
-                input={
-                  <select
-                    className={inputClass}
-                    value={form.interest_service}
-                    onChange={(e) =>
-                      setForm({ ...form, interest_service: e.target.value })
-                    }
-                  >
-                    <option value="">Selecciona</option>
-                    {interestServiceOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                }
-              />
-
-              <Field
-                label="Origen del lead"
-                input={
-                  <select
-                    className={inputClass}
-                    value={form.source}
-                    onChange={(e) =>
-                      setForm({ ...form, source: e.target.value })
-                    }
-                  >
-                    <option value="">Selecciona</option>
-                    {sourceOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                }
-              />
-            </div>
-
-            <Field
-              label="Observaciones"
-              input={
-                <textarea
-                  className={`${inputClass} min-h-[120px] resize-none`}
-                  placeholder="Ej: interesada en valoración preventiva"
-                  value={form.observations}
-                  onChange={(e) =>
-                    setForm({ ...form, observations: e.target.value })
-                  }
+              <div className="mb-6 grid gap-3">
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="date"
+                  value={dateFilter}
+                  onChange={(e) => setDateFilter(e.target.value)}
                 />
-              }
-            />
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white disabled:opacity-60"
-            >
-              {loading ? "Guardando lead..." : "Guardar lead"}
-            </button>
-
-            {mensaje ? (
-              <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-                {mensaje}
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="text"
+                  placeholder="Buscar por nombre, teléfono u OPC"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
               </div>
-            ) : null}
 
-            {error ? (
-              <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-                {error}
+              {loading ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  Cargando leads...
+                </div>
+              ) : leadsFiltrados.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  No hay leads visibles con esos filtros.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {leadsFiltrados.map((lead) => {
+                    const estadoVisible = getVisibleStatus(lead);
+
+                    return (
+                      <div key={lead.id} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-semibold text-slate-900">
+                              {lead.full_name?.trim() ||
+                                `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+                                "Sin nombre"}
+                            </h3>
+
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                                estadoVisible
+                              )}`}
+                            >
+                              {translateStatus(estadoVisible)}
+                            </span>
+                          </div>
+
+                          <p className="text-sm text-slate-700">
+                            {lead.phone} · {lead.city || "Sin ciudad"}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            Servicio: {translateService(lead.interest_service)}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            Origen: {translateSource(lead.source)}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            Captación: {lead.capture_location || "Sin lugar"}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            OPC: {getCreatorName(lead.created_by_user_id)}
+                          </p>
+
+                          <p className="text-sm text-slate-500">
+                            Creado: {formatDate(lead.created_at)}
+                          </p>
+
+                          <div className="flex flex-wrap gap-2">
+                            <a
+                              href={`/leads/${lead.id}`}
+                              className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                            >
+                              Ver / editar
+                            </a>
+
+                            {isSuperUser ? (
+                              <button
+                                type="button"
+                                onClick={() => eliminarLead(lead)}
+                                disabled={deletingLeadId === lead.id}
+                                className="inline-flex rounded-xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {deletingLeadId === lead.id ? "Borrando..." : "Eliminar"}
+                              </button>
+                            ) : null}
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+
+            <section className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="mb-5">
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Citas agendadas del equipo
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Filtra las citas por fecha para ver la agenda futura del equipo OPC.
+                </p>
               </div>
-            ) : null}
-          </form>
-        </section>
+
+              <div className="mb-6 grid gap-3">
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="date"
+                  value={appointmentsDateFilter}
+                  onChange={(e) => setAppointmentsDateFilter(e.target.value)}
+                />
+
+                <input
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  type="text"
+                  placeholder="Buscar por nombre o teléfono"
+                  value={appointmentsSearch}
+                  onChange={(e) => setAppointmentsSearch(e.target.value)}
+                />
+              </div>
+
+              {loading ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  Cargando citas...
+                </div>
+              ) : citasFiltradas.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  No hay citas del equipo con esos filtros.
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {citasFiltradas.map((appointment) => {
+                    const leadRelacionado = leads.find((lead) => lead.id === appointment.lead_id);
+
+                    return (
+                      <div key={appointment.id} className="rounded-2xl border border-slate-200 p-4">
+                        <div className="flex flex-col gap-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-semibold text-slate-900">
+                              {appointment.patient_name || "Sin nombre"}
+                            </h3>
+
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                                appointment.status
+                              )}`}
+                            >
+                              {translateStatus(appointment.status)}
+                            </span>
+                          </div>
+
+                          <p className="text-sm text-slate-700">
+                            {appointment.phone || "Sin teléfono"} · {appointment.city || "Sin ciudad"}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            Servicio: {translateService(appointment.service_type)}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            Fecha: {appointment.appointment_date} · Hora: {appointment.appointment_time?.slice(0, 5)}
+                          </p>
+
+                          <p className="text-sm text-slate-700">
+                            OPC:{" "}
+                            {leadRelacionado
+                              ? getCreatorName(leadRelacionado.created_by_user_id)
+                              : "Sin OPC"}
+                          </p>
+
+                          {leadRelacionado ? (
+                            <div>
+                              <a
+                                href={`/leads/${leadRelacionado.id}`}
+                                className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                              >
+                                Ver lead
+                              </a>
+                            </div>
+                          ) : null}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </section>
+          </section>
+        ) : (
+          <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">
+                  Leads visibles para tu rol
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  {showCreatorColumn
+                    ? "Busca por nombre, teléfono o nombre del OPC y filtra por fecha."
+                    : "Busca por nombre o teléfono y filtra por fecha."}
+                </p>
+              </div>
+
+              <button
+                onClick={cargarLeads}
+                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Actualizar
+              </button>
+            </div>
+
+            <div className="mb-6 grid gap-3 md:grid-cols-2">
+              <input
+                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                type="date"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value)}
+              />
+
+              <input
+                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                type="text"
+                placeholder={
+                  showCreatorColumn
+                    ? "Buscar por nombre, teléfono u OPC"
+                    : "Buscar por nombre o teléfono"
+                }
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            {loading ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                Cargando leads...
+              </div>
+            ) : leadsFiltrados.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                No hay leads visibles con esos filtros.
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-separate border-spacing-y-3">
+                  <thead>
+                    <tr className="text-left text-sm text-slate-500">
+                      <th className="px-4">Nombre</th>
+                      <th className="px-4">Teléfono</th>
+                      <th className="px-4">Ciudad</th>
+                      <th className="px-4">Servicio</th>
+                      <th className="px-4">Origen</th>
+                      <th className="px-4">Captación</th>
+                      {showCreatorColumn && <th className="px-4">OPC</th>}
+                      <th className="px-4">Estado</th>
+                      <th className="px-4">Creado</th>
+                      <th className="px-4">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {leadsFiltrados.map((lead) => {
+                      const estadoVisible = getVisibleStatus(lead);
+
+                      return (
+                        <tr key={lead.id} className="rounded-2xl bg-slate-50">
+                          <td className="rounded-l-2xl px-4 py-4 font-semibold text-slate-900">
+                            {lead.full_name?.trim() ||
+                              `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+                              "Sin nombre"}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {lead.phone}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {lead.city || "Sin ciudad"}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {translateService(lead.interest_service)}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {translateSource(lead.source)}
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-700">
+                            {lead.capture_location || "Sin lugar"}
+                          </td>
+
+                          {showCreatorColumn && (
+                            <td className="px-4 py-4 text-sm text-slate-700">
+                              {getCreatorName(lead.created_by_user_id)}
+                            </td>
+                          )}
+
+                          <td className="px-4 py-4 text-sm">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                                estadoVisible
+                              )}`}
+                            >
+                              {translateStatus(estadoVisible)}
+                            </span>
+                          </td>
+
+                          <td className="px-4 py-4 text-sm text-slate-500">
+                            {formatDate(lead.created_at)}
+                          </td>
+
+                          <td className="rounded-r-2xl px-4 py-4">
+                            <div className="flex flex-wrap gap-2">
+                              <a
+                                href={`/leads/${lead.id}`}
+                                className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                              >
+                                Ver / editar
+                              </a>
+
+                              {isSuperUser ? (
+                                <button
+                                  type="button"
+                                  onClick={() => eliminarLead(lead)}
+                                  disabled={deletingLeadId === lead.id}
+                                  className="inline-flex rounded-xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {deletingLeadId === lead.id ? "Borrando..." : "Eliminar"}
+                                </button>
+                              ) : null}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </main>
   );
 }
 
-function Field({
-  label,
-  required,
-  input,
+function StatCard({
+  title,
+  value,
+  active,
+  onClick,
 }: {
-  label: string;
-  required?: boolean;
-  input: React.ReactNode;
+  title: string;
+  value: number;
+  active: boolean;
+  onClick: () => void;
 }) {
   return (
-    <label className="block">
-      <div className="mb-2 text-sm font-medium text-slate-700">
-        {label} {required ? <span className="text-red-500">*</span> : null}
-      </div>
-      {input}
-    </label>
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-3xl bg-white p-5 text-left shadow-sm transition ${
+        active ? "ring-2 ring-slate-900" : ""
+      }`}
+    >
+      <p className="text-sm text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+    </button>
   );
 }
-
-const inputClass =
-  "w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-slate-500";
