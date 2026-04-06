@@ -153,6 +153,8 @@ export default function LeadsPage() {
   const [appointmentsDateFilter, setAppointmentsDateFilter] = useState(hoyISO());
   const [appointmentsSearch, setAppointmentsSearch] = useState("");
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
+  const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
 
   const showCreatorColumn =
     roleCode === "super_user" ||
@@ -161,6 +163,8 @@ export default function LeadsPage() {
 
   const showSupervisorOpcTools =
     roleCode === "supervisor_opc" || roleCode === "super_user";
+
+  const isSuperUser = roleCode === "super_user";
 
   async function validarAcceso() {
     try {
@@ -274,6 +278,49 @@ export default function LeadsPage() {
       setError(err?.message || "No se pudieron cargar los leads.");
     } finally {
       setLoading(false);
+    }
+  }
+
+
+  async function eliminarLead(lead: LeadRow) {
+    if (!isSuperUser) return;
+
+    const nombre =
+      lead.full_name?.trim() ||
+      `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+      "este lead";
+
+    const confirmado = window.confirm(
+      `¿Seguro que deseas borrar a ${nombre}? Esta acción eliminará también sus citas relacionadas y no se puede deshacer.`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      setDeletingLeadId(lead.id);
+      setError("");
+      setSuccessMessage("");
+
+      const { error: appointmentsDeleteError } = await supabase
+        .from("appointments")
+        .delete()
+        .eq("lead_id", lead.id);
+
+      if (appointmentsDeleteError) throw appointmentsDeleteError;
+
+      const { error: leadDeleteError } = await supabase
+        .from("leads")
+        .delete()
+        .eq("id", lead.id);
+
+      if (leadDeleteError) throw leadDeleteError;
+
+      setSuccessMessage("Lead eliminado correctamente.");
+      await cargarLeads();
+    } catch (err: any) {
+      setError(err?.message || "No se pudo eliminar el lead.");
+    } finally {
+      setDeletingLeadId(null);
     }
   }
 
@@ -605,6 +652,12 @@ export default function LeadsPage() {
           </div>
         ) : null}
 
+        {successMessage ? (
+          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            {successMessage}
+          </div>
+        ) : null}
+
         {showSupervisorOpcTools ? (
           <section className="mb-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
@@ -735,13 +788,24 @@ export default function LeadsPage() {
                             Creado: {formatDate(lead.created_at)}
                           </p>
 
-                          <div>
+                          <div className="flex flex-wrap gap-2">
                             <a
                               href={`/leads/${lead.id}`}
                               className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
                             >
                               Ver / editar
                             </a>
+
+                            {isSuperUser ? (
+                              <button
+                                type="button"
+                                onClick={() => eliminarLead(lead)}
+                                disabled={deletingLeadId === lead.id}
+                                className="inline-flex rounded-xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                {deletingLeadId === lead.id ? "Borrando..." : "Eliminar"}
+                              </button>
+                            ) : null}
                           </div>
                         </div>
                       </div>
@@ -966,12 +1030,25 @@ export default function LeadsPage() {
                           </td>
 
                           <td className="rounded-r-2xl px-4 py-4">
-                            <a
-                              href={`/leads/${lead.id}`}
-                              className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
-                            >
-                              Ver / editar
-                            </a>
+                            <div className="flex flex-wrap gap-2">
+                              <a
+                                href={`/leads/${lead.id}`}
+                                className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                              >
+                                Ver / editar
+                              </a>
+
+                              {isSuperUser ? (
+                                <button
+                                  type="button"
+                                  onClick={() => eliminarLead(lead)}
+                                  disabled={deletingLeadId === lead.id}
+                                  className="inline-flex rounded-xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                >
+                                  {deletingLeadId === lead.id ? "Borrando..." : "Eliminar"}
+                                </button>
+                              ) : null}
+                            </div>
                           </td>
                         </tr>
                       );
