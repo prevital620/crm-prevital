@@ -159,6 +159,40 @@ const commercialDisqualifyingOptions: Array<{
   { key: "dialisis", label: "Diálisis" },
 ];
 
+
+const commercialOccupationOptions = [
+  { value: "empleado", label: "Empleado" },
+  { value: "independiente", label: "Independiente" },
+  { value: "pensionado", label: "Pensionado" },
+  { value: "desempleado", label: "Desempleado" },
+  { value: "estudiante", label: "Estudiante" },
+  { value: "empleado_salud", label: "Empleado de la salud" },
+  { value: "otro", label: "Otro" },
+];
+
+const commercialOccupationDisqualifyingValues = new Set([
+  "desempleado",
+  "estudiante",
+  "empleado_salud",
+]);
+
+const commercialOccupationOtherDisqualifyingTerms = [
+  "desempleado",
+  "estudiante",
+  "empleado de la salud",
+  "empleado salud",
+  "salud",
+];
+
+function traducirOcupacionComercial(value: string, otherValue?: string) {
+  if (value === "otro") {
+    return otherValue?.trim() || "Otro";
+  }
+
+  const found = commercialOccupationOptions.find((item) => item.value === value);
+  return found?.label || value || "";
+}
+
 const emptyCommercialDisqualifyingFlags = (): CommercialDisqualifyingFlags => ({
   stent: false,
   corazon_abierto: false,
@@ -373,11 +407,20 @@ function calcularClasificacionInicial(values: {
   afiliacion: string;
   trae_cedula: string;
   celular_inteligente: string;
+  ocupacion: string;
+  ocupacion_otro?: string;
   condiciones_descalificantes: CommercialDisqualifyingFlags;
 }) {
   const motivos: string[] = [];
   const edad = Number(values.edad || "0");
   const tieneCondicionDescalificante = Object.values(values.condiciones_descalificantes).some(Boolean);
+  const ocupacionOtroNormalizada = (values.ocupacion_otro || "").trim().toLowerCase();
+  const ocupacionDescalificante =
+    commercialOccupationDisqualifyingValues.has(values.ocupacion) ||
+    (values.ocupacion === "otro" &&
+      commercialOccupationOtherDisqualifyingTerms.some((term) =>
+        ocupacionOtroNormalizada.includes(term)
+      ));
 
   if (!edad || Number.isNaN(edad) || edad < 40 || edad > 69) {
     motivos.push("edad fuera del rango de 40 a 69 años");
@@ -397,6 +440,10 @@ function calcularClasificacionInicial(values: {
 
   if (values.celular_inteligente !== "si") {
     motivos.push("no tiene celular inteligente");
+  }
+
+  if (ocupacionDescalificante) {
+    motivos.push("ocupación descalificante");
   }
 
   if (tieneCondicionDescalificante) {
@@ -480,6 +527,7 @@ function RecepcionContent() {
     tiene_eps: "si",
     afiliacion: "",
     ocupacion: "",
+    ocupacion_otro: "",
     edad: "",
     trae_cedula: "si",
     celular_inteligente: "si",
@@ -520,6 +568,8 @@ function RecepcionContent() {
       afiliacion: commercialForm.afiliacion,
       trae_cedula: commercialForm.trae_cedula,
       celular_inteligente: commercialForm.celular_inteligente,
+      ocupacion: commercialForm.ocupacion,
+      ocupacion_otro: commercialForm.ocupacion_otro,
       condiciones_descalificantes: commercialForm.condiciones_descalificantes,
     });
 
@@ -539,6 +589,8 @@ function RecepcionContent() {
     commercialForm.afiliacion,
     commercialForm.trae_cedula,
     commercialForm.celular_inteligente,
+    commercialForm.ocupacion,
+    commercialForm.ocupacion_otro,
     commercialForm.condiciones_descalificantes,
   ]);
 
@@ -657,7 +709,43 @@ function RecepcionContent() {
       const leadsData = (leadsResult.data as LeadOption[]) || [];
       const dayRows = (daySettingsResult.data as AgendaDaySetting[]) || [];
       const slotRows = (slotSettingsResult.data as AgendaSlotSetting[]) || [];
+      const commercialCasesData = (commercialCasesResult.data as CommercialCaseRow[]) || [];
 
+      const hoy = hoyISO();
+      const staleAppointments = appointmentsData.filter((item) => {
+        const hasCommercialRecord = commercialCasesData.some(
+          (caseItem) => caseItem.appointment_id === item.id
+        );
+
+        return (
+          item.appointment_date < hoy &&
+          ACTIVE_APPOINTMENT_STATUSES.includes(item.status) &&
+          !hasCommercialRecord
+        );
+      });
+
+      if (staleAppointments.length > 0) {
+        const staleIds = staleAppointments.map((item) => item.id);
+        const { error: staleError } = await supabase
+          .from("appointments")
+          .update({
+            status: "no_asistio",
+            updated_by_user_id: currentUserId,
+          })
+          .in("id", staleIds);
+
+        if (staleError) throw staleError;
+
+        for (const staleItem of staleAppointments) {
+          if (staleItem.lead_id) {
+            await actualizarEstadoLeadPorCita(staleItem.lead_id, "no_asistio");
+          }
+        }
+
+        staleAppointments.forEach((item) => {
+          item.status = "no_asistio";
+        });
+      }
 
       const nextStatuses: Record<string, string> = {};
       appointmentsData.forEach((item) => {
@@ -682,6 +770,7 @@ function RecepcionContent() {
       setStatusById(nextStatuses);
       setDaySettings(dayMap);
       setSlotSettings(slotMap);
+      setCommercialCases(commercialCasesData);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los datos de recepción.");
     } finally {
@@ -1217,6 +1306,7 @@ function RecepcionContent() {
       tiene_eps: "si",
       afiliacion: "",
       ocupacion: "",
+      ocupacion_otro: "",
       edad: "",
       trae_cedula: "si",
       celular_inteligente: "si",
@@ -1258,6 +1348,7 @@ function RecepcionContent() {
       }
 
       const clasificacion = commercialForm.clasificacion_inicial || "No Q";
+      const ocupacionLabel = traducirOcupacionComercial(commercialForm.ocupacion, commercialForm.ocupacion_otro);
 
       try {
         const identifier = commercialForm.documento.trim() || commercialForm.phone.trim();
@@ -1275,7 +1366,7 @@ function RecepcionContent() {
               documento: commercialForm.documento.trim() || null,
               telefono: commercialForm.phone.trim() || null,
               ciudad: commercialForm.city.trim() || null,
-              ocupacion: commercialForm.ocupacion || null,
+              ocupacion: ocupacionLabel || null,
               estado_actual: "pendiente valoracion",
               clasificacion_inicial: clasificacion,
               clasificacion_final: clasificacion,
@@ -1289,7 +1380,7 @@ function RecepcionContent() {
               documento: commercialForm.documento.trim() || null,
               telefono: commercialForm.phone.trim() || null,
               ciudad: commercialForm.city.trim() || null,
-              ocupacion: commercialForm.ocupacion || null,
+              ocupacion: ocupacionLabel || null,
               estado_actual: "pendiente valoracion",
               clasificacion_inicial: clasificacion,
               clasificacion_final: clasificacion,
@@ -1314,7 +1405,7 @@ function RecepcionContent() {
         commercialForm.afiliacion ? `Afiliación: ${commercialForm.afiliacion}` : "",
         `Trae cédula: ${commercialForm.trae_cedula === "si" ? "Sí" : "No"}`,
         `Celular inteligente: ${commercialForm.celular_inteligente === "si" ? "Sí" : "No"}`,
-        commercialForm.ocupacion ? `Ocupación: ${commercialForm.ocupacion}` : "",
+        ocupacionLabel ? `Ocupación: ${ocupacionLabel}` : "",
         commercialForm.edad ? `Edad: ${commercialForm.edad}` : "",
         condicionesMarcadas ? `Condiciones descalificantes: ${condicionesMarcadas}` : "Condiciones descalificantes: Ninguna",
         commercialForm.referido_por ? `Referido por: ${commercialForm.referido_por}` : "",
@@ -1437,6 +1528,7 @@ function RecepcionContent() {
       tiene_eps: "si",
       afiliacion: "",
       ocupacion: "",
+      ocupacion_otro: "",
       edad: "",
       trae_cedula: "si",
       celular_inteligente: "si",
@@ -2181,18 +2273,41 @@ function RecepcionContent() {
                       <select
                         className={inputClass}
                         value={commercialForm.ocupacion}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, ocupacion: e.target.value }))}
+                        onChange={(e) =>
+                          setCommercialForm((prev) => ({
+                            ...prev,
+                            ocupacion: e.target.value,
+                            ocupacion_otro: e.target.value === "otro" ? prev.ocupacion_otro : "",
+                          }))
+                        }
                       >
                         <option value="">Selecciona</option>
-                        <option value="empleado">Empleado</option>
-                        <option value="independiente">Independiente</option>
-                        <option value="pensionado">Pensionado</option>
-                        <option value="hogar">Hogar</option>
-                        <option value="estudiante">Estudiante</option>
-                        <option value="otro">Otro</option>
+                        {commercialOccupationOptions.map((item) => (
+                          <option key={item.value} value={item.value}>
+                            {item.label}
+                          </option>
+                        ))}
                       </select>
                     }
                   />
+                  {commercialForm.ocupacion === "otro" ? (
+                    <Field
+                      label="¿Cuál ocupación?"
+                      input={
+                        <input
+                          className={inputClass}
+                          placeholder="Escribe la ocupación"
+                          value={commercialForm.ocupacion_otro}
+                          onChange={(e) =>
+                            setCommercialForm((prev) => ({
+                              ...prev,
+                              ocupacion_otro: e.target.value,
+                            }))
+                          }
+                        />
+                      }
+                    />
+                  ) : null}
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
