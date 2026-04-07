@@ -43,19 +43,6 @@ type QuickAction = {
   roles: string[];
 };
 
-function normalizeRoleCode(roleCode: string | null | undefined) {
-  if (!roleCode) return null;
-
-  const map: Record<string, string> = {
-    gerente: "gerencia_comercial",
-    gerente_comercial: "gerencia_comercial",
-    gerencia_comercial: "gerencia_comercial",
-    recepcionista: "recepcion",
-  };
-
-  return map[roleCode] || roleCode;
-}
-
 const quickActions: QuickAction[] = [
   {
     title: "Nuevo lead",
@@ -114,6 +101,19 @@ const quickActions: QuickAction[] = [
   },
 ];
 
+
+function normalizeRoleCode(roleCode: string | null | undefined) {
+  if (!roleCode) return null;
+
+  const role = roleCode.trim().toLowerCase();
+
+  if (["gerente", "gerente_comercial", "gerencia_comercial"].includes(role)) {
+    return "gerencia_comercial";
+  }
+
+  return role;
+}
+
 export default function HomePage() {
   const router = useRouter();
 
@@ -143,6 +143,7 @@ export default function HomePage() {
     }
 
     const auth = await getCurrentUserRole();
+
     const normalizedRoleCode = normalizeRoleCode(auth.roleCode);
 
     setCurrentRoleCode(normalizedRoleCode);
@@ -243,6 +244,7 @@ export default function HomePage() {
   }, [currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
+  const isPromotorOpc = currentRoleCode === "promotor_opc";
 
   const totalLeads = leads.length;
   const totalDepartments = departments.length;
