@@ -30,11 +30,22 @@ type CommercialUser = {
 };
 
 type GerenciaTab = "pendientes" | "comerciales" | "en_gestion" | "finalizados";
-type StatusFilter = "todos" | "pendiente_asignacion_comercial" | "asignado_comercial" | "en_atencion_comercial" | "seguimiento_comercial" | "finalizado";
+type StatusFilter =
+  | "todos"
+  | "pendiente_asignacion_comercial"
+  | "asignado_comercial"
+  | "en_atencion_comercial"
+  | "seguimiento_comercial"
+  | "finalizado";
 type SaleFilter = "todas" | "con_venta" | "sin_venta";
 type DateFilter = "hoy" | "todos";
 
-const allowedRoles = ["super_user", "gerente"];
+const allowedRoles = [
+  "super_user",
+  "gerente",
+  "gerente_comercial",
+  "gerencia_comercial",
+];
 
 const activeCommercialStatuses = [
   "asignado_comercial",
