@@ -46,6 +46,12 @@ type SpecialistOption = {
   role_code: string;
 };
 
+type PortfolioFields = {
+  installments_count: string;
+  installment_value: string;
+  first_installment_date: string;
+};
+
 const allowedRoles = [
   "super_user",
   "comercial",
@@ -61,45 +67,47 @@ const managementRoles = [
   "gerencia_comercial",
 ];
 
-const caseStatusOptions = [
-  { value: "asignado_comercial", label: "Asignado" },
-  { value: "en_atencion_comercial", label: "En atención" },
-  { value: "seguimiento_comercial", label: "Seguimiento" },
-  { value: "finalizado", label: "Finalizado" },
-];
-
 const purchasedServiceOptions = [
   { value: "", label: "Selecciona" },
   { value: "valoracion", label: "Valoración" },
   { value: "detox", label: "Detox" },
   { value: "sueroterapia", label: "Sueroterapia" },
   { value: "nutricion", label: "Nutrición" },
+  { value: "medico", label: "Médico" },
   { value: "fisioterapia", label: "Fisioterapia" },
-  { value: "medicina_general", label: "Medicina general" },
-  { value: "plan_integral", label: "Plan integral" },
-  { value: "otro", label: "Otro" },
+  { value: "tratamiento_integral", label: "Tratamiento integral" },
 ];
 
 const paymentMethodOptions = [
   { value: "", label: "Selecciona" },
-  { value: "efectivo", label: "Efectivo" },
-  { value: "transferencia", label: "Transferencia" },
+  { value: "contado", label: "Contado" },
   { value: "tarjeta", label: "Tarjeta" },
+  { value: "transferencia", label: "Transferencia" },
   { value: "mixto", label: "Mixto" },
-  { value: "otro", label: "Otro" },
+  { value: "cartera", label: "Cartera" },
 ];
 
 const nextStepOptions = [
-  { value: "", label: "Sin siguiente cita" },
-  { value: "especialista", label: "Especialista" },
+  { value: "", label: "Sin continuidad todavía" },
+  { value: "nutricion", label: "Nutrición" },
+  { value: "medico", label: "Médico" },
+  { value: "fisioterapia", label: "Fisioterapia" },
   { value: "detox", label: "Detox" },
   { value: "sueroterapia", label: "Sueroterapia" },
-  { value: "valoracion", label: "Valoración" },
-  { value: "nutricion", label: "Nutrición" },
-  { value: "fisioterapia", label: "Fisioterapia" },
-  { value: "medicina_general", label: "Medicina general" },
-  { value: "otro", label: "Otro" },
 ];
+
+function traducirEstado(status: string | null) {
+  const map: Record<string, string> = {
+    pendiente_asignacion_comercial: "Pendiente asignación",
+    asignado_comercial: "Asignado",
+    en_atencion_comercial: "En atención",
+    seguimiento_comercial: "Seguimiento",
+    finalizado: "Finalizado",
+  };
+
+  if (!status) return "Sin estado";
+  return map[status] || status;
+}
 
 function estadoBadge(status: string | null) {
   switch (status) {
@@ -118,19 +126,6 @@ function estadoBadge(status: string | null) {
   }
 }
 
-function traducirEstado(status: string | null) {
-  const map: Record<string, string> = {
-    pendiente_asignacion_comercial: "Pendiente asignación",
-    asignado_comercial: "Asignado",
-    en_atencion_comercial: "En atención",
-    seguimiento_comercial: "Seguimiento",
-    finalizado: "Finalizado",
-  };
-
-  if (!status) return "Sin estado";
-  return map[status] || status;
-}
-
 function formatDate(dateString: string | null | undefined) {
   if (!dateString) return "Sin fecha";
   try {
@@ -144,25 +139,104 @@ function formatDate(dateString: string | null | undefined) {
 }
 
 function hoyISO() {
-  const hoy = new Date();
-  const y = hoy.getFullYear();
-  const m = String(hoy.getMonth() + 1).padStart(2, "0");
-  const d = String(hoy.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
+  const now = new Date();
+  const offset = now.getTimezoneOffset();
+  const local = new Date(now.getTime() - offset * 60 * 1000);
+  return local.toISOString().slice(0, 10);
 }
 
 function ahoraHora() {
-  const ahora = new Date();
-  const hh = String(ahora.getHours()).padStart(2, "0");
-  const mm = String(ahora.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  const now = new Date();
+  return now.toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
 }
 
 function esVentaReal(item: CommercialCase) {
   return !!(
     item.purchased_service ||
-    (item.sale_value && Number(item.sale_value) > 0)
+    (item.sale_value && Number(item.sale_value) > 0) ||
+    (item.volume_amount && Number(item.volume_amount) > 0)
   );
+}
+
+function normalizeMoneyString(value: string) {
+  return value.replace(/[^\d]/g, "");
+}
+
+function numberFromString(value: string) {
+  const raw = normalizeMoneyString(value);
+  if (!raw) return 0;
+  return Number(raw);
+}
+
+function formatMoneyDisplay(value: string | number | null | undefined) {
+  const numeric = typeof value === "number" ? value : numberFromString(value || "");
+  if (!numeric) return "";
+  return numeric.toLocaleString("es-CO");
+}
+
+function isOutcomeCode(value: string | null | undefined) {
+  return ["ganada", "perdida", "pendiente"].includes(value || "");
+}
+
+function getReceptionSummary(item: CommercialCase) {
+  if (!item.sale_result || isOutcomeCode(item.sale_result)) return [];
+  return item.sale_result
+    .split("|")
+    .map((part) => part.trim())
+    .map((part) => part.replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+
+function parsePortfolioDetails(text: string | null | undefined): PortfolioFields {
+  const source = text || "";
+  const installments = source.match(/Número de cuotas:\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const installmentValue = source.match(/Valor de la cuota:\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const firstDate = source.match(/Fecha primera cuota:\s*([^\n]+)/i)?.[1]?.trim() || "";
+
+  return {
+    installments_count: installments,
+    installment_value: installmentValue,
+    first_installment_date: firstDate,
+  };
+}
+
+function stripPortfolioDetails(text: string | null | undefined) {
+  const source = text || "";
+  const lines = source
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(
+      (line) =>
+        !/^Detalle cartera:/i.test(line) &&
+        !/^Número de cuotas:/i.test(line) &&
+        !/^Valor de la cuota:/i.test(line) &&
+        !/^Fecha primera cuota:/i.test(line)
+    );
+
+  return lines.join("\n").trim();
+}
+
+function buildClosingNotes(baseText: string, portfolio: PortfolioFields, portfolioAmount: number) {
+  const lines = [stripPortfolioDetails(baseText)].filter(Boolean);
+
+  if (portfolioAmount > 0) {
+    lines.push("Detalle cartera:");
+    if (portfolio.installments_count) {
+      lines.push(`Número de cuotas: ${portfolio.installments_count}`);
+    }
+    if (portfolio.installment_value) {
+      lines.push(`Valor de la cuota: ${portfolio.installment_value}`);
+    }
+    if (portfolio.first_installment_date) {
+      lines.push(`Fecha primera cuota: ${portfolio.first_installment_date}`);
+    }
+  }
+
+  return lines.join("\n").trim() || null;
 }
 
 export default function ComercialPage() {
@@ -172,9 +246,6 @@ export default function ComercialPage() {
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentRoleCode, setCurrentRoleCode] = useState<string | null>(null);
-
-  const [error, setError] = useState("");
-  const [mensaje, setMensaje] = useState("");
 
   const [cases, setCases] = useState<CommercialCase[]>([]);
   const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
@@ -186,12 +257,11 @@ export default function ComercialPage() {
   const [saving, setSaving] = useState(false);
 
   const [form, setForm] = useState({
-    status: "asignado_comercial",
+    status: "en_atencion_comercial",
     commercial_notes: "",
     sales_assessment: "",
     proposal_text: "",
     purchased_service: "",
-    sale_value: "",
     payment_method: "",
     cash_amount: "",
     portfolio_amount: "",
@@ -203,6 +273,34 @@ export default function ComercialPage() {
     next_specialist_user_id: "",
     next_notes: "",
   });
+
+  const [portfolioForm, setPortfolioForm] = useState<PortfolioFields>({
+    installments_count: "",
+    installment_value: "",
+    first_installment_date: "",
+  });
+
+  const [error, setError] = useState("");
+  const [mensaje, setMensaje] = useState("");
+
+  const currentCase = useMemo(
+    () => cases.find((item) => item.id === editingCaseId) || null,
+    [cases, editingCaseId]
+  );
+
+  const calculatedVolume = useMemo(() => numberFromString(form.volume_amount), [form.volume_amount]);
+  const calculatedCash = useMemo(() => numberFromString(form.cash_amount), [form.cash_amount]);
+  const calculatedPortfolio = useMemo(
+    () => Math.max(0, calculatedVolume - calculatedCash),
+    [calculatedCash, calculatedVolume]
+  );
+
+  useEffect(() => {
+    setForm((prev) => ({
+      ...prev,
+      portfolio_amount: calculatedPortfolio ? String(calculatedPortfolio) : "",
+    }));
+  }, [calculatedPortfolio]);
 
   async function validarAcceso() {
     try {
@@ -313,7 +411,7 @@ export default function ComercialPage() {
           const role = row.user_roles?.[0]?.roles;
           return {
             id: row.id,
-            full_name: row.full_name,
+            full_name: row.full_name || "Sin nombre",
             role_name: role?.name || "",
             role_code: role?.code || "",
           };
@@ -348,7 +446,8 @@ export default function ComercialPage() {
     return cases.filter((item) => {
       const searchOk = q
         ? (item.customer_name || "").toLowerCase().includes(q) ||
-          (item.phone || "").toLowerCase().includes(q)
+          (item.phone || "").toLowerCase().includes(q) ||
+          (item.city || "").toLowerCase().includes(q)
         : true;
 
       const statusOk = statusFilter ? item.status === statusFilter : true;
@@ -365,51 +464,76 @@ export default function ComercialPage() {
           x.status
         )
       ).length,
-      vendidos: cases.filter(
-        (x) => x.status === "finalizado" && esVentaReal(x)
-      ).length,
+      vendidos: cases.filter((x) => x.status === "finalizado" && esVentaReal(x)).length,
       seguimiento: cases.filter((x) => x.status === "seguimiento_comercial").length,
-      noVendidos: cases.filter(
-        (x) => x.status === "finalizado" && !esVentaReal(x)
-      ).length,
+      noVendidos: cases.filter((x) => x.status === "finalizado" && !esVentaReal(x)).length,
     };
   }, [cases]);
 
-  function cargarCasoParaEditar(item: CommercialCase) {
-    setEditingCaseId(item.id);
-    setForm({
-      status: item.status || "asignado_comercial",
-      commercial_notes: item.commercial_notes || "",
-      sales_assessment: item.sales_assessment || "",
-      proposal_text: item.proposal_text || "",
-      purchased_service: item.purchased_service || "",
-      sale_value: item.sale_value ? String(item.sale_value) : "",
-      payment_method: item.payment_method || "",
-      cash_amount: item.cash_amount ? String(item.cash_amount) : "",
-      portfolio_amount: item.portfolio_amount ? String(item.portfolio_amount) : "",
-      volume_amount: item.volume_amount ? String(item.volume_amount) : "",
-      closing_notes: item.closing_notes || "",
-      next_step_type: item.next_step_type || "",
-      next_appointment_date: item.next_appointment_date || hoyISO(),
-      next_appointment_time: item.next_appointment_time
-        ? item.next_appointment_time.slice(0, 5)
-        : ahoraHora(),
-      next_specialist_user_id: item.next_specialist_user_id || "",
-      next_notes: item.next_notes || "",
-    });
+  async function iniciarAtencion(item: CommercialCase) {
+    try {
+      setError("");
+      setMensaje("");
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+      if (item.status !== "finalizado" && item.status !== "en_atencion_comercial") {
+        const { error } = await supabase
+          .from("commercial_cases")
+          .update({
+            status: "en_atencion_comercial",
+            updated_by_user_id: currentUserId,
+          })
+          .eq("id", item.id);
+
+        if (error) throw error;
+      }
+
+      const portfolioData = parsePortfolioDetails(item.closing_notes);
+
+      setEditingCaseId(item.id);
+      setForm({
+        status: item.status === "finalizado" ? "finalizado" : "en_atencion_comercial",
+        commercial_notes: item.commercial_notes || "",
+        sales_assessment: item.sales_assessment || "",
+        proposal_text: item.proposal_text || "",
+        purchased_service: item.purchased_service || "",
+        payment_method: item.payment_method || "",
+        cash_amount: item.cash_amount ? String(item.cash_amount) : "",
+        portfolio_amount: item.portfolio_amount ? String(item.portfolio_amount) : "",
+        volume_amount:
+          item.volume_amount || item.sale_value ? String(item.volume_amount || item.sale_value) : "",
+        closing_notes: stripPortfolioDetails(item.closing_notes || ""),
+        next_step_type: item.next_step_type || "",
+        next_appointment_date: item.next_appointment_date || hoyISO(),
+        next_appointment_time: item.next_appointment_time
+          ? item.next_appointment_time.slice(0, 5)
+          : ahoraHora(),
+        next_specialist_user_id: item.next_specialist_user_id || "",
+        next_notes: item.next_notes || "",
+      });
+      setPortfolioForm(portfolioData);
+
+      setCases((prev) =>
+        prev.map((caseItem) =>
+          caseItem.id === item.id && caseItem.status !== "finalizado"
+            ? { ...caseItem, status: "en_atencion_comercial" }
+            : caseItem
+        )
+      );
+
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err: any) {
+      setError(err?.message || "No se pudo abrir el caso.");
+    }
   }
 
   function resetForm() {
     setEditingCaseId(null);
     setForm({
-      status: "asignado_comercial",
+      status: "en_atencion_comercial",
       commercial_notes: "",
       sales_assessment: "",
       proposal_text: "",
       purchased_service: "",
-      sale_value: "",
       payment_method: "",
       cash_amount: "",
       portfolio_amount: "",
@@ -421,11 +545,14 @@ export default function ComercialPage() {
       next_specialist_user_id: "",
       next_notes: "",
     });
+    setPortfolioForm({
+      installments_count: "",
+      installment_value: "",
+      first_installment_date: "",
+    });
   }
 
-  async function guardarCaso(e: React.FormEvent) {
-    e.preventDefault();
-
+  async function guardarCaso(finalizar: boolean) {
     if (!editingCaseId || !currentUserId) {
       setError("No se encontró el caso o el usuario actual.");
       return;
@@ -436,28 +563,39 @@ export default function ComercialPage() {
     setMensaje("");
 
     try {
-      const statusFinal = form.status;
+      const currentCaseFound = cases.find((item) => item.id === editingCaseId);
+      const statusFinal = finalizar ? "finalizado" : "en_atencion_comercial";
+      const volumeNumber = numberFromString(form.volume_amount);
+      const cashNumber = numberFromString(form.cash_amount);
+      const portfolioNumber = Math.max(0, volumeNumber - cashNumber);
+      const closingNotes = buildClosingNotes(form.closing_notes, portfolioForm, portfolioNumber);
+      const saleOutcome =
+        volumeNumber > 0 || form.purchased_service
+          ? "ganada"
+          : finalizar
+          ? "perdida"
+          : currentCaseFound?.status === "seguimiento_comercial"
+          ? "pendiente"
+          : null;
+
+      const preservedReceptionSummary =
+        currentCaseFound?.sale_result && !isOutcomeCode(currentCaseFound.sale_result)
+          ? currentCaseFound.sale_result
+          : saleOutcome;
 
       const updatePayload: any = {
         status: statusFinal,
         commercial_notes: form.commercial_notes.trim() || null,
         sales_assessment: form.sales_assessment.trim() || null,
         proposal_text: form.proposal_text.trim() || null,
-        sale_result:
-          form.purchased_service || form.sale_value
-            ? "ganada"
-            : statusFinal === "seguimiento_comercial"
-            ? "pendiente"
-            : statusFinal === "finalizado"
-            ? "perdida"
-            : null,
+        sale_result: preservedReceptionSummary,
         purchased_service: form.purchased_service || null,
-        sale_value: form.sale_value ? Number(form.sale_value) : null,
+        sale_value: volumeNumber || null,
         payment_method: form.payment_method || null,
-        cash_amount: form.cash_amount ? Number(form.cash_amount) : null,
-        portfolio_amount: form.portfolio_amount ? Number(form.portfolio_amount) : null,
-        volume_amount: form.volume_amount ? Number(form.volume_amount) : null,
-        closing_notes: form.closing_notes.trim() || null,
+        cash_amount: cashNumber || null,
+        portfolio_amount: portfolioNumber || null,
+        volume_amount: volumeNumber || null,
+        closing_notes: closingNotes,
         next_step_type: form.next_step_type || null,
         next_appointment_date: form.next_step_type ? form.next_appointment_date : null,
         next_appointment_time: form.next_step_type ? form.next_appointment_time : null,
@@ -471,25 +609,22 @@ export default function ComercialPage() {
         updatePayload.closed_at = new Date().toISOString();
       }
 
-      const currentCase = cases.find((item) => item.id === editingCaseId);
-
-      const hayVenta =
-        !!form.purchased_service || !!form.sale_value || !!form.cash_amount || !!form.volume_amount;
+      const hayVenta = volumeNumber > 0 || !!form.purchased_service;
 
       if (
         statusFinal === "finalizado" &&
         hayVenta &&
         form.next_step_type &&
-        !currentCase?.next_appointment_created
+        !currentCaseFound?.next_appointment_created
       ) {
         const { data: appointmentData, error: appointmentError } = await supabase
           .from("appointments")
           .insert([
             {
-              lead_id: currentCase?.lead_id || null,
-              patient_name: currentCase?.customer_name || "Cliente",
-              phone: currentCase?.phone || null,
-              city: currentCase?.city || null,
+              lead_id: currentCaseFound?.lead_id || null,
+              patient_name: currentCaseFound?.customer_name || "Cliente",
+              phone: currentCaseFound?.phone || null,
+              city: currentCaseFound?.city || null,
               appointment_date: form.next_appointment_date,
               appointment_time: form.next_appointment_time,
               status: "agendada",
@@ -518,7 +653,11 @@ export default function ComercialPage() {
 
       if (error) throw error;
 
-      setMensaje("Caso comercial actualizado correctamente.");
+      setMensaje(
+        finalizar
+          ? "Caso finalizado correctamente."
+          : "Avance comercial guardado correctamente."
+      );
       resetForm();
       await cargarDatos();
     } catch (err: any) {
@@ -550,6 +689,8 @@ export default function ComercialPage() {
     );
   }
 
+  const receptionSummary = currentCase ? getReceptionSummary(currentCase) : [];
+
   return (
     <main className="min-h-screen bg-slate-100 p-6 md:p-8">
       <div className="mx-auto max-w-7xl">
@@ -557,9 +698,7 @@ export default function ComercialPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-medium text-slate-500">Comercial</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">
-                Gestión comercial
-              </h1>
+              <h1 className="mt-2 text-3xl font-bold text-slate-900">Gestión comercial</h1>
               <p className="mt-3 text-sm text-slate-600">
                 Atiende tus casos, registra ventas y agenda la siguiente continuidad.
               </p>
@@ -568,10 +707,10 @@ export default function ComercialPage() {
             <SessionBadge />
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-4">
             <a
               href="/"
-              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+              className="inline-flex rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
             >
               Inicio
             </a>
@@ -606,7 +745,7 @@ export default function ComercialPage() {
                   {editingCaseId ? "Atender caso" : "Selecciona un caso"}
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Registra tu gestión comercial, la venta y la continuidad.
+                  Aquí ves lo registrado en recepción y completas el cierre comercial.
                 </p>
               </div>
 
@@ -626,25 +765,45 @@ export default function ComercialPage() {
                 Selecciona un caso de la lista para empezar a atenderlo.
               </div>
             ) : (
-              <form onSubmit={guardarCaso} className="mt-5 space-y-4">
-                <Field
-                  label="Estado del caso"
-                  input={
-                    <select
-                      className={inputClass}
-                      value={form.status}
-                      onChange={(e) =>
-                        setForm((prev) => ({ ...prev, status: e.target.value }))
-                      }
-                    >
-                      {caseStatusOptions.map((item) => (
-                        <option key={item.value} value={item.value}>
-                          {item.label}
-                        </option>
-                      ))}
-                    </select>
-                  }
-                />
+              <div className="mt-5 space-y-5">
+                <div className="rounded-2xl border border-cyan-200 bg-cyan-50 p-4">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="text-sm font-semibold text-cyan-900">Estado del caso:</span>
+                    <span className="rounded-full bg-cyan-100 px-3 py-1 text-sm font-semibold text-cyan-800">
+                      En atención
+                    </span>
+                    {currentCase?.assigned_at ? (
+                      <span className="text-sm text-cyan-900">
+                        Desde: {formatDate(currentCase.assigned_at)}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+
+                {currentCase ? (
+                  <div className="rounded-2xl border border-slate-200 p-4">
+                    <h3 className="text-lg font-semibold text-slate-900">Información recibida desde recepción</h3>
+                    <div className="mt-3 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
+                      <InfoItem label="Cliente" value={currentCase.customer_name} />
+                      <InfoItem label="Teléfono" value={currentCase.phone || "Sin teléfono"} />
+                      <InfoItem label="Ciudad" value={currentCase.city || "Sin ciudad"} />
+                      <InfoItem label="Ingreso comercial" value={formatDate(currentCase.created_at)} />
+                    </div>
+
+                    {receptionSummary.length > 0 ? (
+                      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                        <p className="mb-2 text-sm font-semibold text-slate-800">
+                          Resumen registrado en recepción
+                        </p>
+                        <ul className="space-y-2 text-sm text-slate-700">
+                          {receptionSummary.map((line, index) => (
+                            <li key={index}>• {line}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 <Field
                   label="Notas comerciales"
@@ -740,16 +899,16 @@ export default function ComercialPage() {
                   />
 
                   <Field
-                    label="Valor de la venta"
+                    label="Volumen"
                     input={
                       <input
                         className={inputClass}
-                        type="number"
-                        value={form.sale_value}
+                        inputMode="numeric"
+                        value={formatMoneyDisplay(form.volume_amount)}
                         onChange={(e) =>
                           setForm((prev) => ({
                             ...prev,
-                            sale_value: e.target.value,
+                            volume_amount: normalizeMoneyString(e.target.value),
                           }))
                         }
                       />
@@ -761,12 +920,12 @@ export default function ComercialPage() {
                     input={
                       <input
                         className={inputClass}
-                        type="number"
-                        value={form.cash_amount}
+                        inputMode="numeric"
+                        value={formatMoneyDisplay(form.cash_amount)}
                         onChange={(e) =>
                           setForm((prev) => ({
                             ...prev,
-                            cash_amount: e.target.value,
+                            cash_amount: normalizeMoneyString(e.target.value),
                           }))
                         }
                       />
@@ -774,39 +933,74 @@ export default function ComercialPage() {
                   />
 
                   <Field
-                    label="Cartera"
+                    label="Valor de cartera"
                     input={
                       <input
-                        className={inputClass}
-                        type="number"
-                        value={form.portfolio_amount}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            portfolio_amount: e.target.value,
-                          }))
-                        }
-                      />
-                    }
-                  />
-
-                  <Field
-                    label="Volumen"
-                    input={
-                      <input
-                        className={inputClass}
-                        type="number"
-                        value={form.volume_amount}
-                        onChange={(e) =>
-                          setForm((prev) => ({
-                            ...prev,
-                            volume_amount: e.target.value,
-                          }))
-                        }
+                        className={`${inputClass} bg-slate-50`}
+                        value={formatMoneyDisplay(calculatedPortfolio)}
+                        readOnly
                       />
                     }
                   />
                 </div>
+
+                {calculatedPortfolio > 0 ? (
+                  <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4">
+                    <h3 className="text-lg font-semibold text-amber-900">Detalle de cartera</h3>
+                    <div className="mt-4 grid gap-4 md:grid-cols-3">
+                      <Field
+                        label="Número de cuotas"
+                        input={
+                          <input
+                            className={inputClass}
+                            inputMode="numeric"
+                            value={portfolioForm.installments_count}
+                            onChange={(e) =>
+                              setPortfolioForm((prev) => ({
+                                ...prev,
+                                installments_count: normalizeMoneyString(e.target.value),
+                              }))
+                            }
+                          />
+                        }
+                      />
+
+                      <Field
+                        label="Valor de la cuota"
+                        input={
+                          <input
+                            className={inputClass}
+                            inputMode="numeric"
+                            value={formatMoneyDisplay(portfolioForm.installment_value)}
+                            onChange={(e) =>
+                              setPortfolioForm((prev) => ({
+                                ...prev,
+                                installment_value: normalizeMoneyString(e.target.value),
+                              }))
+                            }
+                          />
+                        }
+                      />
+
+                      <Field
+                        label="Fecha primera cuota"
+                        input={
+                          <input
+                            className={inputClass}
+                            type="date"
+                            value={portfolioForm.first_installment_date}
+                            onChange={(e) =>
+                              setPortfolioForm((prev) => ({
+                                ...prev,
+                                first_installment_date: e.target.value,
+                              }))
+                            }
+                          />
+                        }
+                      />
+                    </div>
+                  </div>
+                ) : null}
 
                 <Field
                   label="Observaciones de cierre"
@@ -829,7 +1023,7 @@ export default function ComercialPage() {
                     Siguiente cita o continuidad
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
-                    Si cierras la venta, puedes dejar programado el siguiente paso.
+                    Si cierras la venta, aquí dejas programado el siguiente paso.
                   </p>
 
                   <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -932,23 +1126,33 @@ export default function ComercialPage() {
                   </div>
                 </div>
 
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white disabled:opacity-60"
-                >
-                  {saving ? "Guardando..." : "Guardar caso comercial"}
-                </button>
-              </form>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <button
+                    type="button"
+                    onClick={() => void guardarCaso(false)}
+                    disabled={saving}
+                    className="rounded-2xl border border-slate-300 bg-white px-4 py-4 text-base font-semibold text-slate-700 disabled:opacity-60"
+                  >
+                    {saving ? "Guardando..." : "Guardar avances"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => void guardarCaso(true)}
+                    disabled={saving}
+                    className="rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white disabled:opacity-60"
+                  >
+                    {saving ? "Guardando..." : "Finalizar caso"}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
           <div className="rounded-3xl bg-white p-6 shadow-sm">
             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">
-                  Casos visibles
-                </h2>
+                <h2 className="text-2xl font-bold text-slate-900">Casos visibles</h2>
                 <p className="mt-1 text-sm text-slate-500">
                   Busca por cliente o teléfono y filtra por estado.
                 </p>
@@ -976,11 +1180,10 @@ export default function ComercialPage() {
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
                 <option value="">Todos los estados</option>
-                {caseStatusOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
-                  </option>
-                ))}
+                <option value="asignado_comercial">Asignado</option>
+                <option value="en_atencion_comercial">En atención</option>
+                <option value="seguimiento_comercial">Seguimiento</option>
+                <option value="finalizado">Finalizado</option>
               </select>
             </div>
 
@@ -1008,9 +1211,7 @@ export default function ComercialPage() {
                             </h3>
 
                             <span
-                              className={`rounded-full px-3 py-1 text-xs ${estadoBadge(
-                                item.status
-                              )}`}
+                              className={`rounded-full px-3 py-1 text-xs ${estadoBadge(item.status)}`}
                             >
                               {traducirEstado(item.status)}
                             </span>
@@ -1030,9 +1231,10 @@ export default function ComercialPage() {
                             </p>
                           ) : null}
 
-                          {item.sale_value ? (
+                          {item.volume_amount || item.sale_value ? (
                             <p className="mt-1 text-sm text-slate-600">
-                              Venta: ${Number(item.sale_value).toLocaleString("es-CO")}
+                              Volumen: $
+                              {Number(item.volume_amount || item.sale_value || 0).toLocaleString("es-CO")}
                             </p>
                           ) : null}
 
@@ -1045,7 +1247,7 @@ export default function ComercialPage() {
 
                         <button
                           type="button"
-                          onClick={() => cargarCasoParaEditar(item)}
+                          onClick={() => void iniciarAtencion(item)}
                           className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
                         >
                           Atender
@@ -1090,6 +1292,14 @@ function Field({
       <div className="mb-2 text-sm font-medium text-slate-700">{label}</div>
       {input}
     </label>
+  );
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <p>
+      <span className="font-medium text-slate-800">{label}:</span> {value}
+    </p>
   );
 }
 
