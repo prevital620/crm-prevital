@@ -96,6 +96,12 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
+    title: "Configurar cupos",
+    subtitle: "Abrir agenda y organizar cupos del día.",
+    href: "/recepcion",
+    roles: ["super_user", "supervisor_call_center"],
+  },
+  {
     title: "Recepción",
     subtitle: "Ver agenda, citas y admisión del sistema.",
     href: "/recepcion",

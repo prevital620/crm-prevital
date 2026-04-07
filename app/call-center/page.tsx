@@ -191,7 +191,7 @@ export default function CallCenterPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
-  const [fechaFiltro, setFechaFiltro] = useState("");
+  const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
   const [busqueda, setBusqueda] = useState("");
   const [selectedAssignments, setSelectedAssignments] = useState<Record<string, string>>({});
   const [selectedStatuses, setSelectedStatuses] = useState<Record<string, string>>({});
@@ -767,14 +767,22 @@ export default function CallCenterPage() {
             ))}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_1fr]">
-            <div className="flex gap-2">
+          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_1fr]">
             <input
               className="w-full rounded-2xl border border-slate-300 p-4 outline-none"
               type="date"
               value={fechaFiltro}
               onChange={(e) => setFechaFiltro(e.target.value)}
             />
+
+            <button
+              type="button"
+              onClick={() => setFechaFiltro(hoyISO())}
+              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+            >
+              Hoy
+            </button>
+
             <button
               type="button"
               onClick={() => setFechaFiltro("")}
@@ -782,7 +790,6 @@ export default function CallCenterPage() {
             >
               Todos
             </button>
-            </div>
 
             <input
               className="rounded-2xl border border-slate-300 p-4 outline-none"
@@ -795,7 +802,7 @@ export default function CallCenterPage() {
           {cargando ? (
             <p className="mt-6 text-slate-600">Cargando leads...</p>
           ) : leadsFiltrados.length === 0 ? (
-            <p className="mt-6 text-slate-600">No hay leads para ese bloque o filtro.</p>
+            <p className="mt-6 text-slate-600">No hay leads para ese día o filtro.</p>
           ) : (
             <div className="mt-6 space-y-4">
               {leadsFiltrados.map((lead) => {
