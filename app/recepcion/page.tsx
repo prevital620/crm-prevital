@@ -97,6 +97,18 @@ type CommercialCaseRow = {
   created_at: string;
 };
 
+type CommercialDisqualifyingKey =
+  | "stent"
+  | "corazon_abierto"
+  | "tratamiento_internista"
+  | "oncologico_tratamiento"
+  | "anticoagulado"
+  | "psiquiatrico"
+  | "cateterismo"
+  | "dialisis";
+
+type CommercialDisqualifyingFlags = Record<CommercialDisqualifyingKey, boolean>;
+
 const allowedRoles = [
   "super_user",
   "recepcion",
@@ -133,6 +145,30 @@ const treatmentOptions = [
   { value: "detox", label: "Detox" },
 ];
 
+const commercialDisqualifyingOptions: Array<{
+  key: CommercialDisqualifyingKey;
+  label: string;
+}> = [
+  { key: "stent", label: "Stent" },
+  { key: "corazon_abierto", label: "Corazón abierto" },
+  { key: "tratamiento_internista", label: "Tratamiento con internista" },
+  { key: "oncologico_tratamiento", label: "Oncológico en tratamiento" },
+  { key: "anticoagulado", label: "Anticoagulado" },
+  { key: "psiquiatrico", label: "Psiquiátrico" },
+  { key: "cateterismo", label: "Cateterismo" },
+  { key: "dialisis", label: "Diálisis" },
+];
+
+const emptyCommercialDisqualifyingFlags = (): CommercialDisqualifyingFlags => ({
+  stent: false,
+  corazon_abierto: false,
+  tratamiento_internista: false,
+  oncologico_tratamiento: false,
+  anticoagulado: false,
+  psiquiatrico: false,
+  cateterismo: false,
+  dialisis: false,
+});
 
 const specialistValues = new Set(specialistOptions.map((item) => item.value));
 const treatmentValues = new Set(treatmentOptions.map((item) => item.value));
@@ -332,22 +368,48 @@ function badgeEstadoComercial(status: string | null | undefined) {
 }
 
 function calcularClasificacionInicial(values: {
-  afiliacion: string;
-  ocupacion: string;
   edad: string;
+  tiene_eps: string;
+  afiliacion: string;
+  trae_cedula: string;
   celular_inteligente: string;
-  antecedente_quirurgico: string;
-  enfermedad_base: string;
+  condiciones_descalificantes: CommercialDisqualifyingFlags;
 }) {
-  let score = 0;
-  if (values.afiliacion === "cotizante") score += 2;
-  if (values.ocupacion === "empleado" || values.ocupacion === "independiente" || values.ocupacion === "pensionado") score += 2;
+  const motivos: string[] = [];
   const edad = Number(values.edad || "0");
-  if (edad >= 35) score += 1;
-  if (values.celular_inteligente === "si") score += 1;
-  if (values.antecedente_quirurgico === "si") score += 1;
-  if (values.enfermedad_base === "si") score += 1;
-  return score >= 4 ? "Q" : "No Q";
+  const tieneCondicionDescalificante = Object.values(values.condiciones_descalificantes).some(Boolean);
+
+  if (!edad || Number.isNaN(edad) || edad < 40 || edad > 69) {
+    motivos.push("edad fuera del rango de 40 a 69 años");
+  }
+
+  if (values.tiene_eps !== "si") {
+    motivos.push("no tiene EPS");
+  }
+
+  if (values.afiliacion !== "cotizante") {
+    motivos.push("no es cotizante");
+  }
+
+  if (values.trae_cedula !== "si") {
+    motivos.push("no asiste con cédula");
+  }
+
+  if (values.celular_inteligente !== "si") {
+    motivos.push("no tiene celular inteligente");
+  }
+
+  if (tieneCondicionDescalificante) {
+    motivos.push("presenta condición descalificante");
+  }
+
+  return {
+    clasificacion: motivos.length === 0 ? "Q" : "No Q",
+    motivo:
+      motivos.length === 0
+        ? "Q inicial: cumple todos los criterios base."
+        : `No Q por ${motivos.join(", ")}.`,
+  };
 }
 
 function normalizarHora(value: string) {
@@ -415,13 +477,15 @@ function RecepcionContent() {
     documento: "",
     fuente: "",
     observaciones: "",
+    tiene_eps: "si",
     afiliacion: "",
     ocupacion: "",
     edad: "",
+    trae_cedula: "si",
     celular_inteligente: "si",
-    antecedente_quirurgico: "no",
-    enfermedad_base: "no",
+    condiciones_descalificantes: emptyCommercialDisqualifyingFlags(),
     clasificacion_inicial: "No Q",
+    clasificacion_motivo: "",
     referido_por: "",
   });
 
@@ -450,25 +514,32 @@ function RecepcionContent() {
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
 
   useEffect(() => {
-    const clasificacion = calcularClasificacionInicial({
-      afiliacion: commercialForm.afiliacion,
-      ocupacion: commercialForm.ocupacion,
+    const resultado = calcularClasificacionInicial({
       edad: commercialForm.edad,
+      tiene_eps: commercialForm.tiene_eps,
+      afiliacion: commercialForm.afiliacion,
+      trae_cedula: commercialForm.trae_cedula,
       celular_inteligente: commercialForm.celular_inteligente,
-      antecedente_quirurgico: commercialForm.antecedente_quirurgico,
-      enfermedad_base: commercialForm.enfermedad_base,
+      condiciones_descalificantes: commercialForm.condiciones_descalificantes,
     });
 
     setCommercialForm((prev) =>
-      prev.clasificacion_inicial === clasificacion ? prev : { ...prev, clasificacion_inicial: clasificacion }
+      prev.clasificacion_inicial === resultado.clasificacion &&
+      prev.clasificacion_motivo === resultado.motivo
+        ? prev
+        : {
+            ...prev,
+            clasificacion_inicial: resultado.clasificacion,
+            clasificacion_motivo: resultado.motivo,
+          }
     );
   }, [
-    commercialForm.afiliacion,
-    commercialForm.ocupacion,
     commercialForm.edad,
+    commercialForm.tiene_eps,
+    commercialForm.afiliacion,
+    commercialForm.trae_cedula,
     commercialForm.celular_inteligente,
-    commercialForm.antecedente_quirurgico,
-    commercialForm.enfermedad_base,
+    commercialForm.condiciones_descalificantes,
   ]);
 
   async function validarAcceso() {
@@ -1143,13 +1214,15 @@ function RecepcionContent() {
       documento: "",
       fuente: "",
       observaciones: "",
+      tiene_eps: "si",
       afiliacion: "",
       ocupacion: "",
       edad: "",
+      trae_cedula: "si",
       celular_inteligente: "si",
-      antecedente_quirurgico: "no",
-      enfermedad_base: "no",
+      condiciones_descalificantes: emptyCommercialDisqualifyingFlags(),
       clasificacion_inicial: "No Q",
+      clasificacion_motivo: "",
       referido_por: "",
     });
   }
@@ -1228,12 +1301,22 @@ function RecepcionContent() {
         console.warn("No se pudo sincronizar ficha base del usuario", syncErr);
       }
 
+      const condicionesMarcadas = commercialDisqualifyingOptions
+        .filter((item) => commercialForm.condiciones_descalificantes[item.key])
+        .map((item) => item.label)
+        .join(", ");
+
       const notesParts = [
         commercialForm.fuente ? `Fuente: ${commercialForm.fuente}` : "",
         `Clasificación inicial: ${clasificacion}`,
+        commercialForm.clasificacion_motivo ? `Motivo clasificación: ${commercialForm.clasificacion_motivo}` : "",
+        `Tiene EPS: ${commercialForm.tiene_eps === "si" ? "Sí" : "No"}`,
         commercialForm.afiliacion ? `Afiliación: ${commercialForm.afiliacion}` : "",
+        `Trae cédula: ${commercialForm.trae_cedula === "si" ? "Sí" : "No"}`,
+        `Celular inteligente: ${commercialForm.celular_inteligente === "si" ? "Sí" : "No"}`,
         commercialForm.ocupacion ? `Ocupación: ${commercialForm.ocupacion}` : "",
         commercialForm.edad ? `Edad: ${commercialForm.edad}` : "",
+        condicionesMarcadas ? `Condiciones descalificantes: ${condicionesMarcadas}` : "Condiciones descalificantes: Ninguna",
         commercialForm.referido_por ? `Referido por: ${commercialForm.referido_por}` : "",
         commercialForm.observaciones ? `Observaciones recepción: ${commercialForm.observaciones}` : "",
       ].filter(Boolean).join(" | ");
@@ -1351,13 +1434,15 @@ function RecepcionContent() {
       documento: "",
       fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
       observaciones: limpiarFuenteManualDeNotas(item.notes),
+      tiene_eps: "si",
       afiliacion: "",
       ocupacion: "",
       edad: "",
+      trae_cedula: "si",
       celular_inteligente: "si",
-      antecedente_quirurgico: "no",
-      enfermedad_base: "no",
+      condiciones_descalificantes: emptyCommercialDisqualifyingFlags(),
       clasificacion_inicial: "No Q",
+      clasificacion_motivo: "",
       referido_por: "",
     });
     setActiveSection("comercial");
@@ -2024,6 +2109,19 @@ function RecepcionContent() {
                     }
                   />
                   <Field
+                    label="¿Tiene EPS?"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.tiene_eps}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, tiene_eps: e.target.value }))}
+                      >
+                        <option value="si">Sí</option>
+                        <option value="no">No</option>
+                      </select>
+                    }
+                  />
+                  <Field
                     label="Afiliación"
                     input={
                       <select
@@ -2033,8 +2131,47 @@ function RecepcionContent() {
                       >
                         <option value="">Selecciona</option>
                         <option value="cotizante">Cotizante</option>
+                        <option value="beneficiario">Beneficiario</option>
                         <option value="subsidiado">Subsidiado</option>
                         <option value="particular">Particular</option>
+                      </select>
+                    }
+                  />
+                  <Field
+                    label="Edad"
+                    input={
+                      <input
+                        className={inputClass}
+                        type="number"
+                        min="0"
+                        value={commercialForm.edad}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, edad: e.target.value }))}
+                      />
+                    }
+                  />
+                  <Field
+                    label="¿Asiste con cédula?"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.trae_cedula}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, trae_cedula: e.target.value }))}
+                      >
+                        <option value="si">Sí</option>
+                        <option value="no">No</option>
+                      </select>
+                    }
+                  />
+                  <Field
+                    label="¿Tiene celular inteligente?"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.celular_inteligente}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, celular_inteligente: e.target.value }))}
+                      >
+                        <option value="si">Sí</option>
+                        <option value="no">No</option>
                       </select>
                     }
                   />
@@ -2056,57 +2193,6 @@ function RecepcionContent() {
                       </select>
                     }
                   />
-                  <Field
-                    label="Edad"
-                    input={
-                      <input
-                        className={inputClass}
-                        type="number"
-                        min="0"
-                        value={commercialForm.edad}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, edad: e.target.value }))}
-                      />
-                    }
-                  />
-                  <Field
-                    label="Celular inteligente"
-                    input={
-                      <select
-                        className={inputClass}
-                        value={commercialForm.celular_inteligente}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, celular_inteligente: e.target.value }))}
-                      >
-                        <option value="si">Sí</option>
-                        <option value="no">No</option>
-                      </select>
-                    }
-                  />
-                  <Field
-                    label="Cirugía previa"
-                    input={
-                      <select
-                        className={inputClass}
-                        value={commercialForm.antecedente_quirurgico}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, antecedente_quirurgico: e.target.value }))}
-                      >
-                        <option value="no">No</option>
-                        <option value="si">Sí</option>
-                      </select>
-                    }
-                  />
-                  <Field
-                    label="Enfermedad base"
-                    input={
-                      <select
-                        className={inputClass}
-                        value={commercialForm.enfermedad_base}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, enfermedad_base: e.target.value }))}
-                      >
-                        <option value="no">No</option>
-                        <option value="si">Sí</option>
-                      </select>
-                    }
-                  />
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -2119,6 +2205,60 @@ function RecepcionContent() {
                       Si entra No Q y compra en Comercial, luego podrá pasar automáticamente a Q como clasificación final.
                     </p>
                   </div>
+                  <p className="mt-3 text-sm text-slate-700">
+                    {commercialForm.clasificacion_motivo || "Completa los datos para calcular la clasificación."}
+                  </p>
+                </div>
+
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-base font-semibold text-slate-900">Condiciones descalificantes</h3>
+                      <p className="mt-1 text-sm text-slate-500">
+                        Marca solo si el cliente presenta alguna de estas condiciones.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCommercialForm((prev) => ({
+                          ...prev,
+                          condiciones_descalificantes: emptyCommercialDisqualifyingFlags(),
+                        }))
+                      }
+                      className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
+                    >
+                      Limpiar
+                    </button>
+                  </div>
+
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {commercialDisqualifyingOptions.map((item) => (
+                      <label
+                        key={item.key}
+                        className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={commercialForm.condiciones_descalificantes[item.key]}
+                          onChange={(e) =>
+                            setCommercialForm((prev) => ({
+                              ...prev,
+                              condiciones_descalificantes: {
+                                ...prev.condiciones_descalificantes,
+                                [item.key]: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        <span>{item.label}</span>
+                      </label>
+                    ))}
+                  </div>
+
+                  {!Object.values(commercialForm.condiciones_descalificantes).some(Boolean) ? (
+                    <p className="mt-3 text-sm text-emerald-700">Ninguna de las anteriores.</p>
+                  ) : null}
                 </div>
 
                 <Field
