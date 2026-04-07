@@ -416,6 +416,7 @@ function calcularClasificacionInicial(values: {
   const tieneCondicionDescalificante = Object.values(values.condiciones_descalificantes).some(Boolean);
   const ocupacionOtroNormalizada = (values.ocupacion_otro || "").trim().toLowerCase();
   const ocupacionDescalificante =
+    values.ocupacion === "otro" ||
     commercialOccupationDisqualifyingValues.has(values.ocupacion) ||
     (values.ocupacion === "otro" &&
       commercialOccupationOtherDisqualifyingTerms.some((term) =>
