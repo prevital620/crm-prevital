@@ -481,7 +481,7 @@ function RecepcionContent() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentRoleCode, setCurrentRoleCode] = useState<string | null>(null);
 
-  const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
+  const [fechaFiltro, setFechaFiltro] = useState("");
   const [busquedaAgenda, setBusquedaAgenda] = useState("");
   const [busquedaLead, setBusquedaLead] = useState("");
 
@@ -955,7 +955,7 @@ function RecepcionContent() {
   }, [appointments, fechaFiltro, busquedaAgenda, activeSection]);
 
   const resumen = useMemo(() => {
-    const delDia = appointments.filter((item) => item.appointment_date === fechaFiltro && appointmentMatchesActiveSection(item));
+    const delDia = appointments.filter((item) => (fechaFiltro ? item.appointment_date === fechaFiltro : true) && appointmentMatchesActiveSection(item));
 
     return {
       total: delDia.length,
@@ -3105,12 +3105,21 @@ function RecepcionContent() {
               </div>
 
               <div className="mb-6 grid gap-3 md:grid-cols-2">
+                <div className="flex gap-2">
                 <input
-                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  className="w-full rounded-2xl border border-slate-300 p-4 outline-none"
                   type="date"
                   value={fechaFiltro}
                   onChange={(e) => setFechaFiltro(e.target.value)}
                 />
+                <button
+                  type="button"
+                  onClick={() => setFechaFiltro("")}
+                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+                >
+                  Todas
+                </button>
+              </div>
 
                 <input
                   className="rounded-2xl border border-slate-300 p-4 outline-none"
