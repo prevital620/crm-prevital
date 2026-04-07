@@ -43,6 +43,20 @@ type QuickAction = {
   roles: string[];
 };
 
+function normalizeRoleCode(roleCode?: string | null) {
+  if (!roleCode) return null;
+
+  if (
+    roleCode === "gerente" ||
+    roleCode === "gerente_comercial" ||
+    roleCode === "gerencia_comercial"
+  ) {
+    return "gerencia_comercial";
+  }
+
+  return roleCode;
+}
+
 const quickActions: QuickAction[] = [
   {
     title: "Nuevo lead",
@@ -101,19 +115,6 @@ const quickActions: QuickAction[] = [
   },
 ];
 
-
-function normalizeRoleCode(roleCode: string | null | undefined) {
-  if (!roleCode) return null;
-
-  const role = roleCode.trim().toLowerCase();
-
-  if (["gerente", "gerente_comercial", "gerencia_comercial"].includes(role)) {
-    return "gerencia_comercial";
-  }
-
-  return role;
-}
-
 export default function HomePage() {
   const router = useRouter();
 
@@ -143,10 +144,9 @@ export default function HomePage() {
     }
 
     const auth = await getCurrentUserRole();
+    const normalizedRole = normalizeRoleCode(auth.roleCode);
 
-    const normalizedRoleCode = normalizeRoleCode(auth.roleCode);
-
-    setCurrentRoleCode(normalizedRoleCode);
+    setCurrentRoleCode(normalizedRole);
     setCurrentRoleName(auth.roleName);
     setCurrentUserId(session.user.id);
 
@@ -159,7 +159,7 @@ export default function HomePage() {
     setCurrentUserName(profile?.full_name || "Usuario");
 
     setCheckingSession(false);
-    loadDashboard(normalizedRoleCode, session.user.id);
+    loadDashboard(normalizedRole, session.user.id);
   }
 
   async function loadDashboard(roleCode?: string | null, userId?: string | null) {
@@ -244,7 +244,6 @@ export default function HomePage() {
   }, [currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
-  const isPromotorOpc = currentRoleCode === "promotor_opc";
 
   const totalLeads = leads.length;
   const totalDepartments = departments.length;
@@ -282,12 +281,8 @@ export default function HomePage() {
 
             <div className="flex items-center gap-3">
               <div className="rounded-2xl bg-slate-900 px-5 py-3 text-white">
-                <p className="text-sm font-semibold">
-                  {currentUserName || "Usuario"}
-                </p>
-                <p className="text-xs text-slate-200">
-                  {currentRoleName || "Rol"}
-                </p>
+                <p className="text-sm font-semibold">{currentUserName || "Usuario"}</p>
+                <p className="text-xs text-slate-200">{currentRoleName || "Rol"}</p>
               </div>
               <LogoutButton />
             </div>
@@ -303,72 +298,25 @@ export default function HomePage() {
         {isSuperUser ? (
           <>
             <section className="mb-8 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-              <DashboardCard
-                title="Leads visibles"
-                value={loading ? "..." : String(totalLeads)}
-                subtitle="Según tu rol"
-              />
-              <DashboardCard
-                title="Departamentos"
-                value={loading ? "..." : String(totalDepartments)}
-                subtitle="Estructura base"
-              />
-              <DashboardCard
-                title="Roles"
-                value={loading ? "..." : String(totalRoles)}
-                subtitle="Roles configurados"
-              />
-              <DashboardCard
-                title="Usuarios"
-                value={loading ? "..." : String(totalUsers)}
-                subtitle="Perfiles internos"
-              />
-              <DashboardCard
-                title="Usuarios activos"
-                value={loading ? "..." : String(activeUsers)}
-                subtitle="Perfiles habilitados"
-              />
+              <DashboardCard title="Leads visibles" value={loading ? "..." : String(totalLeads)} subtitle="Según tu rol" />
+              <DashboardCard title="Departamentos" value={loading ? "..." : String(totalDepartments)} subtitle="Estructura base" />
+              <DashboardCard title="Roles" value={loading ? "..." : String(totalRoles)} subtitle="Roles configurados" />
+              <DashboardCard title="Usuarios" value={loading ? "..." : String(totalUsers)} subtitle="Perfiles internos" />
+              <DashboardCard title="Usuarios activos" value={loading ? "..." : String(activeUsers)} subtitle="Perfiles habilitados" />
             </section>
 
             <section className="mb-8 rounded-3xl bg-white p-6 shadow-sm">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <div>
-                  <h2 className="text-2xl font-bold text-slate-900">
-                    Accesos disponibles
-                  </h2>
-                  <p className="mt-1 text-sm text-slate-500">
-                    Solo ves los módulos permitidos para tu rol.
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => loadDashboard(currentRoleCode, currentUserId)}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-                >
-                  Actualizar
-                </button>
-              </div>
+              <HeaderActions title="Accesos disponibles" subtitle="Solo ves los módulos permitidos para tu rol." onRefresh={() => loadDashboard(currentRoleCode, currentUserId)} />
 
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
                 {visibleQuickActions.map((action) => (
-                  <a
-                    key={action.title}
-                    href={action.href}
-                    className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition hover:border-slate-300 hover:bg-white"
-                  >
+                  <a key={action.title} href={action.href} className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition hover:border-slate-300 hover:bg-white">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-900">
-                          {action.title}
-                        </h3>
-                        <p className="mt-2 text-sm text-slate-600">
-                          {action.subtitle}
-                        </p>
+                        <h3 className="text-lg font-semibold text-slate-900">{action.title}</h3>
+                        <p className="mt-2 text-sm text-slate-600">{action.subtitle}</p>
                       </div>
-
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                        Abrir
-                      </span>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">Abrir</span>
                     </div>
                   </a>
                 ))}
@@ -379,30 +327,18 @@ export default function HomePage() {
               <div className="xl:col-span-2">
                 <div className="rounded-3xl bg-white p-6 shadow-sm">
                   <div className="mb-5">
-                    <h2 className="text-2xl font-bold text-slate-900">
-                      Leads recientes
-                    </h2>
-                    <p className="mt-1 text-sm text-slate-500">
-                      Vista rápida según tu rol.
-                    </p>
+                    <h2 className="text-2xl font-bold text-slate-900">Leads recientes</h2>
+                    <p className="mt-1 text-sm text-slate-500">Vista rápida según tu rol.</p>
                   </div>
 
                   {loading ? (
-                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                      Cargando leads...
-                    </div>
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">Cargando leads...</div>
                   ) : leads.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                      No hay leads visibles para este usuario.
-                    </div>
+                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">No hay leads visibles para este usuario.</div>
                   ) : (
                     <div className="space-y-4">
                       {leads.slice(0, 6).map((lead) => (
-                        <LeadCard
-                          key={lead.id}
-                          lead={lead}
-                          formatDate={formatDate}
-                        />
+                        <LeadCard key={lead.id} lead={lead} formatDate={formatDate} />
                       ))}
                     </div>
                   )}
@@ -410,78 +346,14 @@ export default function HomePage() {
               </div>
 
               <div className="space-y-6">
-                <div className="rounded-3xl bg-white p-6 shadow-sm">
-                  <h2 className="text-2xl font-bold text-slate-900">Departamentos</h2>
-                  <p className="mt-1 text-sm text-slate-500">Resumen general.</p>
-
-                  <div className="mt-5 space-y-3">
-                    {loading ? (
-                      <p className="text-sm text-slate-500">Cargando...</p>
-                    ) : departments.length === 0 ? (
-                      <p className="text-sm text-slate-500">
-                        No hay departamentos registrados.
-                      </p>
-                    ) : (
-                      departments.map((department) => (
-                        <div
-                          key={department.id}
-                          className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700"
-                        >
-                          {department.name}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                <div className="rounded-3xl bg-white p-6 shadow-sm">
-                  <h2 className="text-2xl font-bold text-slate-900">Roles</h2>
-                  <p className="mt-1 text-sm text-slate-500">Estructura configurada.</p>
-
-                  <div className="mt-5 max-h-[320px] space-y-3 overflow-auto pr-1">
-                    {loading ? (
-                      <p className="text-sm text-slate-500">Cargando...</p>
-                    ) : roles.length === 0 ? (
-                      <p className="text-sm text-slate-500">
-                        No hay roles registrados.
-                      </p>
-                    ) : (
-                      roles.map((role) => (
-                        <div
-                          key={role.id}
-                          className="rounded-xl border border-slate-200 px-4 py-3"
-                        >
-                          <p className="text-sm font-semibold text-slate-900">
-                            {role.name}
-                          </p>
-                          <p className="mt-1 text-xs text-slate-500">{role.code}</p>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
+                <SimpleListCard title="Departamentos" subtitle="Resumen general." items={departments.map((x) => x.name)} loading={loading} emptyText="No hay departamentos registrados." />
+                <SimpleListCard title="Roles" subtitle="Estructura configurada." items={roles.map((x) => `${x.name} · ${x.code}`)} loading={loading} emptyText="No hay roles registrados." />
               </div>
             </section>
           </>
         ) : (
           <section className="rounded-3xl bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center justify-between gap-3">
-              <div>
-                <h2 className="text-2xl font-bold text-slate-900">
-                  Accesos disponibles
-                </h2>
-                <p className="mt-1 text-sm text-slate-500">
-                  Solo ves los módulos permitidos para tu rol.
-                </p>
-              </div>
-
-              <button
-                onClick={() => loadDashboard(currentRoleCode, currentUserId)}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
-              >
-                Actualizar
-              </button>
-            </div>
+            <HeaderActions title="Accesos disponibles" subtitle="Solo ves los módulos permitidos para tu rol." onRefresh={() => loadDashboard(currentRoleCode, currentUserId)} />
 
             {visibleQuickActions.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
@@ -490,24 +362,13 @@ export default function HomePage() {
             ) : (
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
                 {visibleQuickActions.map((action) => (
-                  <a
-                    key={action.title}
-                    href={action.href}
-                    className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition hover:border-slate-300 hover:bg-white"
-                  >
+                  <a key={action.title} href={action.href} className="group rounded-2xl border border-slate-200 bg-slate-50 p-5 transition hover:border-slate-300 hover:bg-white">
                     <div className="flex items-start justify-between gap-3">
                       <div>
-                        <h3 className="text-lg font-semibold text-slate-900">
-                          {action.title}
-                        </h3>
-                        <p className="mt-2 text-sm text-slate-600">
-                          {action.subtitle}
-                        </p>
+                        <h3 className="text-lg font-semibold text-slate-900">{action.title}</h3>
+                        <p className="mt-2 text-sm text-slate-600">{action.subtitle}</p>
                       </div>
-
-                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">
-                        Abrir
-                      </span>
+                      <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-slate-700 shadow-sm">Abrir</span>
                     </div>
                   </a>
                 ))}
@@ -520,37 +381,28 @@ export default function HomePage() {
   );
 }
 
-function LeadCard({
-  lead,
-  formatDate,
+function HeaderActions({
+  title,
+  subtitle,
+  onRefresh,
 }: {
-  lead: Lead;
-  formatDate: (dateString: string) => string;
+  title: string;
+  subtitle: string;
+  onRefresh: () => void;
 }) {
   return (
-    <div className="rounded-2xl border border-slate-200 p-4">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div>
-          <h3 className="text-lg font-semibold text-slate-900">
-            {lead.full_name?.trim() ||
-              `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
-              "Sin nombre"}
-          </h3>
-
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm text-slate-600">
-            <span>📞 {lead.phone || "Sin teléfono"}</span>
-            <span>📍 {lead.city || "Sin ciudad"}</span>
-          </div>
-        </div>
-
-        <span className="inline-flex w-fit rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
-          {lead.status}
-        </span>
+    <div className="mb-5 flex items-center justify-between gap-3">
+      <div>
+        <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
+        <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
       </div>
 
-      <p className="mt-3 text-xs text-slate-500">
-        Creado: {formatDate(lead.created_at)}
-      </p>
+      <button
+        onClick={onRefresh}
+        className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+      >
+        Actualizar
+      </button>
     </div>
   );
 }
@@ -566,20 +418,86 @@ function DashboardCard({
 }) {
   return (
     <div className="rounded-3xl bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-3 text-4xl font-bold text-slate-900">{value}</p>
-      <p className="mt-2 text-sm text-slate-500">{subtitle}</p>
+      <p className="text-sm text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+      <p className="mt-1 text-xs text-slate-500">{subtitle}</p>
     </div>
   );
 }
 
-function formatDate(dateString: string) {
+function LeadCard({
+  lead,
+  formatDate,
+}: {
+  lead: Lead;
+  formatDate: (value: string | null | undefined) => string;
+}) {
+  const displayName =
+    lead.full_name?.trim() ||
+    `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+    "Sin nombre";
+
+  return (
+    <div className="rounded-2xl border border-slate-200 p-4">
+      <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+        <div>
+          <h3 className="text-base font-semibold text-slate-900">{displayName}</h3>
+          <p className="mt-1 text-sm text-slate-600">{lead.phone} · {lead.city || "Sin ciudad"}</p>
+          <p className="mt-1 text-xs text-slate-500">{formatDate(lead.created_at)}</p>
+        </div>
+
+        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
+          {lead.status || "Sin estado"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SimpleListCard({
+  title,
+  subtitle,
+  items,
+  loading,
+  emptyText,
+}: {
+  title: string;
+  subtitle: string;
+  items: string[];
+  loading: boolean;
+  emptyText: string;
+}) {
+  return (
+    <div className="rounded-3xl bg-white p-6 shadow-sm">
+      <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
+      <p className="mt-1 text-sm text-slate-500">{subtitle}</p>
+
+      <div className="mt-5 max-h-[320px] space-y-3 overflow-auto pr-1">
+        {loading ? (
+          <p className="text-sm text-slate-500">Cargando...</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-slate-500">{emptyText}</p>
+        ) : (
+          items.map((item) => (
+            <div key={item} className="rounded-xl border border-slate-200 px-4 py-3 text-sm font-medium text-slate-700">
+              {item}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "Sin fecha";
+
   try {
-    return new Date(dateString).toLocaleString("es-CO", {
+    return new Date(value).toLocaleString("es-CO", {
       dateStyle: "medium",
       timeStyle: "short",
     });
   } catch {
-    return dateString;
+    return value;
   }
 }
