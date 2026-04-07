@@ -52,6 +52,12 @@ type PortfolioFields = {
   first_installment_date: string;
 };
 
+type InstallmentPlanItem = {
+  number: number;
+  date: string;
+  value: number;
+};
+
 const allowedRoles = [
   "super_user",
   "comercial",
@@ -138,6 +144,17 @@ function formatDate(dateString: string | null | undefined) {
   }
 }
 
+function formatDateOnly(dateString: string | null | undefined) {
+  if (!dateString) return "Sin fecha";
+  try {
+    return new Date(dateString).toLocaleDateString("es-CO", {
+      dateStyle: "medium",
+    });
+  } catch {
+    return dateString;
+  }
+}
+
 function hoyISO() {
   const now = new Date();
   const offset = now.getTimezoneOffset();
@@ -214,13 +231,42 @@ function stripPortfolioDetails(text: string | null | undefined) {
         !/^Detalle cartera:/i.test(line) &&
         !/^Número de cuotas:/i.test(line) &&
         !/^Valor de la cuota:/i.test(line) &&
-        !/^Fecha primera cuota:/i.test(line)
+        !/^Fecha primera cuota:/i.test(line) &&
+        !/^Plan de cuotas:/i.test(line) &&
+        !/^\d+\.\s*\d{4}-\d{2}-\d{2}\s*·\s*\$/i.test(line)
     );
 
   return lines.join("\n").trim();
 }
 
-function buildClosingNotes(baseText: string, portfolio: PortfolioFields, portfolioAmount: number) {
+function addMonthsKeepingDay(isoDate: string, monthOffset: number) {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const base = new Date(y, m - 1 + monthOffset, 1);
+  const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+  const safeDay = Math.min(d, lastDay);
+  const result = new Date(base.getFullYear(), base.getMonth(), safeDay);
+  const yy = result.getFullYear();
+  const mm = String(result.getMonth() + 1).padStart(2, "0");
+  const dd = String(result.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function buildInstallmentPlan(firstDate: string, count: number, value: number): InstallmentPlanItem[] {
+  if (!firstDate || !count || count < 1 || !value) return [];
+  return Array.from({ length: count }).map((_, index) => ({
+    number: index + 1,
+    date: addMonthsKeepingDay(firstDate, index),
+    value,
+  }));
+}
+
+function buildClosingNotes(
+  baseText: string,
+  portfolio: PortfolioFields,
+  portfolioAmount: number,
+  autoInstallmentValue: number,
+  installmentPlan: InstallmentPlanItem[]
+) {
   const lines = [stripPortfolioDetails(baseText)].filter(Boolean);
 
   if (portfolioAmount > 0) {
@@ -228,11 +274,19 @@ function buildClosingNotes(baseText: string, portfolio: PortfolioFields, portfol
     if (portfolio.installments_count) {
       lines.push(`Número de cuotas: ${portfolio.installments_count}`);
     }
-    if (portfolio.installment_value) {
-      lines.push(`Valor de la cuota: ${portfolio.installment_value}`);
+    if (autoInstallmentValue > 0) {
+      lines.push(`Valor de la cuota: ${autoInstallmentValue.toLocaleString("es-CO")}`);
     }
     if (portfolio.first_installment_date) {
       lines.push(`Fecha primera cuota: ${portfolio.first_installment_date}`);
+    }
+    if (installmentPlan.length > 0) {
+      lines.push("Plan de cuotas:");
+      installmentPlan.forEach((item) => {
+        lines.push(
+          `${item.number}. ${item.date} · $${item.value.toLocaleString("es-CO")}`
+        );
+      });
     }
   }
 
@@ -288,11 +342,36 @@ export default function ComercialPage() {
     [cases, editingCaseId]
   );
 
+  const currentReceptionSummary = useMemo(
+    () => (currentCase ? getReceptionSummary(currentCase) : []),
+    [currentCase]
+  );
+
   const calculatedVolume = useMemo(() => numberFromString(form.volume_amount), [form.volume_amount]);
   const calculatedCash = useMemo(() => numberFromString(form.cash_amount), [form.cash_amount]);
   const calculatedPortfolio = useMemo(
     () => Math.max(0, calculatedVolume - calculatedCash),
     [calculatedCash, calculatedVolume]
+  );
+
+  const installmentsCountNumber = useMemo(
+    () => Number(portfolioForm.installments_count || "0"),
+    [portfolioForm.installments_count]
+  );
+
+  const automaticInstallmentValue = useMemo(() => {
+    if (!calculatedPortfolio || !installmentsCountNumber) return 0;
+    return Math.round(calculatedPortfolio / installmentsCountNumber);
+  }, [calculatedPortfolio, installmentsCountNumber]);
+
+  const installmentPlan = useMemo(
+    () =>
+      buildInstallmentPlan(
+        portfolioForm.first_installment_date,
+        installmentsCountNumber,
+        automaticInstallmentValue
+      ),
+    [portfolioForm.first_installment_date, installmentsCountNumber, automaticInstallmentValue]
   );
 
   useEffect(() => {
@@ -301,6 +380,13 @@ export default function ComercialPage() {
       portfolio_amount: calculatedPortfolio ? String(calculatedPortfolio) : "",
     }));
   }, [calculatedPortfolio]);
+
+  useEffect(() => {
+    setPortfolioForm((prev) => ({
+      ...prev,
+      installment_value: automaticInstallmentValue ? String(automaticInstallmentValue) : "",
+    }));
+  }, [automaticInstallmentValue]);
 
   async function validarAcceso() {
     try {
@@ -510,7 +596,10 @@ export default function ComercialPage() {
         next_specialist_user_id: item.next_specialist_user_id || "",
         next_notes: item.next_notes || "",
       });
-      setPortfolioForm(portfolioData);
+      setPortfolioForm({
+        ...portfolioData,
+        installment_value: "",
+      });
 
       setCases((prev) =>
         prev.map((caseItem) =>
@@ -568,7 +657,13 @@ export default function ComercialPage() {
       const volumeNumber = numberFromString(form.volume_amount);
       const cashNumber = numberFromString(form.cash_amount);
       const portfolioNumber = Math.max(0, volumeNumber - cashNumber);
-      const closingNotes = buildClosingNotes(form.closing_notes, portfolioForm, portfolioNumber);
+      const closingNotes = buildClosingNotes(
+        form.closing_notes,
+        portfolioForm,
+        portfolioNumber,
+        automaticInstallmentValue,
+        installmentPlan
+      );
       const saleOutcome =
         volumeNumber > 0 || form.purchased_service
           ? "ganada"
@@ -689,8 +784,6 @@ export default function ComercialPage() {
     );
   }
 
-  const receptionSummary = currentCase ? getReceptionSummary(currentCase) : [];
-
   return (
     <main className="min-h-screen bg-slate-100 p-6 md:p-8">
       <div className="mx-auto max-w-7xl">
@@ -781,27 +874,36 @@ export default function ComercialPage() {
                 </div>
 
                 {currentCase ? (
-                  <div className="rounded-2xl border border-slate-200 p-4">
-                    <h3 className="text-lg font-semibold text-slate-900">Información recibida desde recepción</h3>
-                    <div className="mt-3 grid gap-3 text-sm text-slate-700 md:grid-cols-2">
-                      <InfoItem label="Cliente" value={currentCase.customer_name} />
-                      <InfoItem label="Teléfono" value={currentCase.phone || "Sin teléfono"} />
-                      <InfoItem label="Ciudad" value={currentCase.city || "Sin ciudad"} />
-                      <InfoItem label="Ingreso comercial" value={formatDate(currentCase.created_at)} />
+                  <div className="grid gap-4 xl:grid-cols-2">
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        Información básica
+                      </h3>
+                      <div className="mt-3 grid gap-3 text-sm text-slate-700">
+                        <InfoItem label="Cliente" value={currentCase.customer_name} />
+                        <InfoItem label="Teléfono" value={currentCase.phone || "Sin teléfono"} />
+                        <InfoItem label="Ciudad" value={currentCase.city || "Sin ciudad"} />
+                        <InfoItem label="Ingreso comercial" value={formatDate(currentCase.created_at)} />
+                      </div>
                     </div>
 
-                    {receptionSummary.length > 0 ? (
-                      <div className="mt-4 rounded-2xl bg-slate-50 p-4">
-                        <p className="mb-2 text-sm font-semibold text-slate-800">
-                          Resumen registrado en recepción
-                        </p>
-                        <ul className="space-y-2 text-sm text-slate-700">
-                          {receptionSummary.map((line, index) => (
+                    <div className="rounded-2xl border border-slate-200 p-4">
+                      <h3 className="text-lg font-semibold text-slate-900">
+                        Información registrada en recepción
+                      </h3>
+
+                      {currentReceptionSummary.length > 0 ? (
+                        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                          {currentReceptionSummary.map((line, index) => (
                             <li key={index}>• {line}</li>
                           ))}
                         </ul>
-                      </div>
-                    ) : null}
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-500">
+                          Aquí aparecerá todo lo que recepción haya guardado dentro del ingreso comercial.
+                        </p>
+                      )}
+                    </div>
                   </div>
                 ) : null}
 
@@ -969,15 +1071,9 @@ export default function ComercialPage() {
                         label="Valor de la cuota"
                         input={
                           <input
-                            className={inputClass}
-                            inputMode="numeric"
-                            value={formatMoneyDisplay(portfolioForm.installment_value)}
-                            onChange={(e) =>
-                              setPortfolioForm((prev) => ({
-                                ...prev,
-                                installment_value: normalizeMoneyString(e.target.value),
-                              }))
-                            }
+                            className={`${inputClass} bg-slate-50`}
+                            value={formatMoneyDisplay(automaticInstallmentValue)}
+                            readOnly
                           />
                         }
                       />
@@ -999,6 +1095,37 @@ export default function ComercialPage() {
                         }
                       />
                     </div>
+
+                    {installmentPlan.length > 0 ? (
+                      <div className="mt-4 rounded-2xl bg-white p-4">
+                        <p className="text-sm font-semibold text-amber-900">
+                          Plan automático de cuotas
+                        </p>
+                        <p className="mt-1 text-sm text-slate-600">
+                          Se generará una cuota mensual con la misma fecha base.
+                        </p>
+                        <div className="mt-3 max-h-48 overflow-auto rounded-2xl border border-amber-100">
+                          <div className="divide-y divide-amber-100">
+                            {installmentPlan.map((item) => (
+                              <div
+                                key={`${item.number}_${item.date}`}
+                                className="flex items-center justify-between gap-3 px-4 py-3 text-sm"
+                              >
+                                <span className="font-medium text-slate-800">
+                                  Cuota {item.number}
+                                </span>
+                                <span className="text-slate-600">
+                                  {formatDateOnly(item.date)}
+                                </span>
+                                <span className="font-semibold text-slate-900">
+                                  ${item.value.toLocaleString("es-CO")}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 ) : null}
 
@@ -1197,65 +1324,89 @@ export default function ComercialPage() {
               </div>
             ) : (
               <div className="space-y-4">
-                {filteredCases.map((item) => (
-                  <div
-                    key={item.id}
-                    className="rounded-2xl border border-slate-200 p-4"
-                  >
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-900">
-                              {item.customer_name}
-                            </h3>
+                {filteredCases.map((item) => {
+                  const receptionSummary = getReceptionSummary(item);
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-slate-200 p-4"
+                    >
+                      <div className="flex flex-col gap-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                          <div className="flex-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="text-lg font-semibold text-slate-900">
+                                {item.customer_name}
+                              </h3>
 
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs ${estadoBadge(item.status)}`}
-                            >
-                              {traducirEstado(item.status)}
-                            </span>
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs ${estadoBadge(item.status)}`}
+                              >
+                                {traducirEstado(item.status)}
+                              </span>
+                            </div>
+
+                            <div className="mt-2 grid gap-3 xl:grid-cols-2">
+                              <div>
+                                <p className="text-sm text-slate-600">
+                                  {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
+                                </p>
+
+                                <p className="mt-1 text-sm text-slate-600">
+                                  Asignado: {formatDate(item.assigned_at)}
+                                </p>
+
+                                {item.purchased_service ? (
+                                  <p className="mt-1 text-sm text-slate-600">
+                                    Servicio adquirido: {item.purchased_service}
+                                  </p>
+                                ) : null}
+
+                                {item.volume_amount || item.sale_value ? (
+                                  <p className="mt-1 text-sm text-slate-600">
+                                    Volumen: $
+                                    {Number(item.volume_amount || item.sale_value || 0).toLocaleString("es-CO")}
+                                  </p>
+                                ) : null}
+                              </div>
+
+                              <div className="rounded-2xl bg-slate-50 p-3">
+                                <p className="text-sm font-semibold text-slate-800">
+                                  Recepción
+                                </p>
+                                {receptionSummary.length > 0 ? (
+                                  <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                                    {receptionSummary.map((line, index) => (
+                                      <li key={index}>• {line}</li>
+                                    ))}
+                                  </ul>
+                                ) : (
+                                  <p className="mt-2 text-sm text-slate-500">
+                                    Sin resumen visible de recepción.
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+
+                            {item.next_appointment_created ? (
+                              <p className="mt-2 text-sm text-green-700">
+                                Siguiente cita creada
+                              </p>
+                            ) : null}
                           </div>
 
-                          <p className="mt-2 text-sm text-slate-600">
-                            {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-600">
-                            Asignado: {formatDate(item.assigned_at)}
-                          </p>
-
-                          {item.purchased_service ? (
-                            <p className="mt-1 text-sm text-slate-600">
-                              Servicio adquirido: {item.purchased_service}
-                            </p>
-                          ) : null}
-
-                          {item.volume_amount || item.sale_value ? (
-                            <p className="mt-1 text-sm text-slate-600">
-                              Volumen: $
-                              {Number(item.volume_amount || item.sale_value || 0).toLocaleString("es-CO")}
-                            </p>
-                          ) : null}
-
-                          {item.next_appointment_created ? (
-                            <p className="mt-1 text-sm text-green-700">
-                              Siguiente cita creada
-                            </p>
-                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void iniciarAtencion(item)}
+                            className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+                          >
+                            Atender
+                          </button>
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => void iniciarAtencion(item)}
-                          className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-                        >
-                          Atender
-                        </button>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
