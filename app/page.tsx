@@ -43,6 +43,19 @@ type QuickAction = {
   roles: string[];
 };
 
+function normalizeRoleCode(roleCode: string | null | undefined) {
+  if (!roleCode) return null;
+
+  const map: Record<string, string> = {
+    gerente: "gerencia_comercial",
+    gerente_comercial: "gerencia_comercial",
+    gerencia_comercial: "gerencia_comercial",
+    recepcionista: "recepcion",
+  };
+
+  return map[roleCode] || roleCode;
+}
+
 const quickActions: QuickAction[] = [
   {
     title: "Nuevo lead",
@@ -91,7 +104,7 @@ const quickActions: QuickAction[] = [
     title: "Comercial",
     subtitle: "Gestionar seguimiento y cierre comercial.",
     href: "/comercial",
-    roles: ["super_user", "comercial"],
+    roles: ["super_user", "comercial", "gerencia_comercial"],
   },
   {
     title: "Gerencia comercial",
@@ -130,8 +143,9 @@ export default function HomePage() {
     }
 
     const auth = await getCurrentUserRole();
+    const normalizedRoleCode = normalizeRoleCode(auth.roleCode);
 
-    setCurrentRoleCode(auth.roleCode);
+    setCurrentRoleCode(normalizedRoleCode);
     setCurrentRoleName(auth.roleName);
     setCurrentUserId(session.user.id);
 
@@ -144,7 +158,7 @@ export default function HomePage() {
     setCurrentUserName(profile?.full_name || "Usuario");
 
     setCheckingSession(false);
-    loadDashboard(auth.roleCode, session.user.id);
+    loadDashboard(normalizedRoleCode, session.user.id);
   }
 
   async function loadDashboard(roleCode?: string | null, userId?: string | null) {
@@ -152,7 +166,7 @@ export default function HomePage() {
       setLoading(true);
       setErrorMessage("");
 
-      const effectiveRole = roleCode ?? currentRoleCode;
+      const effectiveRole = normalizeRoleCode(roleCode ?? currentRoleCode);
       const effectiveUserId = userId ?? currentUserId ?? null;
 
       let leadsQuery = supabase
@@ -229,7 +243,6 @@ export default function HomePage() {
   }, [currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
-  const isPromotorOpc = currentRoleCode === "promotor_opc";
 
   const totalLeads = leads.length;
   const totalDepartments = departments.length;
