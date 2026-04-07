@@ -30,6 +30,9 @@ type CommercialUser = {
 };
 
 type GerenciaTab = "pendientes" | "comerciales" | "en_gestion" | "finalizados";
+type StatusFilter = "todos" | "pendiente_asignacion_comercial" | "asignado_comercial" | "en_atencion_comercial" | "seguimiento_comercial" | "finalizado";
+type SaleFilter = "todas" | "con_venta" | "sin_venta";
+type DateFilter = "hoy" | "todos";
 
 const allowedRoles = ["super_user", "gerente"];
 
@@ -55,17 +58,17 @@ function traducirEstado(status: string | null) {
 function estadoBadge(status: string | null) {
   switch (status) {
     case "pendiente_asignacion_comercial":
-      return "bg-amber-100 text-amber-700";
+      return "bg-amber-100 text-amber-800 border border-amber-200";
     case "asignado_comercial":
-      return "bg-blue-100 text-blue-700";
+      return "bg-blue-100 text-blue-800 border border-blue-200";
     case "en_atencion_comercial":
-      return "bg-cyan-100 text-cyan-700";
+      return "bg-cyan-100 text-cyan-800 border border-cyan-200";
     case "seguimiento_comercial":
-      return "bg-violet-100 text-violet-700";
+      return "bg-violet-100 text-violet-800 border border-violet-200";
     case "finalizado":
-      return "bg-slate-200 text-slate-800";
+      return "bg-slate-200 text-slate-800 border border-slate-300";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "bg-slate-100 text-slate-700 border border-slate-200";
   }
 }
 
@@ -111,11 +114,23 @@ function minutosEspera(dateString: string | null | undefined) {
 }
 
 function esVentaReal(item: CommercialCase) {
-  return !!(
+  return Boolean(
     item.purchased_service ||
-    item.sale_result === "venta_realizada" ||
-    (item.sale_value && Number(item.sale_value) > 0)
+      item.sale_result === "venta_realizada" ||
+      (item.sale_value && Number(item.sale_value) > 0)
   );
+}
+
+function esHoy(dateString: string | null | undefined) {
+  if (!dateString) return false;
+
+  try {
+    const date = new Date(dateString);
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  } catch {
+    return false;
+  }
 }
 
 export default function GerenciaComercialPage() {
@@ -132,6 +147,11 @@ export default function GerenciaComercialPage() {
 
   const [activeTab, setActiveTab] = useState<GerenciaTab>("pendientes");
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("todos");
+  const [commercialFilter, setCommercialFilter] = useState<string>("todos");
+  const [saleFilter, setSaleFilter] = useState<SaleFilter>("todas");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("hoy");
+
   const [selectedCommercialByCase, setSelectedCommercialByCase] = useState<Record<string, string>>({});
   const [savingCaseId, setSavingCaseId] = useState<string | null>(null);
 
@@ -245,7 +265,7 @@ export default function GerenciaComercialPage() {
 
   useEffect(() => {
     if (authorized) {
-      cargarDatos();
+      void cargarDatos();
     }
   }, [authorized]);
 
@@ -262,13 +282,12 @@ export default function GerenciaComercialPage() {
   }, [cases]);
 
   const finishedTodayByCommercial = useMemo(() => {
-    const today = new Date().toDateString();
     const map: Record<string, number> = {};
 
     cases.forEach((item) => {
       if (!item.assigned_commercial_user_id) return;
       if (item.status !== "finalizado") return;
-      if (new Date(item.created_at).toDateString() !== today) return;
+      if (!esHoy(item.created_at)) return;
 
       map[item.assigned_commercial_user_id] = (map[item.assigned_commercial_user_id] || 0) + 1;
     });
@@ -277,14 +296,13 @@ export default function GerenciaComercialPage() {
   }, [cases]);
 
   const salesTodayByCommercial = useMemo(() => {
-    const today = new Date().toDateString();
     const map: Record<string, number> = {};
 
     cases.forEach((item) => {
       if (!item.assigned_commercial_user_id) return;
       if (item.status !== "finalizado") return;
       if (!esVentaReal(item)) return;
-      if (new Date(item.created_at).toDateString() !== today) return;
+      if (!esHoy(item.created_at)) return;
 
       map[item.assigned_commercial_user_id] = (map[item.assigned_commercial_user_id] || 0) + 1;
     });
@@ -308,37 +326,66 @@ export default function GerenciaComercialPage() {
   );
 
   const resumen = useMemo(() => {
+    const base = dateFilter === "hoy" ? cases.filter((item) => esHoy(item.created_at)) : cases;
+    const basePendientes = base.filter((item) => item.status === "pendiente_asignacion_comercial");
+    const baseActivos = base.filter((item) => activeCommercialStatuses.includes(item.status));
+    const baseFinalizados = base.filter((item) => item.status === "finalizado");
+
     return {
-      pendientes: pendingCases.length,
-      enAtencion: inProgressCases.length,
-      finalizados: finalizadosCases.length,
-      ventas: finalizadosCases.filter(esVentaReal).length,
-      seguimientos: cases.filter((x) => x.status === "seguimiento_comercial").length,
+      pendientes: basePendientes.length,
+      enAtencion: baseActivos.length,
+      finalizados: baseFinalizados.length,
+      ventas: baseFinalizados.filter(esVentaReal).length,
+      seguimientos: base.filter((item) => item.status === "seguimiento_comercial").length,
       disponibles: commercialUsers.filter((user) => (activeCasesByCommercial[user.id] || 0) === 0).length,
     };
-  }, [pendingCases, inProgressCases, finalizadosCases, cases, commercialUsers, activeCasesByCommercial]);
+  }, [cases, commercialUsers, activeCasesByCommercial, dateFilter]);
+
+  const currentSource = useMemo(() => {
+    if (activeTab === "pendientes") return pendingCases;
+    if (activeTab === "en_gestion") return inProgressCases;
+    if (activeTab === "finalizados") return finalizadosCases;
+    return cases;
+  }, [activeTab, pendingCases, inProgressCases, finalizadosCases, cases]);
 
   const visibleCases = useMemo(() => {
-    const source =
-      activeTab === "pendientes"
-        ? pendingCases
-        : activeTab === "en_gestion"
-          ? inProgressCases
-          : activeTab === "finalizados"
-            ? finalizadosCases
-            : cases;
+    let filtered = [...currentSource];
+
+    if (dateFilter === "hoy") {
+      filtered = filtered.filter((item) => esHoy(item.created_at));
+    }
+
+    if (statusFilter !== "todos") {
+      filtered = filtered.filter((item) => item.status === statusFilter);
+    }
+
+    if (commercialFilter !== "todos") {
+      if (commercialFilter === "sin_asignar") {
+        filtered = filtered.filter((item) => !item.assigned_commercial_user_id);
+      } else {
+        filtered = filtered.filter((item) => item.assigned_commercial_user_id === commercialFilter);
+      }
+    }
+
+    if (saleFilter === "con_venta") {
+      filtered = filtered.filter((item) => esVentaReal(item));
+    }
+
+    if (saleFilter === "sin_venta") {
+      filtered = filtered.filter((item) => !esVentaReal(item));
+    }
 
     const q = search.trim().toLowerCase();
-    if (!q) return source;
+    if (!q) return filtered;
 
-    return source.filter((item) => {
+    return filtered.filter((item) => {
       return (
         (item.customer_name || "").toLowerCase().includes(q) ||
         (item.phone || "").toLowerCase().includes(q) ||
         (item.city || "").toLowerCase().includes(q)
       );
     });
-  }, [activeTab, pendingCases, inProgressCases, finalizadosCases, cases, search]);
+  }, [currentSource, dateFilter, statusFilter, commercialFilter, saleFilter, search]);
 
   function nombreComercial(userId: string | null) {
     if (!userId) return "Sin asignar";
@@ -353,7 +400,9 @@ export default function GerenciaComercialPage() {
 
   function disponibilidadBadge(userId: string) {
     const activeCount = activeCasesByCommercial[userId] || 0;
-    return activeCount === 0 ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700";
+    return activeCount === 0
+      ? "bg-green-100 text-green-700 border border-green-200"
+      : "bg-amber-100 text-amber-700 border border-amber-200";
   }
 
   async function asignarCaso(caseId: string, commercialId: string) {
@@ -367,46 +416,52 @@ export default function GerenciaComercialPage() {
       return;
     }
 
-    setSavingCaseId(caseId);
-    setError("");
-    setMensaje("");
+    try {
+      setSavingCaseId(caseId);
+      setError("");
+      setMensaje("");
 
-    const assignedAt = new Date().toISOString();
+      const assignedAt = new Date().toISOString();
 
-    const { error: updateError } = await supabase
-      .from("commercial_cases")
-      .update({
-        assigned_commercial_user_id: commercialId,
-        assigned_by_user_id: currentUserId,
-        assigned_at: assignedAt,
-        status: "asignado_comercial",
-        updated_by_user_id: currentUserId,
-      })
-      .eq("id", caseId);
+      const { error: updateError } = await supabase
+        .from("commercial_cases")
+        .update({
+          assigned_commercial_user_id: commercialId,
+          assigned_by_user_id: currentUserId,
+          assigned_at: assignedAt,
+          status: "asignado_comercial",
+          updated_by_user_id: currentUserId,
+        })
+        .eq("id", caseId);
 
-    if (updateError) {
-      setError("No se pudo asignar el caso.");
+      if (updateError) throw updateError;
+
+      setCases((prev) =>
+        prev.map((item) =>
+          item.id === caseId
+            ? {
+                ...item,
+                assigned_commercial_user_id: commercialId,
+                assigned_by_user_id: currentUserId,
+                assigned_at: assignedAt,
+                status: "asignado_comercial",
+              }
+            : item
+        )
+      );
+
+      setSelectedCommercialByCase((prev) => ({ ...prev, [caseId]: commercialId }));
+
+      setMensaje(
+        commercialId === currentUserId
+          ? "Te asignaste este cliente correctamente."
+          : "Cliente asignado correctamente."
+      );
+    } catch (err: any) {
+      setError(err?.message || "No se pudo asignar el caso.");
+    } finally {
       setSavingCaseId(null);
-      return;
     }
-
-    setCases((prev) =>
-      prev.map((item) =>
-        item.id === caseId
-          ? {
-              ...item,
-              assigned_commercial_user_id: commercialId,
-              assigned_by_user_id: currentUserId,
-              assigned_at: assignedAt,
-              status: "asignado_comercial",
-            }
-          : item
-      )
-    );
-
-    setSelectedCommercialByCase((prev) => ({ ...prev, [caseId]: commercialId }));
-    setMensaje(commercialId === currentUserId ? "Te asignaste este cliente correctamente." : "Cliente asignado correctamente.");
-    setSavingCaseId(null);
   }
 
   async function atenderYo(caseId: string) {
@@ -418,30 +473,96 @@ export default function GerenciaComercialPage() {
     await asignarCaso(caseId, currentUserId);
   }
 
+  function limpiarFiltros() {
+    setSearch("");
+    setStatusFilter("todos");
+    setCommercialFilter("todos");
+    setSaleFilter("todas");
+    setDateFilter("hoy");
+  }
+
   function renderCaseList(title: string, description: string, items: CommercialCase[]) {
     return (
-      <div className="rounded-3xl bg-white p-6 shadow-sm">
-        <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+      <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <div className="mb-5 flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
             <p className="mt-1 text-sm text-slate-500">{description}</p>
           </div>
 
           <button
-            onClick={cargarDatos}
+            onClick={() => void cargarDatos()}
             className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
             Actualizar
           </button>
         </div>
 
-        <div className="mb-6">
-          <input
-            className="w-full rounded-2xl border border-slate-300 p-4 outline-none"
-            placeholder="Buscar por nombre, teléfono o ciudad"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+        <div className="mb-6 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+            <input
+              className="w-full rounded-2xl border border-slate-300 bg-white p-3 outline-none"
+              placeholder="Buscar por nombre, teléfono o ciudad"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
+            <select
+              className="w-full rounded-2xl border border-slate-300 bg-white p-3 outline-none"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            >
+              <option value="todos">Todos los estados</option>
+              <option value="pendiente_asignacion_comercial">Pendiente de asignación</option>
+              <option value="asignado_comercial">Asignado</option>
+              <option value="en_atencion_comercial">En atención</option>
+              <option value="seguimiento_comercial">Seguimiento</option>
+              <option value="finalizado">Finalizado</option>
+            </select>
+
+            <select
+              className="w-full rounded-2xl border border-slate-300 bg-white p-3 outline-none"
+              value={commercialFilter}
+              onChange={(e) => setCommercialFilter(e.target.value)}
+            >
+              <option value="todos">Todos los comerciales</option>
+              <option value="sin_asignar">Sin asignar</option>
+              {commercialUsers.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.full_name}
+                </option>
+              ))}
+            </select>
+
+            <select
+              className="w-full rounded-2xl border border-slate-300 bg-white p-3 outline-none"
+              value={saleFilter}
+              onChange={(e) => setSaleFilter(e.target.value as SaleFilter)}
+            >
+              <option value="todas">Todas las ventas</option>
+              <option value="con_venta">Con venta</option>
+              <option value="sin_venta">Sin venta</option>
+            </select>
+
+            <div className="flex gap-2">
+              <select
+                className="w-full rounded-2xl border border-slate-300 bg-white p-3 outline-none"
+                value={dateFilter}
+                onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+              >
+                <option value="hoy">Solo hoy</option>
+                <option value="todos">Todos</option>
+              </select>
+
+              <button
+                type="button"
+                onClick={limpiarFiltros}
+                className="rounded-2xl border border-slate-300 bg-white px-4 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Limpiar
+              </button>
+            </div>
+          </div>
         </div>
 
         {loading ? (
@@ -454,101 +575,146 @@ export default function GerenciaComercialPage() {
           </div>
         ) : (
           <div className="space-y-4">
-            {items.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
-                <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="text-lg font-semibold text-slate-900">{item.customer_name}</h3>
-                      <span className={`rounded-full px-3 py-1 text-xs ${estadoBadge(item.status)}`}>
-                        {traducirEstado(item.status)}
-                      </span>
-                    </div>
+            {items.map((item) => {
+              const tieneVenta = esVentaReal(item);
 
-                    <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
-                      <p><span className="font-medium text-slate-700">Teléfono:</span> {item.phone || "Sin teléfono"}</p>
-                      <p><span className="font-medium text-slate-700">Ciudad:</span> {item.city || "Sin ciudad"}</p>
-                      <p><span className="font-medium text-slate-700">Ingreso:</span> {formatDate(item.created_at)}</p>
-                      <p><span className="font-medium text-slate-700">Hora:</span> {formatHour(item.created_at)}</p>
-                      <p><span className="font-medium text-slate-700">Comercial:</span> {nombreComercial(item.assigned_commercial_user_id)}</p>
-                      <p><span className="font-medium text-slate-700">Espera:</span> {minutosEspera(item.created_at)}</p>
-                    </div>
+              return (
+                <div
+                  key={item.id}
+                  className="overflow-hidden rounded-3xl border border-slate-200 bg-white"
+                >
+                  <div className="border-b border-slate-100 bg-slate-50 px-5 py-4">
+                    <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <h3 className="truncate text-lg font-semibold text-slate-900">
+                            {item.customer_name}
+                          </h3>
+                          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${estadoBadge(item.status)}`}>
+                            {traducirEstado(item.status)}
+                          </span>
+                          <span
+                            className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                              tieneVenta
+                                ? "border border-emerald-200 bg-emerald-100 text-emerald-800"
+                                : "border border-slate-200 bg-white text-slate-700"
+                            }`}
+                          >
+                            {tieneVenta ? "Con venta" : "Sin venta"}
+                          </span>
+                        </div>
 
-                    {item.status === "finalizado" ? (
-                      <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2">
-                        <p>
-                          <span className="font-medium text-slate-700">Resultado:</span>{" "}
-                          {esVentaReal(item) ? "Venta realizada" : "Sin venta"}
-                        </p>
-                        <p>
-                          <span className="font-medium text-slate-700">Valor:</span>{" "}
-                          {item.sale_value ? `$${item.sale_value.toLocaleString("es-CO")}` : "No registrado"}
+                        <p className="mt-2 text-sm text-slate-500">
+                          Ingreso: {formatDate(item.created_at)} · Espera: {minutosEspera(item.created_at)}
                         </p>
                       </div>
-                    ) : null}
-                  </div>
-
-                  <div className="w-full rounded-2xl bg-slate-50 p-4 lg:w-[360px]">
-                    <p className="mb-3 text-sm font-medium text-slate-700">
-                      {item.assigned_commercial_user_id ? "Reasignar o editar" : "Asignar atención"}
-                    </p>
-
-                    <div className="space-y-3">
-                      <select
-                        className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
-                        value={selectedCommercialByCase[item.id] || ""}
-                        onChange={(e) =>
-                          setSelectedCommercialByCase((prev) => ({
-                            ...prev,
-                            [item.id]: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Selecciona un comercial</option>
-                        {commercialUsers.map((user) => (
-                          <option key={user.id} value={user.id}>
-                            {user.full_name} · {disponibilidadComercial(user.id)}
-                          </option>
-                        ))}
-                      </select>
 
                       <div className="flex flex-wrap gap-2">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const commercialId = selectedCommercialByCase[item.id] || "";
-                            void asignarCaso(item.id, commercialId);
-                          }}
-                          disabled={savingCaseId === item.id}
-                          className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
-                        >
-                          {savingCaseId === item.id ? "Guardando..." : item.assigned_commercial_user_id ? "Reasignar" : "Asignar"}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => void atenderYo(item.id)}
-                          disabled={savingCaseId === item.id}
-                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 disabled:opacity-60"
-                        >
-                          Atender yo
-                        </button>
-
                         <a
                           href={`/comercial?caseId=${item.id}`}
-                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700"
+                          className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                         >
-                          Editar gestión
+                          Abrir gestión
                         </a>
                       </div>
                     </div>
                   </div>
+
+                  <div className="grid gap-4 p-5 xl:grid-cols-[1.4fr_0.9fr]">
+                    <div className="grid gap-4">
+                      <div className="rounded-2xl border border-slate-200 p-4">
+                        <p className="mb-3 text-sm font-semibold text-slate-800">Datos del cliente</p>
+
+                        <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
+                          <InfoItem label="Teléfono" value={item.phone || "Sin teléfono"} />
+                          <InfoItem label="Ciudad" value={item.city || "Sin ciudad"} />
+                          <InfoItem label="Hora" value={formatHour(item.created_at)} />
+                          <InfoItem label="Comercial" value={nombreComercial(item.assigned_commercial_user_id)} />
+                          <InfoItem label="Asignado desde" value={item.assigned_at ? formatDate(item.assigned_at) : "Aún no"} />
+                          <InfoItem label="Servicio vendido" value={item.purchased_service || "No registrado"} />
+                        </div>
+                      </div>
+
+                      <div className="rounded-2xl border border-slate-200 p-4">
+                        <p className="mb-3 text-sm font-semibold text-slate-800">Resumen operativo</p>
+
+                        <div className="grid gap-3 text-sm text-slate-600 md:grid-cols-2">
+                          <InfoItem label="Resultado comercial" value={tieneVenta ? "Venta realizada" : "Aún sin venta"} />
+                          <InfoItem
+                            label="Valor"
+                            value={
+                              item.sale_value && Number(item.sale_value) > 0
+                                ? `$${Number(item.sale_value).toLocaleString("es-CO")}`
+                                : "No registrado"
+                            }
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="rounded-2xl bg-slate-50 p-4">
+                      <p className="mb-3 text-sm font-semibold text-slate-800">
+                        {item.assigned_commercial_user_id ? "Reasignar o tomar control" : "Asignar atención"}
+                      </p>
+
+                      <div className="space-y-3">
+                        <select
+                          className="w-full rounded-2xl border border-slate-300 bg-white p-3 outline-none"
+                          value={selectedCommercialByCase[item.id] || ""}
+                          onChange={(e) =>
+                            setSelectedCommercialByCase((prev) => ({
+                              ...prev,
+                              [item.id]: e.target.value,
+                            }))
+                          }
+                        >
+                          <option value="">Selecciona un comercial</option>
+                          {commercialUsers.map((user) => (
+                            <option key={user.id} value={user.id}>
+                              {user.full_name} · {disponibilidadComercial(user.id)}
+                            </option>
+                          ))}
+                        </select>
+
+                        <div className="grid gap-2 sm:grid-cols-2">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const commercialId = selectedCommercialByCase[item.id] || "";
+                              void asignarCaso(item.id, commercialId);
+                            }}
+                            disabled={savingCaseId === item.id}
+                            className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                          >
+                            {savingCaseId === item.id
+                              ? "Guardando..."
+                              : item.assigned_commercial_user_id
+                                ? "Reasignar"
+                                : "Asignar"}
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => void atenderYo(item.id)}
+                            disabled={savingCaseId === item.id}
+                            className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 disabled:opacity-60"
+                          >
+                            Atender yo
+                          </button>
+                        </div>
+
+                        <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-500">
+                          El gerente puede asignar, reasignar o entrar a la gestión del caso sin perder el control operativo.
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
     );
   }
 
@@ -566,7 +732,9 @@ export default function GerenciaComercialPage() {
     return (
       <main className="min-h-screen bg-slate-100 p-6 md:p-8">
         <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-red-700">{error || "No tienes permiso para entrar a este módulo."}</p>
+          <p className="text-sm font-medium text-red-700">
+            {error || "No tienes permiso para entrar a este módulo."}
+          </p>
         </div>
       </main>
     );
@@ -580,8 +748,9 @@ export default function GerenciaComercialPage() {
             <div>
               <p className="text-sm font-medium text-slate-500">Gerencia comercial</p>
               <h1 className="mt-2 text-3xl font-bold text-slate-900">Centro de control comercial</h1>
-              <p className="mt-3 text-sm text-slate-600">
-                Asigna clientes, revisa disponibilidad del equipo y entra a la gestión solo cuando lo necesites.
+              <p className="mt-3 max-w-3xl text-sm text-slate-600">
+                Aquí el gerente ve qué clientes llegaron desde Recepción, quién está disponible,
+                qué casos siguen activos y cuáles ya cerraron.
               </p>
             </div>
 
@@ -591,28 +760,60 @@ export default function GerenciaComercialPage() {
           <div className="mt-4 flex flex-wrap gap-3">
             <a
               href="/"
-              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
             >
               Inicio
             </a>
+
+            <button
+              type="button"
+              onClick={() => void cargarDatos()}
+              className="rounded-2xl border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              Actualizar datos
+            </button>
           </div>
         </section>
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            {error}
+          </div>
         ) : null}
 
         {mensaje ? (
-          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">{mensaje}</div>
+          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+            {mensaje}
+          </div>
         ) : null}
 
         <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
-          <StatCard title="Pendientes" value={String(resumen.pendientes)} />
-          <StatCard title="En atención" value={String(resumen.enAtencion)} />
-          <StatCard title="Finalizados" value={String(resumen.finalizados)} />
+          <StatCard
+            title="Pendientes"
+            value={String(resumen.pendientes)}
+            active={activeTab === "pendientes"}
+            onClick={() => setActiveTab("pendientes")}
+          />
+          <StatCard
+            title="En atención"
+            value={String(resumen.enAtencion)}
+            active={activeTab === "en_gestion"}
+            onClick={() => setActiveTab("en_gestion")}
+          />
+          <StatCard
+            title="Finalizados"
+            value={String(resumen.finalizados)}
+            active={activeTab === "finalizados"}
+            onClick={() => setActiveTab("finalizados")}
+          />
           <StatCard title="Ventas" value={String(resumen.ventas)} />
           <StatCard title="Seguimientos" value={String(resumen.seguimientos)} />
-          <StatCard title="Disponibles" value={String(resumen.disponibles)} />
+          <StatCard
+            title="Disponibles"
+            value={String(resumen.disponibles)}
+            active={activeTab === "comerciales"}
+            onClick={() => setActiveTab("comerciales")}
+          />
         </section>
 
         <section className="mb-6 rounded-3xl bg-white p-4 shadow-sm">
@@ -623,40 +824,43 @@ export default function GerenciaComercialPage() {
               className={`rounded-2xl px-4 py-2 text-sm font-medium ${
                 activeTab === "pendientes"
                   ? "bg-slate-900 text-white"
-                  : "border border-slate-300 text-slate-700"
+                  : "border border-slate-300 text-slate-700 hover:bg-slate-50"
               }`}
             >
               Pendientes
             </button>
+
             <button
               type="button"
               onClick={() => setActiveTab("comerciales")}
               className={`rounded-2xl px-4 py-2 text-sm font-medium ${
                 activeTab === "comerciales"
                   ? "bg-slate-900 text-white"
-                  : "border border-slate-300 text-slate-700"
+                  : "border border-slate-300 text-slate-700 hover:bg-slate-50"
               }`}
             >
               Comerciales
             </button>
+
             <button
               type="button"
               onClick={() => setActiveTab("en_gestion")}
               className={`rounded-2xl px-4 py-2 text-sm font-medium ${
                 activeTab === "en_gestion"
                   ? "bg-slate-900 text-white"
-                  : "border border-slate-300 text-slate-700"
+                  : "border border-slate-300 text-slate-700 hover:bg-slate-50"
               }`}
             >
               En gestión
             </button>
+
             <button
               type="button"
               onClick={() => setActiveTab("finalizados")}
               className={`rounded-2xl px-4 py-2 text-sm font-medium ${
                 activeTab === "finalizados"
                   ? "bg-slate-900 text-white"
-                  : "border border-slate-300 text-slate-700"
+                  : "border border-slate-300 text-slate-700 hover:bg-slate-50"
               }`}
             >
               Finalizados
@@ -674,14 +878,14 @@ export default function GerenciaComercialPage() {
         {activeTab === "en_gestion" &&
           renderCaseList(
             "Clientes en gestión",
-            "Casos ya asignados o en atención. El gerente puede corregir, reasignar o atender directamente.",
+            "Casos ya asignados o en atención. El gerente puede corregir, reasignar o entrar a la gestión cuando haga falta.",
             visibleCases
           )}
 
         {activeTab === "finalizados" &&
           renderCaseList(
             "Gestiones finalizadas",
-            "Resumen de clientes cerrados hoy, con o sin venta, para control operativo.",
+            "Resumen operativo de clientes cerrados, con o sin venta.",
             visibleCases
           )}
 
@@ -691,12 +895,12 @@ export default function GerenciaComercialPage() {
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">Comerciales del día</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Revisa en tiempo real quién está disponible y cuántos clientes ha movido hoy.
+                  Revisa en tiempo real quién está disponible y cuántos movimientos lleva cada uno.
                 </p>
               </div>
 
               <button
-                onClick={cargarDatos}
+                onClick={() => void cargarDatos()}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Actualizar
@@ -719,11 +923,13 @@ export default function GerenciaComercialPage() {
                   const salesCount = salesTodayByCommercial[user.id] || 0;
 
                   return (
-                    <div key={user.id} className="rounded-2xl border border-slate-200 p-5">
+                    <div key={user.id} className="rounded-3xl border border-slate-200 p-5">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-slate-900">{user.full_name}</p>
-                          <p className="mt-1 text-xs text-slate-500">{user.role_name || "Comercial"}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {user.role_name || "Comercial"}
+                          </p>
                         </div>
 
                         <span className={`rounded-full px-3 py-1 text-xs font-semibold ${disponibilidadBadge(user.id)}`}>
@@ -748,12 +954,31 @@ export default function GerenciaComercialPage() {
   );
 }
 
-function StatCard({ title, value }: { title: string; value: string }) {
+function StatCard({
+  title,
+  value,
+  active = false,
+  onClick,
+}: {
+  title: string;
+  value: string;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  const clickable = Boolean(onClick);
+
   return (
-    <div className="rounded-3xl bg-white p-5 shadow-sm">
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!clickable}
+      className={`rounded-3xl bg-white p-5 text-left shadow-sm transition ${
+        clickable ? "hover:-translate-y-0.5 hover:shadow-md" : ""
+      } ${active ? "ring-2 ring-slate-900" : ""} ${!clickable ? "cursor-default" : ""}`}
+    >
       <p className="text-sm text-slate-500">{title}</p>
       <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
-    </div>
+    </button>
   );
 }
 
@@ -763,5 +988,13 @@ function MiniStat({ label, value }: { label: string; value: string }) {
       <p className="text-xs text-slate-500">{label}</p>
       <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
     </div>
+  );
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <p>
+      <span className="font-medium text-slate-700">{label}:</span> {value}
+    </p>
   );
 }
