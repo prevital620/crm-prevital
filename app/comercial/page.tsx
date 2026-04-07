@@ -1,4 +1,4 @@
-"use client";
+\"use client\";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -46,7 +46,20 @@ type SpecialistOption = {
   role_code: string;
 };
 
-const allowedRoles = ["super_user", "comercial", "gerente"];
+const allowedRoles = [
+  "super_user",
+  "comercial",
+  "gerente",
+  "gerente_comercial",
+  "gerencia_comercial",
+];
+
+const managementRoles = [
+  "super_user",
+  "gerente",
+  "gerente_comercial",
+  "gerencia_comercial",
+];
 
 const caseStatusOptions = [
   { value: "asignado_comercial", label: "Asignado" },
@@ -285,7 +298,11 @@ export default function ComercialPage() {
       let casesData = (casesResult.data as CommercialCase[]) || [];
       const profileRows = (profilesResult.data as any[]) || [];
 
-      if (currentRoleCode === "comercial" && currentUserId) {
+      const isManagementView = currentRoleCode
+        ? managementRoles.includes(currentRoleCode)
+        : false;
+
+      if (!isManagementView && currentUserId) {
         casesData = casesData.filter(
           (item) => item.assigned_commercial_user_id === currentUserId
         );
@@ -321,7 +338,7 @@ export default function ComercialPage() {
 
   useEffect(() => {
     if (authorized) {
-      cargarDatos();
+      void cargarDatos();
     }
   }, [authorized, currentRoleCode, currentUserId]);
 
@@ -938,7 +955,7 @@ export default function ComercialPage() {
               </div>
 
               <button
-                onClick={cargarDatos}
+                onClick={() => void cargarDatos()}
                 className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
                 Actualizar
