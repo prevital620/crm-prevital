@@ -60,12 +60,8 @@ const statusOptions = [
   { value: "no_responde", label: "No responde" },
   { value: "contactado", label: "Contactado" },
   { value: "agendado", label: "Agendado" },
-  { value: "reagendar", label: "Reagendar" },
-  { value: "asistio", label: "Asistió" },
-  { value: "no_asistio", label: "No asistió" },
-  { value: "vendido", label: "Vendido" },
-  { value: "cerrado", label: "Cerrado" },
-  { value: "descartado", label: "Perdido" },
+  { value: "dato_falso", label: "Dato falso" },
+  { value: "no_interesa", label: "No interesa" },
 ];
 
 const allowedRoles = [
@@ -112,17 +108,9 @@ function estadoBadge(estado: string | null) {
       return "bg-indigo-100 text-indigo-700";
     case "agendado":
       return "bg-emerald-100 text-emerald-700";
-    case "reagendar":
-      return "bg-cyan-100 text-cyan-700";
-    case "asistio":
-      return "bg-teal-100 text-teal-700";
-    case "no_asistio":
+    case "dato_falso":
       return "bg-rose-100 text-rose-700";
-    case "vendido":
-      return "bg-green-100 text-green-700";
-    case "cerrado":
-      return "bg-slate-200 text-slate-800";
-    case "descartado":
+    case "no_interesa":
       return "bg-red-100 text-red-700";
     default:
       return "bg-slate-100 text-slate-700";
@@ -138,12 +126,8 @@ function traducirEstado(estado: string | null) {
     no_responde: "No responde",
     contactado: "Contactado",
     agendado: "Agendado",
-    reagendar: "Reagendar",
-    asistio: "Asistió",
-    no_asistio: "No asistió",
-    vendido: "Vendido",
-    cerrado: "Cerrado",
-    descartado: "Perdido",
+    dato_falso: "Dato falso",
+    no_interesa: "No interesa",
   };
 
   if (!estado) return "Sin estado";
@@ -542,19 +526,12 @@ export default function CallCenterPage() {
 
   function esPendienteDeCita(lead: Lead) {
     const estado = obtenerEstadoVisible(lead);
-    return (
-      !tieneCitaActiva(lead) &&
-      (estado === "contactado" || estado === "reagendar")
-    );
+    return !tieneCitaActiva(lead) && estado === "contactado";
   }
 
   function esCerrado(lead: Lead) {
     const estado = obtenerEstadoVisible(lead);
-    return (
-      estado === "vendido" ||
-      estado === "cerrado" ||
-      estado === "descartado"
-    );
+    return estado === "dato_falso" || estado === "no_interesa";
   }
 
   const leadsBasePorRol = useMemo(() => {
@@ -584,7 +561,7 @@ export default function CallCenterPage() {
       pendientes: delDia.filter((lead) => esPendiente(lead)).length,
       pendientesCita: delDia.filter((lead) => esPendienteDeCita(lead)).length,
       agendados: delDia.filter((lead) => tieneCitaActiva(lead)).length,
-      noAsistio: delDia.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio").length,
+      noAsistio: delDia.filter((lead) => soloFecha(activeAppointmentByLeadId[lead.id]?.appointment_date) === fechaFiltro && obtenerEstadoVisible(lead) === "no_asistio").length,
       cerrados: delDia.filter((lead) => esCerrado(lead)).length,
     };
   }, [leadsBasePorRol, fechaFiltro, activeAppointmentByLeadId]);
@@ -737,6 +714,7 @@ export default function CallCenterPage() {
           <StatCard title="Pendientes de cita" value={resumen.pendientesCita} active={quickFilter === "pendientes_cita"} onClick={() => setQuickFilter("pendientes_cita")} />
           <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
           <StatCard title="No asistió" value={resumen.noAsistio} active={quickFilter === "no_asistio"} onClick={() => setQuickFilter("no_asistio")} />
+          <StatCard title="Descartados" value={resumen.cerrados} active={quickFilter === "cerrados"} onClick={() => setQuickFilter("cerrados")} />
         </section>
 
         <section className="rounded-3xl bg-white p-6 shadow-sm">
@@ -750,7 +728,7 @@ export default function CallCenterPage() {
               { key: "pendientes_cita", label: "Pendientes de cita" },
               { key: "agendados", label: "Agendados" },
               { key: "no_asistio", label: "No asistió" },
-              { key: "cerrados", label: "Cerrados" },
+              { key: "cerrados", label: "Descartados" },
             ].map((item) => (
               <button
                 key={item.key}
@@ -963,7 +941,7 @@ export default function CallCenterPage() {
                       {canChangeStatus ? (
                         <div className="rounded-2xl bg-slate-50 p-4">
                           <p className="mb-3 text-sm font-medium text-slate-700">
-                            Estado del lead
+                            Estado del lead en Call Center
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
