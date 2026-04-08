@@ -221,6 +221,30 @@ function getPrintTitle(serviceType: string | null | undefined) {
     : "Comprobante de cita";
 }
 
+function getPrintRecommendations(
+  tipo: "cita" | "tratamiento" | "instrucciones",
+  serviceType: string | null | undefined
+) {
+  const docType =
+    tipo === "instrucciones" ? "instrucciones" : getPrintDocumentType(serviceType);
+
+  if (docType === "tratamiento") {
+    return [
+      "Presentarse 10 minutos antes de la hora programada.",
+      "Traer documento de identidad.",
+      "Informar cualquier cambio de salud antes del procedimiento.",
+      "Si no puede asistir, avisar con anticipación para reprogramar.",
+    ];
+  }
+
+  return [
+    "Presentarse 10 minutos antes de la hora programada.",
+    "Traer documento de identidad.",
+    "Traer exámenes o soportes si aplica.",
+    "Si no puede asistir, avisar con anticipación para reprogramar.",
+  ];
+}
+
 
 function getSectionForService(serviceType: string | null | undefined): ReceptionSection {
   const value = (serviceType || "").trim().toLowerCase();
@@ -1084,6 +1108,20 @@ function RecepcionContent() {
     return printCandidates[0] || null;
   }, [printCandidates]);
 
+  const [previewDocType, setPreviewDocType] = useState<"cita" | "tratamiento" | "instrucciones">("cita");
+
+  const previewTitle = useMemo(() => {
+    if (!selectedPrintPatient) return "Vista previa";
+    if (previewDocType === "instrucciones") return "Instrucciones";
+    return previewDocType === "tratamiento"
+      ? "Comprobante de tratamiento"
+      : "Comprobante de cita";
+  }, [previewDocType, selectedPrintPatient]);
+
+  const previewRecommendations = useMemo(() => {
+    return getPrintRecommendations(previewDocType, selectedPrintPatient?.service_type);
+  }, [previewDocType, selectedPrintPatient]);
+
   const commercialCasesFiltered = useMemo(() => {
     const q = commercialSearch.trim().toLowerCase();
     const base = [...commercialCases].sort(
@@ -1128,20 +1166,7 @@ function RecepcionContent() {
           ? "Comprobante de tratamiento"
           : "Comprobante de cita";
 
-    const recomendaciones =
-      docType === "tratamiento"
-        ? [
-            "Presentarse 10 minutos antes de la hora programada.",
-            "Traer documento de identidad.",
-            "Informar cualquier cambio de salud antes del procedimiento.",
-            "Si no puede asistir, avisar con anticipación para reprogramar.",
-          ]
-        : [
-            "Presentarse 10 minutos antes de la hora programada.",
-            "Traer documento de identidad.",
-            "Traer exámenes o soportes si aplica.",
-            "Si no puede asistir, avisar con anticipación para reprogramar.",
-          ];
+    const recomendaciones = getPrintRecommendations(tipo, selectedPrintPatient?.service_type);
 
     const bloqueServicio =
       docType === "tratamiento"
@@ -2571,6 +2596,55 @@ function RecepcionContent() {
                     Escribe un nombre o teléfono para buscar el cliente.
                   </div>
                 )}
+
+                <div className="rounded-2xl border border-slate-200 p-4">
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDocType("cita")}
+                      className={`rounded-2xl px-4 py-2 text-sm font-medium ${previewDocType === "cita" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                    >
+                      Vista previa cita
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDocType("tratamiento")}
+                      className={`rounded-2xl px-4 py-2 text-sm font-medium ${previewDocType === "tratamiento" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                    >
+                      Vista previa tratamiento
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewDocType("instrucciones")}
+                      className={`rounded-2xl px-4 py-2 text-sm font-medium ${previewDocType === "instrucciones" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
+                    >
+                      Vista previa instrucciones
+                    </button>
+                  </div>
+
+                  <div className="mt-4 rounded-2xl bg-slate-50 p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      {previewTitle}
+                    </p>
+                    <div className="mt-3 space-y-2 text-sm text-slate-700">
+                      <p><span className="font-medium text-slate-800">Paciente:</span> {selectedPrintPatient?.patient_name || "Paciente"}</p>
+                      <p><span className="font-medium text-slate-800">Teléfono:</span> {selectedPrintPatient?.phone || "Sin teléfono"}</p>
+                      <p><span className="font-medium text-slate-800">Ciudad:</span> {selectedPrintPatient?.city || "Sin ciudad"}</p>
+                      <p><span className="font-medium text-slate-800">Fecha y hora:</span> {selectedPrintPatient?.detail || "Sin detalle"}</p>
+                      <p><span className="font-medium text-slate-800">{previewDocType === "tratamiento" ? "Tratamiento" : "Servicio"}:</span> {selectedPrintPatient?.service_type || "Sin servicio"}</p>
+                      <p><span className="font-medium text-slate-800">Observaciones:</span> {selectedPrintPatient?.notes || "Sin notas registradas"}</p>
+                    </div>
+
+                    <div className="mt-4">
+                      <p className="text-sm font-semibold text-slate-800">Recomendaciones</p>
+                      <ul className="mt-2 space-y-1 text-sm text-slate-600">
+                        {previewRecommendations.map((item) => (
+                          <li key={item}>• {item}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </div>
 
                 <div className="grid gap-3 md:grid-cols-3">
                   <button
