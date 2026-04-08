@@ -206,6 +206,21 @@ const emptyCommercialDisqualifyingFlags = (): CommercialDisqualifyingFlags => ({
 
 const specialistValues = new Set(specialistOptions.map((item) => item.value));
 const treatmentValues = new Set(treatmentOptions.map((item) => item.value));
+const specialistPrintValues = new Set(["nutricion", "medico", "fisioterapia", "valoracion"]);
+const treatmentPrintValues = new Set(["detox", "sueroterapia"]);
+
+function getPrintDocumentType(serviceType: string | null | undefined) {
+  const value = (serviceType || "").trim().toLowerCase();
+  if (treatmentPrintValues.has(value)) return "tratamiento";
+  return "cita";
+}
+
+function getPrintTitle(serviceType: string | null | undefined) {
+  return getPrintDocumentType(serviceType) === "tratamiento"
+    ? "Comprobante de tratamiento"
+    : "Comprobante de cita";
+}
+
 
 function getSectionForService(serviceType: string | null | undefined): ReceptionSection {
   const value = (serviceType || "").trim().toLowerCase();
@@ -1093,7 +1108,7 @@ function RecepcionContent() {
     };
   }, [commercialCases]);
 
-  function imprimirDocumento(tipo: "cita" | "instrucciones") {
+  function imprimirDocumento(tipo: "cita" | "tratamiento" | "instrucciones") {
     if (typeof window === "undefined") return;
 
     const nombre = selectedPrintPatient?.patient_name || "Paciente";
@@ -1102,7 +1117,43 @@ function RecepcionContent() {
     const detalle = selectedPrintPatient?.detail || "Sin detalle";
     const servicio = selectedPrintPatient?.service_type || "Sin servicio";
     const notas = selectedPrintPatient?.notes || "Sin notas registradas";
-    const titulo = tipo === "cita" ? "Comprobante de cita" : "Instrucciones";
+    const docType =
+      tipo === "instrucciones"
+        ? "instrucciones"
+        : getPrintDocumentType(selectedPrintPatient?.service_type);
+    const titulo =
+      tipo === "instrucciones"
+        ? "Instrucciones"
+        : docType === "tratamiento"
+          ? "Comprobante de tratamiento"
+          : "Comprobante de cita";
+
+    const recomendaciones =
+      docType === "tratamiento"
+        ? [
+            "Presentarse 10 minutos antes de la hora programada.",
+            "Traer documento de identidad.",
+            "Informar cualquier cambio de salud antes del procedimiento.",
+            "Si no puede asistir, avisar con anticipación para reprogramar.",
+          ]
+        : [
+            "Presentarse 10 minutos antes de la hora programada.",
+            "Traer documento de identidad.",
+            "Traer exámenes o soportes si aplica.",
+            "Si no puede asistir, avisar con anticipación para reprogramar.",
+          ];
+
+    const bloqueServicio =
+      docType === "tratamiento"
+        ? `<p><strong>Tratamiento:</strong> ${servicio}</p>`
+        : `<p><strong>Servicio / especialista:</strong> ${servicio}</p>`;
+
+    const subtitulo =
+      docType === "tratamiento"
+        ? "Documento de apoyo para tratamientos programados"
+        : docType === "cita"
+          ? "Documento de apoyo para citas programadas"
+          : "Documento de apoyo para el paciente";
 
     const nuevaVentana = window.open("", "_blank", "width=900,height=700");
     if (!nuevaVentana) return;
@@ -1113,22 +1164,41 @@ function RecepcionContent() {
           <title>${titulo}</title>
           <style>
             body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
-            h1 { margin-bottom: 8px; }
+            h1 { margin: 0 0 6px 0; font-size: 28px; }
+            h2 { margin: 0; font-size: 14px; font-weight: 600; color: #475569; }
             .box { border: 1px solid #cbd5e1; border-radius: 16px; padding: 20px; margin-top: 20px; }
             .muted { color: #475569; margin: 6px 0; }
+            .section-title { margin: 0 0 12px 0; font-size: 16px; font-weight: 700; }
+            ul { padding-left: 20px; }
+            li { margin-bottom: 8px; }
+            .footer { margin-top: 28px; font-size: 13px; color: #475569; }
           </style>
         </head>
         <body>
-          <h1>${titulo}</h1>
-          <p class="muted">CRM Prevital · Recepción</p>
+          <h1>PREVITAL ANTIOQUIA S.A.S.</h1>
+          <h2>${titulo}</h2>
+          <p class="muted">${subtitulo}</p>
+
           <div class="box">
-            <p><strong>Cliente:</strong> ${nombre}</p>
+            <p><strong>Paciente:</strong> ${nombre}</p>
             <p><strong>Teléfono:</strong> ${telefono}</p>
             <p><strong>Ciudad:</strong> ${ciudad}</p>
-            <p><strong>Detalle:</strong> ${detalle}</p>
-            <p><strong>Servicio:</strong> ${servicio}</p>
-            <p><strong>Notas:</strong> ${notas}</p>
+            <p><strong>Fecha y hora:</strong> ${detalle}</p>
+            ${bloqueServicio}
+            <p><strong>Observaciones:</strong> ${notas}</p>
           </div>
+
+          <div class="box">
+            <p class="section-title">Recomendaciones</p>
+            <ul>
+              ${recomendaciones.map((item) => `<li>${item}</li>`).join("")}
+            </ul>
+          </div>
+
+          <p class="footer">
+            Dirección: Cra 43 A No. 1-71, Edificio Caja Social · Medellín, Antioquia<br/>
+            Teléfono / WhatsApp: 3337346644 · www.prevital.co
+          </p>
         </body>
       </html>
     `);
@@ -2457,7 +2527,7 @@ function RecepcionContent() {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Impresiones y entregas</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Busca un cliente para imprimir su cita, sus instrucciones o registrar la entrega de nutracéuticos.
+                    Busca un cliente para imprimir su cita, su tratamiento, sus instrucciones o registrar la entrega de nutracéuticos.
                   </p>
                 </div>
               </div>
@@ -2492,6 +2562,9 @@ function RecepcionContent() {
                     <p className="mt-1 text-sm text-slate-600">
                       Fuente: {selectedPrintPatient.source}
                     </p>
+                    <p className="mt-2 inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
+                      Documento sugerido: {getPrintTitle(selectedPrintPatient.service_type)}
+                    </p>
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
@@ -2499,13 +2572,21 @@ function RecepcionContent() {
                   </div>
                 )}
 
-                <div className="grid gap-3 md:grid-cols-2">
+                <div className="grid gap-3 md:grid-cols-3">
                   <button
                     type="button"
                     onClick={() => imprimirDocumento("cita")}
                     className="rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white"
                   >
                     Imprimir cita
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => imprimirDocumento("tratamiento")}
+                    className="rounded-2xl border border-slate-900 px-4 py-4 text-base font-semibold text-slate-900"
+                  >
+                    Imprimir tratamiento
                   </button>
 
                   <button
