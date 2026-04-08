@@ -1,0 +1,52 @@
+:root {
+  --prevital-bg: #f8f7f4;
+  --prevital-surface: #ffffff;
+  --prevital-surface-muted: #f3f5f1;
+  --prevital-brand: #5e8f6c;
+  --prevital-brand-dark: #4f6f5b;
+  --prevital-brand-soft: #eaf4ec;
+  --prevital-text: #334155;
+  --prevital-text-secondary: #64748b;
+  --prevital-border: #e5e7eb;
+  --prevital-shadow-card: 0 10px 30px rgba(79, 111, 91, 0.08);
+  --prevital-shadow-soft: 0 4px 18px rgba(15, 23, 42, 0.06);
+}
+
+body {
+  background: var(--prevital-bg);
+  color: var(--prevital-text);
+}
+
+.prevital-page {
+  min-height: 100%;
+  background: var(--prevital-bg);
+}
+
+.prevital-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.prevital-surface {
+  background: var(--prevital-surface);
+  border: 1px solid var(--prevital-border);
+  box-shadow: var(--prevital-shadow-card);
+  border-radius: 1.5rem;
+}
+
+.prevital-soft-surface {
+  background: var(--prevital-surface-muted);
+  border: 1px solid var(--prevital-border);
+  border-radius: 1rem;
+}
+
+.prevital-focus-ring:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 4px rgba(94, 143, 108, 0.18);
+}
+
+.prevital-scroll {
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
+}

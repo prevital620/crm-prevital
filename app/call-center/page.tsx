@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -95,25 +96,25 @@ function soloFecha(fecha: string | null | undefined) {
 function estadoBadge(estado: string | null) {
   switch (estado) {
     case "asignado":
-      return "bg-emerald-100 text-emerald-700";
+      return "border-[#CFE7D6] bg-[#EEF8F1] text-[#2F7A52]";
     case "nuevo":
-      return "bg-slate-100 text-slate-700";
+      return "border-slate-200 bg-slate-100 text-slate-700";
     case "pendiente_contacto":
-      return "bg-blue-100 text-blue-700";
+      return "border-[#D6E8DA] bg-[#EEF5F0] text-[#4F6F5B]";
     case "interesado":
-      return "bg-amber-100 text-amber-700";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "no_responde":
-      return "bg-orange-100 text-orange-700";
+      return "border-orange-200 bg-orange-50 text-orange-700";
     case "contactado":
-      return "bg-indigo-100 text-indigo-700";
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "agendado":
-      return "bg-emerald-100 text-emerald-700";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "dato_falso":
-      return "bg-rose-100 text-rose-700";
+      return "border-rose-200 bg-rose-50 text-rose-700";
     case "no_interesa":
-      return "bg-red-100 text-red-700";
+      return "border-red-200 bg-red-50 text-red-700";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "border-slate-200 bg-slate-100 text-slate-700";
   }
 }
 
@@ -162,6 +163,18 @@ function traducirOrigen(source: string | null) {
   if (!source) return "Sin origen";
   return map[source] || source;
 }
+
+const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
+  { key: "todos", label: "Todos" },
+  { key: "nuevos", label: "Nuevos" },
+  { key: "sin_asignar", label: "Sin asignar" },
+  { key: "asignados", label: "Asignados" },
+  { key: "pendientes", label: "Pendientes" },
+  { key: "pendientes_cita", label: "Pendientes de cita" },
+  { key: "agendados", label: "Agendados" },
+  { key: "no_asistio", label: "No asistió" },
+  { key: "cerrados", label: "Descartados" },
+];
 
 export default function CallCenterPage() {
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -643,8 +656,8 @@ export default function CallCenterPage() {
 
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-10">
-        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-10">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm text-slate-500">Validando acceso...</p>
         </div>
       </main>
@@ -653,8 +666,8 @@ export default function CallCenterPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-10">
-        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-10">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-red-700">
             {error || "No tienes permiso para entrar a este módulo."}
           </p>
@@ -664,14 +677,40 @@ export default function CallCenterPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6 md:p-10">
+    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-10">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[420px] w-[420px] opacity-[0.04] md:h-[560px] md:w-[560px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+
       <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
+
+        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm text-slate-500">Call Center</p>
-              <h1 className="text-3xl font-bold text-slate-900">Gestión de leads</h1>
-              <p className="mt-2 text-slate-600">
+              <p className="text-sm font-medium text-[#7FA287]">Call Center</p>
+              <h1 className="mt-1 text-3xl font-bold text-[#24312A]">Gestión de leads</h1>
+              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
                 {currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user"
                   ? "Puedes consultar, asignar, organizar por bloques, cancelar citas y actualizar el estado de los leads."
                   : currentRoleCode === "confirmador"
@@ -686,10 +725,19 @@ export default function CallCenterPage() {
           <div className="mt-4 flex flex-wrap gap-3">
             <a
               href="/"
-              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 text-center"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
             >
               Inicio
             </a>
+
+            {(currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user") && (
+              <a
+                href="/recepcion"
+                className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+              >
+                Configurar cupos
+              </a>
+            )}
           </div>
         </section>
 
@@ -700,7 +748,7 @@ export default function CallCenterPage() {
         ) : null}
 
         {mensaje ? (
-          <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
             {mensaje}
           </div>
         ) : null}
@@ -717,27 +765,17 @@ export default function CallCenterPage() {
           <StatCard title="Descartados" value={resumen.cerrados} active={quickFilter === "cerrados"} onClick={() => setQuickFilter("cerrados")} />
         </section>
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <div className="mb-4 flex flex-wrap gap-2">
-            {[
-              { key: "todos", label: "Todos" },
-              { key: "nuevos", label: "Nuevos" },
-              { key: "sin_asignar", label: "Sin asignar" },
-              { key: "asignados", label: "Asignados" },
-              { key: "pendientes", label: "Pendientes" },
-              { key: "pendientes_cita", label: "Pendientes de cita" },
-              { key: "agendados", label: "Agendados" },
-              { key: "no_asistio", label: "No asistió" },
-              { key: "cerrados", label: "Descartados" },
-            ].map((item) => (
+            {quickFilterButtons.map((item) => (
               <button
                 key={item.key}
                 type="button"
-                onClick={() => setQuickFilter(item.key as QuickFilter)}
-                className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                onClick={() => setQuickFilter(item.key)}
+                className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
                   quickFilter === item.key
-                    ? "bg-slate-900 text-white"
-                    : "border border-slate-300 text-slate-700"
+                    ? "bg-[#5F7D66] text-white shadow-sm"
+                    : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"
                 }`}
               >
                 {item.label}
@@ -747,7 +785,7 @@ export default function CallCenterPage() {
 
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_1fr]">
             <input
-              className="w-full rounded-2xl border border-slate-300 p-4 outline-none"
+              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
               type="date"
               value={fechaFiltro}
               onChange={(e) => setFechaFiltro(e.target.value)}
@@ -756,7 +794,7 @@ export default function CallCenterPage() {
             <button
               type="button"
               onClick={() => setFechaFiltro(hoyISO())}
-              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
               Hoy
             </button>
@@ -764,13 +802,13 @@ export default function CallCenterPage() {
             <button
               type="button"
               onClick={() => setFechaFiltro("")}
-              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
+              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
               Todos
             </button>
 
             <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className="rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
               placeholder="Buscar por teléfono, nombre, creador o asignado"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
@@ -778,9 +816,13 @@ export default function CallCenterPage() {
           </div>
 
           {cargando ? (
-            <p className="mt-6 text-slate-600">Cargando leads...</p>
+            <div className="mt-6 rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+              Cargando leads...
+            </div>
           ) : leadsFiltrados.length === 0 ? (
-            <p className="mt-6 text-slate-600">No hay leads para ese día o filtro.</p>
+            <div className="mt-6 rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+              No hay leads para ese día o filtro.
+            </div>
           ) : (
             <div className="mt-6 space-y-4">
               {leadsFiltrados.map((lead) => {
@@ -806,80 +848,67 @@ export default function CallCenterPage() {
                 return (
                   <div
                     key={lead.id}
-                    className="rounded-2xl border border-slate-200 p-4"
+                    className="group rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md"
                   >
                     <div className="flex flex-col gap-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-900">
+                            <h3 className="text-lg font-semibold text-[#24312A]">
                               {nombre}
                             </h3>
 
                             <span
-                              className={`rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${estadoBadge(
                                 estadoVisible
                               )}`}
                             >
                               {traducirEstado(estadoVisible)}
                             </span>
 
-                            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                            <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-600">
                               {soloFecha(lead.created_at)}
                             </span>
                           </div>
 
-                          <p className="mt-2 text-sm text-slate-600">
-                            {lead.phone || "Sin teléfono"} · {lead.city || "Sin ciudad"}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-600">
-                            Servicio: {traducirServicio(lead.interest_service)}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-600">
-                            Origen: {traducirOrigen(lead.source)}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-600">
-                            Captación: {lead.capture_location || "No registrado"}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-600">
-                            Creado por: {creatorNames[lead.created_by_user_id || ""] || "Sin nombre"}
-                          </p>
-
-                          <p className="mt-1 text-sm text-slate-700">
-                            <span className="font-medium">Asignado a:</span>{" "}
-                            {obtenerNombreAsignado(lead)}
-                          </p>
-
-                          {activeAppointment ? (
-                            <p className="mt-1 text-sm text-slate-700">
-                              <span className="font-medium">Cita activa:</span>{" "}
-                              {activeAppointment.appointment_date} · {activeAppointment.appointment_time}
+                          <div className="mt-3 grid gap-1 text-sm text-slate-600">
+                            <p>{lead.phone || "Sin teléfono"} · {lead.city || "Sin ciudad"}</p>
+                            <p>Servicio: {traducirServicio(lead.interest_service)}</p>
+                            <p>Origen: {traducirOrigen(lead.source)}</p>
+                            <p>Captación: {lead.capture_location || "No registrado"}</p>
+                            <p>Creado por: {creatorNames[lead.created_by_user_id || ""] || "Sin nombre"}</p>
+                            <p className="text-[#4F6F5B]">
+                              <span className="font-medium">Asignado a:</span>{" "}
+                              {obtenerNombreAsignado(lead)}
                             </p>
-                          ) : null}
+
+                            {activeAppointment ? (
+                              <p className="text-[#4F6F5B]">
+                                <span className="font-medium">Cita activa:</span>{" "}
+                                {activeAppointment.appointment_date} · {activeAppointment.appointment_time}
+                              </p>
+                            ) : null}
+                          </div>
 
                           {lead.observations ? (
-                            <p className="mt-2 text-sm text-slate-600">
-                              <span className="font-medium text-slate-800">Observaciones:</span>{" "}
+                            <div className="mt-3 rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-3 text-sm text-slate-600">
+                              <span className="font-medium text-[#24312A]">Observaciones:</span>{" "}
                               {lead.observations}
-                            </p>
+                            </div>
                           ) : null}
                         </div>
 
                         <div className="flex flex-wrap gap-2">
                           <a
                             href={`/leads/${lead.id}`}
-                            className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 text-center"
+                            className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
                           >
                             Ver / editar
                           </a>
 
                           <a
                             href={`/recepcion?leadId=${lead.id}`}
-                            className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 text-center"
+                            className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
                           >
                             {hasActiveAppointment ? "Reagendar cita" : "Agendar cita"}
                           </a>
@@ -889,7 +918,7 @@ export default function CallCenterPage() {
                               type="button"
                               onClick={() => cancelarCita(lead, activeAppointment)}
                               disabled={cancelingAppointmentId === activeAppointment.id}
-                              className="rounded-2xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 disabled:opacity-60"
+                              className="rounded-2xl border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:opacity-60"
                             >
                               {cancelingAppointmentId === activeAppointment.id
                                 ? "Cancelando..."
@@ -900,14 +929,14 @@ export default function CallCenterPage() {
                       </div>
 
                       {canAssign ? (
-                        <div className="rounded-2xl bg-slate-50 p-4">
-                          <p className="mb-3 text-sm font-medium text-slate-700">
+                        <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
+                          <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
                             Asignación Call Center
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
                             <select
-                              className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
+                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
                               value={selectedAssignments[lead.id] || ""}
                               onChange={(e) =>
                                 setSelectedAssignments((prev) => ({
@@ -928,7 +957,7 @@ export default function CallCenterPage() {
                               type="button"
                               onClick={() => guardarAsignacion(lead.id)}
                               disabled={savingLeadId === lead.id}
-                              className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white disabled:opacity-60"
+                              className="rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
                             >
                               {savingLeadId === lead.id
                                 ? "Guardando..."
@@ -939,14 +968,14 @@ export default function CallCenterPage() {
                       ) : null}
 
                       {canChangeStatus ? (
-                        <div className="rounded-2xl bg-slate-50 p-4">
-                          <p className="mb-3 text-sm font-medium text-slate-700">
+                        <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
+                          <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
                             Estado del lead en Call Center
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
                             <select
-                              className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
+                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
                               value={selectedStatuses[lead.id] || lead.status || "nuevo"}
                               onChange={(e) =>
                                 setSelectedStatuses((prev) => ({
@@ -966,7 +995,7 @@ export default function CallCenterPage() {
                               type="button"
                               onClick={() => guardarEstado(lead.id)}
                               disabled={savingStatusLeadId === lead.id}
-                              className="rounded-2xl border border-slate-900 px-5 py-3 text-sm font-medium text-slate-900 disabled:opacity-60"
+                              className="rounded-2xl border border-[#5F7D66] bg-white px-5 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
                             >
                               {savingStatusLeadId === lead.id
                                 ? "Guardando..."
@@ -1002,12 +1031,15 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-3xl bg-white p-5 text-left shadow-sm transition ${
-        active ? "ring-2 ring-slate-900" : ""
+      className={`group overflow-hidden rounded-3xl border bg-white p-5 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md ${
+        active
+          ? "border-[#7FA287] ring-2 ring-[#DDECE1]"
+          : "border-[#D6E8DA] hover:border-[#BCD7C2]"
       }`}
     >
-      <p className="text-sm text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+      <p className="text-sm font-medium text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold text-[#24312A]">{value}</p>
     </button>
   );
 }

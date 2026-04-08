@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -96,45 +97,45 @@ function soloFecha(fecha: string | null | undefined) {
 function estadoBadge(estado: string | null) {
   switch (estado) {
     case "nuevo":
-      return "bg-slate-100 text-slate-700";
+      return "border-slate-200 bg-slate-100 text-slate-700";
     case "pendiente_contacto":
-      return "bg-blue-100 text-blue-700";
+      return "border-blue-200 bg-blue-50 text-blue-700";
     case "interesado":
-      return "bg-amber-100 text-amber-700";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "no_responde":
-      return "bg-orange-100 text-orange-700";
+      return "border-orange-200 bg-orange-50 text-orange-700";
     case "contactado":
-      return "bg-indigo-100 text-indigo-700";
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "reagendar":
-      return "bg-cyan-100 text-cyan-700";
+      return "border-cyan-200 bg-cyan-50 text-cyan-700";
     case "agendado":
-      return "bg-emerald-100 text-emerald-700";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "asistio":
-      return "bg-teal-100 text-teal-700";
+      return "border-teal-200 bg-teal-50 text-teal-700";
     case "no_asistio":
-      return "bg-rose-100 text-rose-700";
+      return "border-rose-200 bg-rose-50 text-rose-700";
     case "vendido":
-      return "bg-green-100 text-green-700";
+      return "border-green-200 bg-green-50 text-green-700";
     case "cerrado":
-      return "bg-slate-200 text-slate-800";
+      return "border-slate-300 bg-slate-200 text-slate-800";
     case "descartado":
-      return "bg-red-100 text-red-700";
+      return "border-red-200 bg-red-50 text-red-700";
     case "agendada":
-      return "bg-emerald-100 text-emerald-700";
+      return "border-emerald-200 bg-emerald-50 text-emerald-700";
     case "confirmada":
-      return "bg-blue-100 text-blue-700";
+      return "border-blue-200 bg-blue-50 text-blue-700";
     case "en_espera":
-      return "bg-amber-100 text-amber-700";
+      return "border-amber-200 bg-amber-50 text-amber-700";
     case "reagendada":
-      return "bg-cyan-100 text-cyan-700";
+      return "border-cyan-200 bg-cyan-50 text-cyan-700";
     case "en_atencion":
-      return "bg-indigo-100 text-indigo-700";
+      return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "cancelada":
-      return "bg-red-100 text-red-700";
+      return "border-red-200 bg-red-50 text-red-700";
     case "finalizada":
-      return "bg-slate-200 text-slate-800";
+      return "border-slate-300 bg-slate-200 text-slate-800";
     default:
-      return "bg-slate-100 text-slate-700";
+      return "border-slate-200 bg-slate-100 text-slate-700";
   }
 }
 
@@ -280,7 +281,6 @@ export default function LeadsPage() {
       setLoading(false);
     }
   }
-
 
   async function eliminarLead(lead: LeadRow) {
     if (!isSuperUser) return;
@@ -588,8 +588,8 @@ export default function LeadsPage() {
 
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm text-slate-500">Validando acceso...</p>
         </div>
       </main>
@@ -598,8 +598,8 @@ export default function LeadsPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-[#F3D3D6] bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-red-700">
             {error || "No tienes permiso para entrar a este módulo."}
           </p>
@@ -609,24 +609,51 @@ export default function LeadsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl">
-        <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
+    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[420px] w-[420px] opacity-[0.04] md:h-[560px] md:w-[560px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+
+      <div className="relative mx-auto max-w-7xl space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
+
+        <section className="rounded-[28px] border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">Leads</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">
+              <p className="text-sm font-medium text-[#7FA287]">Leads</p>
+              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">
                 Gestión de leads
               </h1>
+              <p className="mt-3 max-w-2xl text-sm text-slate-500">
+                Consulta, filtra y administra los leads visibles según el rol autenticado.
+              </p>
             </div>
 
             <SessionBadge />
           </div>
 
-          <div className="mt-4 flex flex-wrap gap-3">
+          <div className="mt-5 flex flex-wrap gap-3">
             <a
               href="/"
-              className="inline-flex rounded-2xl border border-slate-300 px-5 py-3 text-sm font-medium text-slate-700"
+              className="inline-flex items-center rounded-2xl border border-[#D6E8DA] bg-white px-5 py-3 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
             >
               Inicio
             </a>
@@ -638,7 +665,7 @@ export default function LeadsPage() {
               roleCode === "tmk") && (
               <a
                 href="/leads/nuevo"
-                className="inline-flex rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium !text-white"
+                className="inline-flex items-center rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-[#4F6F5B]"
               >
                 Nuevo lead
               </a>
@@ -647,19 +674,19 @@ export default function LeadsPage() {
         </section>
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         ) : null}
 
         {successMessage ? (
-          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
             {successMessage}
           </div>
         ) : null}
 
         {showSupervisorOpcTools ? (
-          <section className="mb-6 grid gap-4 md:grid-cols-3 xl:grid-cols-6">
+          <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
             <StatCard title="Nuevos" value={resumen.nuevos} active={quickFilter === "nuevos"} onClick={() => setQuickFilter("nuevos")} />
             <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
@@ -671,10 +698,10 @@ export default function LeadsPage() {
 
         {showSupervisorOpcTools ? (
           <section className="grid gap-6 xl:grid-cols-2">
-            <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <section className="rounded-[28px] border border-[#D6E8DA] bg-white p-6 shadow-sm">
               <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">
+                  <h2 className="text-2xl font-bold tracking-tight text-[#24312A]">
                     Leads visibles para tu rol
                   </h2>
                   <p className="mt-1 text-sm text-slate-500">
@@ -684,7 +711,7 @@ export default function LeadsPage() {
 
                 <button
                   onClick={cargarLeads}
-                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                  className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
                 >
                   Actualizar
                 </button>
@@ -704,10 +731,10 @@ export default function LeadsPage() {
                     key={item.key}
                     type="button"
                     onClick={() => setQuickFilter(item.key as QuickFilter)}
-                    className={`rounded-2xl px-4 py-2 text-sm font-medium ${
+                    className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
                       quickFilter === item.key
-                        ? "bg-slate-900 text-white"
-                        : "border border-slate-300 text-slate-700"
+                        ? "bg-[#5F7D66] text-white shadow-sm"
+                        : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"
                     }`}
                   >
                     {item.label}
@@ -717,14 +744,14 @@ export default function LeadsPage() {
 
               <div className="mb-6 grid gap-3">
                 <input
-                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
                   type="date"
                   value={dateFilter}
                   onChange={(e) => setDateFilter(e.target.value)}
                 />
 
                 <input
-                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
                   type="text"
                   placeholder="Buscar por nombre, teléfono u OPC"
                   value={search}
@@ -733,30 +760,33 @@ export default function LeadsPage() {
               </div>
 
               {loading ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                   Cargando leads...
                 </div>
               ) : leadsFiltrados.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                   No hay leads visibles con esos filtros.
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {leadsFiltrados.map((lead) => {
                     const estadoVisible = getVisibleStatus(lead);
 
                     return (
-                      <div key={lead.id} className="rounded-2xl border border-slate-200 p-4">
+                      <div
+                        key={lead.id}
+                        className="group rounded-3xl border border-[#D6E8DA] bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md"
+                      >
                         <div className="flex flex-col gap-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-900">
+                            <h3 className="text-lg font-semibold text-[#24312A] transition group-hover:text-[#4F6F5B]">
                               {lead.full_name?.trim() ||
                                 `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
                                 "Sin nombre"}
                             </h3>
 
                             <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${estadoBadge(
                                 estadoVisible
                               )}`}
                             >
@@ -768,21 +798,12 @@ export default function LeadsPage() {
                             {lead.phone} · {lead.city || "Sin ciudad"}
                           </p>
 
-                          <p className="text-sm text-slate-700">
-                            Servicio: {translateService(lead.interest_service)}
-                          </p>
-
-                          <p className="text-sm text-slate-700">
-                            Origen: {translateSource(lead.source)}
-                          </p>
-
-                          <p className="text-sm text-slate-700">
-                            Captación: {lead.capture_location || "Sin lugar"}
-                          </p>
-
-                          <p className="text-sm text-slate-700">
-                            OPC: {getCreatorName(lead.created_by_user_id)}
-                          </p>
+                          <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+                            <p>Servicio: {translateService(lead.interest_service)}</p>
+                            <p>Origen: {translateSource(lead.source)}</p>
+                            <p>Captación: {lead.capture_location || "Sin lugar"}</p>
+                            <p>OPC: {getCreatorName(lead.created_by_user_id)}</p>
+                          </div>
 
                           <p className="text-sm text-slate-500">
                             Creado: {formatDate(lead.created_at)}
@@ -791,7 +812,7 @@ export default function LeadsPage() {
                           <div className="flex flex-wrap gap-2">
                             <a
                               href={`/leads/${lead.id}`}
-                              className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                              className="inline-flex rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#4F6F5B]"
                             >
                               Ver / editar
                             </a>
@@ -801,7 +822,7 @@ export default function LeadsPage() {
                                 type="button"
                                 onClick={() => eliminarLead(lead)}
                                 disabled={deletingLeadId === lead.id}
-                                className="inline-flex rounded-xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex rounded-2xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                               >
                                 {deletingLeadId === lead.id ? "Borrando..." : "Eliminar"}
                               </button>
@@ -815,9 +836,9 @@ export default function LeadsPage() {
               )}
             </section>
 
-            <section className="rounded-3xl bg-white p-6 shadow-sm">
+            <section className="rounded-[28px] border border-[#D6E8DA] bg-white p-6 shadow-sm">
               <div className="mb-5">
-                <h2 className="text-2xl font-bold text-slate-900">
+                <h2 className="text-2xl font-bold tracking-tight text-[#24312A]">
                   Citas agendadas del equipo
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -827,14 +848,14 @@ export default function LeadsPage() {
 
               <div className="mb-6 grid gap-3">
                 <input
-                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
                   type="date"
                   value={appointmentsDateFilter}
                   onChange={(e) => setAppointmentsDateFilter(e.target.value)}
                 />
 
                 <input
-                  className="rounded-2xl border border-slate-300 p-4 outline-none"
+                  className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
                   type="text"
                   placeholder="Buscar por nombre o teléfono"
                   value={appointmentsSearch}
@@ -843,28 +864,31 @@ export default function LeadsPage() {
               </div>
 
               {loading ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                   Cargando citas...
                 </div>
               ) : citasFiltradas.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                   No hay citas del equipo con esos filtros.
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div className="space-y-3">
                   {citasFiltradas.map((appointment) => {
                     const leadRelacionado = leads.find((lead) => lead.id === appointment.lead_id);
 
                     return (
-                      <div key={appointment.id} className="rounded-2xl border border-slate-200 p-4">
+                      <div
+                        key={appointment.id}
+                        className="group rounded-3xl border border-[#D6E8DA] bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md"
+                      >
                         <div className="flex flex-col gap-3">
                           <div className="flex flex-wrap items-center gap-2">
-                            <h3 className="text-lg font-semibold text-slate-900">
+                            <h3 className="text-lg font-semibold text-[#24312A] transition group-hover:text-[#4F6F5B]">
                               {appointment.patient_name || "Sin nombre"}
                             </h3>
 
                             <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${estadoBadge(
                                 appointment.status
                               )}`}
                             >
@@ -876,26 +900,24 @@ export default function LeadsPage() {
                             {appointment.phone || "Sin teléfono"} · {appointment.city || "Sin ciudad"}
                           </p>
 
-                          <p className="text-sm text-slate-700">
-                            Servicio: {translateService(appointment.service_type)}
-                          </p>
-
-                          <p className="text-sm text-slate-700">
-                            Fecha: {appointment.appointment_date} · Hora: {appointment.appointment_time?.slice(0, 5)}
-                          </p>
-
-                          <p className="text-sm text-slate-700">
-                            OPC:{" "}
-                            {leadRelacionado
-                              ? getCreatorName(leadRelacionado.created_by_user_id)
-                              : "Sin OPC"}
-                          </p>
+                          <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
+                            <p>Servicio: {translateService(appointment.service_type)}</p>
+                            <p>
+                              Fecha: {appointment.appointment_date} · Hora: {appointment.appointment_time?.slice(0, 5)}
+                            </p>
+                            <p className="md:col-span-2">
+                              OPC:{" "}
+                              {leadRelacionado
+                                ? getCreatorName(leadRelacionado.created_by_user_id)
+                                : "Sin OPC"}
+                            </p>
+                          </div>
 
                           {leadRelacionado ? (
                             <div>
                               <a
                                 href={`/leads/${leadRelacionado.id}`}
-                                className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                                className="inline-flex rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#4F6F5B]"
                               >
                                 Ver lead
                               </a>
@@ -910,10 +932,10 @@ export default function LeadsPage() {
             </section>
           </section>
         ) : (
-          <section className="rounded-3xl bg-white p-6 shadow-sm">
+          <section className="rounded-[28px] border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">
+                <h2 className="text-2xl font-bold tracking-tight text-[#24312A]">
                   Leads visibles para tu rol
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -925,7 +947,7 @@ export default function LeadsPage() {
 
               <button
                 onClick={cargarLeads}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
               >
                 Actualizar
               </button>
@@ -933,14 +955,14 @@ export default function LeadsPage() {
 
             <div className="mb-6 grid gap-3 md:grid-cols-2">
               <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
                 type="date"
                 value={dateFilter}
                 onChange={(e) => setDateFilter(e.target.value)}
               />
 
               <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
                 type="text"
                 placeholder={
                   showCreatorColumn
@@ -953,18 +975,18 @@ export default function LeadsPage() {
             </div>
 
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+              <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                 Cargando leads...
               </div>
             ) : leadsFiltrados.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+              <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                 No hay leads visibles con esos filtros.
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto rounded-[24px] border border-[#E3ECE5] bg-[#FCFDFC] p-3">
                 <table className="min-w-full border-separate border-spacing-y-3">
                   <thead>
-                    <tr className="text-left text-sm text-slate-500">
+                    <tr className="text-left text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
                       <th className="px-4">Nombre</th>
                       <th className="px-4">Teléfono</th>
                       <th className="px-4">Ciudad</th>
@@ -982,8 +1004,11 @@ export default function LeadsPage() {
                       const estadoVisible = getVisibleStatus(lead);
 
                       return (
-                        <tr key={lead.id} className="rounded-2xl bg-slate-50">
-                          <td className="rounded-l-2xl px-4 py-4 font-semibold text-slate-900">
+                        <tr
+                          key={lead.id}
+                          className="rounded-3xl border border-[#D6E8DA] bg-white shadow-sm"
+                        >
+                          <td className="rounded-l-3xl px-4 py-4 font-semibold text-[#24312A]">
                             {lead.full_name?.trim() ||
                               `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
                               "Sin nombre"}
@@ -1017,7 +1042,7 @@ export default function LeadsPage() {
 
                           <td className="px-4 py-4 text-sm">
                             <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-medium ${estadoBadge(
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${estadoBadge(
                                 estadoVisible
                               )}`}
                             >
@@ -1029,11 +1054,11 @@ export default function LeadsPage() {
                             {formatDate(lead.created_at)}
                           </td>
 
-                          <td className="rounded-r-2xl px-4 py-4">
+                          <td className="rounded-r-3xl px-4 py-4">
                             <div className="flex flex-wrap gap-2">
                               <a
                                 href={`/leads/${lead.id}`}
-                                className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium !text-white"
+                                className="inline-flex rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#4F6F5B]"
                               >
                                 Ver / editar
                               </a>
@@ -1043,7 +1068,7 @@ export default function LeadsPage() {
                                   type="button"
                                   onClick={() => eliminarLead(lead)}
                                   disabled={deletingLeadId === lead.id}
-                                  className="inline-flex rounded-xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+                                  className="inline-flex rounded-2xl border border-red-300 px-4 py-2 text-sm font-medium text-red-700 transition hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
                                 >
                                   {deletingLeadId === lead.id ? "Borrando..." : "Eliminar"}
                                 </button>
@@ -1079,12 +1104,17 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-3xl bg-white p-5 text-left shadow-sm transition ${
-        active ? "ring-2 ring-slate-900" : ""
+      className={`group overflow-hidden rounded-3xl border bg-white p-0 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md ${
+        active ? "border-[#7FA287] ring-2 ring-[#A8CDBD]/40" : "border-[#D6E8DA]"
       }`}
     >
-      <p className="text-sm text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+      <div className="h-1 w-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+      <div className="p-5">
+        <p className="text-sm font-medium text-slate-500">{title}</p>
+        <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">
+          {value}
+        </p>
+      </div>
     </button>
   );
 }

@@ -1,5 +1,7 @@
+
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -195,9 +197,9 @@ export default function NuevoLeadPage() {
 
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-slate-100 pb-10">
-        <div className="mx-auto w-full max-w-3xl px-4 pt-4 sm:px-6 sm:pt-6">
-          <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
+      <main className="min-h-screen bg-[#F8F7F4] pb-10">
+        <div className="mx-auto w-full max-w-4xl px-4 pt-4 sm:px-6 sm:pt-6">
+          <section className="rounded-[28px] border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <p className="text-sm text-slate-500">Validando acceso...</p>
           </section>
         </div>
@@ -207,9 +209,9 @@ export default function NuevoLeadPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-slate-100 pb-10">
-        <div className="mx-auto w-full max-w-3xl px-4 pt-4 sm:px-6 sm:pt-6">
-          <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
+      <main className="min-h-screen bg-[#F8F7F4] pb-10">
+        <div className="mx-auto w-full max-w-4xl px-4 pt-4 sm:px-6 sm:pt-6">
+          <section className="rounded-[28px] border border-[#F2C9C9] bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-red-700">
               {error || "No tienes permiso para entrar a este módulo."}
             </p>
@@ -220,18 +222,44 @@ export default function NuevoLeadPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 pb-10">
-      <div className="mx-auto w-full max-w-3xl px-4 pt-4 sm:px-6 sm:pt-6">
-        <section className="mb-4 rounded-3xl bg-white p-5 shadow-sm sm:mb-6 sm:p-6">
+    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] pb-10">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[380px] w-[380px] opacity-[0.045] md:h-[520px] md:w-[520px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+
+      <div className="mx-auto w-full max-w-4xl px-4 pt-4 sm:px-6 sm:pt-6">
+        <div className="mb-4 flex items-center gap-3">
+          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
+
+        <section className="relative mb-4 overflow-hidden rounded-[28px] border border-[#D6E8DA] bg-white p-5 shadow-sm sm:mb-6 sm:p-6">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+
           <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7FA287]">
                 Leads
               </p>
-              <h1 className="mt-2 text-2xl font-bold text-slate-900 sm:text-3xl">
+              <h1 className="mt-2 text-2xl font-bold text-[#24312A] sm:text-3xl">
                 Nuevo lead
               </h1>
-              <p className="mt-2 text-sm leading-6 text-slate-600">
+              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
                 Formulario rápido para captación en punto, calle, evento o visita.
               </p>
             </div>
@@ -239,14 +267,14 @@ export default function NuevoLeadPage() {
             <div className="flex flex-wrap gap-3">
               <a
                 href="/"
-                className="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700"
+                className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
               >
                 Inicio
               </a>
 
               <a
                 href="/leads"
-                className="inline-flex items-center justify-center rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white"
+                className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
               >
                 Consultar leads
               </a>
@@ -254,13 +282,15 @@ export default function NuevoLeadPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white p-5 shadow-sm sm:p-6">
-          <form onSubmit={crearLead} className="space-y-5">
-            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+        <section className="relative rounded-[28px] border border-[#D6E8DA] bg-white p-5 shadow-sm sm:p-6">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+
+          <form onSubmit={crearLead} className="space-y-6">
+            <div className="rounded-3xl border border-[#D6E8DA] bg-[#F8F7F4] p-4">
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7FA287]">
                 Captado por
               </p>
-              <p className="mt-1 text-base font-semibold text-slate-900">
+              <p className="mt-1 text-base font-semibold text-[#24312A]">
                 {currentUserName}
               </p>
               {(currentRoleCode === "tmk" || currentRoleCode === "confirmador") && (
@@ -269,6 +299,11 @@ export default function NuevoLeadPage() {
                 </p>
               )}
             </div>
+
+            <SectionTitle
+              title="Datos principales"
+              description="Registra la información básica del lead."
+            />
 
             <div className="grid gap-4 sm:grid-cols-2">
               <Field
@@ -332,6 +367,20 @@ export default function NuevoLeadPage() {
               />
 
               <Field
+                label="Ciudad"
+                input={
+                  <input
+                    className={inputClass}
+                    placeholder="Ej: Medellín"
+                    value={form.city}
+                    onChange={(e) =>
+                      setForm({ ...form, city: e.target.value })
+                    }
+                  />
+                }
+              />
+
+              <Field
                 label="Estado civil"
                 input={
                   <select
@@ -350,21 +399,14 @@ export default function NuevoLeadPage() {
                   </select>
                 }
               />
+            </div>
 
-              <Field
-                label="Ciudad"
-                input={
-                  <input
-                    className={inputClass}
-                    placeholder="Ej: Medellín"
-                    value={form.city}
-                    onChange={(e) =>
-                      setForm({ ...form, city: e.target.value })
-                    }
-                  />
-                }
-              />
+            <SectionTitle
+              title="Información de afiliación y origen"
+              description="Completa los datos para clasificación y seguimiento."
+            />
 
+            <div className="grid gap-4 sm:grid-cols-2">
               <Field
                 label="¿Tiene EPS?"
                 input={
@@ -415,26 +457,6 @@ export default function NuevoLeadPage() {
               />
 
               <Field
-                label="Servicio de interés"
-                input={
-                  <select
-                    className={inputClass}
-                    value={form.interest_service}
-                    onChange={(e) =>
-                      setForm({ ...form, interest_service: e.target.value })
-                    }
-                  >
-                    <option value="">Selecciona</option>
-                    {interestServiceOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                }
-              />
-
-              <Field
                 label="Origen del lead"
                 input={
                   <select
@@ -453,7 +475,32 @@ export default function NuevoLeadPage() {
                   </select>
                 }
               />
+
+              <Field
+                label="Servicio de interés"
+                input={
+                  <select
+                    className={inputClass}
+                    value={form.interest_service}
+                    onChange={(e) =>
+                      setForm({ ...form, interest_service: e.target.value })
+                    }
+                  >
+                    <option value="">Selecciona</option>
+                    {interestServiceOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                }
+              />
             </div>
+
+            <SectionTitle
+              title="Observaciones"
+              description="Agrega notas útiles para el seguimiento posterior."
+            />
 
             <Field
               label="Observaciones"
@@ -469,16 +516,25 @@ export default function NuevoLeadPage() {
               }
             />
 
-            <button
-              type="submit"
-              disabled={loading}
-              className="w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white disabled:opacity-60"
-            >
-              {loading ? "Guardando lead..." : "Guardar lead"}
-            </button>
+            <div className="flex flex-col gap-3 pt-2 sm:flex-row">
+              <button
+                type="submit"
+                disabled={loading}
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-[#5F7D66] px-5 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[220px]"
+              >
+                {loading ? "Guardando lead..." : "Guardar lead"}
+              </button>
+
+              <a
+                href="/leads"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-5 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] sm:w-auto"
+              >
+                Cancelar / volver
+              </a>
+            </div>
 
             {mensaje ? (
-              <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
                 {mensaje}
               </div>
             ) : null}
@@ -492,6 +548,21 @@ export default function NuevoLeadPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function SectionTitle({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <h2 className="text-lg font-semibold text-[#24312A]">{title}</h2>
+      <p className="mt-1 text-sm text-slate-500">{description}</p>
+    </div>
   );
 }
 
@@ -515,4 +586,4 @@ function Field({
 }
 
 const inputClass =
-  "w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-slate-500";
+  "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-[#24312A] outline-none transition placeholder:text-slate-400 focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
