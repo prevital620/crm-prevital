@@ -206,8 +206,8 @@ const emptyCommercialDisqualifyingFlags = (): CommercialDisqualifyingFlags => ({
 
 const specialistValues = new Set(specialistOptions.map((item) => item.value));
 const treatmentValues = new Set(treatmentOptions.map((item) => item.value));
-const specialistPrintValues = new Set(["nutricion", "medico", "fisioterapia", "valoracion"]);
-const treatmentPrintValues = new Set(["detox", "sueroterapia"]);
+const treatmentPrintValues = new Set(["detox", "sueroterapia", "fisioterapia"]);
+const specialistPrintValues = new Set(["nutricion", "medico", "valoracion"]);
 
 function getPrintDocumentType(serviceType: string | null | undefined) {
   const value = (serviceType || "").trim().toLowerCase();
@@ -215,20 +215,16 @@ function getPrintDocumentType(serviceType: string | null | undefined) {
   return "cita";
 }
 
-function getPrintTitle(serviceType: string | null | undefined) {
-  return getPrintDocumentType(serviceType) === "tratamiento"
-    ? "Comprobante de tratamiento"
-    : "Comprobante de cita";
+function getPrintTitleByType(tipo: "cita" | "tratamiento" | "instrucciones") {
+  if (tipo === "tratamiento") return "Comprobante de tratamiento";
+  if (tipo === "instrucciones") return "Instrucciones";
+  return "Comprobante de cita";
 }
 
 function getPrintRecommendations(
-  tipo: "cita" | "tratamiento" | "instrucciones",
-  serviceType: string | null | undefined
+  tipo: "cita" | "tratamiento" | "instrucciones"
 ) {
-  const docType =
-    tipo === "instrucciones" ? "instrucciones" : getPrintDocumentType(serviceType);
-
-  if (docType === "tratamiento") {
+  if (tipo === "tratamiento") {
     return [
       "Presentarse 10 minutos antes de la hora programada.",
       "Traer documento de identidad.",
@@ -290,15 +286,22 @@ const manualSourceOptions = [
 
 const SLOT_OPTIONS: SlotOption[] = [
   { value: "08:00", label: "8:00 a. m." },
+  { value: "08:30", label: "8:30 a. m." },
   { value: "09:00", label: "9:00 a. m." },
+  { value: "09:30", label: "9:30 a. m." },
   { value: "10:00", label: "10:00 a. m." },
+  { value: "10:30", label: "10:30 a. m." },
   { value: "11:00", label: "11:00 a. m." },
-  { value: "12:00", label: "12:00 m." },
+  { value: "11:30", label: "11:30 a. m." },
+  { value: "13:00", label: "1:00 p. m." },
   { value: "13:30", label: "1:30 p. m." },
+  { value: "14:00", label: "2:00 p. m." },
   { value: "14:30", label: "2:30 p. m." },
+  { value: "15:00", label: "3:00 p. m." },
   { value: "15:30", label: "3:30 p. m." },
+  { value: "16:00", label: "4:00 p. m." },
   { value: "16:30", label: "4:30 p. m." },
-  { value: "17:30", label: "5:30 p. m." },
+  { value: "17:00", label: "5:00 p. m." },
 ];
 
 const ACTIVE_APPOINTMENT_STATUSES = [
@@ -311,6 +314,8 @@ const ACTIVE_APPOINTMENT_STATUSES = [
 
 const DEFAULT_SLOT_CAPACITY = 6;
 const DEFAULT_DAILY_CAPACITY = 60;
+const SPECIALIST_SINGLE_CAPACITY = 1;
+const TREATMENT_DOUBLE_CAPACITY = 2;
 
 function hoyISO() {
   const hoy = new Date();
@@ -371,6 +376,171 @@ function construirNotasConFuente(notes: string, manualSource: string) {
   return `Fuente: ${sourceLabel}\n${cleanNotes}`;
 }
 
+function limpiarMetadatosAgenda(notes: string | null | undefined) {
+  if (!notes) return "";
+  return notes
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !/^Fuente:\s*/i.test(trimmed) && !/^Duración:\s*/i.test(trimmed);
+    })
+    .join("\n")
+    .trim();
+}
+
+function extraerDuracionDesdeNotas(notes: string | null | undefined) {
+  if (!notes) return 30;
+  const match = notes.match(/Duración:\s*(30|60)\s*min/i);
+  return match?.[1] === "60" ? 60 : 30;
+}
+
+function construirNotasAgenda({
+  notes,
+  manualSource,
+  durationMinutes,
+}: {
+  notes: string;
+  manualSource: string;
+  durationMinutes: number;
+}) {
+  const lines: string[] = [];
+
+  if (manualSource) {
+    lines.push(`Fuente: ${traducirFuenteManual(manualSource)}`);
+  }
+
+  lines.push(`Duración: ${durationMinutes} min`);
+
+  const cleanNotes = limpiarMetadatosAgenda(notes);
+  if (cleanNotes) {
+    lines.push(cleanNotes);
+  }
+
+  return lines.join("\n").trim();
+}
+
+function getDayOfWeek(isoDate: string) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day).getDay();
+}
+
+function getSlotIndex(time: string) {
+  return SLOT_OPTIONS.findIndex((slot) => slot.value === normalizarHora(time));
+}
+
+function getSlotsForDuration(startTime: string, durationMinutes: number) {
+  const normalized = normalizarHora(startTime);
+  const startIndex = getSlotIndex(normalized);
+  if (startIndex < 0) return [];
+
+  const blocksNeeded = Math.max(1, Math.ceil(durationMinutes / 30));
+  const slots = SLOT_OPTIONS.slice(startIndex, startIndex + blocksNeeded).map((slot) => slot.value);
+
+  if (slots.length !== blocksNeeded) return [];
+
+  return slots;
+}
+
+function getResourceCapacity(section: ReceptionSection) {
+  if (section === "especialistas") return SPECIALIST_SINGLE_CAPACITY;
+  if (section === "tratamientos") return TREATMENT_DOUBLE_CAPACITY;
+  return DEFAULT_SLOT_CAPACITY;
+}
+
+function getDurationOptions(
+  section: ReceptionSection,
+  serviceType: string,
+  appointmentDate: string
+) {
+  if (section === "tratamientos") {
+    return [{ value: "30", label: "30 min" }];
+  }
+
+  if (section === "especialistas") {
+    if (serviceType === "medico") {
+      return getDayOfWeek(appointmentDate) === 3
+        ? [{ value: "60", label: "60 min" }]
+        : [];
+    }
+
+    if (serviceType === "nutricion" || serviceType === "fisioterapia") {
+      return [
+        { value: "30", label: "30 min" },
+        { value: "60", label: "60 min" },
+      ];
+    }
+
+    return [];
+  }
+
+  return [{ value: "30", label: "30 min" }];
+}
+
+function getAllowedSlotOptions(
+  section: ReceptionSection,
+  serviceType: string,
+  appointmentDate: string,
+  durationMinutes: number
+) {
+  if (section === "especialistas") {
+    if (serviceType === "medico") {
+      if (getDayOfWeek(appointmentDate) !== 3 || durationMinutes !== 60) return [];
+      return SLOT_OPTIONS.filter((slot) =>
+        ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"].includes(slot.value)
+      );
+    }
+
+    if (serviceType === "nutricion" || serviceType === "fisioterapia") {
+      return SLOT_OPTIONS.filter((slot) => {
+        if (slot.value === "17:00") return false;
+        const slotsNeeded = getSlotsForDuration(slot.value, durationMinutes);
+        if (slotsNeeded.length === 0) return false;
+        if (durationMinutes === 60 && slot.value === "11:30") return false;
+        return true;
+      });
+    }
+
+    return [];
+  }
+
+  if (section === "tratamientos") {
+    return SLOT_OPTIONS.filter((slot) => slot.value !== "17:00");
+  }
+
+  return SLOT_OPTIONS.filter((slot) => slot.value !== "17:00");
+}
+
+function getAppointmentOccupiedSlots(item: AppointmentRow) {
+  const duration = extraerDuracionDesdeNotas(item.notes);
+  return getSlotsForDuration(item.appointment_time, duration);
+}
+
+function sameAgendaResource(
+  section: ReceptionSection,
+  item: AppointmentRow,
+  selectedServiceType: string
+) {
+  const itemSection = getSectionForService(item.service_type);
+  if (section === "agenda") return itemSection === "agenda";
+  return itemSection === section && (item.service_type || "") === selectedServiceType;
+}
+
+function countBookingsForSlot(
+  allAppointments: AppointmentRow[],
+  section: ReceptionSection,
+  serviceType: string,
+  appointmentDate: string,
+  slotValue: string,
+  editingAppointmentId: string | null
+) {
+  return allAppointments.filter((item) => {
+    if (item.appointment_date !== appointmentDate) return false;
+    if (!ACTIVE_APPOINTMENT_STATUSES.includes(item.status)) return false;
+    if (item.id === editingAppointmentId) return false;
+    if (!sameAgendaResource(section, item, serviceType)) return false;
+    return getAppointmentOccupiedSlots(item).includes(slotValue);
+  }).length;
+}
 
 function badgeEstado(status: string) {
   switch (status) {
@@ -520,7 +690,7 @@ function RecepcionContent() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentRoleCode, setCurrentRoleCode] = useState<string | null>(null);
 
-  const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
+  const [fechaFiltro, setFechaFiltro] = useState("");
   const [busquedaAgenda, setBusquedaAgenda] = useState("");
   const [busquedaLead, setBusquedaLead] = useState("");
 
@@ -586,6 +756,7 @@ function RecepcionContent() {
     manual_source: "",
     appointment_date: hoyISO(),
     appointment_time: "08:00",
+    duration_minutes: "30",
     status: "agendada",
     service_type: "",
     notes: "",
@@ -597,9 +768,41 @@ function RecepcionContent() {
   const serviceOptions = useMemo(() => getServiceOptionsBySection(activeSection), [activeSection]);
   const serviceFieldLabel = useMemo(() => getServiceFieldLabel(activeSection), [activeSection]);
   const sectionLabel = useMemo(() => getSectionLabel(activeSection), [activeSection]);
+  const durationOptions = useMemo(
+    () => getDurationOptions(activeSection, form.service_type, form.appointment_date),
+    [activeSection, form.service_type, form.appointment_date]
+  );
 
   const canManageAgendaConfig =
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
+
+  useEffect(() => {
+    const options = getDurationOptions(activeSection, form.service_type, form.appointment_date);
+    if (options.length === 0) return;
+
+    const currentDurationIsValid = options.some((item) => item.value === form.duration_minutes);
+    if (!currentDurationIsValid) {
+      setForm((prev) => ({
+        ...prev,
+        duration_minutes: options[0].value,
+      }));
+      return;
+    }
+
+    const allowedSlots = getAllowedSlotOptions(
+      activeSection,
+      form.service_type,
+      form.appointment_date,
+      Number(form.duration_minutes || "30")
+    );
+
+    if (allowedSlots.length > 0 && !allowedSlots.some((slot) => slot.value === form.appointment_time)) {
+      setForm((prev) => ({
+        ...prev,
+        appointment_time: allowedSlots[0].value,
+      }));
+    }
+  }, [activeSection, form.service_type, form.appointment_date, form.duration_minutes]);
 
   useEffect(() => {
     const resultado = calcularClasificacionInicial({
@@ -1012,44 +1215,61 @@ function RecepcionContent() {
   const selectedDateActiveTotal = activeAppointmentsForSelectedDate.length;
 
   const slotAvailability = useMemo(() => {
-    return SLOT_OPTIONS.map((slot) => {
-      const key = `${form.appointment_date}_${slot.value}`;
-      const setting = slotSettings[key];
-      const capacity = setting?.capacity ?? DEFAULT_SLOT_CAPACITY;
-      const isBlocked = setting?.is_blocked ?? false;
+    const durationMinutes = Number(form.duration_minutes || "30");
+    const allowedSlots = getAllowedSlotOptions(
+      activeSection,
+      form.service_type,
+      form.appointment_date,
+      durationMinutes
+    );
 
-      const booked = appointmentsForSelectedDate.filter(
-        (item) =>
-          normalizarHora(item.appointment_time) === slot.value &&
-          ACTIVE_APPOINTMENT_STATUSES.includes(item.status) &&
-          item.id !== editingAppointmentId
-      ).length;
+    return allowedSlots.map((slot) => {
+      const requiredSlots = getSlotsForDuration(slot.value, durationMinutes);
+      const capacity = getResourceCapacity(activeSection);
 
-      const dailyRemaining = Math.max(
-        selectedDateDailyCapacity - selectedDateActiveTotal,
-        0
+      const perSlotBookings = requiredSlots.map((requiredSlot) =>
+        countBookingsForSlot(
+          appointments,
+          activeSection,
+          form.service_type,
+          form.appointment_date,
+          requiredSlot,
+          editingAppointmentId
+        )
       );
 
-      const isFullBySlot = booked >= capacity;
-      const isFullByDay =
-        selectedDateActiveTotal >= selectedDateDailyCapacity &&
-        !editingAppointmentId;
-      const disabled = selectedDateClosed || isBlocked || isFullBySlot || isFullByDay;
+      const maxBooked = perSlotBookings.length > 0 ? Math.max(...perSlotBookings) : 0;
+      const blockedByConfig = requiredSlots.some((requiredSlot) => {
+        const setting = slotSettings[`${form.appointment_date}_${requiredSlot}`];
+        return setting?.is_blocked ?? false;
+      });
+
+      const dayLimited =
+        selectedDateActiveTotal >= selectedDateDailyCapacity && !editingAppointmentId;
+      const disabled =
+        selectedDateClosed ||
+        blockedByConfig ||
+        requiredSlots.length === 0 ||
+        maxBooked >= capacity ||
+        dayLimited;
 
       return {
         ...slot,
         capacity,
-        booked,
+        booked: maxBooked,
         disabled,
-        isBlocked,
-        isFullBySlot,
-        isFullByDay,
+        isBlocked: blockedByConfig,
+        isFullBySlot: maxBooked >= capacity,
+        isFullByDay: dayLimited,
       };
     });
   }, [
-    appointmentsForSelectedDate,
-    slotSettings,
+    appointments,
+    activeSection,
+    form.service_type,
     form.appointment_date,
+    form.duration_minutes,
+    slotSettings,
     selectedDateClosed,
     selectedDateDailyCapacity,
     selectedDateActiveTotal,
@@ -1070,7 +1290,7 @@ function RecepcionContent() {
             ? `${item.appointment_date} · ${formatHora(item.appointment_time)}`
             : "Sin cita",
         service_type: item.service_type || "",
-        notes: limpiarFuenteManualDeNotas(item.notes),
+        notes: limpiarMetadatosAgenda(item.notes),
       })),
       ...leads.map((lead) => ({
         id: `lead_${lead.id}`,
@@ -1110,17 +1330,15 @@ function RecepcionContent() {
 
   const [previewDocType, setPreviewDocType] = useState<"cita" | "tratamiento" | "instrucciones">("cita");
 
-  const previewTitle = useMemo(() => {
-    if (!selectedPrintPatient) return "Vista previa";
-    if (previewDocType === "instrucciones") return "Instrucciones";
-    return previewDocType === "tratamiento"
-      ? "Comprobante de tratamiento"
-      : "Comprobante de cita";
-  }, [previewDocType, selectedPrintPatient]);
+  useEffect(() => {
+    if (!selectedPrintPatient) return;
+    const suggested = getPrintDocumentType(selectedPrintPatient.service_type);
+    setPreviewDocType(suggested);
+  }, [selectedPrintPatient]);
 
   const previewRecommendations = useMemo(() => {
-    return getPrintRecommendations(previewDocType, selectedPrintPatient?.service_type);
-  }, [previewDocType, selectedPrintPatient]);
+    return getPrintRecommendations(previewDocType);
+  }, [previewDocType]);
 
   const commercialCasesFiltered = useMemo(() => {
     const q = commercialSearch.trim().toLowerCase();
@@ -1155,30 +1373,22 @@ function RecepcionContent() {
     const detalle = selectedPrintPatient?.detail || "Sin detalle";
     const servicio = selectedPrintPatient?.service_type || "Sin servicio";
     const notas = selectedPrintPatient?.notes || "Sin notas registradas";
-    const docType =
-      tipo === "instrucciones"
-        ? "instrucciones"
-        : getPrintDocumentType(selectedPrintPatient?.service_type);
-    const titulo =
-      tipo === "instrucciones"
-        ? "Instrucciones"
-        : docType === "tratamiento"
-          ? "Comprobante de tratamiento"
-          : "Comprobante de cita";
-
-    const recomendaciones = getPrintRecommendations(tipo, selectedPrintPatient?.service_type);
+    const titulo = getPrintTitleByType(tipo);
+    const recomendaciones = getPrintRecommendations(tipo);
 
     const bloqueServicio =
-      docType === "tratamiento"
+      tipo === "tratamiento"
         ? `<p><strong>Tratamiento:</strong> ${servicio}</p>`
-        : `<p><strong>Servicio / especialista:</strong> ${servicio}</p>`;
+        : tipo === "instrucciones"
+          ? `<p><strong>Área / servicio:</strong> ${servicio}</p>`
+          : `<p><strong>Servicio / especialista:</strong> ${servicio}</p>`;
 
     const subtitulo =
-      docType === "tratamiento"
+      tipo === "tratamiento"
         ? "Documento de apoyo para tratamientos programados"
-        : docType === "cita"
-          ? "Documento de apoyo para citas programadas"
-          : "Documento de apoyo para el paciente";
+        : tipo === "instrucciones"
+          ? "Indicaciones y recomendaciones para el paciente"
+          : "Documento de apoyo para citas programadas";
 
     const nuevaVentana = window.open("", "_blank", "width=900,height=700");
     if (!nuevaVentana) return;
@@ -1574,6 +1784,7 @@ function RecepcionContent() {
       manual_source: "",
       appointment_date: hoyISO(),
       appointment_time: "08:00",
+      duration_minutes: activeSection === "tratamientos" ? "30" : "30",
       status: "agendada",
       service_type: "",
       notes: "",
@@ -1596,9 +1807,10 @@ function RecepcionContent() {
       manual_source: item.lead_id ? "" : extraerFuenteManualDesdeNotas(item.notes),
       appointment_date: item.appointment_date,
       appointment_time: normalizarHora(item.appointment_time),
+      duration_minutes: String(extraerDuracionDesdeNotas(item.notes)),
       status: item.status || "agendada",
       service_type: item.service_type || "",
-      notes: limpiarFuenteManualDeNotas(item.notes),
+      notes: limpiarMetadatosAgenda(item.notes),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
@@ -1741,6 +1953,23 @@ function RecepcionContent() {
       return;
     }
 
+    const durationMinutes = Number(form.duration_minutes || "30");
+    const durationOptionsForCurrentForm = getDurationOptions(
+      activeSection,
+      form.service_type,
+      form.appointment_date
+    );
+
+    if (durationOptionsForCurrentForm.length === 0) {
+      setError("Ese servicio no tiene agenda disponible para la fecha seleccionada.");
+      return;
+    }
+
+    if (!durationOptionsForCurrentForm.some((item) => item.value === String(durationMinutes))) {
+      setError("La duración elegida no es válida para ese servicio.");
+      return;
+    }
+
     if (selectedDateClosed) {
       setError("Ese día está cerrado para agenda.");
       return;
@@ -1790,9 +2019,11 @@ function RecepcionContent() {
             ? "valoracion"
             : form.service_type || null,
         notes:
-          form.mode === "manual"
-            ? construirNotasConFuente(form.notes, form.manual_source).trim() || null
-            : form.notes.trim() || null,
+          construirNotasAgenda({
+            notes: form.notes,
+            manualSource: form.mode === "manual" ? form.manual_source : "",
+            durationMinutes: Number(form.duration_minutes || "30"),
+          }) || null,
         updated_by_user_id: currentUserId,
       };
 
@@ -2588,7 +2819,7 @@ function RecepcionContent() {
                       Fuente: {selectedPrintPatient.source}
                     </p>
                     <p className="mt-2 inline-flex rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700">
-                      Documento sugerido: {getPrintTitle(selectedPrintPatient.service_type)}
+                      Documento sugerido: {getPrintTitleByType(getPrintDocumentType(selectedPrintPatient.service_type))}
                     </p>
                   </div>
                 ) : (
@@ -2624,7 +2855,7 @@ function RecepcionContent() {
 
                   <div className="mt-4 rounded-2xl bg-slate-50 p-4">
                     <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      {previewTitle}
+                      {getPrintTitleByType(previewDocType)}
                     </p>
                     <div className="mt-3 space-y-2 text-sm text-slate-700">
                       <p><span className="font-medium text-slate-800">Paciente:</span> {selectedPrintPatient?.patient_name || "Paciente"}</p>
@@ -3147,25 +3378,51 @@ function RecepcionContent() {
                 />
 
                 {activeSection !== "agenda" ? (
-                  <Field
-                    label={serviceFieldLabel}
-                    input={
-                      <select
-                        className={inputClass}
-                        value={form.service_type}
-                        onChange={(e) =>
-                          setForm((prev) => ({ ...prev, service_type: e.target.value }))
-                        }
-                      >
-                        <option value="">Selecciona</option>
-                        {serviceOptions.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    }
-                  />
+                  <>
+                    <Field
+                      label={serviceFieldLabel}
+                      input={
+                        <select
+                          className={inputClass}
+                          value={form.service_type}
+                          onChange={(e) =>
+                            setForm((prev) => ({ ...prev, service_type: e.target.value }))
+                          }
+                        >
+                          <option value="">Selecciona</option>
+                          {serviceOptions.map((item) => (
+                            <option key={item.value} value={item.value}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      }
+                    />
+
+                    <Field
+                      label="Duración"
+                      input={
+                        <select
+                          className={inputClass}
+                          value={form.duration_minutes}
+                          onChange={(e) =>
+                            setForm((prev) => ({ ...prev, duration_minutes: e.target.value }))
+                          }
+                          disabled={durationOptions.length === 0}
+                        >
+                          {durationOptions.length === 0 ? (
+                            <option value="">Sin agenda disponible</option>
+                          ) : (
+                            durationOptions.map((item) => (
+                              <option key={item.value} value={item.value}>
+                                {item.label}
+                              </option>
+                            ))
+                          )}
+                        </select>
+                      }
+                    />
+                  </>
                 ) : null}
 
                 <Field
@@ -3204,8 +3461,8 @@ function RecepcionContent() {
                             : slot.isFullByDay
                             ? "· Día lleno"
                             : slot.isFullBySlot
-                            ? `· Lleno (${slot.booked}/${slot.capacity})`
-                            : `· ${slot.booked}/${slot.capacity}`}
+                            ? `· Completo (${slot.booked} de ${slot.capacity})`
+                            : `· ${slot.booked} de ${slot.capacity} ocupados`}
                         </option>
                       ))}
                     </select>
@@ -3267,13 +3524,6 @@ function RecepcionContent() {
                   value={fechaFiltro}
                   onChange={(e) => setFechaFiltro(e.target.value)}
                 />
-                <button
-                  type="button"
-                  onClick={() => setFechaFiltro(hoyISO())}
-                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
-                >
-                  Hoy
-                </button>
                 <button
                   type="button"
                   onClick={() => setFechaFiltro("")}
