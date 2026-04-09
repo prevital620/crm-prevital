@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import Image from "next/image";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
@@ -22,7 +23,10 @@ export default function UsuariosPage() {
   const [loading, setLoading] = useState(true);
   const [users, setUsers] = useState<UserRow[]>([]);
   const [error, setError] = useState("");
+  const [mensaje, setMensaje] = useState("");
   const [authorized, setAuthorized] = useState(false);
+  const [search, setSearch] = useState("");
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
 
   async function cargarUsuarios() {
     try {
@@ -75,6 +79,37 @@ export default function UsuariosPage() {
     cargarUsuarios();
   }, []);
 
+  async function toggleEstadoUsuario(user: UserRow, nextActive: boolean) {
+    try {
+      setSavingUserId(user.id);
+      setError("");
+      setMensaje("");
+
+      const { error } = await supabase
+        .from("profiles")
+        .update({ is_active: nextActive })
+        .eq("id", user.id);
+
+      if (error) throw error;
+
+      setUsers((prev) =>
+        prev.map((item) =>
+          item.id === user.id ? { ...item, is_active: nextActive } : item
+        )
+      );
+
+      setMensaje(
+        nextActive
+          ? "Usuario reactivado correctamente."
+          : "Usuario desactivado correctamente."
+      );
+    } catch (err: any) {
+      setError(err?.message || "No se pudo actualizar el estado del usuario.");
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
   function formatDate(dateString: string) {
     try {
       return new Date(dateString).toLocaleString("es-CO", {
@@ -86,50 +121,119 @@ export default function UsuariosPage() {
     }
   }
 
+  const filteredUsers = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return users;
+
+    return users.filter((user) => {
+      const department = user.departments?.[0]?.name || "";
+      const role = user.user_roles?.[0]?.roles?.[0]?.name || "";
+      return (
+        (user.full_name || "").toLowerCase().includes(q) ||
+        (user.phone || "").toLowerCase().includes(q) ||
+        (user.job_title || "").toLowerCase().includes(q) ||
+        department.toLowerCase().includes(q) ||
+        role.toLowerCase().includes(q)
+      );
+    });
+  }, [users, search]);
+
+  const resumen = useMemo(() => {
+    return {
+      total: users.length,
+      activos: users.filter((item) => item.is_active).length,
+      inactivos: users.filter((item) => !item.is_active).length,
+    };
+  }, [users]);
+
   return (
-    <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl">
-        <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
+    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
+
+        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">
-                Super Usuario
-              </p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">
-                Gestión de usuarios
+              <p className="text-sm font-medium text-[#7FA287]">Super Usuario</p>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">
+                Usuarios y roles
               </h1>
-              <p className="mt-3 text-sm text-slate-600">
-                Consulta los empleados creados en el CRM, su cargo,
-                departamento, rol y estado.
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+                Consulta empleados creados en el CRM, edítalos, desactívalos de forma segura y entra al formulario de creación cuando lo necesites.
               </p>
             </div>
 
             <SessionBadge />
           </div>
 
-          {authorized ? (
-            <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              href="/"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+            >
+              Inicio
+            </a>
+
+            {authorized ? (
               <a
                 href="/usuarios/nuevo"
-                className="inline-flex rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white"
+                className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
               >
                 Crear usuario
               </a>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </section>
 
+        {authorized ? (
+          <section className="grid gap-4 md:grid-cols-3">
+            <StatCard title="Usuarios" value={String(resumen.total)} />
+            <StatCard title="Activos" value={String(resumen.activos)} />
+            <StatCard title="Inactivos" value={String(resumen.inactivos)} />
+          </section>
+        ) : null}
+
         {error ? (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         ) : null}
 
+        {mensaje ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            {mensaje}
+          </div>
+        ) : null}
+
         {!authorized ? null : (
-          <section className="rounded-3xl bg-white p-6 shadow-sm">
-            <div className="mb-5 flex items-center justify-between">
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">
+                <h2 className="text-2xl font-bold text-[#24312A]">
                   Usuarios registrados
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -137,91 +241,129 @@ export default function UsuariosPage() {
                 </p>
               </div>
 
-              <button
-                onClick={cargarUsuarios}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
-                Actualizar
-              </button>
+              <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
+                <input
+                  className="w-full rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287] md:min-w-[280px]"
+                  placeholder="Buscar por nombre, cargo, teléfono o rol"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+
+                <button
+                  onClick={cargarUsuarios}
+                  className="rounded-xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                >
+                  Actualizar
+                </button>
+              </div>
             </div>
 
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                 Cargando usuarios...
               </div>
-            ) : users.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                Aún no hay usuarios registrados.
+            ) : filteredUsers.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                No hay usuarios que coincidan con la búsqueda.
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="min-w-full border-separate border-spacing-y-3">
-                  <thead>
-                    <tr className="text-left text-sm text-slate-500">
-                      <th className="px-4">Nombre</th>
-                      <th className="px-4">Teléfono</th>
-                      <th className="px-4">Cargo</th>
-                      <th className="px-4">Departamento</th>
-                      <th className="px-4">Rol</th>
-                      <th className="px-4">Estado</th>
-                      <th className="px-4">Creado</th>
-                      <th className="px-4">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {users.map((user) => {
-                      const firstDepartment = user.departments?.[0];
-                      const firstRole = user.user_roles?.[0]?.roles?.[0];
+              <div className="space-y-4">
+                {filteredUsers.map((user) => {
+                  const firstDepartment = user.departments?.[0];
+                  const firstRole = user.user_roles?.[0]?.roles?.[0];
 
-                      return (
-                        <tr key={user.id} className="rounded-2xl bg-slate-50">
-                          <td className="rounded-l-2xl px-4 py-4 font-semibold text-slate-900">
-                            {user.full_name}
-                          </td>
-                          <td className="px-4 py-4 text-sm text-slate-700">
-                            {user.phone || "Sin teléfono"}
-                          </td>
-                          <td className="px-4 py-4 text-sm text-slate-700">
-                            {user.job_title || "Sin cargo"}
-                          </td>
-                          <td className="px-4 py-4 text-sm text-slate-700">
-                            {firstDepartment?.name || "Sin departamento"}
-                          </td>
-                          <td className="px-4 py-4 text-sm text-slate-700">
-                            {firstRole?.name || "Sin rol"}
-                          </td>
-                          <td className="px-4 py-4">
+                  return (
+                    <div
+                      key={user.id}
+                      className="group rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md"
+                    >
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <h3 className="text-lg font-semibold text-[#24312A]">
+                              {user.full_name}
+                            </h3>
+
                             <span
-                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                              className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
                                 user.is_active
-                                  ? "bg-green-100 text-green-700"
-                                  : "bg-red-100 text-red-700"
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-rose-200 bg-rose-50 text-rose-700"
                               }`}
                             >
                               {user.is_active ? "Activo" : "Inactivo"}
                             </span>
-                          </td>
-                          <td className="px-4 py-4 text-sm text-slate-500">
-                            {formatDate(user.created_at)}
-                          </td>
-                          <td className="rounded-r-2xl px-4 py-4">
+                          </div>
+
+                          <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
+                            <InfoItem label="Teléfono" value={user.phone || "Sin teléfono"} />
+                            <InfoItem label="Cargo" value={user.job_title || "Sin cargo"} />
+                            <InfoItem
+                              label="Departamento"
+                              value={firstDepartment?.name || "Sin departamento"}
+                            />
+                            <InfoItem label="Rol" value={firstRole?.name || "Sin rol"} />
+                            <InfoItem label="Código rol" value={firstRole?.code || "Sin código"} />
+                            <InfoItem label="Creado" value={formatDate(user.created_at)} />
+                          </div>
+                        </div>
+
+                        <div className="w-full rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-4 lg:w-[330px]">
+                          <p className="mb-3 text-sm font-medium text-slate-700">Acciones</p>
+
+                          <div className="flex flex-wrap gap-2">
                             <a
                               href={`/usuarios/${user.id}`}
-                              className="inline-flex rounded-xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
+                              className="rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
                             >
                               Editar
                             </a>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+
+                            <button
+                              type="button"
+                              onClick={() => void toggleEstadoUsuario(user, !user.is_active)}
+                              disabled={savingUserId === user.id}
+                              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                            >
+                              {savingUserId === user.id
+                                ? "Guardando..."
+                                : user.is_active
+                                ? "Desactivar"
+                                : "Reactivar"}
+                            </button>
+                          </div>
+
+                          <p className="mt-3 text-xs text-slate-500">
+                            La opción de eliminar aquí funciona como desactivación segura para no romper el acceso histórico del CRM.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
             )}
           </section>
         )}
       </div>
     </main>
+  );
+}
+
+function StatCard({ title, value }: { title: string; value: string }) {
+  return (
+    <div className="group overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md">
+      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+      <p className="text-sm font-medium text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
+    </div>
+  );
+}
+
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <p>
+      <span className="font-medium text-[#24312A]">{label}:</span> {value}
+    </p>
   );
 }

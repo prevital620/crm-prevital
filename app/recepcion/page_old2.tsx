@@ -1,6 +1,5 @@
 "use client";
 
-import Image from "next/image";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -2129,43 +2128,18 @@ function RecepcionContent() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
-      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
-          <Image
-            src="/prevital-logo.jpeg"
-            alt="Prevital"
-            fill
-            className="object-contain"
-            priority
-          />
-        </div>
-      </div>
-
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
-            <Image
-              src="/prevital-logo.jpeg"
-              alt="Prevital"
-              fill
-              className="object-contain p-1"
-              priority
-            />
-          </div>
-        </div>
-
-        <section className="relative mb-6 overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+    <main className="min-h-screen bg-slate-100 p-6 md:p-8">
+      <div className="mx-auto max-w-7xl">
+        <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-[#7FA287]">
+              <p className="text-sm font-medium text-slate-500">
                 {isReadOnlyAgendaForCall ? "Agenda" : "Recepción"}
               </p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">
+              <h1 className="mt-2 text-3xl font-bold text-slate-900">
                 {isReadOnlyAgendaForCall ? "Agendar cita" : "Agenda y admisión"}
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+              <p className="mt-3 text-sm text-slate-600">
                 {isReadOnlyAgendaForCall
                   ? "Desde aquí puedes crear una cita para tu lead sin entrar al módulo completo de recepción."
                   : "Crear citas, ubicar clientes, registrar llegada y actualizar estado."}
@@ -2178,7 +2152,7 @@ function RecepcionContent() {
           <div className="mt-4 flex flex-wrap gap-3">
             <a
               href="/"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
             >
               Inicio
             </a>
@@ -2188,42 +2162,42 @@ function RecepcionContent() {
                 <button
                   type="button"
                   onClick={() => cambiarSeccion("agenda")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "agenda" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "agenda" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
                 >
                   Agenda
                 </button>
                 <button
                   type="button"
                   onClick={() => cambiarSeccion("especialistas")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "especialistas" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "especialistas" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
                 >
                   Especialistas
                 </button>
                 <button
                   type="button"
                   onClick={() => cambiarSeccion("tratamientos")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "tratamientos" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "tratamientos" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
                 >
                   Tratamientos
                 </button>
                 <button
                   type="button"
                   onClick={() => cambiarSeccion("comercial")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "comercial" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "comercial" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
                 >
                   Ingreso comercial
                 </button>
                 <button
                   type="button"
                   onClick={() => cambiarSeccion("impresiones")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "impresiones" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "impresiones" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
                 >
                   Impresiones / Entregas
                 </button>
                 <button
                   type="button"
                   onClick={() => cambiarSeccion("inventario")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "inventario" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium ${activeSection === "inventario" ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"}`}
                 >
                   Inventario
                 </button>
@@ -2265,10 +2239,10 @@ function RecepcionContent() {
         )}
 
         {canManageAgendaConfig && activeSection !== "impresiones" && activeSection !== "inventario" && activeSection !== "comercial" ? (
-          <section className="mb-6 rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-[#24312A]">
+                <h2 className="text-2xl font-bold text-slate-900">
                   Configuración de cupos
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
@@ -2280,7 +2254,7 @@ function RecepcionContent() {
                 type="button"
                 onClick={guardarConfiguracionAgenda}
                 disabled={savingConfig}
-                className="rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                className="rounded-2xl bg-slate-900 px-5 py-3 text-sm font-medium text-white disabled:opacity-60"
               >
                 {savingConfig ? "Guardando..." : "Guardar configuración"}
               </button>
@@ -2317,7 +2291,7 @@ function RecepcionContent() {
                 }
               />
 
-              <label className="flex items-center gap-3 rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] px-4 py-4">
+              <label className="flex items-center gap-3 rounded-2xl border border-slate-300 px-4 py-4">
                 <input
                   type="checkbox"
                   checked={dailyClosedInput}
@@ -2331,7 +2305,7 @@ function RecepcionContent() {
 
             <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
               {SLOT_OPTIONS.map((slot) => (
-                <div key={slot.value} className="rounded-2xl border border-[#E3ECE5] bg-[#FBFCFB] p-4">
+                <div key={slot.value} className="rounded-2xl border border-slate-200 p-4">
                   <p className="text-sm font-semibold text-slate-900">{slot.label}</p>
                   <p className="mt-1 text-xs text-slate-500">
                     Activos:{" "}
@@ -2662,7 +2636,7 @@ function RecepcionContent() {
                 <button
                   type="submit"
                   disabled={savingCommercialIntake}
-                  className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                  className="w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white disabled:opacity-60"
                 >
                   {savingCommercialIntake ? "Registrando..." : "Registrar ingreso a comercial"}
                 </button>
@@ -2879,7 +2853,7 @@ function RecepcionContent() {
                             </p>
                           ) : null}
                         </div>
-                        <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
+                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
                           {new Date(item.created_at).toLocaleDateString()}
                         </span>
                       </div>
@@ -3089,7 +3063,7 @@ function RecepcionContent() {
                               </p>
                             ) : null}
                           </div>
-                          <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
                             {new Date(item.created_at).toLocaleDateString()}
                           </span>
                         </div>
@@ -3102,7 +3076,7 @@ function RecepcionContent() {
           </section>
         ) : (
         <section className={`mb-6 grid gap-6 ${isReadOnlyAgendaForCall ? "" : "xl:grid-cols-2"}`}>
-          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="rounded-3xl bg-white p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">
@@ -3114,7 +3088,7 @@ function RecepcionContent() {
                     : "Puedes elegir un lead existente o ingresar el cliente manualmente."}
                 </p>
                 {!isReadOnlyAgendaForCall ? (
-                  <p className="mt-2 inline-flex rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs font-medium text-[#4F6F5B]">
+                  <p className="mt-2 inline-flex rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-700">
                     Módulo activo: {sectionLabel}
                   </p>
                 ) : null}
@@ -3124,7 +3098,7 @@ function RecepcionContent() {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
                 >
                   Cancelar edición
                 </button>
@@ -3372,7 +3346,7 @@ function RecepcionContent() {
               <button
                 type="submit"
                 disabled={savingAppointment}
-                className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                className="w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white disabled:opacity-60"
               >
                 {savingAppointment
                   ? "Guardando..."
@@ -3384,7 +3358,7 @@ function RecepcionContent() {
           </div>
 
           {!isReadOnlyAgendaForCall && (
-            <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
               <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Agenda visible</h2>
@@ -3395,7 +3369,7 @@ function RecepcionContent() {
 
                 <button
                   onClick={cargarTodo}
-                  className="rounded-xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
                 >
                   Actualizar
                 </button>
@@ -3403,7 +3377,7 @@ function RecepcionContent() {
 
               <div className="mb-6 grid gap-3 md:grid-cols-[1fr_auto_auto_1fr]">
                 <input
-                  className="w-full rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
+                  className="w-full rounded-2xl border border-slate-300 p-4 outline-none"
                   type="date"
                   value={fechaFiltro}
                   onChange={(e) => setFechaFiltro(e.target.value)}
@@ -3411,20 +3385,20 @@ function RecepcionContent() {
                 <button
                   type="button"
                   onClick={() => setFechaFiltro(hoyISO())}
-                  className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
                 >
                   Hoy
                 </button>
                 <button
                   type="button"
                   onClick={() => setFechaFiltro("")}
-                  className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
                 >
                   Todas
                 </button>
 
                 <input
-                  className="rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
+                  className="rounded-2xl border border-slate-300 p-4 outline-none"
                   type="text"
                   placeholder="Buscar por nombre o teléfono"
                   value={busquedaAgenda}
@@ -3451,11 +3425,7 @@ function RecepcionContent() {
                     <div
                       key={item.id}
                       onDoubleClick={() => abrirIngresoComercialDesdeCita(item)}
-                      className={`rounded-3xl border p-5 shadow-sm transition duration-200 ${
-                            isSelected
-                              ? "border-[#7FA287] bg-[#F8F7F4] shadow-md"
-                              : "border-[#D6E8DA] bg-white hover:border-[#BCD7C2] hover:shadow-md"
-                          }`}
+                      className={`rounded-2xl border p-4 transition ${isSelected ? "border-slate-900 bg-slate-50" : "border-slate-200"}`}
                     >
                       <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -3473,16 +3443,16 @@ function RecepcionContent() {
                                 {traducirEstado(item.status)}
                               </span>
 
-                              <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
                                 {item.appointment_date}
                               </span>
 
-                              <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
+                              <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
                                 {formatHora(item.appointment_time)}
                               </span>
 
                               {isSelected ? (
-                                <span className="rounded-full bg-[#5F7D66] px-3 py-1 text-xs text-white">
+                                <span className="rounded-full bg-slate-900 px-3 py-1 text-xs text-white">
                                   Seleccionada
                                 </span>
                               ) : null}
@@ -3512,7 +3482,7 @@ function RecepcionContent() {
                             <button
                               type="button"
                               onClick={() => abrirIngresoComercialDesdeCita(item)}
-                              className="rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                              className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white"
                             >
                               Registro comercial
                             </button>
@@ -3522,7 +3492,7 @@ function RecepcionContent() {
                                 type="button"
                                 onClick={() => actualizarEstadoCita(item.id, "no_asistio")}
                                 disabled={savingStatusId === item.id}
-                                className="rounded-2xl border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
+                                className="rounded-2xl border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 disabled:opacity-60"
                               >
                                 No asistió
                               </button>
@@ -3535,21 +3505,21 @@ function RecepcionContent() {
                             <button
                               type="button"
                               onClick={() => cargarCitaParaEditar(item)}
-                              className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                              className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700"
                             >
                               Reagendar
                             </button>
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
+                        <div className="rounded-2xl bg-slate-50 p-4">
                           <p className="mb-3 text-sm font-medium text-slate-700">
                             Estado de la cita
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
                             <select
-                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 outline-none transition focus:border-[#7FA287]"
+                              className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
                               value={statusById[item.id] || item.status}
                               onChange={(e) =>
                                 setStatusById((prev) => ({
@@ -3571,7 +3541,7 @@ function RecepcionContent() {
                               type="button"
                               onClick={() => guardarEstado(item.id)}
                               disabled={savingStatusId === item.id}
-                              className="rounded-2xl border border-[#5F7D66] px-5 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                              className="rounded-2xl border border-slate-900 px-5 py-3 text-sm font-medium text-slate-900 disabled:opacity-60"
                             >
                               {savingStatusId === item.id
                                 ? "Guardando..."
@@ -3617,10 +3587,9 @@ function StatCard({
   value: string;
 }) {
   return (
-    <div className="group overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md">
-      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
-      <p className="text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
+    <div className="rounded-3xl bg-white p-5 shadow-sm">
+      <p className="text-sm text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
     </div>
   );
 }
@@ -3641,4 +3610,4 @@ function Field({
 }
 
 const inputClass =
-  "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
+  "w-full rounded-2xl border border-slate-300 bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-slate-500";

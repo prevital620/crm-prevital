@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -140,8 +141,8 @@ export default function NuevoUsuarioPage() {
 
   if (loadingData) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-3xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm text-slate-500">Validando acceso...</p>
         </div>
       </main>
@@ -150,8 +151,8 @@ export default function NuevoUsuarioPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-3xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-red-700">
             {error || "No tienes permiso para entrar a este módulo."}
           </p>
@@ -161,23 +162,68 @@ export default function NuevoUsuarioPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-      <div className="mx-auto max-w-3xl">
-        <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-slate-500">Super Usuario</p>
-          <h1 className="mt-2 text-3xl font-bold text-slate-900">
-            Crear usuario
-          </h1>
-          <p className="mt-3 text-sm text-slate-600">
-            Crea empleados del CRM, asígnales departamento, cargo y rol. El
-            sistema les generará una contraseña temporal.
-          </p>
+    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
+
+        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+            <div>
+              <p className="text-sm font-medium text-[#7FA287]">Super Usuario</p>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">
+                Crear usuario
+              </h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+                Crea empleados del CRM, asígnales departamento, cargo y rol. El sistema les generará una contraseña temporal.
+              </p>
+            </div>
+
+            <a
+              href="/"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+            >
+              Inicio
+            </a>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              href="/usuarios"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+            >
+              Usuarios y roles
+            </a>
+          </div>
         </section>
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <form onSubmit={crearUsuario} className="grid gap-4">
             <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               placeholder="Nombre completo"
               value={form.full_name}
               onChange={(e) =>
@@ -186,7 +232,7 @@ export default function NuevoUsuarioPage() {
             />
 
             <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               placeholder="Correo de acceso"
               type="email"
               value={form.email}
@@ -194,14 +240,14 @@ export default function NuevoUsuarioPage() {
             />
 
             <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               placeholder="Teléfono"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
 
             <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               placeholder="Cargo"
               value={form.job_title}
               onChange={(e) =>
@@ -210,7 +256,7 @@ export default function NuevoUsuarioPage() {
             />
 
             <select
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               value={form.department_id}
               onChange={(e) =>
                 setForm({ ...form, department_id: e.target.value })
@@ -225,7 +271,7 @@ export default function NuevoUsuarioPage() {
             </select>
 
             <select
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               value={form.role_id}
               onChange={(e) => setForm({ ...form, role_id: e.target.value })}
             >
@@ -240,13 +286,17 @@ export default function NuevoUsuarioPage() {
             <button
               type="submit"
               disabled={loading}
-              className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+              className="rounded-2xl bg-[#5F7D66] px-4 py-4 text-sm font-medium text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
             >
               {loading ? "Creando usuario..." : "Crear usuario"}
             </button>
 
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              El cambio de correo y el borrado real del usuario requieren la lógica segura del backend o API de usuarios. Esta pantalla crea correctamente, pero el correo luego no debe editarse solo desde el cliente.
+            </div>
+
             {mensaje ? (
-              <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
                 {mensaje}
               </div>
             ) : null}
@@ -262,3 +312,6 @@ export default function NuevoUsuarioPage() {
     </main>
   );
 }
+
+const inputClass =
+  "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";

@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -482,7 +483,7 @@ export default function GerenciaComercialPage() {
 
   function renderCaseList(title: string, description: string, items: CommercialCase[]) {
     return (
-      <section className="rounded-3xl bg-white p-6 shadow-sm">
+      <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
         <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
           <div>
             <h2 className="text-2xl font-bold text-slate-900">{title}</h2>
@@ -491,7 +492,7 @@ export default function GerenciaComercialPage() {
 
           <button
             onClick={() => void cargarDatos()}
-            className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            className="rounded-xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
           >
             Actualizar
           </button>
@@ -499,7 +500,7 @@ export default function GerenciaComercialPage() {
 
         <div className="mb-6">
           <input
-            className="w-full rounded-2xl border border-slate-300 p-4 outline-none"
+            className="w-full rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
             placeholder="Buscar por nombre, teléfono o ciudad"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -507,17 +508,17 @@ export default function GerenciaComercialPage() {
         </div>
 
         {loading ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+          <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
             Cargando información...
           </div>
         ) : items.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+          <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
             No hay registros para esta vista.
           </div>
         ) : (
           <div className="space-y-4">
             {items.map((item) => (
-              <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+              <div key={item.id} className="group rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md">
                 <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
@@ -551,14 +552,14 @@ export default function GerenciaComercialPage() {
                     ) : null}
                   </div>
 
-                  <div className="w-full rounded-2xl bg-slate-50 p-4 lg:w-[380px]">
+                  <div className="w-full rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-4 lg:w-[380px]">
                     <p className="mb-3 text-sm font-medium text-slate-700">
                       {item.assigned_commercial_user_id ? "Reasignar o editar" : "Asignar atención"}
                     </p>
 
                     <div className="space-y-3">
                       <select
-                        className="w-full rounded-2xl border border-slate-300 bg-white p-4 outline-none"
+                        className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 outline-none transition focus:border-[#7FA287]"
                         value={selectedCommercialByCase[item.id] || ""}
                         onChange={(e) =>
                           setSelectedCommercialByCase((prev) => ({
@@ -583,7 +584,7 @@ export default function GerenciaComercialPage() {
                             void asignarCaso(item.id, commercialId);
                           }}
                           disabled={savingCaseId === item.id}
-                          className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                          className="rounded-2xl bg-[#5F7D66] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
                         >
                           {savingCaseId === item.id ? "Guardando..." : item.assigned_commercial_user_id ? "Reasignar" : "Asignar"}
                         </button>
@@ -592,20 +593,20 @@ export default function GerenciaComercialPage() {
                           type="button"
                           onClick={() => void atenderYo(item.id)}
                           disabled={savingCaseId === item.id}
-                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700 disabled:opacity-60"
+                          className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
                         >
                           Atender yo
                         </button>
 
                         <a
                           href={`/comercial?caseId=${item.id}`}
-                          className="rounded-2xl border border-slate-300 bg-white px-4 py-3 text-sm font-medium text-slate-700"
+                          className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
                         >
                           Editar gestión
                         </a>
                       </div>
 
-                      <div className="rounded-2xl border border-dashed border-slate-300 bg-white p-3 text-xs text-slate-500">
+                      <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-white p-3 text-xs text-slate-500">
                         Si el gerente toma un caso, aparecerá como atendiendo en la pestaña de equipo y el cliente quedará en En gestión.
                       </div>
                     </div>
@@ -621,8 +622,8 @@ export default function GerenciaComercialPage() {
 
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm text-slate-500">Validando acceso...</p>
         </div>
       </main>
@@ -631,8 +632,8 @@ export default function GerenciaComercialPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-red-700">{error || "No tienes permiso para entrar a este módulo."}</p>
         </div>
       </main>
@@ -640,14 +641,38 @@ export default function GerenciaComercialPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-      <div className="mx-auto max-w-7xl">
-        <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
+    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-7xl space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
+        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">Gerencia comercial</p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">Centro de control comercial</h1>
-              <p className="mt-3 text-sm text-slate-600">
+              <p className="text-sm font-medium text-[#7FA287]">Gerencia comercial</p>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Centro de control comercial</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
                 Asigna clientes, revisa disponibilidad del equipo y entra a la gestión solo cuando lo necesites.
               </p>
             </div>
@@ -656,7 +681,7 @@ export default function GerenciaComercialPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a href="/" className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700">
+            <a href="/" className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]">
               Inicio
             </a>
           </div>
@@ -667,7 +692,7 @@ export default function GerenciaComercialPage() {
         ) : null}
 
         {mensaje ? (
-          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">{mensaje}</div>
+          <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">{mensaje}</div>
         ) : null}
 
         <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
@@ -679,7 +704,7 @@ export default function GerenciaComercialPage() {
           <StatCard title="Disponibles" value={String(resumen.disponibles)} />
         </section>
 
-        <section className="mb-6 rounded-3xl bg-white p-4 shadow-sm">
+        <section className="mb-6 rounded-3xl border border-[#D6E8DA] bg-white p-4 shadow-sm">
           <div className="flex flex-wrap gap-3">
             <TabButton active={activeTab === "pendientes"} onClick={() => setActiveTab("pendientes")}>
               Pendientes
@@ -718,7 +743,7 @@ export default function GerenciaComercialPage() {
           )}
 
         {activeTab === "comerciales" && (
-          <section className="rounded-3xl bg-white p-6 shadow-sm">
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">Equipo comercial del día</h2>
@@ -729,18 +754,18 @@ export default function GerenciaComercialPage() {
 
               <button
                 onClick={() => void cargarDatos()}
-                className="rounded-xl border border-slate-200 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+                className="rounded-xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
               >
                 Actualizar
               </button>
             </div>
 
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                 Cargando equipo...
               </div>
             ) : commercialUsers.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
                 No hay usuarios comerciales visibles.
               </div>
             ) : (
@@ -751,7 +776,7 @@ export default function GerenciaComercialPage() {
                   const salesCount = salesTodayByCommercial[user.id] || 0;
 
                   return (
-                    <div key={user.id} className="rounded-2xl border border-slate-200 p-5">
+                    <div key={user.id} className="rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="font-semibold text-slate-900">{user.full_name}</p>
@@ -793,8 +818,10 @@ function TabButton({
     <button
       type="button"
       onClick={onClick}
-      className={`rounded-2xl px-4 py-2 text-sm font-medium ${
-        active ? "bg-slate-900 text-white" : "border border-slate-300 text-slate-700"
+      className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
+        active
+          ? "bg-[#5F7D66] text-white shadow-sm"
+          : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"
       }`}
     >
       {children}
@@ -804,18 +831,19 @@ function TabButton({
 
 function StatCard({ title, value }: { title: string; value: string }) {
   return (
-    <div className="rounded-3xl bg-white p-5 shadow-sm">
-      <p className="text-sm text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-slate-900">{value}</p>
+    <div className="group overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md">
+      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+      <p className="text-sm font-medium text-slate-500">{title}</p>
+      <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
     </div>
   );
 }
 
 function MiniStat({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-2xl bg-slate-50 p-3">
+    <div className="rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-3">
       <p className="text-xs text-slate-500">{label}</p>
-      <p className="mt-1 text-lg font-bold text-slate-900">{value}</p>
+      <p className="mt-1 text-lg font-bold text-[#24312A]">{value}</p>
     </div>
   );
 }
@@ -823,7 +851,7 @@ function MiniStat({ label, value }: { label: string; value: string }) {
 function InfoItem({ label, value }: { label: string; value: string }) {
   return (
     <p>
-      <span className="font-medium text-slate-700">{label}:</span> {value}
+      <span className="font-medium text-[#24312A]">{label}:</span> {value}
     </p>
   );
 }

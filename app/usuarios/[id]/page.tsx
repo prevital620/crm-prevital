@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -32,13 +33,12 @@ export default function EditarUsuarioPage() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [savingEmail, setSavingEmail] = useState(false);
   const [authorized, setAuthorized] = useState(false);
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
-
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
-
   const [form, setForm] = useState({
     full_name: "",
     phone: "",
@@ -47,6 +47,7 @@ export default function EditarUsuarioPage() {
     role_id: "",
     is_active: true,
   });
+  const [email, setEmail] = useState("");
 
   async function cargarUsuario() {
     if (!userId) return;
@@ -67,33 +68,15 @@ export default function EditarUsuarioPage() {
 
       setAuthorized(true);
 
-      const [
-        userResult,
-        departmentsResult,
-        rolesResult,
-        userRoleResult,
-      ] = await Promise.all([
+      const [userResult, departmentsResult, rolesResult, userRoleResult] = await Promise.all([
         supabase
           .from("profiles")
           .select("id, full_name, phone, job_title, department_id, is_active, created_at")
           .eq("id", userId)
           .single(),
-
-        supabase
-          .from("departments")
-          .select("id, name")
-          .order("name", { ascending: true }),
-
-        supabase
-          .from("roles")
-          .select("id, name, code")
-          .order("name", { ascending: true }),
-
-        supabase
-          .from("user_roles")
-          .select("role_id")
-          .eq("user_id", userId)
-          .limit(1),
+        supabase.from("departments").select("id, name").order("name", { ascending: true }),
+        supabase.from("roles").select("id, name, code").order("name", { ascending: true }),
+        supabase.from("user_roles").select("role_id").eq("user_id", userId).limit(1),
       ]);
 
       if (userResult.error) throw userResult.error;
@@ -106,7 +89,6 @@ export default function EditarUsuarioPage() {
 
       setDepartments((departmentsResult.data as Department[]) || []);
       setRoles((rolesResult.data as Role[]) || []);
-
       setForm({
         full_name: user.full_name || "",
         phone: user.phone || "",
@@ -115,6 +97,7 @@ export default function EditarUsuarioPage() {
         role_id: currentRoleId,
         is_active: user.is_active,
       });
+      setEmail("");
     } catch (err: any) {
       setError(err?.message || "No se pudo cargar el usuario.");
     } finally {
@@ -162,12 +145,7 @@ export default function EditarUsuarioPage() {
       if (form.role_id) {
         const { error: insertRoleError } = await supabase
           .from("user_roles")
-          .insert([
-            {
-              user_id: userId,
-              role_id: form.role_id,
-            },
-          ]);
+          .insert([{ user_id: userId, role_id: form.role_id }]);
 
         if (insertRoleError) throw insertRoleError;
       }
@@ -180,10 +158,49 @@ export default function EditarUsuarioPage() {
     }
   }
 
+  async function cambiarCorreo() {
+    if (!userId) {
+      setError("No se encontró el ID del usuario.");
+      return;
+    }
+
+    if (!email.trim()) {
+      setError("Debes escribir el nuevo correo.");
+      return;
+    }
+
+    setSavingEmail(true);
+    setError("");
+    setMensaje("");
+
+    try {
+      const response = await fetch(`/api/usuarios/${userId}/email`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ email }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo actualizar el correo.");
+      }
+
+      setMensaje("Correo actualizado correctamente.");
+      setEmail("");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo cambiar el correo.");
+    } finally {
+      setSavingEmail(false);
+    }
+  }
+
   if (loading) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-3xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm text-slate-500">Validando acceso...</p>
         </div>
       </main>
@@ -192,8 +209,8 @@ export default function EditarUsuarioPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-3xl rounded-3xl bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-3xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-red-700">
             {error || "No tienes permiso para entrar a este módulo."}
           </p>
@@ -203,64 +220,121 @@ export default function EditarUsuarioPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-      <div className="mx-auto max-w-3xl">
-        <section className="mb-6 rounded-3xl bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
+    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+
+      <div className="mx-auto max-w-3xl space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
+
+        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+
+          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-slate-500">
-                Super Usuario
-              </p>
-              <h1 className="mt-2 text-3xl font-bold text-slate-900">
-                Editar usuario
-              </h1>
-              <p className="mt-3 text-sm text-slate-600">
-                Actualiza los datos básicos, departamento, rol y estado del empleado.
+              <p className="text-sm font-medium text-[#7FA287]">Super Usuario</p>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Editar usuario</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+                Actualiza datos básicos, departamento, rol y estado del empleado.
               </p>
             </div>
 
             <a
-              href="/usuarios"
-              className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700"
+              href="/"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
-              Volver
+              Inicio
+            </a>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <a
+              href="/usuarios"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+            >
+              Volver a usuarios
             </a>
           </div>
         </section>
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="mb-5">
+            <h2 className="text-xl font-bold text-[#24312A]">Cambiar correo de acceso</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Este cambio usa una ruta segura del backend. Debes crear también la API correspondiente.
+            </p>
+          </div>
+
+          <div className="grid gap-4">
+            <input
+              className={inputClass}
+              type="email"
+              placeholder="nuevo.correo@correo.com"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+
+            <button
+              type="button"
+              onClick={cambiarCorreo}
+              disabled={savingEmail}
+              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+            >
+              {savingEmail ? "Actualizando correo..." : "Actualizar correo"}
+            </button>
+
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              Si la ruta del backend todavía no existe, este botón no podrá cambiar el correo. Primero va este archivo y luego te paso la API.
+            </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <form onSubmit={guardarCambios} className="grid gap-4">
             <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               placeholder="Nombre completo"
               value={form.full_name}
-              onChange={(e) =>
-                setForm({ ...form, full_name: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, full_name: e.target.value })}
             />
 
             <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               placeholder="Teléfono"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
 
             <input
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               placeholder="Cargo"
               value={form.job_title}
-              onChange={(e) =>
-                setForm({ ...form, job_title: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, job_title: e.target.value })}
             />
 
             <select
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               value={form.department_id}
-              onChange={(e) =>
-                setForm({ ...form, department_id: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, department_id: e.target.value })}
             >
               <option value="">Selecciona un departamento</option>
               {departments.map((department) => (
@@ -271,7 +345,7 @@ export default function EditarUsuarioPage() {
             </select>
 
             <select
-              className="rounded-2xl border border-slate-300 p-4 outline-none"
+              className={inputClass}
               value={form.role_id}
               onChange={(e) => setForm({ ...form, role_id: e.target.value })}
             >
@@ -283,13 +357,11 @@ export default function EditarUsuarioPage() {
               ))}
             </select>
 
-            <label className="flex items-center gap-3 rounded-2xl border border-slate-300 p-4 text-sm text-slate-700">
+            <label className="flex items-center gap-3 rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4 text-sm text-slate-700">
               <input
                 type="checkbox"
                 checked={form.is_active}
-                onChange={(e) =>
-                  setForm({ ...form, is_active: e.target.checked })
-                }
+                onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
               />
               Usuario activo
             </label>
@@ -297,13 +369,13 @@ export default function EditarUsuarioPage() {
             <button
               type="submit"
               disabled={saving}
-              className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+              className="rounded-2xl bg-[#5F7D66] px-4 py-4 text-sm font-medium text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
             >
               {saving ? "Guardando cambios..." : "Guardar cambios"}
             </button>
 
             {mensaje ? (
-              <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+              <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
                 {mensaje}
               </div>
             ) : null}
@@ -319,3 +391,6 @@ export default function EditarUsuarioPage() {
     </main>
   );
 }
+
+const inputClass =
+  "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
