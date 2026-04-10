@@ -104,6 +104,11 @@ const nextStepOptions = [
   { value: "sueroterapia", label: "Sueroterapia" },
 ];
 
+const activeCommercialStatuses = [
+  "asignado_comercial",
+  "en_atencion_comercial",
+] as const;
+
 function traducirEstado(status: string | null) {
   const map: Record<string, string> = {
     pendiente_asignacion_comercial: "Pendiente asignación",
@@ -295,6 +300,19 @@ function buildClosingNotes(
   return lines.join("\n").trim() || null;
 }
 
+function dateToLocalISO(dateString: string | null | undefined) {
+  if (!dateString) return "";
+  const date = new Date(dateString);
+  if (Number.isNaN(date.getTime())) return "";
+  const offset = date.getTimezoneOffset();
+  const local = new Date(date.getTime() - offset * 60 * 1000);
+  return local.toISOString().slice(0, 10);
+}
+
+function isSameLocalDay(dateString: string | null | undefined, targetIso: string) {
+  return dateToLocalISO(dateString) === targetIso;
+}
+
 export default function ComercialPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
@@ -348,6 +366,8 @@ export default function ComercialPage() {
     () => (currentCase ? getReceptionSummary(currentCase) : []),
     [currentCase]
   );
+
+  const todayIso = useMemo(() => hoyISO(), []);
 
   const calculatedVolume = useMemo(() => numberFromString(form.volume_amount), [form.volume_amount]);
   const calculatedCash = useMemo(() => numberFromString(form.cash_amount), [form.cash_amount]);
@@ -528,10 +548,18 @@ export default function ComercialPage() {
     }
   }, [authorized, currentRoleCode, currentUserId]);
 
+  const dayCases = useMemo(() => {
+    return cases.filter((item) => isSameLocalDay(item.assigned_at, todayIso));
+  }, [cases, todayIso]);
+
+  const activeDayCases = useMemo(() => {
+    return dayCases.filter((item) => activeCommercialStatuses.includes(item.status as any));
+  }, [dayCases]);
+
   const filteredCases = useMemo(() => {
     const q = search.trim().toLowerCase();
 
-    return cases.filter((item) => {
+    return activeDayCases.filter((item) => {
       const searchOk = q
         ? (item.customer_name || "").toLowerCase().includes(q) ||
           (item.phone || "").toLowerCase().includes(q) ||
@@ -542,21 +570,29 @@ export default function ComercialPage() {
 
       return searchOk && statusOk;
     });
-  }, [cases, search, statusFilter]);
+  }, [activeDayCases, search, statusFilter]);
 
   const resumen = useMemo(() => {
     return {
-      total: cases.length,
-      activos: cases.filter((x) =>
-        ["asignado_comercial", "en_atencion_comercial", "seguimiento_comercial"].includes(
-          x.status
-        )
+      asignadosHoy: dayCases.length,
+      activosHoy: activeDayCases.length,
+      asistieronHoy: dayCases.filter((x) =>
+        ["en_atencion_comercial", "seguimiento_comercial", "finalizado"].includes(x.status)
       ).length,
-      vendidos: cases.filter((x) => x.status === "finalizado" && esVentaReal(x)).length,
-      seguimiento: cases.filter((x) => x.status === "seguimiento_comercial").length,
-      noVendidos: cases.filter((x) => x.status === "finalizado" && !esVentaReal(x)).length,
+      vendidosHoy: dayCases.filter((x) => x.status === "finalizado" && esVentaReal(x)).length,
+      seguimientoHoy: dayCases.filter((x) => x.status === "seguimiento_comercial").length,
+      noVendidosHoy: dayCases.filter((x) => x.status === "finalizado" && !esVentaReal(x)).length,
+      citasHoy: dayCases.filter((x) => x.next_appointment_created).length,
     };
-  }, [cases]);
+  }, [dayCases, activeDayCases]);
+
+  useEffect(() => {
+    if (!editingCaseId) return;
+    const exists = filteredCases.some((item) => item.id === editingCaseId);
+    if (!exists) {
+      resetForm();
+    }
+  }, [filteredCases, editingCaseId]);
 
   async function iniciarAtencion(item: CommercialCase) {
     try {
@@ -752,7 +788,7 @@ export default function ComercialPage() {
 
       setMensaje(
         finalizar
-          ? "Caso finalizado correctamente."
+          ? "Caso finalizado correctamente. Ya no aparecerá en la bandeja activa del día."
           : "Avance comercial guardado correctamente."
       );
       resetForm();
@@ -818,20 +854,28 @@ export default function ComercialPage() {
               <p className="text-sm font-medium text-[#7FA287]">Comercial</p>
               <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Gestión comercial</h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Atiende tus casos, registra ventas y agenda la siguiente continuidad.
+                Atiende solo los casos asignados hoy y registra el cierre comercial del día.
               </p>
             </div>
 
             <SessionBadge />
           </div>
 
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-3">
             <a
               href="/"
               className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
               Inicio
             </a>
+
+            <button
+              type="button"
+              onClick={() => void cargarDatos()}
+              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+            >
+              Actualizar
+            </button>
           </div>
         </section>
 
@@ -847,12 +891,14 @@ export default function ComercialPage() {
           </div>
         ) : null}
 
-        <section className="mb-6 grid gap-4 md:grid-cols-5">
-          <StatCard title="Casos" value={String(resumen.total)} />
-          <StatCard title="Activos" value={String(resumen.activos)} />
-          <StatCard title="Vendidos" value={String(resumen.vendidos)} />
-          <StatCard title="Seguimiento" value={String(resumen.seguimiento)} />
-          <StatCard title="No vendidos" value={String(resumen.noVendidos)} />
+        <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+          <StatCard title="Asignados hoy" value={String(resumen.asignadosHoy)} />
+          <StatCard title="Activos hoy" value={String(resumen.activosHoy)} />
+          <StatCard title="Asistieron hoy" value={String(resumen.asistieronHoy)} />
+          <StatCard title="Vendidos hoy" value={String(resumen.vendidosHoy)} />
+          <StatCard title="Seguimiento hoy" value={String(resumen.seguimientoHoy)} />
+          <StatCard title="No vendidos hoy" value={String(resumen.noVendidosHoy)} />
+          <StatCard title="Citas hoy" value={String(resumen.citasHoy)} />
         </section>
 
         <section className="mb-6 grid gap-6 xl:grid-cols-2">
@@ -1306,7 +1352,7 @@ export default function ComercialPage() {
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">Casos visibles</h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Busca por cliente o teléfono y filtra por estado.
+                  Solo aparecen los casos asignados hoy y aún activos para trabajar.
                 </p>
               </div>
 
@@ -1316,6 +1362,10 @@ export default function ComercialPage() {
               >
                 Actualizar
               </button>
+            </div>
+
+            <div className="mb-4 rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4 text-sm text-slate-600">
+              Los casos finalizados ya no quedan en esta bandeja. Siguen contando en el resumen diario.
             </div>
 
             <div className="mb-6 grid gap-3 md:grid-cols-2">
@@ -1334,8 +1384,6 @@ export default function ComercialPage() {
                 <option value="">Todos los estados</option>
                 <option value="asignado_comercial">Asignado</option>
                 <option value="en_atencion_comercial">En atención</option>
-                <option value="seguimiento_comercial">Seguimiento</option>
-                <option value="finalizado">Finalizado</option>
               </select>
             </div>
 
@@ -1345,7 +1393,7 @@ export default function ComercialPage() {
               </div>
             ) : filteredCases.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
-                No hay casos visibles.
+                No hay casos activos asignados hoy.
               </div>
             ) : (
               <div className="space-y-4">
@@ -1380,19 +1428,6 @@ export default function ComercialPage() {
                                 <p className="mt-1 text-sm text-slate-600">
                                   Asignado: {formatDate(item.assigned_at)}
                                 </p>
-
-                                {item.purchased_service ? (
-                                  <p className="mt-1 text-sm text-slate-600">
-                                    Servicio adquirido: {item.purchased_service}
-                                  </p>
-                                ) : null}
-
-                                {item.volume_amount || item.sale_value ? (
-                                  <p className="mt-1 text-sm text-slate-600">
-                                    Volumen: $
-                                    {Number(item.volume_amount || item.sale_value || 0).toLocaleString("es-CO")}
-                                  </p>
-                                ) : null}
                               </div>
 
                               <div className="rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-3">
@@ -1412,12 +1447,6 @@ export default function ComercialPage() {
                                 )}
                               </div>
                             </div>
-
-                            {item.next_appointment_created ? (
-                              <p className="mt-2 text-sm text-green-700">
-                                Siguiente cita creada
-                              </p>
-                            ) : null}
                           </div>
 
                           <button
