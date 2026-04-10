@@ -6,6 +6,9 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
+import StatCard from "@/components/ui/StatCard";
+import Field from "@/components/ui/Field";
+import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 
 type CommercialCase = {
   id: string;
@@ -311,14 +314,6 @@ function dateToLocalISO(dateString: string | null | undefined) {
 
 function isSameLocalDay(dateString: string | null | undefined, targetIso: string) {
   return dateToLocalISO(dateString) === targetIso;
-}
-
-function escapeHtml(value: string | null | undefined) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
 }
 
 function serviceLabel(value: string) {
@@ -706,315 +701,30 @@ export default function ComercialPage() {
     });
   }
 
+
   function imprimirInstruccionesPlan() {
     if (!currentCase) return;
 
-    const resumenRecepcion =
-      currentReceptionSummary.length > 0
-        ? `<ul>${currentReceptionSummary
-            .map((line) => `<li>${escapeHtml(line)}</li>`)
-            .join("")}</ul>`
-        : "<p>Sin resumen visible de recepción.</p>";
-
-    const planCuotas =
-      installmentPlan.length > 0
-        ? `<table class="installments-table">
-            <thead>
-              <tr>
-                <th>Cuota</th>
-                <th>Fecha</th>
-                <th>Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${installmentPlan
-                .map(
-                  (item) => `
-                    <tr>
-                      <td>${item.number}</td>
-                      <td>${escapeHtml(formatDateOnly(item.date))}</td>
-                      <td>$${escapeHtml(item.value.toLocaleString("es-CO"))}</td>
-                    </tr>
-                  `
-                )
-                .join("")}
-            </tbody>
-          </table>`
-        : `<p>No aplica plan de cuotas.</p>`;
-
-    const html = `
-      <!DOCTYPE html>
-      <html lang="es">
-        <head>
-          <meta charset="UTF-8" />
-          <title>Instrucciones del plan</title>
-          <style>
-            * { box-sizing: border-box; }
-            body {
-              font-family: Arial, Helvetica, sans-serif;
-              color: #1f2937;
-              margin: 0;
-              background: #ffffff;
-            }
-            .page {
-              width: 100%;
-              max-width: 900px;
-              margin: 0 auto;
-              padding: 28px 32px 40px;
-            }
-            .header {
-              display: flex;
-              justify-content: space-between;
-              align-items: flex-start;
-              gap: 24px;
-              border-bottom: 2px solid #d6e8da;
-              padding-bottom: 18px;
-              margin-bottom: 24px;
-            }
-            .brand h1 {
-              margin: 0;
-              font-size: 28px;
-              color: #24312a;
-            }
-            .brand p {
-              margin: 6px 0 0;
-              color: #5f7d66;
-              font-size: 14px;
-            }
-            .box {
-              border: 1px solid #d6e8da;
-              border-radius: 16px;
-              padding: 16px 18px;
-              margin-bottom: 18px;
-            }
-            .box h2 {
-              margin: 0 0 12px;
-              font-size: 18px;
-              color: #24312a;
-            }
-            .grid {
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 10px 18px;
-            }
-            .item-label {
-              font-size: 12px;
-              color: #64748b;
-              margin-bottom: 3px;
-            }
-            .item-value {
-              font-size: 15px;
-              font-weight: 600;
-              color: #111827;
-            }
-            .text-block {
-              white-space: pre-wrap;
-              line-height: 1.55;
-              font-size: 14px;
-            }
-            ul {
-              margin: 0;
-              padding-left: 18px;
-              line-height: 1.5;
-            }
-            .installments-table {
-              width: 100%;
-              border-collapse: collapse;
-              margin-top: 8px;
-            }
-            .installments-table th,
-            .installments-table td {
-              border: 1px solid #d6e8da;
-              padding: 8px 10px;
-              font-size: 13px;
-              text-align: left;
-            }
-            .installments-table th {
-              background: #f3f8f4;
-            }
-            .recommendations li {
-              margin-bottom: 8px;
-            }
-            .signatures {
-              display: grid;
-              grid-template-columns: repeat(2, minmax(0, 1fr));
-              gap: 26px;
-              margin-top: 30px;
-            }
-            .signature-line {
-              border-top: 1px solid #94a3b8;
-              padding-top: 10px;
-              font-size: 13px;
-              color: #475569;
-            }
-            .footer-note {
-              margin-top: 18px;
-              font-size: 12px;
-              color: #64748b;
-            }
-            @media print {
-              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-              .page { padding: 20px 24px 28px; }
-            }
-          </style>
-        </head>
-        <body>
-          <div class="page">
-            <div class="header">
-              <div class="brand">
-                <h1>Prevital</h1>
-                <p>Instrucciones del plan</p>
-              </div>
-              <div>
-                <div class="item-label">Fecha de impresión</div>
-                <div class="item-value">${escapeHtml(formatDate(new Date().toISOString()))}</div>
-              </div>
-            </div>
-
-            <div class="box">
-              <h2>Datos del cliente</h2>
-              <div class="grid">
-                <div>
-                  <div class="item-label">Nombre</div>
-                  <div class="item-value">${escapeHtml(currentCase.customer_name)}</div>
-                </div>
-                <div>
-                  <div class="item-label">Teléfono</div>
-                  <div class="item-value">${escapeHtml(currentCase.phone || "Sin teléfono")}</div>
-                </div>
-                <div>
-                  <div class="item-label">Ciudad</div>
-                  <div class="item-value">${escapeHtml(currentCase.city || "Sin ciudad")}</div>
-                </div>
-                <div>
-                  <div class="item-label">Ingreso comercial</div>
-                  <div class="item-value">${escapeHtml(formatDate(currentCase.created_at))}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="box">
-              <h2>Información del plan</h2>
-              <div class="grid">
-                <div>
-                  <div class="item-label">Servicio o plan</div>
-                  <div class="item-value">${escapeHtml(serviceLabel(form.purchased_service))}</div>
-                </div>
-                <div>
-                  <div class="item-label">Forma de pago</div>
-                  <div class="item-value">${escapeHtml(paymentMethodLabel(form.payment_method))}</div>
-                </div>
-                <div>
-                  <div class="item-label">Volumen</div>
-                  <div class="item-value">$${escapeHtml(
-                    calculatedVolume ? calculatedVolume.toLocaleString("es-CO") : "0"
-                  )}</div>
-                </div>
-                <div>
-                  <div class="item-label">Caja</div>
-                  <div class="item-value">$${escapeHtml(
-                    calculatedCash ? calculatedCash.toLocaleString("es-CO") : "0"
-                  )}</div>
-                </div>
-                <div>
-                  <div class="item-label">Cartera</div>
-                  <div class="item-value">$${escapeHtml(
-                    calculatedPortfolio ? calculatedPortfolio.toLocaleString("es-CO") : "0"
-                  )}</div>
-                </div>
-                <div>
-                  <div class="item-label">Siguiente paso</div>
-                  <div class="item-value">${escapeHtml(nextStepLabel(form.next_step_type))}</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="box">
-              <h2>Resumen de recepción</h2>
-              <div class="text-block">${resumenRecepcion}</div>
-            </div>
-
-            <div class="box">
-              <h2>Valoración y propuesta comercial</h2>
-              <p class="text-block"><strong>Valoración:</strong>\n${escapeHtml(
-                form.sales_assessment || "Sin valoración registrada."
-              )}</p>
-              <p class="text-block"><strong>Propuesta:</strong>\n${escapeHtml(
-                form.proposal_text || "Sin propuesta registrada."
-              )}</p>
-            </div>
-
-            <div class="box">
-              <h2>Observaciones de cierre</h2>
-              <p class="text-block">${escapeHtml(
-                form.closing_notes || "Sin observaciones adicionales."
-              )}</p>
-            </div>
-
-            <div class="box">
-              <h2>Continuidad o siguiente cita</h2>
-              <div class="grid">
-                <div>
-                  <div class="item-label">Fecha</div>
-                  <div class="item-value">${escapeHtml(
-                    form.next_step_type ? form.next_appointment_date || "Sin fecha" : "No definida"
-                  )}</div>
-                </div>
-                <div>
-                  <div class="item-label">Hora</div>
-                  <div class="item-value">${escapeHtml(
-                    form.next_step_type ? form.next_appointment_time || "Sin hora" : "No definida"
-                  )}</div>
-                </div>
-              </div>
-              <p class="text-block" style="margin-top: 14px;"><strong>Notas de continuidad:</strong>\n${escapeHtml(
-                form.next_notes || "Sin notas de continuidad."
-              )}</p>
-            </div>
-
-            <div class="box">
-              <h2>Detalle de cartera</h2>
-              ${planCuotas}
-            </div>
-
-            <div class="box">
-              <h2>Recomendaciones importantes</h2>
-              <ul class="recommendations">
-                <li>Conserva este documento como soporte de las indicaciones entregadas.</li>
-                <li>En caso de reprogramación o dudas, comunícate con Prevital con anticipación.</li>
-                <li>Asiste puntualmente a tus citas y lleva tus documentos si son requeridos.</li>
-                <li>Sigue las indicaciones del personal de salud y del área comercial.</li>
-                <li>Si existe cartera, respeta el plan de cuotas acordado.</li>
-              </ul>
-            </div>
-
-            <div class="signatures">
-              <div class="signature-line">Firma cliente</div>
-              <div class="signature-line">Firma asesor comercial</div>
-            </div>
-
-            <div class="footer-note">
-              Documento generado desde el módulo Comercial de Prevital.
-            </div>
-          </div>
-          <script>
-            window.onload = function() {
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `;
-
-    const printWindow = window.open("", "_blank", "width=980,height=900");
-    if (!printWindow) {
-      alert("No se pudo abrir la ventana de impresión.");
-      return;
-    }
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
+    printPlanInstructions({
+      customerName: currentCase.customer_name,
+      phone: currentCase.phone,
+      city: currentCase.city,
+      commercialDate: formatDate(currentCase.created_at),
+      serviceName: serviceLabel(form.purchased_service),
+      paymentMethod: paymentMethodLabel(form.payment_method),
+      volumeAmount: calculatedVolume,
+      cashAmount: calculatedCash,
+      portfolioAmount: calculatedPortfolio,
+      nextStep: nextStepLabel(form.next_step_type),
+      receptionSummary: currentReceptionSummary,
+      assessment: form.sales_assessment,
+      proposal: form.proposal_text,
+      closingNotes: form.closing_notes,
+      nextAppointmentDate: form.next_appointment_date || null,
+      nextAppointmentTime: form.next_appointment_time || null,
+      nextNotes: form.next_notes,
+      installmentPlan,
+    });
   }
 
   async function guardarCaso(finalizar: boolean) {
@@ -1821,44 +1531,6 @@ export default function ComercialPage() {
   );
 }
 
-function StatCard({
-  title,
-  value,
-}: {
-  title: string;
-  value: string;
-}) {
-  return (
-    <div className="group overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md">
-      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
-      <p className="text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
-    </div>
-  );
-}
-
-function Field({
-  label,
-  input,
-}: {
-  label: string;
-  input: React.ReactNode;
-}) {
-  return (
-    <label className="block">
-      <div className="mb-2 text-sm font-medium text-slate-700">{label}</div>
-      {input}
-    </label>
-  );
-}
-
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <p>
-      <span className="font-medium text-slate-800">{label}:</span> {value}
-    </p>
-  );
-}
 
 const inputClass =
   "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
