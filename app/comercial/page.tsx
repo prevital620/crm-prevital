@@ -8,7 +8,12 @@ import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 import StatCard from "@/components/ui/StatCard";
 import Field from "@/components/ui/Field";
+import InfoItem from "@/components/ui/InfoItem";
+import StatusBadge from "@/components/ui/StatusBadge";
 import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
+import { hoyISO, dateToLocalISO, isSameLocalDay } from "@/lib/datetime/dateHelpers";
+import { formatDate, formatDateOnly } from "@/lib/datetime/dateFormat";
+import { traducirEstadoComercial, commercialStatusClass } from "@/lib/status/commercialStatus";
 
 type CommercialCase = {
   id: string;
@@ -112,64 +117,28 @@ const activeCommercialStatuses = [
   "en_atencion_comercial",
 ] as const;
 
-function traducirEstado(status: string | null) {
-  const map: Record<string, string> = {
-    pendiente_asignacion_comercial: "Pendiente asignación",
-    asignado_comercial: "Asignado",
-    en_atencion_comercial: "En atención",
-    seguimiento_comercial: "Seguimiento",
-    finalizado: "Finalizado",
-  };
-
-  if (!status) return "Sin estado";
-  return map[status] || status;
+function esVentaReal(item: CommercialCase) {
+  return !!(
+    item.purchased_service ||
+    (item.sale_value && Number(item.sale_value) > 0) ||
+    (item.volume_amount && Number(item.volume_amount) > 0)
+  );
 }
 
-function estadoBadge(status: string | null) {
-  switch (status) {
-    case "pendiente_asignacion_comercial":
-      return "bg-amber-100 text-amber-700";
-    case "asignado_comercial":
-      return "bg-blue-100 text-blue-700";
-    case "en_atencion_comercial":
-      return "bg-cyan-100 text-cyan-700";
-    case "seguimiento_comercial":
-      return "bg-violet-100 text-violet-700";
-    case "finalizado":
-      return "bg-slate-200 text-slate-800";
-    default:
-      return "bg-slate-100 text-slate-700";
-  }
+
+function serviceLabel(value: string) {
+  const found = purchasedServiceOptions.find((item) => item.value === value);
+  return found?.label || value || "Sin definir";
 }
 
-function formatDate(dateString: string | null | undefined) {
-  if (!dateString) return "Sin fecha";
-  try {
-    return new Date(dateString).toLocaleString("es-CO", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return dateString;
-  }
+function paymentMethodLabel(value: string) {
+  const found = paymentMethodOptions.find((item) => item.value === value);
+  return found?.label || value || "Sin definir";
 }
 
-function formatDateOnly(dateString: string | null | undefined) {
-  if (!dateString) return "Sin fecha";
-  try {
-    return new Date(dateString).toLocaleDateString("es-CO", {
-      dateStyle: "medium",
-    });
-  } catch {
-    return dateString;
-  }
-}
-
-function hoyISO() {
-  const now = new Date();
-  const offset = now.getTimezoneOffset();
-  const local = new Date(now.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 10);
+function nextStepLabel(value: string) {
+  const found = nextStepOptions.find((item) => item.value === value);
+  return found?.label || value || "No definida";
 }
 
 function ahoraHora() {
@@ -179,14 +148,6 @@ function ahoraHora() {
     minute: "2-digit",
     hour12: false,
   });
-}
-
-function esVentaReal(item: CommercialCase) {
-  return !!(
-    item.purchased_service ||
-    (item.sale_value && Number(item.sale_value) > 0) ||
-    (item.volume_amount && Number(item.volume_amount) > 0)
-  );
 }
 
 function normalizeMoneyString(value: string) {
@@ -301,34 +262,6 @@ function buildClosingNotes(
   }
 
   return lines.join("\n").trim() || null;
-}
-
-function dateToLocalISO(dateString: string | null | undefined) {
-  if (!dateString) return "";
-  const date = new Date(dateString);
-  if (Number.isNaN(date.getTime())) return "";
-  const offset = date.getTimezoneOffset();
-  const local = new Date(date.getTime() - offset * 60 * 1000);
-  return local.toISOString().slice(0, 10);
-}
-
-function isSameLocalDay(dateString: string | null | undefined, targetIso: string) {
-  return dateToLocalISO(dateString) === targetIso;
-}
-
-function serviceLabel(value: string) {
-  const found = purchasedServiceOptions.find((item) => item.value === value);
-  return found?.label || value || "Sin definir";
-}
-
-function paymentMethodLabel(value: string) {
-  const found = paymentMethodOptions.find((item) => item.value === value);
-  return found?.label || value || "Sin definir";
-}
-
-function nextStepLabel(value: string) {
-  const found = nextStepOptions.find((item) => item.value === value);
-  return found?.label || value || "No definida";
 }
 
 export default function ComercialPage() {
@@ -981,9 +914,10 @@ export default function ComercialPage() {
                 <div className="rounded-2xl border border-[#CFE7D6] bg-[#EEF8F1] p-4">
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="text-sm font-semibold text-[#2F5E46]">Estado del caso:</span>
-                    <span className="rounded-full border border-[#CFE7D6] bg-white px-3 py-1 text-sm font-semibold text-[#2F7A52]">
-                      En atención
-                    </span>
+                    <StatusBadge
+                      label="En atención"
+                      className="bg-emerald-100 text-emerald-700"
+                    />
                     {currentCase?.assigned_at ? (
                       <span className="text-sm text-[#2F5E46]">
                         Desde: {formatDate(currentCase.assigned_at)}
@@ -1473,11 +1407,10 @@ export default function ComercialPage() {
                                 {item.customer_name}
                               </h3>
 
-                              <span
-                                className={`rounded-full border px-3 py-1 text-xs font-semibold ${estadoBadge(item.status)}`}
-                              >
-                                {traducirEstado(item.status)}
-                              </span>
+                              <StatusBadge
+                                label={traducirEstadoComercial(item.status)}
+                                className={commercialStatusClass(item.status)}
+                              />
                             </div>
 
                             <div className="mt-2 grid gap-3 xl:grid-cols-2">
@@ -1534,10 +1467,3 @@ export default function ComercialPage() {
 
 const inputClass =
   "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
-function InfoItem({ label, value }: { label: string; value: string }) {
-  return (
-    <p>
-      <span className="font-medium text-slate-800">{label}:</span> {value}
-    </p>
-  );
-}
