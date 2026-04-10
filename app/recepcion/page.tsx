@@ -639,6 +639,14 @@ function normalizarHora(value: string) {
   return value.slice(0, 5);
 }
 
+function escapeHtml(value: string | null | undefined) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function RecepcionContent() {
   const searchParams = useSearchParams();
   const leadIdFromUrl = searchParams.get("leadId");
@@ -1541,6 +1549,287 @@ function RecepcionContent() {
       clasificacion_motivo: "",
       referido_por: "",
     });
+  }
+
+
+  function imprimirRegistroComercial() {
+    const ocupacion = traducirOcupacionComercial(
+      commercialForm.ocupacion,
+      commercialForm.ocupacion_otro
+    );
+
+    const condicionesMarcadas = commercialDisqualifyingOptions
+      .filter((item) => commercialForm.condiciones_descalificantes[item.key])
+      .map((item) => item.label);
+
+    const html = `
+      <!DOCTYPE html>
+      <html lang="es">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Registro recepción</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; background: #fff; }
+            .page { max-width: 900px; margin: 0 auto; padding: 28px 32px 40px; }
+            .header {
+              display:flex; justify-content:space-between; gap:24px;
+              border-bottom: 3px solid #7FA287;
+              padding-bottom:18px; margin-bottom:24px;
+            }
+            .brand h1 { margin:0; font-size:30px; color:#24312a; letter-spacing:.2px; }
+            .brand p { margin:6px 0 0; color:#5f7d66; font-size:14px; }
+            .pill {
+              display:inline-block; padding:6px 12px; border-radius:999px;
+              background:#eef8f1; color:#2f5e46; font-size:12px; font-weight:700;
+              border:1px solid #cfe7d6;
+            }
+            .box {
+              border:1px solid #d6e8da; border-radius:18px; padding:16px 18px;
+              margin-bottom:18px; background:#fff;
+            }
+            .box h2 { margin:0 0 12px; font-size:18px; color:#24312a; }
+            .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 18px; }
+            .item-label { font-size:12px; color:#64748b; margin-bottom:4px; text-transform:uppercase; letter-spacing:.3px; }
+            .item-value { font-size:15px; font-weight:600; color:#111827; }
+            .text-block { white-space:pre-wrap; line-height:1.65; font-size:14px; }
+            ul { margin:0; padding-left:18px; line-height:1.6; }
+            .signatures { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; margin-top:34px; }
+            .signature-line { border-top:1px solid #94a3b8; padding-top:10px; font-size:13px; color:#475569; }
+            .muted { color:#64748b; font-size:12px; }
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="header">
+              <div class="brand">
+                <span class="pill">Prevital</span>
+                <h1>Registro de recepción</h1>
+                <p>Ingreso comercial y validación inicial del cliente</p>
+              </div>
+              <div>
+                <div class="item-label">Fecha de impresión</div>
+                <div class="item-value">${escapeHtml(new Date().toLocaleString("es-CO"))}</div>
+              </div>
+            </div>
+
+            <div class="box">
+              <h2>Datos del cliente</h2>
+              <div class="grid">
+                <div><div class="item-label">Nombre</div><div class="item-value">${escapeHtml(commercialForm.customer_name || "Sin nombre")}</div></div>
+                <div><div class="item-label">Teléfono</div><div class="item-value">${escapeHtml(commercialForm.phone || "Sin teléfono")}</div></div>
+                <div><div class="item-label">Ciudad</div><div class="item-value">${escapeHtml(commercialForm.city || "Sin ciudad")}</div></div>
+                <div><div class="item-label">Documento</div><div class="item-value">${escapeHtml(commercialForm.documento || "Sin documento")}</div></div>
+                <div><div class="item-label">Fuente</div><div class="item-value">${escapeHtml(commercialForm.fuente || "Sin fuente")}</div></div>
+                <div><div class="item-label">Referido por</div><div class="item-value">${escapeHtml(commercialForm.referido_por || "No aplica")}</div></div>
+              </div>
+            </div>
+
+            <div class="box">
+              <h2>Clasificación inicial</h2>
+              <div class="grid">
+                <div><div class="item-label">Resultado</div><div class="item-value">${escapeHtml(commercialForm.clasificacion_inicial || "Sin definir")}</div></div>
+                <div><div class="item-label">Motivo</div><div class="item-value">${escapeHtml(commercialForm.clasificacion_motivo || "Sin motivo")}</div></div>
+              </div>
+            </div>
+
+            <div class="box">
+              <h2>Información de validación</h2>
+              <div class="grid">
+                <div><div class="item-label">Tiene EPS</div><div class="item-value">${escapeHtml(commercialForm.tiene_eps === "si" ? "Sí" : "No")}</div></div>
+                <div><div class="item-label">Afiliación</div><div class="item-value">${escapeHtml(commercialForm.afiliacion || "Sin definir")}</div></div>
+                <div><div class="item-label">Edad</div><div class="item-value">${escapeHtml(commercialForm.edad || "Sin dato")}</div></div>
+                <div><div class="item-label">Asiste con cédula</div><div class="item-value">${escapeHtml(commercialForm.trae_cedula === "si" ? "Sí" : "No")}</div></div>
+                <div><div class="item-label">Celular inteligente</div><div class="item-value">${escapeHtml(commercialForm.celular_inteligente === "si" ? "Sí" : "No")}</div></div>
+                <div><div class="item-label">Ocupación</div><div class="item-value">${escapeHtml(ocupacion || "Sin definir")}</div></div>
+              </div>
+            </div>
+
+            <div class="box">
+              <h2>Condiciones descalificantes</h2>
+              ${
+                condicionesMarcadas.length > 0
+                  ? `<ul>${condicionesMarcadas.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+                  : `<p class="text-block">Ninguna de las anteriores.</p>`
+              }
+            </div>
+
+            <div class="box">
+              <h2>Observaciones de recepción</h2>
+              <p class="text-block">${escapeHtml(commercialForm.observaciones || "Sin observaciones registradas.")}</p>
+              <p class="muted" style="margin-top:10px;">Este formato puede usarse como soporte interno o para archivo del proceso de admisión.</p>
+            </div>
+
+            <div class="signatures">
+              <div class="signature-line">Firma del cliente</div>
+              <div class="signature-line">Firma de recepción</div>
+            </div>
+          </div>
+          <script>window.onload = function(){ window.print(); };</script>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "width=980,height=900");
+    if (!printWindow) {
+      alert("No se pudo abrir la ventana de impresión.");
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
+
+  function imprimirCitaRecepcion(item: AppointmentRow) {
+    const source = item.lead_id
+      ? "Lead existente"
+      : traducirFuenteManual(extraerFuenteManualDesdeNotas(item.notes));
+    const cleanNotes = limpiarMetadatosAgenda(item.notes);
+    const html = `
+      <!DOCTYPE html>
+      <html lang="es">
+        <head>
+          <meta charset="UTF-8" />
+          <title>Comprobante de cita</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { font-family: Arial, Helvetica, sans-serif; color: #1f2937; margin: 0; background: #fff; }
+            .page { max-width: 900px; margin: 0 auto; padding: 28px 32px 40px; }
+            .header {
+              display:flex; justify-content:space-between; gap:24px;
+              border-bottom: 3px solid #7FA287;
+              padding-bottom:18px; margin-bottom:24px;
+            }
+            .brand h1 { margin:0; font-size:30px; color:#24312a; letter-spacing:.2px; }
+            .brand p { margin:6px 0 0; color:#5f7d66; font-size:14px; }
+            .pill {
+              display:inline-block; padding:6px 12px; border-radius:999px;
+              background:#eef8f1; color:#2f5e46; font-size:12px; font-weight:700;
+              border:1px solid #cfe7d6;
+            }
+            .box {
+              border:1px solid #d6e8da; border-radius:18px; padding:16px 18px;
+              margin-bottom:18px; background:#fff;
+            }
+            .box h2 { margin:0 0 12px; font-size:18px; color:#24312a; }
+            .grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px 18px; }
+            .item-label { font-size:12px; color:#64748b; margin-bottom:4px; text-transform:uppercase; letter-spacing:.3px; }
+            .item-value { font-size:15px; font-weight:600; color:#111827; }
+            .text-block { white-space:pre-wrap; line-height:1.65; font-size:14px; }
+            ul { margin:0; padding-left:18px; line-height:1.6; }
+            .signatures { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:28px; margin-top:34px; }
+            .signature-line { border-top:1px solid #94a3b8; padding-top:10px; font-size:13px; color:#475569; }
+            .muted { color:#64748b; font-size:12px; }
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="page">
+            <div class="header">
+              <div class="brand">
+                <span class="pill">Prevital</span>
+                <h1>Comprobante de cita</h1>
+                <p>Agenda de recepción</p>
+              </div>
+              <div>
+                <div class="item-label">Fecha de impresión</div>
+                <div class="item-value">${escapeHtml(new Date().toLocaleString("es-CO"))}</div>
+              </div>
+            </div>
+
+            <div class="box">
+              <h2>Datos del cliente</h2>
+              <div class="grid">
+                <div><div class="item-label">Nombre</div><div class="item-value">${escapeHtml(item.patient_name || "Sin nombre")}</div></div>
+                <div><div class="item-label">Teléfono</div><div class="item-value">${escapeHtml(item.phone || "Sin teléfono")}</div></div>
+                <div><div class="item-label">Ciudad</div><div class="item-value">${escapeHtml(item.city || "Sin ciudad")}</div></div>
+                <div><div class="item-label">Fuente</div><div class="item-value">${escapeHtml(source || "Sin fuente")}</div></div>
+              </div>
+            </div>
+
+            <div class="box">
+              <h2>Información de la cita</h2>
+              <div class="grid">
+                <div><div class="item-label">Fecha</div><div class="item-value">${escapeHtml(item.appointment_date)}</div></div>
+                <div><div class="item-label">Hora</div><div class="item-value">${escapeHtml(formatHora(item.appointment_time))}</div></div>
+                <div><div class="item-label">Estado</div><div class="item-value">${escapeHtml(traducirEstado(item.status))}</div></div>
+                <div><div class="item-label">Servicio</div><div class="item-value">${escapeHtml(item.service_type || "Valoración")}</div></div>
+              </div>
+            </div>
+
+            <div class="box">
+              <h2>Indicaciones importantes</h2>
+              <ul>
+                <li>Llegar 10 a 15 minutos antes de la cita.</li>
+                <li>Presentar documento si es requerido.</li>
+                <li>Informar con anticipación si no puede asistir.</li>
+                <li>Seguir las recomendaciones dadas por Prevital.</li>
+              </ul>
+              <p class="muted" style="margin-top:10px;">Conserva este comprobante para tu control de asistencia.</p>
+            </div>
+
+            <div class="box">
+              <h2>Notas</h2>
+              <p class="text-block">${escapeHtml(cleanNotes || "Sin notas registradas.")}</p>
+            </div>
+
+            <div class="signatures">
+              <div class="signature-line">Firma del cliente</div>
+              <div class="signature-line">Firma de recepción</div>
+            </div>
+          </div>
+          <script>window.onload = function(){ window.print(); };</script>
+        </body>
+      </html>
+    `;
+
+    const printWindow = window.open("", "_blank", "width=980,height=900");
+    if (!printWindow) {
+      alert("No se pudo abrir la ventana de impresión.");
+      return;
+    }
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+  }
+
+
+  function imprimirCitaActualDesdeFormulario() {
+    const citaActual: AppointmentRow = {
+      id: editingAppointmentId || "actual",
+      lead_id: form.mode === "lead" ? form.lead_id || null : null,
+      patient_name: form.patient_name,
+      phone: form.phone || null,
+      city: form.city || null,
+      appointment_date: form.appointment_date,
+      appointment_time: form.appointment_time,
+      status: form.status,
+      service_type:
+        activeSection === "agenda"
+          ? "valoracion"
+          : form.service_type || null,
+      notes: construirNotasAgenda({
+        notes: form.notes,
+        manualSource: form.mode === "manual" ? form.manual_source : "",
+        durationMinutes: Number(form.duration_minutes || "30"),
+      }),
+      checked_in_at: null,
+      attended_at: null,
+    };
+
+    if (!citaActual.patient_name.trim() || !citaActual.appointment_date || !citaActual.appointment_time) {
+      alert("Completa nombre, fecha y hora antes de imprimir la cita.");
+      return;
+    }
+
+    imprimirCitaRecepcion(citaActual);
   }
 
   async function registrarIngresoComercial(e: React.FormEvent) {
@@ -2659,13 +2948,23 @@ function RecepcionContent() {
                   }
                 />
 
-                <button
-                  type="submit"
-                  disabled={savingCommercialIntake}
-                  className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
-                >
-                  {savingCommercialIntake ? "Registrando..." : "Registrar ingreso a comercial"}
-                </button>
+                <div className="grid gap-3 md:grid-cols-2">
+                  <button
+                    type="submit"
+                    disabled={savingCommercialIntake}
+                    className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                  >
+                    {savingCommercialIntake ? "Registrando..." : "Registrar ingreso a comercial"}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={imprimirRegistroComercial}
+                    className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  >
+                    Imprimir registro
+                  </button>
+                </div>
               </form>
             </div>
 
@@ -3369,17 +3668,27 @@ function RecepcionContent() {
                 }
               />
 
-              <button
-                type="submit"
-                disabled={savingAppointment}
-                className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
-              >
-                {savingAppointment
-                  ? "Guardando..."
-                  : editingAppointmentId
-                  ? "Guardar reagendamiento"
-                  : "Guardar cita"}
-              </button>
+              <div className="grid gap-3 md:grid-cols-2">
+                <button
+                  type="submit"
+                  disabled={savingAppointment}
+                  className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                >
+                  {savingAppointment
+                    ? "Guardando..."
+                    : editingAppointmentId
+                    ? "Guardar reagendamiento"
+                    : "Guardar cita"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={imprimirCitaActualDesdeFormulario}
+                  className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                >
+                  Imprimir cita actual
+                </button>
+              </div>
             </form>
           </div>
 
