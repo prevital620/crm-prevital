@@ -1534,3 +1534,10 @@ export default function ComercialPage() {
 
 const inputClass =
   "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
+function InfoItem({ label, value }: { label: string; value: string }) {
+  return (
+    <p>
+      <span className="font-medium text-slate-800">{label}:</span> {value}
+    </p>
+  );
+}
