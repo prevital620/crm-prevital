@@ -110,6 +110,37 @@ export default function UsuariosPage() {
     }
   }
 
+  async function eliminarUsuario(user: UserRow) {
+    const confirmado = window.confirm(
+      `¿Seguro que quieres eliminar a ${user.full_name}? Esta acción borrará el acceso del usuario.`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      setSavingUserId(user.id);
+      setError("");
+      setMensaje("");
+
+      const response = await fetch(`/api/usuarios/${user.id}`, {
+        method: "DELETE",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo eliminar el usuario.");
+      }
+
+      setUsers((prev) => prev.filter((item) => item.id !== user.id));
+      setMensaje("Usuario eliminado correctamente.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo eliminar el usuario.");
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
   function formatDate(dateString: string) {
     try {
       return new Date(dateString).toLocaleString("es-CO", {
@@ -183,7 +214,7 @@ export default function UsuariosPage() {
                 Usuarios y roles
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Consulta empleados creados en el CRM, edítalos, desactívalos de forma segura y entra al formulario de creación cuando lo necesites.
+                Consulta empleados creados en el CRM, edítalos, desactívalos o elimínalos cuando sea necesario.
               </p>
             </div>
 
@@ -308,7 +339,7 @@ export default function UsuariosPage() {
                           </div>
                         </div>
 
-                        <div className="w-full rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-4 lg:w-[330px]">
+                        <div className="w-full rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-4 lg:w-[360px]">
                           <p className="mb-3 text-sm font-medium text-slate-700">Acciones</p>
 
                           <div className="flex flex-wrap gap-2">
@@ -331,10 +362,19 @@ export default function UsuariosPage() {
                                 ? "Desactivar"
                                 : "Reactivar"}
                             </button>
+
+                            <button
+                              type="button"
+                              onClick={() => void eliminarUsuario(user)}
+                              disabled={savingUserId === user.id}
+                              className="rounded-2xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
+                            >
+                              {savingUserId === user.id ? "Eliminando..." : "Eliminar"}
+                            </button>
                           </div>
 
                           <p className="mt-3 text-xs text-slate-500">
-                            La opción de eliminar aquí funciona como desactivación segura para no romper el acceso histórico del CRM.
+                            El botón eliminar hará borrado real del acceso por backend.
                           </p>
                         </div>
                       </div>
