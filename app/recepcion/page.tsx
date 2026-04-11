@@ -8,8 +8,13 @@ import SessionBadge from "@/components/session-badge";
 import { useSearchParams } from "next/navigation";
 import StatCard from "@/components/ui/StatCard";
 import Field from "@/components/ui/Field";
+import InfoItem from "@/components/ui/InfoItem";
+import StatusBadge from "@/components/ui/StatusBadge";
 import printAppointment from "@/lib/print/templates/printAppointment";
 import printReceptionRecord from "@/lib/print/templates/printReceptionRecord";
+import { hoyISO, formatHora, normalizarHora } from "@/lib/datetime/dateHelpers";
+import { traducirEstadoCita, appointmentStatusClass } from "@/lib/status/appointmentStatus";
+import { traducirEstadoComercial, commercialStatusClass } from "@/lib/status/commercialStatus";
 
 type LeadOption = {
   id: string;
@@ -287,19 +292,6 @@ const DEFAULT_DAILY_CAPACITY = 60;
 const SPECIALIST_SINGLE_CAPACITY = 1;
 const TREATMENT_DOUBLE_CAPACITY = 2;
 
-function hoyISO() {
-  const hoy = new Date();
-  const y = hoy.getFullYear();
-  const m = String(hoy.getMonth() + 1).padStart(2, "0");
-  const d = String(hoy.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
-function formatHora(hora: string | null | undefined) {
-  if (!hora) return "";
-  return hora.slice(0, 5);
-}
-
 function fullLeadName(lead: LeadOption) {
   return (
     lead.full_name?.trim() ||
@@ -510,74 +502,6 @@ function countBookingsForSlot(
     if (!sameAgendaResource(section, item, serviceType)) return false;
     return getAppointmentOccupiedSlots(item).includes(slotValue);
   }).length;
-}
-
-function badgeEstado(status: string) {
-  switch (status) {
-    case "agendada":
-      return "bg-slate-100 text-slate-700";
-    case "confirmada":
-      return "bg-blue-100 text-blue-700";
-    case "en_espera":
-      return "bg-amber-100 text-amber-700";
-    case "asistio":
-      return "bg-emerald-100 text-emerald-700";
-    case "no_asistio":
-      return "bg-rose-100 text-rose-700";
-    case "reagendada":
-      return "bg-violet-100 text-violet-700";
-    case "cancelada":
-      return "bg-red-100 text-red-700";
-    case "en_atencion":
-      return "bg-cyan-100 text-cyan-700";
-    case "finalizada":
-      return "bg-green-100 text-green-700";
-    default:
-      return "bg-slate-100 text-slate-700";
-  }
-}
-
-function traducirEstado(status: string) {
-  const map: Record<string, string> = {
-    agendada: "Agendada",
-    confirmada: "Confirmada",
-    en_espera: "En espera",
-    asistio: "Asistió",
-    no_asistio: "No asistió",
-    reagendada: "Reagendada",
-    cancelada: "Cancelada",
-    en_atencion: "En atención",
-    finalizada: "Finalizada",
-  };
-  return map[status] || status;
-}
-
-function traducirEstadoComercial(status: string | null | undefined) {
-  const map: Record<string, string> = {
-    pendiente_asignacion_comercial: "Pendiente de asignación",
-    asignado_comercial: "Asignado",
-    en_atencion_comercial: "En atención",
-    seguimiento: "Seguimiento",
-    finalizado: "Finalizado",
-  };
-  return map[status || ""] || status || "Sin estado";
-}
-
-function badgeEstadoComercial(status: string | null | undefined) {
-  switch (status) {
-    case "pendiente_asignacion_comercial":
-      return "bg-amber-100 text-amber-700";
-    case "asignado_comercial":
-      return "bg-blue-100 text-blue-700";
-    case "en_atencion_comercial":
-      return "bg-cyan-100 text-cyan-700";
-    case "seguimiento":
-      return "bg-violet-100 text-violet-700";
-    case "finalizado":
-      return "bg-emerald-100 text-emerald-700";
-    default:
-      return "bg-slate-100 text-slate-700";
-  }
 }
 
 function calcularClasificacionInicial(values: {
@@ -1590,7 +1514,7 @@ function RecepcionContent() {
       source: source || "Sin fuente",
       appointmentDate: item.appointment_date,
       appointmentTime: formatHora(item.appointment_time),
-      statusLabel: traducirEstado(item.status),
+      statusLabel: traducirEstadoCita(item.status),
       serviceType: item.service_type || "Valoración",
       notes: limpiarMetadatosAgenda(item.notes) || "Sin notas registradas.",
     });
@@ -2792,9 +2716,10 @@ function RecepcionContent() {
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-base font-semibold text-slate-900">{item.customer_name}</p>
-                            <span className={`rounded-full px-3 py-1 text-xs ${badgeEstadoComercial(item.status)}`}>
-                              {traducirEstadoComercial(item.status)}
-                            </span>
+                            <StatusBadge
+                              label={traducirEstadoComercial(item.status)}
+                              className={commercialStatusClass(item.status)}
+                            />
                           </div>
                           <p className="mt-1 text-sm text-slate-600">
                             {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
@@ -2848,15 +2773,14 @@ function RecepcionContent() {
                     <p className="mt-1 text-lg font-semibold text-slate-900">
                       {selectedPrintPatient.patient_name}
                     </p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {selectedPrintPatient.phone || "Sin teléfono"} · {selectedPrintPatient.city || "Sin ciudad"}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      {selectedPrintPatient.detail}
-                    </p>
-                    <p className="mt-1 text-sm text-slate-600">
-                      Fuente: {selectedPrintPatient.source}
-                    </p>
+                    <div className="mt-2 space-y-1 text-sm text-slate-600">
+                      <InfoItem
+                        label="Contacto"
+                        value={`${selectedPrintPatient.phone || "Sin teléfono"} · ${selectedPrintPatient.city || "Sin ciudad"}`}
+                      />
+                      <InfoItem label="Detalle" value={selectedPrintPatient.detail} />
+                      <InfoItem label="Fuente" value={selectedPrintPatient.source} />
+                    </div>
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
@@ -3569,13 +3493,10 @@ function RecepcionContent() {
                                 {item.patient_name}
                               </h3>
 
-                              <span
-                                className={`rounded-full px-3 py-1 text-xs ${badgeEstado(
-                                  item.status
-                                )}`}
-                              >
-                                {traducirEstado(item.status)}
-                              </span>
+                              <StatusBadge
+                                label={traducirEstadoCita(item.status)}
+                                className={appointmentStatusClass(item.status)}
+                              />
 
                               <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
                                 {item.appointment_date}
