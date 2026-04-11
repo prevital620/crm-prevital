@@ -4,7 +4,8 @@ export type ReceptionSection =
   | "tratamientos"
   | "impresiones"
   | "inventario"
-  | "comercial";
+  | "comercial"
+  | "nutricion_entregas";
 
 export const generalServiceOptions = [
   { value: "valoracion", label: "Valoración" },
@@ -38,19 +39,30 @@ export function getSectionLabel(section: ReceptionSection) {
   if (section === "impresiones") return "Impresiones y entregas";
   if (section === "inventario") return "Inventario";
   if (section === "comercial") return "Ingreso comercial";
+  if (section === "nutricion_entregas") return "Entregas nutrición";
   return "Agenda";
 }
 
 export function getServiceFieldLabel(section: ReceptionSection) {
   if (section === "especialistas") return "Especialista";
   if (section === "tratamientos") return "Tratamiento";
-  if (section === "impresiones" || section === "inventario" || section === "comercial") return "Servicio";
+  if (
+    section === "impresiones" ||
+    section === "inventario" ||
+    section === "comercial" ||
+    section === "nutricion_entregas"
+  ) return "Servicio";
   return "Servicio";
 }
 
 export function getServiceOptionsBySection(section: ReceptionSection) {
   if (section === "especialistas") return specialistOptions;
   if (section === "tratamientos") return treatmentOptions;
-  if (section === "impresiones" || section === "inventario" || section === "comercial") return [];
+  if (
+    section === "impresiones" ||
+    section === "inventario" ||
+    section === "comercial" ||
+    section === "nutricion_entregas"
+  ) return [];
   return generalServiceOptions;
 }

@@ -59,6 +59,7 @@ export function getSlotsForDuration(startTime: string, durationMinutes: number) 
 export function getResourceCapacity(section: ReceptionSection) {
   if (section === "especialistas") return SPECIALIST_SINGLE_CAPACITY;
   if (section === "tratamientos") return TREATMENT_DOUBLE_CAPACITY;
+  if (section === "nutricion_entregas") return DEFAULT_SLOT_CAPACITY;
   return DEFAULT_SLOT_CAPACITY;
 }
 
@@ -67,6 +68,7 @@ export function getDurationOptions(
   serviceType: string,
   appointmentDate: string
 ) {
+  if (section === "nutricion_entregas") return [];
   if (section === "tratamientos") return [{ value: "30", label: "30 min" }];
 
   if (section === "especialistas") {
@@ -91,6 +93,8 @@ export function getAllowedSlotOptions(
   appointmentDate: string,
   durationMinutes: number
 ) {
+  if (section === "nutricion_entregas") return [];
+
   if (section === "especialistas") {
     if (serviceType === "medico") {
       if (getDayOfWeek(appointmentDate) !== 3 || durationMinutes !== 60) return [];

@@ -54,6 +54,15 @@ type AppointmentRow = {
   attended_at: string | null;
 };
 
+type UserRow = {
+  id: string;
+  nombre: string | null;
+  documento: string | null;
+  telefono: string | null;
+  ciudad: string | null;
+};
+
+
 type AgendaDaySetting = {
   agenda_date: string;
   daily_capacity: number | null;
@@ -72,7 +81,7 @@ type SlotOption = {
   label: string;
 };
 
-type ReceptionSection = "agenda" | "especialistas" | "tratamientos" | "impresiones" | "inventario" | "comercial";
+type ReceptionSection = "agenda" | "especialistas" | "tratamientos" | "impresiones" | "inventario" | "comercial" | "nutricion_entregas";
 
 type DeliveryLog = {
   id: string;
@@ -131,6 +140,40 @@ type CommercialDisqualifyingKey =
   | "dialisis";
 
 type CommercialDisqualifyingFlags = Record<CommercialDisqualifyingKey, boolean>;
+
+type NutritionProfileRow = {
+  user_id: string;
+  antecedentes_patologicos: string | null;
+  cirugias: string | null;
+  toxicos: string | null;
+  alergicos: string | null;
+  medicamentos: string | null;
+  familiares: string | null;
+  peso: string | null;
+  talla: string | null;
+  perimetro_brazo: string | null;
+  indice_masa_corporal: string | null;
+  porcentaje_masa_corporal: string | null;
+  masa_muscular: string | null;
+  metabolismo_reposo: string | null;
+  grasa_visceral: string | null;
+  edad_corporal: string | null;
+  circunferencia_cintura: string | null;
+  perimetro_pantorrilla: string | null;
+  clasificacion_nutricional: string | null;
+  objetivo_nutricional: string | null;
+  recomendaciones_nutricionales: string | null;
+  datos_alimentarios: string | null;
+  plan_nutricional: string | null;
+  observaciones_generales: string | null;
+};
+
+type NutritionDeliverySelection = {
+  appointment: AppointmentRow;
+  userId: string | null;
+  document: string;
+  profile: NutritionProfileRow | null;
+};
 
 const allowedRoles = [
   "super_user",
@@ -329,6 +372,113 @@ function badgeEstadoComercial(status: string | null | undefined) {
 }
 
 
+function isNutritionService(serviceType: string | null | undefined) {
+  return (serviceType || "").toLowerCase().includes("nutri");
+}
+
+function hasPendingNutritionDelivery(notes: string | null | undefined) {
+  return /Entrega nutrición pendiente:\s*Sí/i.test(notes || "");
+}
+
+function limpiarPendienteNutricionDeNotas(notes: string | null | undefined) {
+  if (!notes) return "";
+  return notes
+    .split("\n")
+    .filter((line) => !/^Entrega nutrición pendiente:/i.test(line.trim()))
+    .join("\n")
+    .trim();
+}
+
+function marcarEntregaNutricionResuelta(notes: string | null | undefined) {
+  const clean = limpiarPendienteNutricionDeNotas(notes);
+  return clean ? `Entrega nutrición pendiente: No\n${clean}` : "Entrega nutrición pendiente: No";
+}
+
+function imprimirDocumentoNutricional({
+  appointment,
+  document,
+  profile,
+}: {
+  appointment: AppointmentRow;
+  document: string;
+  profile: NutritionProfileRow | null;
+}) {
+  if (typeof window === "undefined") return;
+
+  const nuevaVentana = window.open("", "_blank", "width=900,height=700");
+  if (!nuevaVentana) return;
+
+  const texto = (value: string | null | undefined) => value || "";
+
+  nuevaVentana.document.write(`
+    <html>
+      <head>
+        <title>Documento nutricional</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 32px; color: #0f172a; }
+          h1 { margin-bottom: 8px; }
+          h2 { margin-top: 28px; margin-bottom: 10px; font-size: 18px; }
+          .muted { color: #475569; margin: 4px 0; }
+          .box { border: 1px solid #cbd5e1; border-radius: 16px; padding: 16px; margin-top: 14px; }
+          .grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+          .item { border: 1px solid #e2e8f0; border-radius: 12px; padding: 10px; }
+        </style>
+      </head>
+      <body>
+        <h1>Documento nutricional</h1>
+        <p class="muted">CRM Prevital · Recepción</p>
+        <div class="box">
+          <p><strong>Cliente:</strong> ${texto(appointment.patient_name)}</p>
+          <p><strong>Documento:</strong> ${texto(document)}</p>
+          <p><strong>Teléfono:</strong> ${texto(appointment.phone)}</p>
+          <p><strong>Ciudad:</strong> ${texto(appointment.city)}</p>
+          <p><strong>Fecha:</strong> ${texto(appointment.appointment_date)}</p>
+          <p><strong>Hora:</strong> ${texto(formatHora(appointment.appointment_time))}</p>
+        </div>
+
+        <h2>Antecedentes</h2>
+        <div class="grid">
+          <div class="item"><strong>Patológicos</strong><br/>${texto(profile?.antecedentes_patologicos)}</div>
+          <div class="item"><strong>Cirugías</strong><br/>${texto(profile?.cirugias)}</div>
+          <div class="item"><strong>Tóxicos</strong><br/>${texto(profile?.toxicos)}</div>
+          <div class="item"><strong>Alérgicos</strong><br/>${texto(profile?.alergicos)}</div>
+          <div class="item"><strong>Medicamentos</strong><br/>${texto(profile?.medicamentos)}</div>
+          <div class="item"><strong>Familiares</strong><br/>${texto(profile?.familiares)}</div>
+        </div>
+
+        <h2>Valoración nutricional</h2>
+        <div class="grid">
+          <div class="item"><strong>Peso</strong><br/>${texto(profile?.peso)}</div>
+          <div class="item"><strong>Talla</strong><br/>${texto(profile?.talla)}</div>
+          <div class="item"><strong>Perímetro brazo</strong><br/>${texto(profile?.perimetro_brazo)}</div>
+          <div class="item"><strong>IMC</strong><br/>${texto(profile?.indice_masa_corporal)}</div>
+          <div class="item"><strong>% masa corporal</strong><br/>${texto(profile?.porcentaje_masa_corporal)}</div>
+          <div class="item"><strong>Masa muscular</strong><br/>${texto(profile?.masa_muscular)}</div>
+          <div class="item"><strong>Metabolismo en reposo</strong><br/>${texto(profile?.metabolismo_reposo)}</div>
+          <div class="item"><strong>Grasa visceral</strong><br/>${texto(profile?.grasa_visceral)}</div>
+          <div class="item"><strong>Edad corporal</strong><br/>${texto(profile?.edad_corporal)}</div>
+          <div class="item"><strong>Circunferencia cintura</strong><br/>${texto(profile?.circunferencia_cintura)}</div>
+          <div class="item"><strong>Perímetro pantorrilla</strong><br/>${texto(profile?.perimetro_pantorrilla)}</div>
+          <div class="item"><strong>Clasificación</strong><br/>${texto(profile?.clasificacion_nutricional)}</div>
+        </div>
+
+        <h2>Plan</h2>
+        <div class="box">
+          <p><strong>Objetivo nutricional:</strong><br/>${texto(profile?.objetivo_nutricional)}</p>
+          <p><strong>Recomendaciones nutricionales:</strong><br/>${texto(profile?.recomendaciones_nutricionales)}</p>
+          <p><strong>Datos alimentarios:</strong><br/>${texto(profile?.datos_alimentarios)}</p>
+          <p><strong>Plan nutricional:</strong><br/>${texto(profile?.plan_nutricional)}</p>
+          <p><strong>Observaciones:</strong><br/>${texto(profile?.observaciones_generales)}</p>
+        </div>
+      </body>
+    </html>
+  `);
+  nuevaVentana.document.close();
+  nuevaVentana.focus();
+  nuevaVentana.print();
+}
+
+
 
 function emptyCommercialDisqualifyingFlags(): CommercialDisqualifyingFlags {
   return {
@@ -490,6 +640,14 @@ function RecepcionContent() {
   const [inventoryQuantity, setInventoryQuantity] = useState("1");
   const [inventoryMinStock, setInventoryMinStock] = useState("5");
   const [inventoryMovementNotes, setInventoryMovementNotes] = useState("");
+  const [selectedNutritionDeliveryId, setSelectedNutritionDeliveryId] = useState<string | null>(null);
+  const [nutritionDeliverySearch, setNutritionDeliverySearch] = useState("");
+  const [nutritionDeliveryProductId, setNutritionDeliveryProductId] = useState("");
+  const [nutritionDeliveryQuantity, setNutritionDeliveryQuantity] = useState("1");
+  const [nutritionDeliveryNotes, setNutritionDeliveryNotes] = useState("");
+  const [nutritionSelection, setNutritionSelection] = useState<NutritionDeliverySelection | null>(null);
+  const [loadingNutritionSelection, setLoadingNutritionSelection] = useState(false);
+  const [savingNutritionDelivery, setSavingNutritionDelivery] = useState(false);
   const [commercialCases, setCommercialCases] = useState<CommercialCaseRow[]>([]);
   const [savingCommercialIntake, setSavingCommercialIntake] = useState(false);
   const [commercialSearch, setCommercialSearch] = useState("");
@@ -531,11 +689,11 @@ function RecepcionContent() {
   const isReadOnlyAgendaForCall =
     currentRoleCode === "tmk" || currentRoleCode === "confirmador";
 
-  const serviceOptions = useMemo(() => getServiceOptionsBySection(activeSection), [activeSection]);
-  const serviceFieldLabel = useMemo(() => getServiceFieldLabel(activeSection), [activeSection]);
-  const sectionLabel = useMemo(() => getSectionLabel(activeSection), [activeSection]);
+  const serviceOptions = useMemo(() => activeSection === "nutricion_entregas" ? [] : getServiceOptionsBySection(activeSection), [activeSection]);
+  const serviceFieldLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Servicio" : getServiceFieldLabel(activeSection), [activeSection]);
+  const sectionLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Entregas nutrición" : getSectionLabel(activeSection), [activeSection]);
   const durationOptions = useMemo(
-    () => getDurationOptions(activeSection, form.service_type, form.appointment_date),
+    () => activeSection === "nutricion_entregas" ? [] : getDurationOptions(activeSection, form.service_type, form.appointment_date),
     [activeSection, form.service_type, form.appointment_date]
   );
 
@@ -1085,6 +1243,30 @@ function RecepcionContent() {
     };
   }, [commercialCases]);
 
+  const nutritionPendingAppointments = useMemo(() => {
+    const q = nutritionDeliverySearch.trim().toLowerCase();
+    return appointments
+      .filter((item) => isNutritionService(item.service_type) && item.status === "finalizada" && hasPendingNutritionDelivery(item.notes))
+      .filter((item) => {
+        if (!q) return true;
+        const text = `${item.patient_name || ""} ${item.phone || ""} ${item.city || ""}`.toLowerCase();
+        return text.includes(q);
+      })
+      .sort((a, b) => {
+        if (a.appointment_date !== b.appointment_date) return b.appointment_date.localeCompare(a.appointment_date);
+        return b.appointment_time.localeCompare(a.appointment_time);
+      });
+  }, [appointments, nutritionDeliverySearch]);
+
+  const nutritionPendingSummary = useMemo(() => ({
+    total: nutritionPendingAppointments.length,
+  }), [nutritionPendingAppointments]);
+
+  const selectedNutritionInventoryItem = useMemo(() =>
+    inventoryItems.find((item) => item.id === nutritionDeliveryProductId) || null,
+    [inventoryItems, nutritionDeliveryProductId]
+  );
+
   function imprimirDocumento(tipo: "cita" | "instrucciones") {
     if (typeof window === "undefined") return;
 
@@ -1284,6 +1466,169 @@ function RecepcionContent() {
     setInventoryMinStock("5");
     setMensaje("Movimiento de inventario registrado correctamente.");
     setError("");
+  }
+
+
+  async function abrirEntregaNutricion(item: AppointmentRow) {
+    try {
+      setSelectedNutritionDeliveryId(item.id);
+      setLoadingNutritionSelection(true);
+      setNutritionSelection(null);
+      setNutritionDeliveryProductId("");
+      setNutritionDeliveryQuantity("1");
+      setNutritionDeliveryNotes("");
+      setError("");
+      setMensaje("");
+
+      let foundUser: UserRow | null = null;
+
+      if (item.phone) {
+        const { data: usersByPhone, error: phoneError } = await supabase
+          .from("users")
+          .select("id, nombre, documento, telefono, ciudad")
+          .eq("telefono", item.phone)
+          .limit(1);
+
+        if (phoneError) throw phoneError;
+        if (usersByPhone && usersByPhone.length > 0) {
+          foundUser = usersByPhone[0] as UserRow;
+        }
+      }
+
+      if (!foundUser && item.patient_name) {
+        const { data: usersByName, error: nameError } = await supabase
+          .from("users")
+          .select("id, nombre, documento, telefono, ciudad")
+          .eq("nombre", item.patient_name)
+          .limit(1);
+
+        if (nameError) throw nameError;
+        if (usersByName && usersByName.length > 0) {
+          foundUser = usersByName[0] as UserRow;
+        }
+      }
+
+      let profile: NutritionProfileRow | null = null;
+      if (foundUser?.id) {
+        const { data: profileData, error: profileError } = await supabase
+          .from("nutrition_profiles")
+          .select("*")
+          .eq("user_id", foundUser.id)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+        profile = (profileData as NutritionProfileRow | null) || null;
+      }
+
+      setNutritionSelection({
+        appointment: item,
+        userId: foundUser?.id || null,
+        document: foundUser?.documento || "",
+        profile,
+      });
+    } catch (err: any) {
+      setError(err?.message || "No se pudo abrir la entrega de nutrición.");
+    } finally {
+      setLoadingNutritionSelection(false);
+    }
+  }
+
+  async function registrarEntregaNutricion() {
+    if (!nutritionSelection) {
+      setError("Debes seleccionar primero un cliente pendiente de nutrición.");
+      return;
+    }
+
+    if (!nutritionDeliveryProductId) {
+      setError("Debes seleccionar el producto entregado.");
+      return;
+    }
+
+    const quantity = Number(nutritionDeliveryQuantity || "0");
+    if (!quantity || quantity < 1) {
+      setError("La cantidad entregada debe ser mayor que cero.");
+      return;
+    }
+
+    const selectedItem = inventoryItems.find((item) => item.id === nutritionDeliveryProductId);
+    if (!selectedItem) {
+      setError("Debes seleccionar un producto válido del inventario.");
+      return;
+    }
+
+    if (selectedItem.stock < quantity) {
+      setError("No hay suficiente stock para registrar esta entrega.");
+      return;
+    }
+
+    try {
+      setSavingNutritionDelivery(true);
+      setError("");
+      setMensaje("");
+
+      const now = new Date().toISOString();
+
+      const updatedItems = inventoryItems.map((item) =>
+        item.id === selectedItem.id
+          ? { ...item, stock: Math.max(item.stock - quantity, 0), updated_at: now }
+          : item
+      );
+
+      const newMovement: InventoryMovement = {
+        id: `${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+        product_id: selectedItem.id,
+        product_name: selectedItem.name,
+        type: "salida",
+        quantity,
+        notes: `Entrega nutrición · ${nutritionSelection.appointment.patient_name}${nutritionDeliveryNotes.trim() ? ` · ${nutritionDeliveryNotes.trim()}` : ""}`,
+        created_at: now,
+      };
+
+      const nextMovements = [newMovement, ...inventoryMovements].slice(0, 100);
+      setInventoryItems(updatedItems);
+      setInventoryMovements(nextMovements);
+
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem("recepcion_inventory_items", JSON.stringify(updatedItems));
+        window.localStorage.setItem("recepcion_inventory_movements", JSON.stringify(nextMovements));
+      }
+
+      if (nutritionSelection.userId) {
+        const { error: userError } = await supabase
+          .from("users")
+          .update({ estado_actual: "entrega_nutricion_completada" })
+          .eq("id", nutritionSelection.userId);
+
+        if (userError) throw userError;
+      }
+
+      const notesResueltas = marcarEntregaNutricionResuelta(nutritionSelection.appointment.notes);
+      const { error: appointmentError } = await supabase
+        .from("appointments")
+        .update({ notes: notesResueltas })
+        .eq("id", nutritionSelection.appointment.id);
+
+      if (appointmentError) throw appointmentError;
+
+      setAppointments((prev) =>
+        prev.map((item) =>
+          item.id === nutritionSelection.appointment.id
+            ? { ...item, notes: notesResueltas }
+            : item
+        )
+      );
+
+      setMensaje("Entrega de nutrición registrada correctamente. El inventario se actualizó en tiempo real en este dispositivo.");
+      setNutritionDeliveryProductId("");
+      setNutritionDeliveryQuantity("1");
+      setNutritionDeliveryNotes("");
+      setSelectedNutritionDeliveryId(null);
+      setNutritionSelection(null);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo registrar la entrega de nutrición.");
+    } finally {
+      setSavingNutritionDelivery(false);
+    }
   }
 
 
@@ -2075,6 +2420,13 @@ function imprimirRegistroComercial() {
                 </button>
                 <button
                   type="button"
+                  onClick={() => cambiarSeccion("nutricion_entregas")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "nutricion_entregas" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+                >
+                  Entregas nutrición
+                </button>
+                <button
+                  type="button"
                   onClick={() => cambiarSeccion("impresiones")}
                   className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "impresiones" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
                 >
@@ -2113,6 +2465,12 @@ function imprimirRegistroComercial() {
               <StatCard title="En atención" value={String(commercialSummary.atencion)} />
               <StatCard title="Finalizados" value={String(commercialSummary.finalizados)} />
             </section>
+          ) : activeSection === "nutricion_entregas" ? (
+            <section className="mb-6 grid gap-4 md:grid-cols-3">
+              <StatCard title="Pendientes nutrición" value={String(nutritionPendingSummary.total)} />
+              <StatCard title="Con producto seleccionado" value={nutritionDeliveryProductId ? "1" : "0"} />
+              <StatCard title="Cliente abierto" value={nutritionSelection ? "1" : "0"} />
+            </section>
           ) : (
             <section className="mb-6 grid gap-4 md:grid-cols-5">
               <StatCard title={`${sectionLabel} del día`} value={String(resumen.total)} />
@@ -2124,7 +2482,7 @@ function imprimirRegistroComercial() {
           )
         )}
 
-        {canManageAgendaConfig && activeSection !== "impresiones" && activeSection !== "inventario" && activeSection !== "comercial" ? (
+        {canManageAgendaConfig && activeSection !== "impresiones" && activeSection !== "inventario" && activeSection !== "comercial" && activeSection !== "nutricion_entregas" ? (
           <section className="mb-6 rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
@@ -2589,6 +2947,174 @@ function imprimirRegistroComercial() {
                   ))
                 )}
               </div>
+            </div>
+          </section>
+        ) : activeSection === "nutricion_entregas" && !isReadOnlyAgendaForCall ? (
+          <section className="mb-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Pendientes nutrición</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Clientes cuya cita ya fue finalizada por nutrición y están pendientes de impresión y entrega.
+                  </p>
+                </div>
+
+                <input
+                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none md:max-w-xs"
+                  placeholder="Buscar por nombre o teléfono"
+                  value={nutritionDeliverySearch}
+                  onChange={(e) => setNutritionDeliverySearch(e.target.value)}
+                />
+              </div>
+
+              <div className="mt-5 space-y-3">
+                {nutritionPendingAppointments.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                    No hay clientes pendientes de entrega nutricional.
+                  </div>
+                ) : (
+                  nutritionPendingAppointments.map((item) => (
+                    <div
+                      key={item.id}
+                      className={`rounded-2xl border p-4 ${selectedNutritionDeliveryId === item.id ? "border-[#7FA287] bg-[#F8F7F4]" : "border-slate-200 bg-white"}`}
+                    >
+                      <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+                        <div>
+                          <p className="text-base font-semibold text-slate-900">{item.patient_name}</p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
+                          </p>
+                          <p className="mt-1 text-sm text-slate-600">
+                            {item.appointment_date} · {formatHora(item.appointment_time)}
+                          </p>
+                        </div>
+
+                        <div className="flex flex-wrap gap-3">
+                          <button
+                            type="button"
+                            onClick={() => abrirEntregaNutricion(item)}
+                            className="rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                          >
+                            Abrir
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <h2 className="text-2xl font-bold text-slate-900">Entrega e impresión</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Selecciona un cliente pendiente, imprime el documento y descuenta los productos entregados.
+              </p>
+
+              {loadingNutritionSelection ? (
+                <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  Cargando información nutricional...
+                </div>
+              ) : !nutritionSelection ? (
+                <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  Abre un cliente pendiente para imprimir su documento y registrar los productos.
+                </div>
+              ) : (
+                <div className="mt-5 space-y-4">
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                    <p className="text-lg font-semibold text-slate-900">{nutritionSelection.appointment.patient_name}</p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {nutritionSelection.document || "Sin documento"} · {nutritionSelection.appointment.phone || "Sin teléfono"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {nutritionSelection.appointment.appointment_date} · {formatHora(nutritionSelection.appointment.appointment_time)}
+                    </p>
+                    {nutritionSelection.profile?.plan_nutricional ? (
+                      <p className="mt-3 text-sm text-slate-700">
+                        <span className="font-medium">Plan nutricional:</span> {nutritionSelection.profile.plan_nutricional}
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      imprimirDocumentoNutricional({
+                        appointment: nutritionSelection.appointment,
+                        document: nutritionSelection.document,
+                        profile: nutritionSelection.profile,
+                      })
+                    }
+                    className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  >
+                    Imprimir documento nutricional
+                  </button>
+
+                  <Field
+                    label="Producto entregado"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={nutritionDeliveryProductId}
+                        onChange={(e) => setNutritionDeliveryProductId(e.target.value)}
+                      >
+                        <option value="">Selecciona</option>
+                        {inventoryItems
+                          .slice()
+                          .sort((a, b) => a.name.localeCompare(b.name))
+                          .map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.name} · stock {item.stock}
+                            </option>
+                          ))}
+                      </select>
+                    }
+                  />
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <Field
+                      label="Cantidad"
+                      input={
+                        <input
+                          className={inputClass}
+                          type="number"
+                          min="1"
+                          value={nutritionDeliveryQuantity}
+                          onChange={(e) => setNutritionDeliveryQuantity(e.target.value)}
+                        />
+                      }
+                    />
+
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                      <p className="text-sm font-medium text-slate-700">Stock disponible</p>
+                      <p className="mt-2 text-lg font-semibold text-slate-900">
+                        {selectedNutritionInventoryItem ? selectedNutritionInventoryItem.stock : "-"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <Field
+                    label="Observaciones de entrega"
+                    input={
+                      <textarea
+                        className={`${inputClass} min-h-[110px] resize-none`}
+                        value={nutritionDeliveryNotes}
+                        onChange={(e) => setNutritionDeliveryNotes(e.target.value)}
+                      />
+                    }
+                  />
+
+                  <button
+                    type="button"
+                    onClick={registrarEntregaNutricion}
+                    disabled={savingNutritionDelivery}
+                    className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                  >
+                    {savingNutritionDelivery ? "Guardando..." : "Registrar entrega y descontar inventario"}
+                  </button>
+                </div>
+              )}
             </div>
           </section>
         ) : activeSection === "impresiones" && !isReadOnlyAgendaForCall ? (
