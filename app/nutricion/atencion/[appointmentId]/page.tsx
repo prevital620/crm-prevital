@@ -40,6 +40,7 @@ type NutritionProfileRow = {
   perimetro_brazo: string | null;
   indice_masa_corporal: string | null;
   porcentaje_masa_corporal: string | null;
+  dinamometria: string | null;
   masa_muscular: string | null;
   metabolismo_reposo: string | null;
   grasa_visceral: string | null;
@@ -71,6 +72,7 @@ type FormState = {
   perimetro_brazo: string;
   indice_masa_corporal: string;
   porcentaje_masa_corporal: string;
+  dinamometria: string;
   masa_muscular: string;
   metabolismo_reposo: string;
   grasa_visceral: string;
@@ -102,6 +104,7 @@ const initialForm: FormState = {
   perimetro_brazo: "",
   indice_masa_corporal: "",
   porcentaje_masa_corporal: "",
+  dinamometria: "",
   masa_muscular: "",
   metabolismo_reposo: "",
   grasa_visceral: "",
@@ -138,11 +141,12 @@ const metricFields: Array<{
   { key: "talla", label: "Talla", placeholder: "Ej: 1.65 m" },
   { key: "perimetro_brazo", label: "Perímetro brazo", placeholder: "Ej: 28 cm" },
   { key: "indice_masa_corporal", label: "Índice masa corporal", placeholder: "Ej: 25" },
-  { key: "porcentaje_masa_corporal", label: "Porcentaje masa corporal", placeholder: "Ej: 30%" },
+  { key: "porcentaje_masa_corporal", label: "Grasa corporal", placeholder: "Ej: 30%" },
   { key: "masa_muscular", label: "Masa muscular", placeholder: "Ej: 42 kg" },
   { key: "metabolismo_reposo", label: "Metabolismo en reposo", placeholder: "Ej: 1450 kcal" },
   { key: "grasa_visceral", label: "Grasa visceral", placeholder: "Ej: 8" },
   { key: "edad_corporal", label: "Edad corporal", placeholder: "Ej: 40" },
+  { key: "dinamometria", label: "Dinamometría", placeholder: "Ej: 28 kg" },
   { key: "circunferencia_cintura", label: "Circunferencia cintura", placeholder: "Ej: 86 cm" },
   { key: "perimetro_pantorrilla", label: "Perímetro pantorrilla", placeholder: "Ej: 35 cm" },
 ];
@@ -288,6 +292,7 @@ export default function NutricionAtencionPage() {
         perimetro_brazo: nutritionProfile?.perimetro_brazo || "",
         indice_masa_corporal: nutritionProfile?.indice_masa_corporal || "",
         porcentaje_masa_corporal: nutritionProfile?.porcentaje_masa_corporal || "",
+        dinamometria: nutritionProfile?.dinamometria || "",
         masa_muscular: nutritionProfile?.masa_muscular || "",
         metabolismo_reposo: nutritionProfile?.metabolismo_reposo || "",
         grasa_visceral: nutritionProfile?.grasa_visceral || "",
