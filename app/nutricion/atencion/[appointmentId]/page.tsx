@@ -167,6 +167,18 @@ function traducirEstado(status: string | null | undefined) {
   return map[status || ""] || status || "";
 }
 
+function buildReceptionDeliveryFlag(currentNotes: string | null | undefined) {
+  const raw = currentNotes || "";
+  const lines = raw
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !/^Entrega nutrición pendiente:/i.test(line));
+
+  lines.unshift("Entrega nutrición pendiente: Sí");
+  return lines.join("\n");
+}
+
 export default function NutricionAtencionPage() {
   const params = useParams();
   const appointmentId = String(params?.appointmentId || "");
@@ -349,6 +361,11 @@ export default function NutricionAtencionPage() {
     try {
       const ensuredUserId = await ensureUser();
 
+      const estadoActual =
+        nextStatus === "finalizada"
+          ? "pendiente_entrega_nutricion"
+          : "en valoracion nutricional";
+
       const { error: userUpdateError } = await supabase
         .from("users")
         .update({
@@ -357,7 +374,7 @@ export default function NutricionAtencionPage() {
           telefono: form.phone.trim() || null,
           ciudad: form.city.trim() || null,
           ocupacion: "nutricion",
-          estado_actual: nextStatus === "finalizada" ? "valoracion nutricional finalizada" : "en valoracion nutricional",
+          estado_actual: estadoActual,
         })
         .eq("id", ensuredUserId);
 
@@ -403,6 +420,7 @@ export default function NutricionAtencionPage() {
 
       if (nextStatus) {
         appointmentUpdate.status = nextStatus;
+        appointmentUpdate.notes = buildReceptionDeliveryFlag(appointment.notes);
       }
 
       const { error: appointmentUpdateError } = await supabase
@@ -419,13 +437,14 @@ export default function NutricionAtencionPage() {
               phone: form.phone.trim() || null,
               city: form.city.trim() || null,
               status: nextStatus || prev.status,
+              notes: nextStatus ? buildReceptionDeliveryFlag(prev.notes) : prev.notes,
             }
           : prev
       );
 
       if (nextStatus === "finalizada") {
         setFinalized(true);
-        setMessage("Consulta finalizada y guardada correctamente.");
+        setMessage("Consulta finalizada. El cliente quedó pendiente para Recepción, impresión y entrega de productos.");
       } else {
         setMessage("Cambios guardados correctamente.");
       }
@@ -688,7 +707,6 @@ function SmallTextAreaField({
         className={inputClass + " min-h-[110px] resize-none"}
         rows={3}
         value={value}
-        placeholder=""
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
@@ -713,7 +731,6 @@ function LargeTextAreaField({
         className={inputClass + " min-h-[160px] resize-none"}
         rows={rows}
         value={value}
-        placeholder=""
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
