@@ -2,90 +2,118 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useParams } from "next/navigation";
+import { useEffect, useMemo, useState } from "react";
+import { supabase } from "@/lib/supabase";
 
-type PatientContext = {
-  appointmentId: string;
-  leadId: string;
-  patientName: string;
-  document: string;
-  phone: string;
-  age: string;
-  sex: string;
-  date: string;
-  time: string;
-  source: string;
+type AppointmentRow = {
+  id: string;
+  lead_id: string | null;
+  patient_name: string;
+  phone: string | null;
+  city: string | null;
+  appointment_date: string;
+  appointment_time: string;
   status: string;
+  service_type: string | null;
+  notes: string | null;
 };
 
-type EditableHistory = {
-  patologicos: string;
+type UserRow = {
+  id: string;
+  nombre: string | null;
+  documento: string | null;
+  telefono: string | null;
+  ciudad: string | null;
+};
+
+type NutritionProfileRow = {
+  user_id: string;
+  antecedentes_patologicos: string | null;
+  cirugias: string | null;
+  toxicos: string | null;
+  alergicos: string | null;
+  medicamentos: string | null;
+  familiares: string | null;
+  peso: string | null;
+  talla: string | null;
+  perimetro_brazo: string | null;
+  indice_masa_corporal: string | null;
+  porcentaje_masa_corporal: string | null;
+  masa_muscular: string | null;
+  metabolismo_reposo: string | null;
+  grasa_visceral: string | null;
+  edad_corporal: string | null;
+  circunferencia_cintura: string | null;
+  perimetro_pantorrilla: string | null;
+  clasificacion_nutricional: string | null;
+  objetivo_nutricional: string | null;
+  recomendaciones_nutricionales: string | null;
+  datos_alimentarios: string | null;
+  plan_nutricional: string | null;
+  observaciones_generales: string | null;
+};
+
+type FormState = {
+  document: string;
+  phone: string;
+  city: string;
+  age: string;
+  sex: string;
+  antecedentes_patologicos: string;
   cirugias: string;
   toxicos: string;
   alergicos: string;
   medicamentos: string;
   familiares: string;
+  peso: string;
+  talla: string;
+  perimetro_brazo: string;
+  indice_masa_corporal: string;
+  porcentaje_masa_corporal: string;
+  masa_muscular: string;
+  metabolismo_reposo: string;
+  grasa_visceral: string;
+  edad_corporal: string;
+  circunferencia_cintura: string;
+  perimetro_pantorrilla: string;
+  clasificacion_nutricional: string;
+  objetivo_nutricional: string;
+  recomendaciones_nutricionales: string;
+  datos_alimentarios: string;
+  plan_nutricional: string;
+  observaciones_generales: string;
 };
 
-type NutritionAssessment = {
-  foodData: string;
-  weight: string;
-  height: string;
-  armPerimeter: string;
-  bodyMassIndex: string;
-  bodyFatPercentage: string;
-  muscleMass: string;
-  restingMetabolism: string;
-  visceralFat: string;
-  bodyAge: string;
-  waistCircumference: string;
-  calfPerimeter: string;
-  nutritionalClassification: string;
-  nutritionalObjective: string;
-  nutritionalRecommendations: string;
-  nutritionalPlan: string;
-};
-
-const patientContext: PatientContext = {
-  appointmentId: "NUT-001",
-  leadId: "LD-1001",
-  patientName: "Paciente de ejemplo",
-  document: "1234567890",
-  phone: "3000000000",
-  age: "45",
-  sex: "Femenino",
-  date: "11/4/2026",
-  time: "08:00 AM",
-  source: "Comercial",
-  status: "Agendada",
-};
-
-const initialHistory: EditableHistory = {
-  patologicos: "Antecedentes patológicos cargados previamente.",
-  cirugias: "Cirugías reportadas previamente por el paciente.",
-  toxicos: "Antecedentes tóxicos reportados previamente.",
-  alergicos: "Antecedentes alérgicos reportados previamente.",
-  medicamentos: "Medicamentos reportados previamente.",
-  familiares: "Antecedentes familiares cargados previamente.",
-};
-
-const initialAssessment: NutritionAssessment = {
-  foodData: "",
-  weight: "",
-  height: "",
-  armPerimeter: "",
-  bodyMassIndex: "",
-  bodyFatPercentage: "",
-  muscleMass: "",
-  restingMetabolism: "",
-  visceralFat: "",
-  bodyAge: "",
-  waistCircumference: "",
-  calfPerimeter: "",
-  nutritionalClassification: "",
-  nutritionalObjective: "",
-  nutritionalRecommendations: "",
-  nutritionalPlan: "",
+const initialForm: FormState = {
+  document: "",
+  phone: "",
+  city: "",
+  age: "",
+  sex: "",
+  antecedentes_patologicos: "",
+  cirugias: "",
+  toxicos: "",
+  alergicos: "",
+  medicamentos: "",
+  familiares: "",
+  peso: "",
+  talla: "",
+  perimetro_brazo: "",
+  indice_masa_corporal: "",
+  porcentaje_masa_corporal: "",
+  masa_muscular: "",
+  metabolismo_reposo: "",
+  grasa_visceral: "",
+  edad_corporal: "",
+  circunferencia_cintura: "",
+  perimetro_pantorrilla: "",
+  clasificacion_nutricional: "",
+  objetivo_nutricional: "",
+  recomendaciones_nutricionales: "",
+  datos_alimentarios: "",
+  plan_nutricional: "",
+  observaciones_generales: "",
 };
 
 const classificationOptions = [
@@ -102,84 +130,330 @@ const classificationOptions = [
 ];
 
 const metricFields: Array<{
-  key: keyof NutritionAssessment;
+  key: keyof FormState;
   label: string;
   placeholder: string;
 }> = [
-  { key: "weight", label: "Peso", placeholder: "Ej: 70 kg" },
-  { key: "height", label: "Talla", placeholder: "Ej: 1.65 m" },
-  { key: "armPerimeter", label: "Perímetro brazo", placeholder: "Ej: 28 cm" },
-  { key: "bodyMassIndex", label: "Índice masa corporal", placeholder: "Ej: 25" },
-  { key: "bodyFatPercentage", label: "Porcentaje masa corporal", placeholder: "Ej: 30%" },
-  { key: "muscleMass", label: "Masa muscular", placeholder: "Ej: 42 kg" },
-  { key: "restingMetabolism", label: "Metabolismo en reposo", placeholder: "Ej: 1450 kcal" },
-  { key: "visceralFat", label: "Grasa visceral", placeholder: "Ej: 8" },
-  { key: "bodyAge", label: "Edad corporal", placeholder: "Ej: 40" },
-  { key: "waistCircumference", label: "Circunferencia cintura", placeholder: "Ej: 86 cm" },
-  { key: "calfPerimeter", label: "Perímetro pantorrilla", placeholder: "Ej: 35 cm" },
+  { key: "peso", label: "Peso", placeholder: "Ej: 70 kg" },
+  { key: "talla", label: "Talla", placeholder: "Ej: 1.65 m" },
+  { key: "perimetro_brazo", label: "Perímetro brazo", placeholder: "Ej: 28 cm" },
+  { key: "indice_masa_corporal", label: "Índice masa corporal", placeholder: "Ej: 25" },
+  { key: "porcentaje_masa_corporal", label: "Porcentaje masa corporal", placeholder: "Ej: 30%" },
+  { key: "masa_muscular", label: "Masa muscular", placeholder: "Ej: 42 kg" },
+  { key: "metabolismo_reposo", label: "Metabolismo en reposo", placeholder: "Ej: 1450 kcal" },
+  { key: "grasa_visceral", label: "Grasa visceral", placeholder: "Ej: 8" },
+  { key: "edad_corporal", label: "Edad corporal", placeholder: "Ej: 40" },
+  { key: "circunferencia_cintura", label: "Circunferencia cintura", placeholder: "Ej: 86 cm" },
+  { key: "perimetro_pantorrilla", label: "Perímetro pantorrilla", placeholder: "Ej: 35 cm" },
 ];
 
+function formatHora(hora: string | null | undefined) {
+  if (!hora) return "";
+  return hora.slice(0, 5);
+}
+
+function traducirEstado(status: string | null | undefined) {
+  const map: Record<string, string> = {
+    agendada: "Agendada",
+    confirmada: "Confirmada",
+    en_espera: "En espera",
+    asistio: "Asistió",
+    no_asistio: "No asistió",
+    reagendada: "Reagendada",
+    cancelada: "Cancelada",
+    en_atencion: "En atención",
+    finalizada: "Finalizada",
+  };
+  return map[status || ""] || status || "Sin estado";
+}
+
 export default function NutricionAtencionPage() {
+  const params = useParams();
+  const appointmentId = String(params?.appointmentId || "");
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [appointment, setAppointment] = useState<AppointmentRow | null>(null);
+  const [userRow, setUserRow] = useState<UserRow | null>(null);
+  const [userId, setUserId] = useState<string | null>(null);
+  const [form, setForm] = useState<FormState>(initialForm);
   const [message, setMessage] = useState("");
-  const [errors, setErrors] = useState<string[]>([]);
-  const [history, setHistory] = useState<EditableHistory>(initialHistory);
-  const [assessment, setAssessment] = useState<NutritionAssessment>(initialAssessment);
+  const [error, setError] = useState("");
+  const [finalized, setFinalized] = useState(false);
+
+  useEffect(() => {
+    if (!appointmentId) return;
+    void loadRealData();
+  }, [appointmentId]);
 
   const canPrint = useMemo(() => {
     return (
-      assessment.nutritionalPlan.trim().length > 0 ||
-      assessment.nutritionalRecommendations.trim().length > 0
+      form.plan_nutricional.trim().length > 0 ||
+      form.recomendaciones_nutricionales.trim().length > 0
     );
-  }, [assessment]);
+  }, [form]);
 
-  function updateHistoryField(key: keyof EditableHistory, value: string) {
-    setHistory((prev) => ({
+  function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
+    setForm((prev) => ({
       ...prev,
       [key]: value,
     }));
   }
 
-  function updateAssessmentField(key: keyof NutritionAssessment, value: string) {
-    setAssessment((prev) => ({
-      ...prev,
-      [key]: value,
-    }));
+  async function loadRealData() {
+    try {
+      setLoading(true);
+      setError("");
+      setMessage("");
+
+      const { data: appointmentData, error: appointmentError } = await supabase
+        .from("appointments")
+        .select("id, lead_id, patient_name, phone, city, appointment_date, appointment_time, status, service_type, notes")
+        .eq("id", appointmentId)
+        .single();
+
+      if (appointmentError) throw appointmentError;
+      if (!appointmentData) throw new Error("No se encontró la cita.");
+
+      setAppointment(appointmentData as AppointmentRow);
+
+      let foundUser: UserRow | null = null;
+
+      if (appointmentData.phone) {
+        const { data: usersByPhone, error: userPhoneError } = await supabase
+          .from("users")
+          .select("id, nombre, documento, telefono, ciudad")
+          .eq("telefono", appointmentData.phone)
+          .limit(1);
+
+        if (userPhoneError) throw userPhoneError;
+        if (usersByPhone && usersByPhone.length > 0) {
+          foundUser = usersByPhone[0] as UserRow;
+        }
+      }
+
+      if (!foundUser && appointmentData.patient_name) {
+        const { data: usersByName, error: userNameError } = await supabase
+          .from("users")
+          .select("id, nombre, documento, telefono, ciudad")
+          .eq("nombre", appointmentData.patient_name)
+          .limit(1);
+
+        if (userNameError) throw userNameError;
+        if (usersByName && usersByName.length > 0) {
+          foundUser = usersByName[0] as UserRow;
+        }
+      }
+
+      setUserRow(foundUser);
+
+      let nutritionProfile: NutritionProfileRow | null = null;
+      if (foundUser?.id) {
+        const { data: nutritionData, error: nutritionError } = await supabase
+          .from("nutrition_profiles")
+          .select("*")
+          .eq("user_id", foundUser.id)
+          .maybeSingle();
+
+        if (nutritionError) throw nutritionError;
+        nutritionProfile = nutritionData as NutritionProfileRow | null;
+        setUserId(foundUser.id);
+      } else {
+        setUserId(null);
+      }
+
+      setForm({
+        document: foundUser?.documento || "",
+        phone: appointmentData.phone || foundUser?.telefono || "",
+        city: appointmentData.city || foundUser?.ciudad || "",
+        age: "",
+        sex: "",
+        antecedentes_patologicos: nutritionProfile?.antecedentes_patologicos || "",
+        cirugias: nutritionProfile?.cirugias || "",
+        toxicos: nutritionProfile?.toxicos || "",
+        alergicos: nutritionProfile?.alergicos || "",
+        medicamentos: nutritionProfile?.medicamentos || "",
+        familiares: nutritionProfile?.familiares || "",
+        peso: nutritionProfile?.peso || "",
+        talla: nutritionProfile?.talla || "",
+        perimetro_brazo: nutritionProfile?.perimetro_brazo || "",
+        indice_masa_corporal: nutritionProfile?.indice_masa_corporal || "",
+        porcentaje_masa_corporal: nutritionProfile?.porcentaje_masa_corporal || "",
+        masa_muscular: nutritionProfile?.masa_muscular || "",
+        metabolismo_reposo: nutritionProfile?.metabolismo_reposo || "",
+        grasa_visceral: nutritionProfile?.grasa_visceral || "",
+        edad_corporal: nutritionProfile?.edad_corporal || "",
+        circunferencia_cintura: nutritionProfile?.circunferencia_cintura || "",
+        perimetro_pantorrilla: nutritionProfile?.perimetro_pantorrilla || "",
+        clasificacion_nutricional: nutritionProfile?.clasificacion_nutricional || "",
+        objetivo_nutricional: nutritionProfile?.objetivo_nutricional || "",
+        recomendaciones_nutricionales: nutritionProfile?.recomendaciones_nutricionales || "",
+        datos_alimentarios: nutritionProfile?.datos_alimentarios || "",
+        plan_nutricional: nutritionProfile?.plan_nutricional || "",
+        observaciones_generales: nutritionProfile?.observaciones_generales || "",
+      });
+
+      setFinalized((appointmentData.status || "") === "finalizada");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo cargar la atención nutricional.");
+    } finally {
+      setLoading(false);
+    }
   }
 
   function validateBeforeFinalize() {
     const nextErrors: string[] = [];
 
-    if (!assessment.nutritionalClassification.trim()) {
+    if (!form.clasificacion_nutricional.trim()) {
       nextErrors.push("La clasificación nutricional es obligatoria.");
     }
-
-    if (!assessment.nutritionalObjective.trim()) {
+    if (!form.objetivo_nutricional.trim()) {
       nextErrors.push("El objetivo nutricional es obligatorio.");
     }
-
-    if (!assessment.nutritionalPlan.trim()) {
+    if (!form.plan_nutricional.trim()) {
       nextErrors.push("El plan nutricional es obligatorio.");
     }
 
     return nextErrors;
   }
 
-  function handleSave() {
-    setErrors([]);
-    setMessage("Cambios guardados correctamente en la valoración nutricional.");
+  async function ensureUser() {
+    if (userId) return userId;
+    if (!appointment) throw new Error("No hay cita cargada.");
+
+    const payload = {
+      nombre: appointment.patient_name?.trim() || "Cliente nutrición",
+      documento: form.document.trim() || null,
+      telefono: form.phone.trim() || appointment.phone || null,
+      ciudad: form.city.trim() || appointment.city || null,
+      ocupacion: "nutricion",
+      estado_actual: "en valoracion nutricional",
+    };
+
+    const { data: insertedUser, error: insertUserError } = await supabase
+      .from("users")
+      .insert([payload])
+      .select("id, nombre, documento, telefono, ciudad")
+      .single();
+
+    if (insertUserError) throw insertUserError;
+
+    setUserId(insertedUser.id);
+    setUserRow(insertedUser as UserRow);
+    return insertedUser.id as string;
   }
 
-  function handleFinalize() {
-    const validationErrors = validateBeforeFinalize();
+  async function saveAll(nextStatus?: string) {
+    if (!appointment) return;
 
+    setSaving(true);
+    setError("");
+    setMessage("");
+
+    try {
+      const ensuredUserId = await ensureUser();
+
+      const { error: userUpdateError } = await supabase
+        .from("users")
+        .update({
+          nombre: appointment.patient_name?.trim() || null,
+          documento: form.document.trim() || null,
+          telefono: form.phone.trim() || null,
+          ciudad: form.city.trim() || null,
+          ocupacion: "nutricion",
+          estado_actual: nextStatus === "finalizada" ? "valoracion nutricional finalizada" : "en valoracion nutricional",
+        })
+        .eq("id", ensuredUserId);
+
+      if (userUpdateError) throw userUpdateError;
+
+      const nutritionPayload = {
+        user_id: ensuredUserId,
+        antecedentes_patologicos: form.antecedentes_patologicos.trim() || null,
+        cirugias: form.cirugias.trim() || null,
+        toxicos: form.toxicos.trim() || null,
+        alergicos: form.alergicos.trim() || null,
+        medicamentos: form.medicamentos.trim() || null,
+        familiares: form.familiares.trim() || null,
+        peso: form.peso.trim() || null,
+        talla: form.talla.trim() || null,
+        perimetro_brazo: form.perimetro_brazo.trim() || null,
+        indice_masa_corporal: form.indice_masa_corporal.trim() || null,
+        porcentaje_masa_corporal: form.porcentaje_masa_corporal.trim() || null,
+        masa_muscular: form.masa_muscular.trim() || null,
+        metabolismo_reposo: form.metabolismo_reposo.trim() || null,
+        grasa_visceral: form.grasa_visceral.trim() || null,
+        edad_corporal: form.edad_corporal.trim() || null,
+        circunferencia_cintura: form.circunferencia_cintura.trim() || null,
+        perimetro_pantorrilla: form.perimetro_pantorrilla.trim() || null,
+        clasificacion_nutricional: form.clasificacion_nutricional.trim() || null,
+        objetivo_nutricional: form.objetivo_nutricional.trim() || null,
+        recomendaciones_nutricionales: form.recomendaciones_nutricionales.trim() || null,
+        datos_alimentarios: form.datos_alimentarios.trim() || null,
+        plan_nutricional: form.plan_nutricional.trim() || null,
+        observaciones_generales: form.observaciones_generales.trim() || null,
+      };
+
+      const { error: nutritionError } = await supabase
+        .from("nutrition_profiles")
+        .upsert([nutritionPayload], { onConflict: "user_id" });
+
+      if (nutritionError) throw nutritionError;
+
+      const appointmentUpdate: Record<string, any> = {
+        patient_name: appointment.patient_name,
+        phone: form.phone.trim() || null,
+        city: form.city.trim() || null,
+      };
+
+      if (nextStatus) {
+        appointmentUpdate.status = nextStatus;
+      }
+
+      const { error: appointmentUpdateError } = await supabase
+        .from("appointments")
+        .update(appointmentUpdate)
+        .eq("id", appointment.id);
+
+      if (appointmentUpdateError) throw appointmentUpdateError;
+
+      setAppointment((prev) =>
+        prev
+          ? {
+              ...prev,
+              phone: form.phone.trim() || null,
+              city: form.city.trim() || null,
+              status: nextStatus || prev.status,
+            }
+          : prev
+      );
+
+      if (nextStatus === "finalizada") {
+        setFinalized(true);
+        setMessage("Consulta finalizada y guardada correctamente en Supabase.");
+      } else {
+        setMessage("Cambios guardados correctamente en Supabase.");
+      }
+    } catch (err: any) {
+      setError(err?.message || "No se pudo guardar la atención nutricional.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleSave() {
+    await saveAll();
+  }
+
+  async function handleFinalize() {
+    const validationErrors = validateBeforeFinalize();
     if (validationErrors.length > 0) {
-      setErrors(validationErrors);
+      setError(validationErrors.join(" "));
       setMessage("");
       return;
     }
 
-    setErrors([]);
-    setMessage("Consulta finalizada correctamente. La información ya puede verse en recepción.");
+    await saveAll("finalizada");
   }
 
   function handlePrint() {
@@ -187,17 +461,34 @@ export default function NutricionAtencionPage() {
     window.print();
   }
 
+  if (loading) {
+    return (
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-5xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <p className="text-sm text-slate-500">Cargando atención nutricional...</p>
+        </div>
+      </main>
+    );
+  }
+
+  if (!appointment) {
+    return (
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-5xl rounded-3xl border border-red-200 bg-white p-6 shadow-sm">
+          <p className="text-sm text-red-700">{error || "No se encontró la cita."}</p>
+          <Link href="/nutricion/agenda" className="mt-4 inline-flex rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B]">
+            Volver a agenda
+          </Link>
+        </div>
+      </main>
+    );
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[420px] w-[420px] opacity-[0.04] md:h-[540px] md:w-[540px]">
-          <Image
-            src="/prevital-logo.jpeg"
-            alt="Prevital"
-            fill
-            className="object-contain"
-            priority
-          />
+          <Image src="/prevital-logo.jpeg" alt="Prevital" fill className="object-contain" priority />
         </div>
       </div>
 
@@ -207,14 +498,10 @@ export default function NutricionAtencionPage() {
 
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">
-                Módulo de Nutrición
-              </p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">
-                {patientContext.patientName}
-              </h1>
+              <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">Módulo de Nutrición</p>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">{appointment.patient_name || "Paciente"}</h1>
               <p className="mt-3 text-sm text-slate-600">
-                Cita {patientContext.appointmentId} · Lead {patientContext.leadId}
+                Cita {appointment.id} · Lead {appointment.lead_id || "Sin lead"}
               </p>
             </div>
 
@@ -229,17 +516,19 @@ export default function NutricionAtencionPage() {
               <button
                 type="button"
                 onClick={handleSave}
-                className="rounded-2xl border border-[#D6E8DA] bg-white px-6 py-3 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                disabled={saving}
+                className="rounded-2xl border border-[#D6E8DA] bg-white px-6 py-3 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
               >
-                Guardar
+                {saving ? "Guardando..." : "Guardar"}
               </button>
 
               <button
                 type="button"
                 onClick={handleFinalize}
-                className="rounded-2xl bg-[#0DA56F] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#0B8E5F]"
+                disabled={saving}
+                className="rounded-2xl bg-[#0DA56F] px-6 py-3 text-base font-semibold text-white transition hover:bg-[#0B8E5F] disabled:opacity-60"
               >
-                Finalizar consulta
+                {saving ? "Guardando..." : finalized ? "Consulta finalizada" : "Finalizar consulta"}
               </button>
 
               <button
@@ -254,25 +543,20 @@ export default function NutricionAtencionPage() {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <InfoBox label="Documento" value={patientContext.document} />
-            <InfoBox label="Teléfono" value={patientContext.phone} />
-            <InfoBox label="Edad" value={patientContext.age} />
-            <InfoBox label="Sexo" value={patientContext.sex} />
-            <InfoBox label="Fecha" value={patientContext.date} />
-            <InfoBox label="Hora" value={patientContext.time} />
-            <InfoBox label="Origen" value={patientContext.source} />
-            <InfoBox label="Estado" value={patientContext.status} />
+            <InfoBox label="Documento" value={form.document || "Sin documento"} />
+            <InfoBox label="Teléfono" value={form.phone || "Sin teléfono"} />
+            <InfoBox label="Edad" value={form.age || "Sin dato"} />
+            <InfoBox label="Sexo" value={form.sex || "Sin dato"} />
+            <InfoBox label="Fecha" value={appointment.appointment_date || "Sin fecha"} />
+            <InfoBox label="Hora" value={formatHora(appointment.appointment_time) || "Sin hora"} />
+            <InfoBox label="Origen" value={appointment.service_type || "Nutrición"} />
+            <InfoBox label="Estado" value={traducirEstado(appointment.status)} />
           </div>
         </section>
 
-        {errors.length > 0 ? (
+        {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <p className="font-semibold">Debes revisar lo siguiente:</p>
-            <ul className="mt-2 space-y-1">
-              {errors.map((error) => (
-                <li key={error}>• {error}</li>
-              ))}
-            </ul>
+            {error}
           </div>
         ) : null}
 
@@ -283,42 +567,26 @@ export default function NutricionAtencionPage() {
         ) : null}
 
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-bold text-[#24312A]">Antecedentes personales</h2>
+          <h2 className="text-2xl font-bold text-[#24312A]">Datos básicos y antecedentes personales</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Si el paciente ya existe, estos datos aparecen cargados. La nutricionista puede modificarlos.
+            Aquí puedes corregir datos del cliente y sus antecedentes reales antes de continuar.
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <SmallTextAreaField
-              label="Antecedentes patológicos"
-              value={history.patologicos}
-              onChange={(value) => updateHistoryField("patologicos", value)}
-            />
-            <SmallTextAreaField
-              label="Cirugías"
-              value={history.cirugias}
-              onChange={(value) => updateHistoryField("cirugias", value)}
-            />
-            <SmallTextAreaField
-              label="Tóxicos"
-              value={history.toxicos}
-              onChange={(value) => updateHistoryField("toxicos", value)}
-            />
-            <SmallTextAreaField
-              label="Alérgicos"
-              value={history.alergicos}
-              onChange={(value) => updateHistoryField("alergicos", value)}
-            />
-            <SmallTextAreaField
-              label="Medicamentos"
-              value={history.medicamentos}
-              onChange={(value) => updateHistoryField("medicamentos", value)}
-            />
-            <SmallTextAreaField
-              label="Familiares"
-              value={history.familiares}
-              onChange={(value) => updateHistoryField("familiares", value)}
-            />
+            <InputField label="Documento" value={form.document} onChange={(v) => updateField("document", v)} />
+            <InputField label="Teléfono" value={form.phone} onChange={(v) => updateField("phone", v)} />
+            <InputField label="Ciudad" value={form.city} onChange={(v) => updateField("city", v)} />
+            <InputField label="Edad" value={form.age} onChange={(v) => updateField("age", v)} />
+            <InputField label="Sexo" value={form.sex} onChange={(v) => updateField("sex", v)} />
+          </div>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <SmallTextAreaField label="Antecedentes patológicos" value={form.antecedentes_patologicos} onChange={(v) => updateField("antecedentes_patologicos", v)} />
+            <SmallTextAreaField label="Cirugías" value={form.cirugias} onChange={(v) => updateField("cirugias", v)} />
+            <SmallTextAreaField label="Tóxicos" value={form.toxicos} onChange={(v) => updateField("toxicos", v)} />
+            <SmallTextAreaField label="Alérgicos" value={form.alergicos} onChange={(v) => updateField("alergicos", v)} />
+            <SmallTextAreaField label="Medicamentos" value={form.medicamentos} onChange={(v) => updateField("medicamentos", v)} />
+            <SmallTextAreaField label="Familiares" value={form.familiares} onChange={(v) => updateField("familiares", v)} />
           </div>
         </section>
 
@@ -333,9 +601,9 @@ export default function NutricionAtencionPage() {
               <InputField
                 key={field.key}
                 label={field.label}
-                value={assessment[field.key] as string}
+                value={form[field.key]}
                 placeholder={field.placeholder}
-                onChange={(value) => updateAssessmentField(field.key, value)}
+                onChange={(v) => updateField(field.key, v)}
               />
             ))}
           </div>
@@ -350,40 +618,21 @@ export default function NutricionAtencionPage() {
 
             <div className="mt-5 space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">
-                  Clasificación nutricional
-                </label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Clasificación nutricional</label>
                 <select
                   className={inputClass}
-                  value={assessment.nutritionalClassification}
-                  onChange={(e) =>
-                    updateAssessmentField("nutritionalClassification", e.target.value)
-                  }
+                  value={form.clasificacion_nutricional}
+                  onChange={(e) => updateField("clasificacion_nutricional", e.target.value)}
                 >
                   <option value="">Selecciona</option>
                   {classificationOptions.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
+                    <option key={item} value={item}>{item}</option>
                   ))}
                 </select>
               </div>
 
-              <LargeTextAreaField
-                label="Objetivo nutricional"
-                value={assessment.nutritionalObjective}
-                onChange={(value) => updateAssessmentField("nutritionalObjective", value)}
-                rows={5}
-              />
-
-              <LargeTextAreaField
-                label="Recomendaciones nutricionales"
-                value={assessment.nutritionalRecommendations}
-                onChange={(value) =>
-                  updateAssessmentField("nutritionalRecommendations", value)
-                }
-                rows={6}
-              />
+              <LargeTextAreaField label="Objetivo nutricional" value={form.objetivo_nutricional} onChange={(v) => updateField("objetivo_nutricional", v)} rows={5} />
+              <LargeTextAreaField label="Recomendaciones nutricionales" value={form.recomendaciones_nutricionales} onChange={(v) => updateField("recomendaciones_nutricionales", v)} rows={6} />
             </div>
           </div>
 
@@ -394,19 +643,9 @@ export default function NutricionAtencionPage() {
             </p>
 
             <div className="mt-5 space-y-4">
-              <LargeTextAreaField
-                label="Datos alimentarios"
-                value={assessment.foodData}
-                onChange={(value) => updateAssessmentField("foodData", value)}
-                rows={7}
-              />
-
-              <LargeTextAreaField
-                label="Plan nutricional"
-                value={assessment.nutritionalPlan}
-                onChange={(value) => updateAssessmentField("nutritionalPlan", value)}
-                rows={7}
-              />
+              <LargeTextAreaField label="Datos alimentarios" value={form.datos_alimentarios} onChange={(v) => updateField("datos_alimentarios", v)} rows={7} />
+              <LargeTextAreaField label="Plan nutricional" value={form.plan_nutricional} onChange={(v) => updateField("plan_nutricional", v)} rows={7} />
+              <LargeTextAreaField label="Observaciones generales" value={form.observaciones_generales} onChange={(v) => updateField("observaciones_generales", v)} rows={5} />
             </div>
           </div>
         </section>
