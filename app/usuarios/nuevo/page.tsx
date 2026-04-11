@@ -198,7 +198,7 @@ export default function NuevoUsuarioPage() {
                 Crear usuario
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Crea empleados del CRM, asígnales departamento, cargo y rol. El sistema les generará una contraseña temporal.
+                Crea empleados del CRM, asígnales departamento, cargo y rol. La contraseña inicial será Prevital2026* y deberán cambiarla en el primer ingreso.
               </p>
             </div>
 

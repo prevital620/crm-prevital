@@ -12,7 +12,9 @@ const supabaseAdmin = createClient(
   }
 );
 
-export async function DELETE(
+const TEMP_PASSWORD = "Prevital2026*";
+
+export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -26,21 +28,34 @@ export async function DELETE(
       );
     }
 
-    const { error } = await supabaseAdmin.auth.admin.deleteUser(id, true);
+    const { data, error } = await supabaseAdmin.auth.admin.updateUserById(id, {
+      password: TEMP_PASSWORD,
+    });
 
     if (error) {
       return NextResponse.json(
-        { error: error.message || "No se pudo eliminar el usuario." },
+        { error: error.message || "No se pudo restablecer la contraseña." },
         { status: 400 }
       );
     }
 
-    await supabaseAdmin.from("profiles").delete().eq("id", id);
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", id);
+    const { error: profileError } = await supabaseAdmin
+      .from("profiles")
+      .update({ must_change_password: true })
+      .eq("id", id);
+
+    if (profileError) {
+      return NextResponse.json(
+        { error: profileError.message || "No se pudo marcar el cambio obligatorio de contraseña." },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      message: "Usuario eliminado correctamente.",
+      message: "Contraseña restablecida correctamente.",
+      tempPassword: TEMP_PASSWORD,
+      user: data.user,
     });
   } catch (error: any) {
     return NextResponse.json(

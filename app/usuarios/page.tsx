@@ -141,6 +141,38 @@ export default function UsuariosPage() {
     }
   }
 
+  async function restablecerContrasena(user: UserRow) {
+    const confirmado = window.confirm(
+      `¿Restablecer la contraseña de ${user.full_name} a Prevital2026*?`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      setSavingUserId(user.id);
+      setError("");
+      setMensaje("");
+
+      const response = await fetch(`/api/usuarios/${user.id}/reset-password`, {
+        method: "PATCH",
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo restablecer la contraseña.");
+      }
+
+      setMensaje(
+        "Contraseña restablecida correctamente a Prevital2026*. El usuario deberá cambiarla en el próximo ingreso."
+      );
+    } catch (err: any) {
+      setError(err?.message || "No se pudo restablecer la contraseña.");
+    } finally {
+      setSavingUserId(null);
+    }
+  }
+
   function formatDate(dateString: string) {
     try {
       return new Date(dateString).toLocaleString("es-CO", {
@@ -352,6 +384,15 @@ export default function UsuariosPage() {
 
                             <button
                               type="button"
+                              onClick={() => void restablecerContrasena(user)}
+                              disabled={savingUserId === user.id}
+                              className="rounded-2xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-60"
+                            >
+                              {savingUserId === user.id ? "Procesando..." : "Restablecer contraseña"}
+                            </button>
+
+                            <button
+                              type="button"
                               onClick={() => void toggleEstadoUsuario(user, !user.is_active)}
                               disabled={savingUserId === user.id}
                               className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
@@ -374,7 +415,7 @@ export default function UsuariosPage() {
                           </div>
 
                           <p className="mt-3 text-xs text-slate-500">
-                            El botón eliminar hará borrado real del acceso por backend.
+                            Puedes editar, restablecer la contraseña temporal, desactivar o eliminar el acceso por backend.
                           </p>
                         </div>
                       </div>

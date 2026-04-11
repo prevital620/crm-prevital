@@ -12,15 +12,7 @@ const supabaseAdmin = createClient(
   }
 );
 
-function generarPasswordTemporal(length = 10) {
-  const chars =
-    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789@$!%*?&";
-  let result = "";
-  for (let i = 0; i < length; i++) {
-    result += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return result;
-}
+const TEMP_PASSWORD = "Prevital2026*";
 
 export async function POST(request: Request) {
   try {
@@ -62,7 +54,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const tempPassword = generarPasswordTemporal();
+    const tempPassword = TEMP_PASSWORD;
 
     const { data: createdUser, error: createError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -92,6 +84,7 @@ export async function POST(request: Request) {
           job_title: job_title || null,
           department_id: department_id || null,
           is_active: true,
+          must_change_password: true,
         },
       ],
       { onConflict: "id" }
