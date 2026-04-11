@@ -94,25 +94,29 @@ const classificationOptions = [
   "Desnutrición grado 3",
   "Normal",
   "Sobrepeso",
-  "Preobeso",
+  "Pre obeso",
   "Obesidad",
   "Obesidad grado 1",
   "Obesidad grado 2",
   "Obesidad grado 3",
 ];
 
-const metricFields: Array<{ key: keyof NutritionAssessment; label: string }> = [
-  { key: "weight", label: "Peso" },
-  { key: "height", label: "Talla" },
-  { key: "armPerimeter", label: "Perímetro brazo" },
-  { key: "bodyMassIndex", label: "Índice masa corporal" },
-  { key: "bodyFatPercentage", label: "Porcentaje masa corporal" },
-  { key: "muscleMass", label: "Masa muscular" },
-  { key: "restingMetabolism", label: "Metabolismo en reposo" },
-  { key: "visceralFat", label: "Grasa visceral" },
-  { key: "bodyAge", label: "Edad corporal" },
-  { key: "waistCircumference", label: "Circunferencia cintura" },
-  { key: "calfPerimeter", label: "Perímetro pantorrilla" },
+const metricFields: Array<{
+  key: keyof NutritionAssessment;
+  label: string;
+  placeholder: string;
+}> = [
+  { key: "weight", label: "Peso", placeholder: "Ej: 70 kg" },
+  { key: "height", label: "Talla", placeholder: "Ej: 1.65 m" },
+  { key: "armPerimeter", label: "Perímetro brazo", placeholder: "Ej: 28 cm" },
+  { key: "bodyMassIndex", label: "Índice masa corporal", placeholder: "Ej: 25" },
+  { key: "bodyFatPercentage", label: "Porcentaje masa corporal", placeholder: "Ej: 30%" },
+  { key: "muscleMass", label: "Masa muscular", placeholder: "Ej: 42 kg" },
+  { key: "restingMetabolism", label: "Metabolismo en reposo", placeholder: "Ej: 1450 kcal" },
+  { key: "visceralFat", label: "Grasa visceral", placeholder: "Ej: 8" },
+  { key: "bodyAge", label: "Edad corporal", placeholder: "Ej: 40" },
+  { key: "waistCircumference", label: "Circunferencia cintura", placeholder: "Ej: 86 cm" },
+  { key: "calfPerimeter", label: "Perímetro pantorrilla", placeholder: "Ej: 35 cm" },
 ];
 
 export default function NutricionAtencionPage() {
@@ -278,153 +282,136 @@ export default function NutricionAtencionPage() {
           </div>
         ) : null}
 
-        <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-          <div className="space-y-6">
-            <CardSection
-              title="Información previa del paciente"
-              description="Estos antecedentes pueden venir precargados desde recepción o comercial, pero la nutricionista puede modificarlos."
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                <TextAreaField
-                  label="Antecedentes patológicos"
-                  value={history.patologicos}
-                  onChange={(value) => updateHistoryField("patologicos", value)}
-                  rows={4}
-                />
-                <TextAreaField
-                  label="Cirugías"
-                  value={history.cirugias}
-                  onChange={(value) => updateHistoryField("cirugias", value)}
-                  rows={4}
-                />
-                <TextAreaField
-                  label="Tóxicos"
-                  value={history.toxicos}
-                  onChange={(value) => updateHistoryField("toxicos", value)}
-                  rows={4}
-                />
-                <TextAreaField
-                  label="Alérgicos"
-                  value={history.alergicos}
-                  onChange={(value) => updateHistoryField("alergicos", value)}
-                  rows={4}
-                />
-                <TextAreaField
-                  label="Medicamentos"
-                  value={history.medicamentos}
-                  onChange={(value) => updateHistoryField("medicamentos", value)}
-                  rows={4}
-                />
-                <TextAreaField
-                  label="Familiares"
-                  value={history.familiares}
-                  onChange={(value) => updateHistoryField("familiares", value)}
-                  rows={4}
-                />
-              </div>
-            </CardSection>
+        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-bold text-[#24312A]">Antecedentes personales</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Si el paciente ya existe, estos datos aparecen cargados. La nutricionista puede modificarlos.
+          </p>
 
-            <CardSection
-              title="Datos alimentarios"
-              description="Aquí la nutricionista registra hábitos, horarios, preferencias y observaciones alimentarias."
-            >
-              <TextAreaField
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            <SmallTextAreaField
+              label="Antecedentes patológicos"
+              value={history.patologicos}
+              onChange={(value) => updateHistoryField("patologicos", value)}
+            />
+            <SmallTextAreaField
+              label="Cirugías"
+              value={history.cirugias}
+              onChange={(value) => updateHistoryField("cirugias", value)}
+            />
+            <SmallTextAreaField
+              label="Tóxicos"
+              value={history.toxicos}
+              onChange={(value) => updateHistoryField("toxicos", value)}
+            />
+            <SmallTextAreaField
+              label="Alérgicos"
+              value={history.alergicos}
+              onChange={(value) => updateHistoryField("alergicos", value)}
+            />
+            <SmallTextAreaField
+              label="Medicamentos"
+              value={history.medicamentos}
+              onChange={(value) => updateHistoryField("medicamentos", value)}
+            />
+            <SmallTextAreaField
+              label="Familiares"
+              value={history.familiares}
+              onChange={(value) => updateHistoryField("familiares", value)}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-bold text-[#24312A]">Formulario nutricional</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Medidas y composición corporal para la valoración nutricional.
+          </p>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {metricFields.map((field) => (
+              <InputField
+                key={field.key}
+                label={field.label}
+                value={assessment[field.key] as string}
+                placeholder={field.placeholder}
+                onChange={(value) => updateAssessmentField(field.key, value)}
+              />
+            ))}
+          </div>
+        </section>
+
+        <section className="grid gap-6 xl:grid-cols-2">
+          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <h2 className="text-2xl font-bold text-[#24312A]">Clasificación y objetivos</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Resultado nutricional y recomendaciones generales.
+            </p>
+
+            <div className="mt-5 space-y-4">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Clasificación nutricional
+                </label>
+                <select
+                  className={inputClass}
+                  value={assessment.nutritionalClassification}
+                  onChange={(e) =>
+                    updateAssessmentField("nutritionalClassification", e.target.value)
+                  }
+                >
+                  <option value="">Selecciona</option>
+                  {classificationOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <LargeTextAreaField
+                label="Objetivo nutricional"
+                value={assessment.nutritionalObjective}
+                onChange={(value) => updateAssessmentField("nutritionalObjective", value)}
+                rows={5}
+              />
+
+              <LargeTextAreaField
+                label="Recomendaciones nutricionales"
+                value={assessment.nutritionalRecommendations}
+                onChange={(value) =>
+                  updateAssessmentField("nutritionalRecommendations", value)
+                }
+                rows={6}
+              />
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <h2 className="text-2xl font-bold text-[#24312A]">Plan y datos alimentarios</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Campos amplios para registrar hábitos, conducta y plan nutricional.
+            </p>
+
+            <div className="mt-5 space-y-4">
+              <LargeTextAreaField
                 label="Datos alimentarios"
                 value={assessment.foodData}
                 onChange={(value) => updateAssessmentField("foodData", value)}
-                rows={10}
+                rows={7}
               />
-            </CardSection>
-          </div>
 
-          <div className="space-y-6">
-            <CardSection
-              title="Medidas y composición corporal"
-              description="Campos para la valoración antropométrica y composición corporal."
-            >
-              <div className="grid gap-4 md:grid-cols-2">
-                {metricFields.map((field) => (
-                  <InputField
-                    key={field.key}
-                    label={field.label}
-                    value={assessment[field.key] as string}
-                    onChange={(value) => updateAssessmentField(field.key, value)}
-                  />
-                ))}
-              </div>
-            </CardSection>
-
-            <CardSection
-              title="Resultado nutricional"
-              description="Conclusiones y plan nutricional que se imprimirán y quedarán visibles para recepción."
-            >
-              <div className="space-y-4">
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    Clasificación nutricional
-                  </label>
-                  <select
-                    className={inputClass}
-                    value={assessment.nutritionalClassification}
-                    onChange={(e) =>
-                      updateAssessmentField("nutritionalClassification", e.target.value)
-                    }
-                  >
-                    <option value="">Selecciona</option>
-                    {classificationOptions.map((item) => (
-                      <option key={item} value={item}>
-                        {item}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-
-                <TextAreaField
-                  label="Objetivo nutricional"
-                  value={assessment.nutritionalObjective}
-                  onChange={(value) => updateAssessmentField("nutritionalObjective", value)}
-                  rows={4}
-                />
-
-                <TextAreaField
-                  label="Recomendaciones nutricionales"
-                  value={assessment.nutritionalRecommendations}
-                  onChange={(value) =>
-                    updateAssessmentField("nutritionalRecommendations", value)
-                  }
-                  rows={5}
-                />
-
-                <TextAreaField
-                  label="Plan nutricional"
-                  value={assessment.nutritionalPlan}
-                  onChange={(value) => updateAssessmentField("nutritionalPlan", value)}
-                  rows={6}
-                />
-              </div>
-            </CardSection>
+              <LargeTextAreaField
+                label="Plan nutricional"
+                value={assessment.nutritionalPlan}
+                onChange={(value) => updateAssessmentField("nutritionalPlan", value)}
+                rows={7}
+              />
+            </div>
           </div>
         </section>
       </div>
     </main>
-  );
-}
-
-function CardSection({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-      <h2 className="text-2xl font-bold text-[#24312A]">{title}</h2>
-      {description ? <p className="mt-1 text-sm text-slate-500">{description}</p> : null}
-      <div className="mt-5">{children}</div>
-    </section>
   );
 }
 
@@ -438,12 +425,36 @@ function InfoBox({
   return (
     <div className="rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4">
       <p className="text-sm font-semibold uppercase tracking-wide text-[#657D9B]">{label}</p>
-      <p className="mt-2 text-2sm text-[#24312A]">{value}</p>
+      <p className="mt-2 text-[#24312A]">{value}</p>
     </div>
   );
 }
 
 function InputField({
+  label,
+  value,
+  onChange,
+  placeholder = "",
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+      <input
+        className={inputClass}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
+  );
+}
+
+function SmallTextAreaField({
   label,
   value,
   onChange,
@@ -455,8 +466,9 @@ function InputField({
   return (
     <div>
       <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
-      <input
-        className={inputClass}
+      <textarea
+        className={inputClass + " min-h-[110px] resize-none"}
+        rows={3}
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
@@ -464,11 +476,11 @@ function InputField({
   );
 }
 
-function TextAreaField({
+function LargeTextAreaField({
   label,
   value,
   onChange,
-  rows = 4,
+  rows = 6,
 }: {
   label: string;
   value: string;
@@ -479,7 +491,7 @@ function TextAreaField({
     <div>
       <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
       <textarea
-        className={inputClass + " min-h-[120px] resize-none"}
+        className={inputClass + " min-h-[160px] resize-none"}
         rows={rows}
         value={value}
         onChange={(e) => onChange(e.target.value)}
