@@ -7,28 +7,22 @@ import { CalendarDays, ClipboardPlus, UserPlus, Stethoscope } from "lucide-react
 const quickCards = [
   {
     title: "Abrir agenda",
-    description: "Ver citas del día, seleccionar paciente y abrir atención nutricional.",
+    description: "Ver citas reales del día y abrir la atención nutricional.",
     href: "/nutricion/agenda",
     icon: CalendarDays,
   },
   {
     title: "Crear nuevo cliente",
-    description: "Registrar un cliente nuevo para luego agendarlo o atenderlo.",
+    description: "Registrar un cliente nuevo desde cero, sin datos precargados.",
     href: "/nutricion/nuevo",
     icon: UserPlus,
   },
   {
     title: "Agendar cita",
-    description: "Programar una cita con nutrición para un cliente existente o nuevo.",
+    description: "Programar una cita con nutrición para un cliente del sistema.",
     href: "/nutricion/agendar",
     icon: ClipboardPlus,
   },
-];
-
-const todayAppointments = [
-  { id: "NUT-001", time: "08:00", patient: "Paciente de ejemplo", status: "Agendada" },
-  { id: "NUT-002", time: "09:00", patient: "María López", status: "En espera" },
-  { id: "NUT-003", time: "10:30", patient: "Carlos Gómez", status: "Finalizada" },
 ];
 
 export default function NutricionHomePage() {
@@ -70,8 +64,8 @@ export default function NutricionHomePage() {
                 Inicio de nutrición
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Desde aquí la nutricionista puede abrir su agenda, crear un cliente nuevo o
-                agendar una cita con ella misma antes de entrar a la valoración.
+                Desde aquí puedes abrir la agenda, crear un cliente nuevo o programar una cita
+                sin usar datos de ejemplo.
               </p>
             </div>
 
@@ -92,12 +86,6 @@ export default function NutricionHomePage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
-          <StatCard title="Citas de hoy" value="3" subtitle="Agenda visible del día" />
-          <StatCard title="Pendientes" value="2" subtitle="Agendadas o en espera" />
-          <StatCard title="Finalizadas" value="1" subtitle="Consultas cerradas hoy" />
-        </section>
-
         <section className="grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
           <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <div className="flex items-center gap-3">
@@ -112,7 +100,7 @@ export default function NutricionHomePage() {
               </div>
             </div>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-1 xl:grid-cols-1">
+            <div className="mt-5 grid gap-4">
               {quickCards.map((item) => {
                 const Icon = item.icon;
                 return (
@@ -143,59 +131,19 @@ export default function NutricionHomePage() {
           </div>
 
           <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-bold text-[#24312A]">Agenda rápida de hoy</h2>
+            <h2 className="text-2xl font-bold text-[#24312A]">Estado del módulo</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Vista rápida antes de entrar a la agenda completa.
+              Base limpia, sin pacientes ni citas de ejemplo.
             </p>
 
-            <div className="mt-5 space-y-3">
-              {todayAppointments.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <p className="text-base font-semibold text-[#24312A]">{item.patient}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {item.id} · {item.time}
-                      </p>
-                    </div>
-                    <span className="rounded-full border border-[#D6E8DA] bg-white px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
-                      {item.status}
-                    </span>
-                  </div>
-                </div>
-              ))}
+            <div className="mt-5 rounded-2xl border border-dashed border-[#D6E8DA] bg-[#FBFCFB] p-6 text-sm text-slate-500">
+              La agenda mostrará las citas reales que existan en el sistema.
+              <br /><br />
+              El formulario de nuevo cliente queda vacío para diligenciar desde cero.
             </div>
-
-            <Link
-              href="/nutricion/agenda"
-              className="mt-5 inline-flex w-full items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Ver agenda completa
-            </Link>
           </div>
         </section>
       </div>
     </main>
-  );
-}
-
-function StatCard({
-  title,
-  value,
-  subtitle,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-}) {
-  return (
-    <div className="rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm">
-      <p className="text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
-      <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
-    </div>
   );
 }
