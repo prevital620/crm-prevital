@@ -39,12 +39,12 @@ export default function EditarUsuarioPage() {
   const [mensaje, setMensaje] = useState("");
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [form, setForm] = useState({
     full_name: "",
     phone: "",
     job_title: "",
     department_id: "",
-    role_id: "",
     is_active: true,
   });
   const [email, setEmail] = useState("");
@@ -76,7 +76,7 @@ export default function EditarUsuarioPage() {
           .single(),
         supabase.from("departments").select("id, name").order("name", { ascending: true }),
         supabase.from("roles").select("id, name, code").order("name", { ascending: true }),
-        supabase.from("user_roles").select("role_id").eq("user_id", userId).limit(1),
+        supabase.from("user_roles").select("role_id").eq("user_id", userId),
       ]);
 
       if (userResult.error) throw userResult.error;
@@ -85,16 +85,19 @@ export default function EditarUsuarioPage() {
       if (userRoleResult.error) throw userRoleResult.error;
 
       const user = userResult.data as UserData;
-      const currentRoleId = userRoleResult.data?.[0]?.role_id || "";
+      const currentRoleIds =
+        ((userRoleResult.data as Array<{ role_id: string }> | null) || [])
+          .map((item) => item.role_id)
+          .filter(Boolean);
 
       setDepartments((departmentsResult.data as Department[]) || []);
       setRoles((rolesResult.data as Role[]) || []);
+      setSelectedRoleIds(currentRoleIds);
       setForm({
         full_name: user.full_name || "",
         phone: user.phone || "",
         job_title: user.job_title || "",
         department_id: user.department_id || "",
-        role_id: currentRoleId,
         is_active: user.is_active,
       });
       setEmail("");
@@ -142,10 +145,15 @@ export default function EditarUsuarioPage() {
 
       if (deleteRoleError) throw deleteRoleError;
 
-      if (form.role_id) {
+      if (selectedRoleIds.length > 0) {
+        const rows = selectedRoleIds.map((roleId) => ({
+          user_id: userId,
+          role_id: roleId,
+        }));
+
         const { error: insertRoleError } = await supabase
           .from("user_roles")
-          .insert([{ user_id: userId, role_id: form.role_id }]);
+          .insert(rows);
 
         if (insertRoleError) throw insertRoleError;
       }
@@ -254,7 +262,7 @@ export default function EditarUsuarioPage() {
               <p className="text-sm font-medium text-[#7FA287]">Super Usuario</p>
               <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Editar usuario</h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Actualiza datos básicos, departamento, rol y estado del empleado.
+                Actualiza datos básicos, departamento, roles múltiples y estado del empleado.
               </p>
             </div>
 
@@ -344,18 +352,46 @@ export default function EditarUsuarioPage() {
               ))}
             </select>
 
-            <select
-              className={inputClass}
-              value={form.role_id}
-              onChange={(e) => setForm({ ...form, role_id: e.target.value })}
-            >
-              <option value="">Selecciona un rol</option>
-              {roles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
+            <div className="rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4">
+              <p className="mb-3 text-sm font-medium text-[#24312A]">
+                Roles y accesos permitidos
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {roles.map((role) => {
+                  const checked = selectedRoleIds.includes(role.id);
+
+                  return (
+                    <label
+                      key={role.id}
+                      className="flex items-start gap-3 rounded-2xl border border-[#D6E8DA] bg-white p-4 text-sm text-slate-700"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setSelectedRoleIds((prev) => {
+                            if (isChecked) {
+                              return Array.from(new Set([...prev, role.id]));
+                            }
+                            return prev.filter((item) => item !== role.id);
+                          });
+                        }}
+                      />
+                      <span>
+                        <span className="block font-medium text-[#24312A]">{role.name}</span>
+                        <span className="text-xs text-slate-500">{role.code}</span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-xs text-slate-500">
+                Puedes aprobar varios accesos al mismo usuario, por ejemplo Comercial y Fisioterapia.
+              </p>
+            </div>
 
             <label className="flex items-center gap-3 rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4 text-sm text-slate-700">
               <input

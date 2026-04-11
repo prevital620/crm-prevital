@@ -164,6 +164,8 @@ export default function HomePage() {
 
   const [currentRoleCode, setCurrentRoleCode] = useState<string | null>(null);
   const [currentRoleName, setCurrentRoleName] = useState<string | null>(null);
+  const [allRoleCodes, setAllRoleCodes] = useState<string[]>([]);
+  const [allRoleNames, setAllRoleNames] = useState<string[]>([]);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
@@ -189,6 +191,8 @@ export default function HomePage() {
 
     setCurrentRoleCode(normalizedRole);
     setCurrentRoleName(auth.roleName);
+    setAllRoleCodes(auth.allRoleCodes || []);
+    setAllRoleNames(auth.allRoleNames || []);
     setCurrentUserId(session.user.id);
 
     const { data: profile } = await supabase
@@ -267,11 +271,17 @@ export default function HomePage() {
   }, []);
 
   const visibleQuickActions = useMemo(() => {
-    if (!currentRoleCode) return [];
+    const effectiveRoles = Array.from(
+      new Set([...(allRoleCodes || []), ...(currentRoleCode ? [currentRoleCode] : [])].filter(Boolean))
+    );
 
-    const base = quickActions.filter((action) => action.roles.includes(currentRoleCode));
+    if (effectiveRoles.length === 0) return [];
 
-    if (currentRoleCode === "promotor_opc") {
+    const base = quickActions.filter((action) =>
+      action.roles.some((role) => effectiveRoles.includes(role))
+    );
+
+    if (effectiveRoles.includes("promotor_opc")) {
       return base.sort((a, b) => {
         const order: Record<string, number> = {
           "/leads/nuevo": 1,
@@ -282,7 +292,7 @@ export default function HomePage() {
     }
 
     return base;
-  }, [currentRoleCode]);
+  }, [allRoleCodes, currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
 
@@ -341,7 +351,9 @@ export default function HomePage() {
             <div className="flex flex-wrap items-center gap-3">
               <div className="rounded-2xl border border-[#D6E8DA] bg-[#EAF4EC] px-5 py-3 text-[#4F6F5B]">
                 <p className="text-sm font-semibold">{currentUserName || "Usuario"}</p>
-                <p className="text-xs text-[#5E8F6C]">{currentRoleName || "Rol"}</p>
+                <p className="text-xs text-[#5E8F6C]">
+                  {allRoleNames.length > 0 ? allRoleNames.join(" · ") : currentRoleName || "Rol"}
+                </p>
               </div>
               <LogoutButton />
             </div>
@@ -356,7 +368,7 @@ export default function HomePage() {
             </div>
             <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm text-slate-600">
               <ShieldCheck className="h-4 w-4 text-[#5E8F6C]" />
-              <span>{currentRoleName || "Rol"}</span>
+              <span>{allRoleNames.length > 0 ? allRoleNames.join(" · ") : currentRoleName || "Rol"}</span>
             </div>
           </PrevitalFilterGroup>
 

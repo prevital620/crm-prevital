@@ -67,7 +67,7 @@ export default function UsuariosPage() {
 
       if (error) throw error;
 
-      setUsers((data ?? []) as UserRow[]);
+      setUsers(((data ?? []) as unknown) as UserRow[]);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los usuarios.");
     } finally {
@@ -190,13 +190,24 @@ export default function UsuariosPage() {
 
     return users.filter((user) => {
       const department = user.departments?.[0]?.name || "";
-      const role = user.user_roles?.[0]?.roles?.[0]?.name || "";
+      const roleNames = (user.user_roles || [])
+        .flatMap((item) => item.roles || [])
+        .map((role) => role.name || "")
+        .filter(Boolean)
+        .join(" ");
+      const roleCodes = (user.user_roles || [])
+        .flatMap((item) => item.roles || [])
+        .map((role) => role.code || "")
+        .filter(Boolean)
+        .join(" ");
+
       return (
         (user.full_name || "").toLowerCase().includes(q) ||
         (user.phone || "").toLowerCase().includes(q) ||
         (user.job_title || "").toLowerCase().includes(q) ||
         department.toLowerCase().includes(q) ||
-        role.toLowerCase().includes(q)
+        roleNames.toLowerCase().includes(q) ||
+        roleCodes.toLowerCase().includes(q)
       );
     });
   }, [users, search]);
@@ -333,7 +344,14 @@ export default function UsuariosPage() {
               <div className="space-y-4">
                 {filteredUsers.map((user) => {
                   const firstDepartment = user.departments?.[0];
-                  const firstRole = user.user_roles?.[0]?.roles?.[0];
+                  const roleNames = (user.user_roles || [])
+                    .flatMap((item) => item.roles || [])
+                    .map((role) => role.name || "")
+                    .filter(Boolean);
+                  const roleCodes = (user.user_roles || [])
+                    .flatMap((item) => item.roles || [])
+                    .map((role) => role.code || "")
+                    .filter(Boolean);
 
                   return (
                     <div
@@ -365,8 +383,8 @@ export default function UsuariosPage() {
                               label="Departamento"
                               value={firstDepartment?.name || "Sin departamento"}
                             />
-                            <InfoItem label="Rol" value={firstRole?.name || "Sin rol"} />
-                            <InfoItem label="Código rol" value={firstRole?.code || "Sin código"} />
+                            <InfoItem label="Rol" value={roleNames.length > 0 ? roleNames.join(" · ") : "Sin rol"} />
+                            <InfoItem label="Código rol" value={roleCodes.length > 0 ? roleCodes.join(" · ") : "Sin código"} />
                             <InfoItem label="Creado" value={formatDate(user.created_at)} />
                           </div>
                         </div>
