@@ -137,6 +137,12 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "nutricionista"],
   },
   {
+    title: "Fisioterapia",
+    subtitle: "Ver agenda, pacientes y atención de fisioterapia.",
+    href: "/fisioterapia",
+    roles: ["super_user", "fisioterapeuta"],
+  },
+  {
     title: "Comercial",
     subtitle: "Gestionar seguimiento y cierre comercial.",
     href: "/comercial",
