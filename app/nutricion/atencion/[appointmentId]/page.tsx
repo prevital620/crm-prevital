@@ -164,7 +164,7 @@ function traducirEstado(status: string | null | undefined) {
     en_atencion: "En atención",
     finalizada: "Finalizada",
   };
-  return map[status || ""] || status || "Sin estado";
+  return map[status || ""] || status || "";
 }
 
 export default function NutricionAtencionPage() {
@@ -174,7 +174,6 @@ export default function NutricionAtencionPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [appointment, setAppointment] = useState<AppointmentRow | null>(null);
-  const [userRow, setUserRow] = useState<UserRow | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
   const [message, setMessage] = useState("");
@@ -244,8 +243,6 @@ export default function NutricionAtencionPage() {
           foundUser = usersByName[0] as UserRow;
         }
       }
-
-      setUserRow(foundUser);
 
       let nutritionProfile: NutritionProfileRow | null = null;
       if (foundUser?.id) {
@@ -333,13 +330,12 @@ export default function NutricionAtencionPage() {
     const { data: insertedUser, error: insertUserError } = await supabase
       .from("users")
       .insert([payload])
-      .select("id, nombre, documento, telefono, ciudad")
+      .select("id")
       .single();
 
     if (insertUserError) throw insertUserError;
 
     setUserId(insertedUser.id);
-    setUserRow(insertedUser as UserRow);
     return insertedUser.id as string;
   }
 
@@ -401,7 +397,6 @@ export default function NutricionAtencionPage() {
       if (nutritionError) throw nutritionError;
 
       const appointmentUpdate: Record<string, any> = {
-        patient_name: appointment.patient_name,
         phone: form.phone.trim() || null,
         city: form.city.trim() || null,
       };
@@ -430,9 +425,9 @@ export default function NutricionAtencionPage() {
 
       if (nextStatus === "finalizada") {
         setFinalized(true);
-        setMessage("Consulta finalizada y guardada correctamente en Supabase.");
+        setMessage("Consulta finalizada y guardada correctamente.");
       } else {
-        setMessage("Cambios guardados correctamente en Supabase.");
+        setMessage("Cambios guardados correctamente.");
       }
     } catch (err: any) {
       setError(err?.message || "No se pudo guardar la atención nutricional.");
@@ -499,9 +494,9 @@ export default function NutricionAtencionPage() {
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">Módulo de Nutrición</p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">{appointment.patient_name || "Paciente"}</h1>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">{appointment.patient_name || ""}</h1>
               <p className="mt-3 text-sm text-slate-600">
-                Cita {appointment.id} · Lead {appointment.lead_id || "Sin lead"}
+                Cita {appointment.id || ""} · Lead {appointment.lead_id || ""}
               </p>
             </div>
 
@@ -543,13 +538,13 @@ export default function NutricionAtencionPage() {
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <InfoBox label="Documento" value={form.document || "Sin documento"} />
-            <InfoBox label="Teléfono" value={form.phone || "Sin teléfono"} />
-            <InfoBox label="Edad" value={form.age || "Sin dato"} />
-            <InfoBox label="Sexo" value={form.sex || "Sin dato"} />
-            <InfoBox label="Fecha" value={appointment.appointment_date || "Sin fecha"} />
-            <InfoBox label="Hora" value={formatHora(appointment.appointment_time) || "Sin hora"} />
-            <InfoBox label="Origen" value={appointment.service_type || "Nutrición"} />
+            <InfoBox label="Documento" value={form.document} />
+            <InfoBox label="Teléfono" value={form.phone} />
+            <InfoBox label="Edad" value={form.age} />
+            <InfoBox label="Sexo" value={form.sex} />
+            <InfoBox label="Fecha" value={appointment.appointment_date || ""} />
+            <InfoBox label="Hora" value={formatHora(appointment.appointment_time)} />
+            <InfoBox label="Origen" value={appointment.service_type || ""} />
             <InfoBox label="Estado" value={traducirEstado(appointment.status)} />
           </div>
         </section>
@@ -567,18 +562,10 @@ export default function NutricionAtencionPage() {
         ) : null}
 
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-bold text-[#24312A]">Datos básicos y antecedentes personales</h2>
+          <h2 className="text-2xl font-bold text-[#24312A]">Antecedentes personales</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Aquí puedes corregir datos del cliente y sus antecedentes reales antes de continuar.
+            Puedes ingresar o modificar los antecedentes reales del paciente.
           </p>
-
-          <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <InputField label="Documento" value={form.document} onChange={(v) => updateField("document", v)} />
-            <InputField label="Teléfono" value={form.phone} onChange={(v) => updateField("phone", v)} />
-            <InputField label="Ciudad" value={form.city} onChange={(v) => updateField("city", v)} />
-            <InputField label="Edad" value={form.age} onChange={(v) => updateField("age", v)} />
-            <InputField label="Sexo" value={form.sex} onChange={(v) => updateField("sex", v)} />
-          </div>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
             <SmallTextAreaField label="Antecedentes patológicos" value={form.antecedentes_patologicos} onChange={(v) => updateField("antecedentes_patologicos", v)} />
@@ -612,10 +599,6 @@ export default function NutricionAtencionPage() {
         <section className="grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-bold text-[#24312A]">Clasificación y objetivos</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Resultado nutricional y recomendaciones generales.
-            </p>
-
             <div className="mt-5 space-y-4">
               <div>
                 <label className="mb-2 block text-sm font-medium text-slate-700">Clasificación nutricional</label>
@@ -638,10 +621,6 @@ export default function NutricionAtencionPage() {
 
           <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-bold text-[#24312A]">Plan y datos alimentarios</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Campos amplios para registrar hábitos, conducta y plan nutricional.
-            </p>
-
             <div className="mt-5 space-y-4">
               <LargeTextAreaField label="Datos alimentarios" value={form.datos_alimentarios} onChange={(v) => updateField("datos_alimentarios", v)} rows={7} />
               <LargeTextAreaField label="Plan nutricional" value={form.plan_nutricional} onChange={(v) => updateField("plan_nutricional", v)} rows={7} />
@@ -664,7 +643,7 @@ function InfoBox({
   return (
     <div className="rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4">
       <p className="text-sm font-semibold uppercase tracking-wide text-[#657D9B]">{label}</p>
-      <p className="mt-2 text-[#24312A]">{value}</p>
+      <p className="mt-2 text-[#24312A]">{value || " "}</p>
     </div>
   );
 }
@@ -709,6 +688,7 @@ function SmallTextAreaField({
         className={inputClass + " min-h-[110px] resize-none"}
         rows={3}
         value={value}
+        placeholder=""
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
@@ -733,6 +713,7 @@ function LargeTextAreaField({
         className={inputClass + " min-h-[160px] resize-none"}
         rows={rows}
         value={value}
+        placeholder=""
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
