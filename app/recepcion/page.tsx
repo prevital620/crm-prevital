@@ -154,6 +154,7 @@ type NutritionProfileRow = {
   perimetro_brazo: string | null;
   indice_masa_corporal: string | null;
   porcentaje_masa_corporal: string | null;
+  dinamometria: string | null;
   masa_muscular: string | null;
   metabolismo_reposo: string | null;
   grasa_visceral: string | null;
@@ -452,7 +453,8 @@ function imprimirDocumentoNutricional({
           <div class="item"><strong>Talla</strong><br/>${texto(profile?.talla)}</div>
           <div class="item"><strong>Perímetro brazo</strong><br/>${texto(profile?.perimetro_brazo)}</div>
           <div class="item"><strong>IMC</strong><br/>${texto(profile?.indice_masa_corporal)}</div>
-          <div class="item"><strong>% masa corporal</strong><br/>${texto(profile?.porcentaje_masa_corporal)}</div>
+          <div class="item"><strong>Grasa corporal</strong><br/>${texto(profile?.porcentaje_masa_corporal)}</div>
+          <div class="item"><strong>Dinamometría</strong><br/>${texto(profile?.dinamometria)}</div>
           <div class="item"><strong>Masa muscular</strong><br/>${texto(profile?.masa_muscular)}</div>
           <div class="item"><strong>Metabolismo en reposo</strong><br/>${texto(profile?.metabolismo_reposo)}</div>
           <div class="item"><strong>Grasa visceral</strong><br/>${texto(profile?.grasa_visceral)}</div>
@@ -701,6 +703,7 @@ function RecepcionContent() {
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
 
   useEffect(() => {
+    if (activeSection === "nutricion_entregas") return;
     const options = getDurationOptions(activeSection, form.service_type, form.appointment_date);
     if (options.length === 0) return;
 
