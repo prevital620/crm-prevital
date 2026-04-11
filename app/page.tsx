@@ -131,6 +131,12 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "recepcion"],
   },
   {
+    title: "Nutrición",
+    subtitle: "Ver agenda, pacientes y valoración nutricional.",
+    href: "/nutricion",
+    roles: ["super_user", "nutricionista"],
+  },
+  {
     title: "Comercial",
     subtitle: "Gestionar seguimiento y cierre comercial.",
     href: "/comercial",
@@ -299,29 +305,29 @@ export default function HomePage() {
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
-<div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-  <div className="relative h-[420px] w-[420px] opacity-[0.05] md:h-[520px] md:w-[520px]">
-    <Image
-      src="/prevital-logo.jpeg"
-      alt="Prevital"
-      fill
-      className="object-contain"
-      priority
-    />
-  </div>
-</div>
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[420px] w-[420px] opacity-[0.05] md:h-[520px] md:w-[520px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
       <div className="mx-auto max-w-7xl space-y-6">
-     <div className="flex items-center gap-3">
-  <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
-    <Image
-      src="/prevital-logo.jpeg"
-      alt="Prevital"
-      fill
-      className="object-contain p-1"
-      priority
-    />
-  </div>
- </div>
+        <div className="flex items-center gap-3">
+          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
         <PrevitalPageHeader
           title="CRM Prevital"
           subtitle="Accesos y resumen según el rol autenticado."
@@ -445,20 +451,20 @@ export default function HomePage() {
                   />
                   <PrevitalCardContent>
                     {loading ? (
-  <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
-    Cargando leads...
-  </div>
-) : leads.length === 0 ? (
-  <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
-    No hay leads visibles para este usuario.
-  </div>
-) : (
-  <div className="space-y-3">
-    {leads.slice(0, 6).map((lead) => (
-      <LeadCard key={lead.id} lead={lead} formatDate={formatDate} />
-    ))}
-  </div>
-)}
+                      <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                        Cargando leads...
+                      </div>
+                    ) : leads.length === 0 ? (
+                      <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                        No hay leads visibles para este usuario.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {leads.slice(0, 6).map((lead) => (
+                          <LeadCard key={lead.id} lead={lead} formatDate={formatDate} />
+                        ))}
+                      </div>
+                    )}
                   </PrevitalCardContent>
                 </PrevitalCard>
               </div>
@@ -504,31 +510,31 @@ export default function HomePage() {
                 </div>
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
-  {visibleQuickActions.map((action) => (
-    <a
-      key={action.title}
-      href={action.href}
-      className="group relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md"
-    >
-      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+                  {visibleQuickActions.map((action) => (
+                    <a
+                      key={action.title}
+                      href={action.href}
+                      className="group relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md"
+                    >
+                      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
 
-      <div className="flex items-start justify-between gap-4">
-        <div className="pr-2">
-          <h3 className="text-lg font-semibold text-[#24312A] transition group-hover:text-[#4F6F5B]">
-            {action.title}
-          </h3>
-          <p className="mt-2 text-sm leading-6 text-slate-500">
-            {action.subtitle}
-          </p>
-        </div>
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="pr-2">
+                          <h3 className="text-lg font-semibold text-[#24312A] transition group-hover:text-[#4F6F5B]">
+                            {action.title}
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-slate-500">
+                            {action.subtitle}
+                          </p>
+                        </div>
 
-        <span className="shrink-0 rounded-full border border-[#D6E8DA] bg-[#F4FAF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B] transition group-hover:bg-white">
-          Abrir
-        </span>
-      </div>
-    </a>
-  ))}
-</div>
+                        <span className="shrink-0 rounded-full border border-[#D6E8DA] bg-[#F4FAF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B] transition group-hover:bg-white">
+                          Abrir
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
               )}
             </PrevitalCardContent>
           </PrevitalCard>
