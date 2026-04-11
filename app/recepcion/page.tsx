@@ -8,13 +8,26 @@ import SessionBadge from "@/components/session-badge";
 import { useSearchParams } from "next/navigation";
 import StatCard from "@/components/ui/StatCard";
 import Field from "@/components/ui/Field";
-import InfoItem from "@/components/ui/InfoItem";
-import StatusBadge from "@/components/ui/StatusBadge";
 import printAppointment from "@/lib/print/templates/printAppointment";
 import printReceptionRecord from "@/lib/print/templates/printReceptionRecord";
-import { hoyISO, formatHora, normalizarHora } from "@/lib/datetime/dateHelpers";
-import { traducirEstadoCita, appointmentStatusClass } from "@/lib/status/appointmentStatus";
-import { traducirEstadoComercial, commercialStatusClass } from "@/lib/status/commercialStatus";
+import {
+  getSectionForService,
+  getSectionLabel,
+  getServiceFieldLabel,
+  getServiceOptionsBySection,
+} from "@/lib/agenda/agendaSections";
+import {
+  SLOT_OPTIONS,
+  ACTIVE_APPOINTMENT_STATUSES,
+  DEFAULT_DAILY_CAPACITY,
+  DEFAULT_SLOT_CAPACITY,
+  getDurationOptions,
+  getAllowedSlotOptions,
+} from "@/lib/agenda/agendaDurations";
+import {
+  extraerDuracionDesdeNotas,
+  buildSlotAvailability,
+} from "@/lib/agenda/agendaAvailability";
 
 type LeadOption = {
   id: string;
@@ -139,114 +152,6 @@ const appointmentStatusOptions = [
   { value: "finalizada", label: "Finalizada" },
 ];
 
-const generalServiceOptions = [
-  { value: "valoracion", label: "Valoración" },
-  { value: "otro", label: "Otro" },
-];
-
-const specialistOptions = [
-  { value: "nutricion", label: "Nutrición" },
-  { value: "medico", label: "Médico" },
-];
-
-const treatmentOptions = [
-  { value: "fisioterapia", label: "Fisioterapia" },
-  { value: "sueroterapia", label: "Sueroterapia" },
-  { value: "detox", label: "Detox" },
-];
-
-const commercialDisqualifyingOptions: Array<{
-  key: CommercialDisqualifyingKey;
-  label: string;
-}> = [
-  { key: "stent", label: "Stent" },
-  { key: "corazon_abierto", label: "Corazón abierto" },
-  { key: "tratamiento_internista", label: "Tratamiento con internista" },
-  { key: "oncologico_tratamiento", label: "Oncológico en tratamiento" },
-  { key: "anticoagulado", label: "Anticoagulado" },
-  { key: "psiquiatrico", label: "Psiquiátrico" },
-  { key: "cateterismo", label: "Cateterismo" },
-  { key: "dialisis", label: "Diálisis" },
-];
-
-
-const commercialOccupationOptions = [
-  { value: "empleado", label: "Empleado" },
-  { value: "independiente", label: "Independiente" },
-  { value: "pensionado", label: "Pensionado" },
-  { value: "desempleado", label: "Desempleado" },
-  { value: "estudiante", label: "Estudiante" },
-  { value: "empleado_salud", label: "Empleado de la salud" },
-  { value: "otro", label: "Otro" },
-];
-
-const commercialOccupationDisqualifyingValues = new Set([
-  "desempleado",
-  "estudiante",
-  "empleado_salud",
-]);
-
-const commercialOccupationOtherDisqualifyingTerms = [
-  "desempleado",
-  "estudiante",
-  "empleado de la salud",
-  "empleado salud",
-  "salud",
-];
-
-function traducirOcupacionComercial(value: string, otherValue?: string) {
-  if (value === "otro") {
-    return otherValue?.trim() || "Otro";
-  }
-
-  const found = commercialOccupationOptions.find((item) => item.value === value);
-  return found?.label || value || "";
-}
-
-const emptyCommercialDisqualifyingFlags = (): CommercialDisqualifyingFlags => ({
-  stent: false,
-  corazon_abierto: false,
-  tratamiento_internista: false,
-  oncologico_tratamiento: false,
-  anticoagulado: false,
-  psiquiatrico: false,
-  cateterismo: false,
-  dialisis: false,
-});
-
-const specialistValues = new Set(specialistOptions.map((item) => item.value));
-const treatmentValues = new Set(treatmentOptions.map((item) => item.value));
-
-function getSectionForService(serviceType: string | null | undefined): ReceptionSection {
-  const value = (serviceType || "").trim().toLowerCase();
-  if (specialistValues.has(value)) return "especialistas";
-  if (treatmentValues.has(value)) return "tratamientos";
-  return "agenda";
-}
-
-function getSectionLabel(section: ReceptionSection) {
-  if (section === "especialistas") return "Especialistas";
-  if (section === "tratamientos") return "Tratamientos";
-  if (section === "impresiones") return "Impresiones y entregas";
-  if (section === "inventario") return "Inventario";
-  if (section === "comercial") return "Ingreso comercial";
-  return "Agenda";
-}
-
-function getServiceFieldLabel(section: ReceptionSection) {
-  if (section === "especialistas") return "Especialista";
-  if (section === "tratamientos") return "Tratamiento";
-  if (section === "impresiones" || section === "inventario" || section === "comercial") return "Servicio";
-  return "Servicio";
-}
-
-function getServiceOptionsBySection(section: ReceptionSection) {
-  if (section === "especialistas") return specialistOptions;
-  if (section === "tratamientos") return treatmentOptions;
-  if (section === "impresiones" || section === "inventario" || section === "comercial") return [];
-  return generalServiceOptions;
-}
-
 const manualSourceOptions = [
   { value: "lead_existente", label: "Lead existente" },
   { value: "opc", label: "OPC" },
@@ -259,38 +164,18 @@ const manualSourceOptions = [
   { value: "otro", label: "Otro" },
 ];
 
-const SLOT_OPTIONS: SlotOption[] = [
-  { value: "08:00", label: "8:00 a. m." },
-  { value: "08:30", label: "8:30 a. m." },
-  { value: "09:00", label: "9:00 a. m." },
-  { value: "09:30", label: "9:30 a. m." },
-  { value: "10:00", label: "10:00 a. m." },
-  { value: "10:30", label: "10:30 a. m." },
-  { value: "11:00", label: "11:00 a. m." },
-  { value: "11:30", label: "11:30 a. m." },
-  { value: "13:00", label: "1:00 p. m." },
-  { value: "13:30", label: "1:30 p. m." },
-  { value: "14:00", label: "2:00 p. m." },
-  { value: "14:30", label: "2:30 p. m." },
-  { value: "15:00", label: "3:00 p. m." },
-  { value: "15:30", label: "3:30 p. m." },
-  { value: "16:00", label: "4:00 p. m." },
-  { value: "16:30", label: "4:30 p. m." },
-  { value: "17:00", label: "5:00 p. m." },
-];
+function hoyISO() {
+  const hoy = new Date();
+  const y = hoy.getFullYear();
+  const m = String(hoy.getMonth() + 1).padStart(2, "0");
+  const d = String(hoy.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
 
-const ACTIVE_APPOINTMENT_STATUSES = [
-  "agendada",
-  "confirmada",
-  "en_espera",
-  "reagendada",
-  "en_atencion",
-];
-
-const DEFAULT_SLOT_CAPACITY = 6;
-const DEFAULT_DAILY_CAPACITY = 60;
-const SPECIALIST_SINGLE_CAPACITY = 1;
-const TREATMENT_DOUBLE_CAPACITY = 2;
+function formatHora(hora: string | null | undefined) {
+  if (!hora) return "";
+  return hora.slice(0, 5);
+}
 
 function fullLeadName(lead: LeadOption) {
   return (
@@ -350,12 +235,6 @@ function limpiarMetadatosAgenda(notes: string | null | undefined) {
     .trim();
 }
 
-function extraerDuracionDesdeNotas(notes: string | null | undefined) {
-  if (!notes) return 30;
-  const match = notes.match(/Duración:\s*(30|60)\s*min/i);
-  return match?.[1] === "60" ? 60 : 30;
-}
-
 function construirNotasAgenda({
   notes,
   manualSource,
@@ -381,128 +260,121 @@ function construirNotasAgenda({
   return lines.join("\n").trim();
 }
 
-function getDayOfWeek(isoDate: string) {
-  const [year, month, day] = isoDate.split("-").map(Number);
-  return new Date(year, month - 1, day).getDay();
-}
-
-function getSlotIndex(time: string) {
-  return SLOT_OPTIONS.findIndex((slot) => slot.value === normalizarHora(time));
-}
-
-function getSlotsForDuration(startTime: string, durationMinutes: number) {
-  const normalized = normalizarHora(startTime);
-  const startIndex = getSlotIndex(normalized);
-  if (startIndex < 0) return [];
-
-  const blocksNeeded = Math.max(1, Math.ceil(durationMinutes / 30));
-  const slots = SLOT_OPTIONS.slice(startIndex, startIndex + blocksNeeded).map((slot) => slot.value);
-
-  if (slots.length !== blocksNeeded) return [];
-
-  return slots;
-}
-
-function getResourceCapacity(section: ReceptionSection) {
-  if (section === "especialistas") return SPECIALIST_SINGLE_CAPACITY;
-  if (section === "tratamientos") return TREATMENT_DOUBLE_CAPACITY;
-  return DEFAULT_SLOT_CAPACITY;
-}
-
-function getDurationOptions(
-  section: ReceptionSection,
-  serviceType: string,
-  appointmentDate: string
-) {
-  if (section === "tratamientos") {
-    return [{ value: "30", label: "30 min" }];
+function badgeEstado(status: string) {
+  switch (status) {
+    case "agendada":
+      return "bg-slate-100 text-slate-700";
+    case "confirmada":
+      return "bg-blue-100 text-blue-700";
+    case "en_espera":
+      return "bg-amber-100 text-amber-700";
+    case "asistio":
+      return "bg-emerald-100 text-emerald-700";
+    case "no_asistio":
+      return "bg-rose-100 text-rose-700";
+    case "reagendada":
+      return "bg-violet-100 text-violet-700";
+    case "cancelada":
+      return "bg-red-100 text-red-700";
+    case "en_atencion":
+      return "bg-cyan-100 text-cyan-700";
+    case "finalizada":
+      return "bg-green-100 text-green-700";
+    default:
+      return "bg-slate-100 text-slate-700";
   }
+}
 
-  if (section === "especialistas") {
-    if (serviceType === "medico") {
-      return getDayOfWeek(appointmentDate) === 3
-        ? [{ value: "60", label: "60 min" }]
-        : [];
-    }
+function traducirEstado(status: string) {
+  const map: Record<string, string> = {
+    agendada: "Agendada",
+    confirmada: "Confirmada",
+    en_espera: "En espera",
+    asistio: "Asistió",
+    no_asistio: "No asistió",
+    reagendada: "Reagendada",
+    cancelada: "Cancelada",
+    en_atencion: "En atención",
+    finalizada: "Finalizada",
+  };
+  return map[status] || status;
+}
 
-    if (serviceType === "nutricion" || serviceType === "fisioterapia") {
-      return [
-        { value: "30", label: "30 min" },
-        { value: "60", label: "60 min" },
-      ];
-    }
+function traducirEstadoComercial(status: string | null | undefined) {
+  const map: Record<string, string> = {
+    pendiente_asignacion_comercial: "Pendiente de asignación",
+    asignado_comercial: "Asignado",
+    en_atencion_comercial: "En atención",
+    seguimiento: "Seguimiento",
+    finalizado: "Finalizado",
+  };
+  return map[status || ""] || status || "Sin estado";
+}
 
-    return [];
+function badgeEstadoComercial(status: string | null | undefined) {
+  switch (status) {
+    case "pendiente_asignacion_comercial":
+      return "bg-amber-100 text-amber-700";
+    case "asignado_comercial":
+      return "bg-blue-100 text-blue-700";
+    case "en_atencion_comercial":
+      return "bg-cyan-100 text-cyan-700";
+    case "seguimiento":
+      return "bg-violet-100 text-violet-700";
+    case "finalizado":
+      return "bg-emerald-100 text-emerald-700";
+    default:
+      return "bg-slate-100 text-slate-700";
   }
-
-  return [{ value: "30", label: "30 min" }];
 }
 
-function getAllowedSlotOptions(
-  section: ReceptionSection,
-  serviceType: string,
-  appointmentDate: string,
-  durationMinutes: number
-) {
-  if (section === "especialistas") {
-    if (serviceType === "medico") {
-      if (getDayOfWeek(appointmentDate) !== 3 || durationMinutes !== 60) return [];
-      return SLOT_OPTIONS.filter((slot) =>
-        ["09:00", "10:00", "11:00", "13:00", "14:00", "15:00", "16:00", "17:00"].includes(slot.value)
-      );
-    }
 
-    if (serviceType === "nutricion" || serviceType === "fisioterapia") {
-      return SLOT_OPTIONS.filter((slot) => {
-        if (slot.value === "17:00") return false;
-        const slotsNeeded = getSlotsForDuration(slot.value, durationMinutes);
-        if (slotsNeeded.length === 0) return false;
-        if (durationMinutes === 60 && slot.value === "11:30") return false;
-        return true;
-      });
-    }
 
-    return [];
-  }
-
-  if (section === "tratamientos") {
-    return SLOT_OPTIONS.filter((slot) => slot.value !== "17:00");
-  }
-
-  return SLOT_OPTIONS.filter((slot) => slot.value !== "17:00");
+function emptyCommercialDisqualifyingFlags(): CommercialDisqualifyingFlags {
+  return {
+    stent: false,
+    corazon_abierto: false,
+    tratamiento_internista: false,
+    oncologico_tratamiento: false,
+    anticoagulado: false,
+    psiquiatrico: false,
+    cateterismo: false,
+    dialisis: false,
+  };
 }
 
-function getAppointmentOccupiedSlots(item: AppointmentRow) {
-  const duration = extraerDuracionDesdeNotas(item.notes);
-  return getSlotsForDuration(item.appointment_time, duration);
-}
 
-function sameAgendaResource(
-  section: ReceptionSection,
-  item: AppointmentRow,
-  selectedServiceType: string
-) {
-  const itemSection = getSectionForService(item.service_type);
-  if (section === "agenda") return itemSection === "agenda";
-  return itemSection === section && (item.service_type || "") === selectedServiceType;
-}
 
-function countBookingsForSlot(
-  allAppointments: AppointmentRow[],
-  section: ReceptionSection,
-  serviceType: string,
-  appointmentDate: string,
-  slotValue: string,
-  editingAppointmentId: string | null
-) {
-  return allAppointments.filter((item) => {
-    if (item.appointment_date !== appointmentDate) return false;
-    if (!ACTIVE_APPOINTMENT_STATUSES.includes(item.status)) return false;
-    if (item.id === editingAppointmentId) return false;
-    if (!sameAgendaResource(section, item, serviceType)) return false;
-    return getAppointmentOccupiedSlots(item).includes(slotValue);
-  }).length;
-}
+const commercialOccupationOptions = [
+  { value: "empleado", label: "Empleado" },
+  { value: "independiente", label: "Independiente" },
+  { value: "pensionado", label: "Pensionado" },
+  { value: "otro", label: "Otro" },
+] as const;
+
+const commercialDisqualifyingOptions = [
+  { key: "stent", label: "Stent" },
+  { key: "corazon_abierto", label: "Corazón abierto" },
+  { key: "tratamiento_internista", label: "Tratamiento por internista" },
+  { key: "oncologico_tratamiento", label: "Tratamiento oncológico" },
+  { key: "anticoagulado", label: "Anticoagulado" },
+  { key: "psiquiatrico", label: "Psiquiátrico" },
+  { key: "cateterismo", label: "Cateterismo" },
+  { key: "dialisis", label: "Diálisis" },
+] as const;
+
+const commercialOccupationDisqualifyingValues = new Set<string>([
+  "desempleado",
+  "estudiante",
+  "empleado_salud",
+]);
+
+const commercialOccupationOtherDisqualifyingTerms = [
+  "desempleado",
+  "estudiante",
+  "empleado de la salud",
+  "salud",
+];
 
 function calcularClasificacionInicial(values: {
   edad: string;
@@ -1110,52 +982,19 @@ function RecepcionContent() {
 
   const slotAvailability = useMemo(() => {
     const durationMinutes = Number(form.duration_minutes || "30");
-    const allowedSlots = getAllowedSlotOptions(
-      activeSection,
-      form.service_type,
-      form.appointment_date,
-      durationMinutes
-    );
 
-    return allowedSlots.map((slot) => {
-      const requiredSlots = getSlotsForDuration(slot.value, durationMinutes);
-      const capacity = getResourceCapacity(activeSection);
-
-      const perSlotBookings = requiredSlots.map((requiredSlot) =>
-        countBookingsForSlot(
-          appointments,
-          activeSection,
-          form.service_type,
-          form.appointment_date,
-          requiredSlot,
-          editingAppointmentId
-        )
-      );
-
-      const maxBooked = perSlotBookings.length > 0 ? Math.max(...perSlotBookings) : 0;
-      const blockedByConfig = requiredSlots.some((requiredSlot) => {
-        const setting = slotSettings[`${form.appointment_date}_${requiredSlot}`];
-        return setting?.is_blocked ?? false;
-      });
-
-      const dayLimited =
-        selectedDateActiveTotal >= selectedDateDailyCapacity && !editingAppointmentId;
-      const disabled =
-        selectedDateClosed ||
-        blockedByConfig ||
-        requiredSlots.length === 0 ||
-        maxBooked >= capacity ||
-        dayLimited;
-
-      return {
-        ...slot,
-        capacity,
-        booked: maxBooked,
-        disabled,
-        isBlocked: blockedByConfig,
-        isFullBySlot: maxBooked >= capacity,
-        isFullByDay: dayLimited,
-      };
+    return buildSlotAvailability({
+      appointments,
+      section: activeSection,
+      serviceType: form.service_type,
+      appointmentDate: form.appointment_date,
+      durationMinutes,
+      slotSettings,
+      selectedDateClosed,
+      selectedDateDailyCapacity,
+      selectedDateActiveTotal,
+      editingAppointmentId,
+      getSectionForService,
     });
   }, [
     appointments,
@@ -1472,7 +1311,20 @@ function RecepcionContent() {
   }
 
 
-  function imprimirRegistroComercial() {
+  
+function traducirOcupacionComercial(ocupacion: string, ocupacionOtro: string) {
+  const map: Record<string, string> = {
+    empleado: "Empleado",
+    independiente: "Independiente",
+    pensionado: "Pensionado",
+    otro: ocupacionOtro?.trim() || "Otro",
+  };
+
+  return map[ocupacion] || ocupacionOtro?.trim() || "Sin definir";
+}
+
+
+function imprimirRegistroComercial() {
     const ocupacion = traducirOcupacionComercial(
       commercialForm.ocupacion,
       commercialForm.ocupacion_otro
@@ -1514,7 +1366,7 @@ function RecepcionContent() {
       source: source || "Sin fuente",
       appointmentDate: item.appointment_date,
       appointmentTime: formatHora(item.appointment_time),
-      statusLabel: traducirEstadoCita(item.status),
+      statusLabel: traducirEstado(item.status),
       serviceType: item.service_type || "Valoración",
       notes: limpiarMetadatosAgenda(item.notes) || "Sin notas registradas.",
     });
@@ -2716,10 +2568,9 @@ function RecepcionContent() {
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
                             <p className="text-base font-semibold text-slate-900">{item.customer_name}</p>
-                            <StatusBadge
-                              label={traducirEstadoComercial(item.status)}
-                              className={commercialStatusClass(item.status)}
-                            />
+                            <span className={`rounded-full px-3 py-1 text-xs ${badgeEstadoComercial(item.status)}`}>
+                              {traducirEstadoComercial(item.status)}
+                            </span>
                           </div>
                           <p className="mt-1 text-sm text-slate-600">
                             {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
@@ -2773,14 +2624,15 @@ function RecepcionContent() {
                     <p className="mt-1 text-lg font-semibold text-slate-900">
                       {selectedPrintPatient.patient_name}
                     </p>
-                    <div className="mt-2 space-y-1 text-sm text-slate-600">
-                      <InfoItem
-                        label="Contacto"
-                        value={`${selectedPrintPatient.phone || "Sin teléfono"} · ${selectedPrintPatient.city || "Sin ciudad"}`}
-                      />
-                      <InfoItem label="Detalle" value={selectedPrintPatient.detail} />
-                      <InfoItem label="Fuente" value={selectedPrintPatient.source} />
-                    </div>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {selectedPrintPatient.phone || "Sin teléfono"} · {selectedPrintPatient.city || "Sin ciudad"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {selectedPrintPatient.detail}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      Fuente: {selectedPrintPatient.source}
+                    </p>
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
@@ -3493,10 +3345,13 @@ function RecepcionContent() {
                                 {item.patient_name}
                               </h3>
 
-                              <StatusBadge
-                                label={traducirEstadoCita(item.status)}
-                                className={appointmentStatusClass(item.status)}
-                              />
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs ${badgeEstado(
+                                  item.status
+                                )}`}
+                              >
+                                {traducirEstado(item.status)}
+                              </span>
 
                               <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
                                 {item.appointment_date}
