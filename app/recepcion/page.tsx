@@ -129,17 +129,12 @@ type CommercialCaseRow = {
   created_at: string;
 };
 
-type CommercialDisqualifyingKey =
-  | "stent"
-  | "corazon_abierto"
-  | "tratamiento_internista"
-  | "oncologico_tratamiento"
-  | "anticoagulado"
-  | "psiquiatrico"
-  | "cateterismo"
-  | "dialisis";
-
-type CommercialDisqualifyingFlags = Record<CommercialDisqualifyingKey, boolean>;
+type CommercialClinicalFlags = {
+  hipertenso_descalifica: boolean;
+  diabetico_descalifica: boolean;
+  cirugias_descalifica: boolean;
+  medicamentos_descalifica: boolean;
+};
 
 type NutritionProfileRow = {
   user_id: string;
@@ -482,16 +477,12 @@ function imprimirDocumentoNutricional({
 
 
 
-function emptyCommercialDisqualifyingFlags(): CommercialDisqualifyingFlags {
+function emptyCommercialClinicalFlags(): CommercialClinicalFlags {
   return {
-    stent: false,
-    corazon_abierto: false,
-    tratamiento_internista: false,
-    oncologico_tratamiento: false,
-    anticoagulado: false,
-    psiquiatrico: false,
-    cateterismo: false,
-    dialisis: false,
+    hipertenso_descalifica: false,
+    diabetico_descalifica: false,
+    cirugias_descalifica: false,
+    medicamentos_descalifica: false,
   };
 }
 
@@ -504,16 +495,6 @@ const commercialOccupationOptions = [
   { value: "otro", label: "Otro" },
 ] as const;
 
-const commercialDisqualifyingOptions = [
-  { key: "stent", label: "Stent" },
-  { key: "corazon_abierto", label: "Corazón abierto" },
-  { key: "tratamiento_internista", label: "Tratamiento por internista" },
-  { key: "oncologico_tratamiento", label: "Tratamiento oncológico" },
-  { key: "anticoagulado", label: "Anticoagulado" },
-  { key: "psiquiatrico", label: "Psiquiátrico" },
-  { key: "cateterismo", label: "Cateterismo" },
-  { key: "dialisis", label: "Diálisis" },
-] as const;
 
 const commercialOccupationDisqualifyingValues = new Set<string>([
   "desempleado",
@@ -536,11 +517,16 @@ function calcularClasificacionInicial(values: {
   celular_inteligente: string;
   ocupacion: string;
   ocupacion_otro?: string;
-  condiciones_descalificantes: CommercialDisqualifyingFlags;
+  hipertenso: string;
+  diabetico: string;
+  cirugias: string;
+  cirugias_cual?: string;
+  medicamentos: string;
+  medicamentos_cual?: string;
+  clinical_flags: CommercialClinicalFlags;
 }) {
   const motivos: string[] = [];
   const edad = Number(values.edad || "0");
-  const tieneCondicionDescalificante = Object.values(values.condiciones_descalificantes).some(Boolean);
   const ocupacionOtroNormalizada = (values.ocupacion_otro || "").trim().toLowerCase();
   const ocupacionDescalificante =
     values.ocupacion === "otro" ||
@@ -574,8 +560,20 @@ function calcularClasificacionInicial(values: {
     motivos.push("ocupación descalificante");
   }
 
-  if (tieneCondicionDescalificante) {
-    motivos.push("presenta condición descalificante");
+  if (values.hipertenso === "si" && values.clinical_flags.hipertenso_descalifica) {
+    motivos.push("hipertensión descalificante");
+  }
+
+  if (values.diabetico === "si" && values.clinical_flags.diabetico_descalifica) {
+    motivos.push("diabetes descalificante");
+  }
+
+  if (values.cirugias === "si" && values.clinical_flags.cirugias_descalifica) {
+    motivos.push("cirugía descalificante");
+  }
+
+  if (values.medicamentos === "si" && values.clinical_flags.medicamentos_descalifica) {
+    motivos.push("medicamento descalificante");
   }
 
   return {
@@ -660,6 +658,8 @@ function RecepcionContent() {
     documento: "",
     fuente: "",
     observaciones: "",
+    acompanante_nombre: "",
+    acompanante_parentesco: "",
     tiene_eps: "si",
     afiliacion: "",
     ocupacion: "",
@@ -667,7 +667,13 @@ function RecepcionContent() {
     edad: "",
     trae_cedula: "si",
     celular_inteligente: "si",
-    condiciones_descalificantes: emptyCommercialDisqualifyingFlags(),
+    hipertenso: "no",
+    diabetico: "no",
+    cirugias: "no",
+    cirugias_cual: "",
+    medicamentos: "no",
+    medicamentos_cual: "",
+    clinical_flags: emptyCommercialClinicalFlags(),
     clasificacion_inicial: "No Q",
     clasificacion_motivo: "",
     referido_por: "",
@@ -745,7 +751,13 @@ function RecepcionContent() {
       celular_inteligente: commercialForm.celular_inteligente,
       ocupacion: commercialForm.ocupacion,
       ocupacion_otro: commercialForm.ocupacion_otro,
-      condiciones_descalificantes: commercialForm.condiciones_descalificantes,
+      hipertenso: commercialForm.hipertenso,
+      diabetico: commercialForm.diabetico,
+      cirugias: commercialForm.cirugias,
+      cirugias_cual: commercialForm.cirugias_cual,
+      medicamentos: commercialForm.medicamentos,
+      medicamentos_cual: commercialForm.medicamentos_cual,
+      clinical_flags: commercialForm.clinical_flags,
     });
 
     setCommercialForm((prev) =>
@@ -766,7 +778,13 @@ function RecepcionContent() {
     commercialForm.celular_inteligente,
     commercialForm.ocupacion,
     commercialForm.ocupacion_otro,
-    commercialForm.condiciones_descalificantes,
+    commercialForm.hipertenso,
+    commercialForm.diabetico,
+    commercialForm.cirugias,
+    commercialForm.cirugias_cual,
+    commercialForm.medicamentos,
+    commercialForm.medicamentos_cual,
+    commercialForm.clinical_flags,
   ]);
 
   async function validarAcceso() {
@@ -1228,9 +1246,14 @@ function RecepcionContent() {
     return printCandidates[0] || null;
   }, [printCandidates]);
 
+  const commercialCasesToday = useMemo(() => {
+    const today = hoyISO();
+    return commercialCases.filter((item) => item.created_at?.slice(0, 10) === today);
+  }, [commercialCases]);
+
   const commercialCasesFiltered = useMemo(() => {
     const q = commercialSearch.trim().toLowerCase();
-    const base = [...commercialCases].sort(
+    const base = [...commercialCasesToday].sort(
       (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
     );
 
@@ -1240,17 +1263,17 @@ function RecepcionContent() {
       (item.customer_name || "").toLowerCase().includes(q) ||
       (item.phone || "").toLowerCase().includes(q)
     );
-  }, [commercialCases, commercialSearch]);
+  }, [commercialCasesToday, commercialSearch]);
 
   const commercialSummary = useMemo(() => {
     return {
-      total: commercialCases.length,
-      pendientes: commercialCases.filter((item) => item.status === "pendiente_asignacion_comercial").length,
-      asignados: commercialCases.filter((item) => item.status === "asignado_comercial").length,
-      atencion: commercialCases.filter((item) => item.status === "en_atencion_comercial").length,
-      finalizados: commercialCases.filter((item) => item.status === "finalizado").length,
+      total: commercialCasesToday.length,
+      pendientes: commercialCasesToday.filter((item) => item.status === "pendiente_asignacion_comercial").length,
+      asignados: commercialCasesToday.filter((item) => item.status === "asignado_comercial").length,
+      atencion: commercialCasesToday.filter((item) => item.status === "en_atencion_comercial").length,
+      finalizados: commercialCasesToday.filter((item) => item.status === "finalizado").length,
     };
-  }, [commercialCases]);
+  }, [commercialCasesToday]);
 
   const nutritionPendingAppointments = useMemo(() => {
     const q = nutritionDeliverySearch.trim().toLowerCase();
@@ -1650,6 +1673,8 @@ function RecepcionContent() {
       documento: "",
       fuente: "",
       observaciones: "",
+      acompanante_nombre: "",
+      acompanante_parentesco: "",
       tiene_eps: "si",
       afiliacion: "",
       ocupacion: "",
@@ -1657,7 +1682,13 @@ function RecepcionContent() {
       edad: "",
       trae_cedula: "si",
       celular_inteligente: "si",
-      condiciones_descalificantes: emptyCommercialDisqualifyingFlags(),
+      hipertenso: "no",
+      diabetico: "no",
+      cirugias: "no",
+      cirugias_cual: "",
+      medicamentos: "no",
+      medicamentos_cual: "",
+      clinical_flags: emptyCommercialClinicalFlags(),
       clasificacion_inicial: "No Q",
       clasificacion_motivo: "",
       referido_por: "",
@@ -1684,10 +1715,6 @@ function imprimirRegistroComercial() {
       commercialForm.ocupacion_otro
     );
 
-    const condicionesMarcadas = commercialDisqualifyingOptions
-      .filter((item) => commercialForm.condiciones_descalificantes[item.key])
-      .map((item) => item.label);
-
     printReceptionRecord({
       customerName: commercialForm.customer_name || "Sin nombre",
       phone: commercialForm.phone || "Sin teléfono",
@@ -1703,7 +1730,7 @@ function imprimirRegistroComercial() {
       bringsId: commercialForm.trae_cedula === "si" ? "Sí" : "No",
       smartphone: commercialForm.celular_inteligente === "si" ? "Sí" : "No",
       occupation: ocupacion || "Sin definir",
-      disqualifyingConditions: condicionesMarcadas,
+      disqualifyingConditions: [],
       observations: commercialForm.observaciones || "Sin observaciones registradas.",
     });
   }
@@ -1832,9 +1859,21 @@ function imprimirRegistroComercial() {
         console.warn("No se pudo sincronizar ficha base del usuario", syncErr);
       }
 
-      const condicionesMarcadas = commercialDisqualifyingOptions
-        .filter((item) => commercialForm.condiciones_descalificantes[item.key])
-        .map((item) => item.label)
+      const condicionesInternas = [
+        commercialForm.hipertenso === "si" && commercialForm.clinical_flags.hipertenso_descalifica
+          ? "Hipertensión descalificante"
+          : "",
+        commercialForm.diabetico === "si" && commercialForm.clinical_flags.diabetico_descalifica
+          ? "Diabetes descalificante"
+          : "",
+        commercialForm.cirugias === "si" && commercialForm.clinical_flags.cirugias_descalifica
+          ? "Cirugía descalificante"
+          : "",
+        commercialForm.medicamentos === "si" && commercialForm.clinical_flags.medicamentos_descalifica
+          ? "Medicamento descalificante"
+          : "",
+      ]
+        .filter(Boolean)
         .join(", ");
 
       const notesParts = [
@@ -1847,7 +1886,19 @@ function imprimirRegistroComercial() {
         `Celular inteligente: ${commercialForm.celular_inteligente === "si" ? "Sí" : "No"}`,
         ocupacionLabel ? `Ocupación: ${ocupacionLabel}` : "",
         commercialForm.edad ? `Edad: ${commercialForm.edad}` : "",
-        condicionesMarcadas ? `Condiciones descalificantes: ${condicionesMarcadas}` : "Condiciones descalificantes: Ninguna",
+        `Hipertenso: ${commercialForm.hipertenso === "si" ? "Sí" : "No"}`,
+        `Diabético: ${commercialForm.diabetico === "si" ? "Sí" : "No"}`,
+        `Cirugías: ${commercialForm.cirugias === "si" ? "Sí" : "No"}`,
+        commercialForm.cirugias === "si" && commercialForm.cirugias_cual
+          ? `Cirugías cuál: ${commercialForm.cirugias_cual}`
+          : "",
+        `Medicamentos: ${commercialForm.medicamentos === "si" ? "Sí" : "No"}`,
+        commercialForm.medicamentos === "si" && commercialForm.medicamentos_cual
+          ? `Medicamentos cuál: ${commercialForm.medicamentos_cual}`
+          : "",
+        condicionesInternas ? `Marcación interna recepción: ${condicionesInternas}` : "",
+        commercialForm.acompanante_nombre ? `Acompañante: ${commercialForm.acompanante_nombre}` : "",
+        commercialForm.acompanante_parentesco ? `Parentesco acompañante: ${commercialForm.acompanante_parentesco}` : "",
         commercialForm.referido_por ? `Referido por: ${commercialForm.referido_por}` : "",
         commercialForm.observaciones ? `Observaciones recepción: ${commercialForm.observaciones}` : "",
       ].filter(Boolean).join(" | ");
@@ -1967,6 +2018,8 @@ function imprimirRegistroComercial() {
       documento: "",
       fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
       observaciones: limpiarFuenteManualDeNotas(item.notes),
+      acompanante_nombre: "",
+      acompanante_parentesco: "",
       tiene_eps: "si",
       afiliacion: "",
       ocupacion: "",
@@ -1974,7 +2027,13 @@ function imprimirRegistroComercial() {
       edad: "",
       trae_cedula: "si",
       celular_inteligente: "si",
-      condiciones_descalificantes: emptyCommercialDisqualifyingFlags(),
+      hipertenso: "no",
+      diabetico: "no",
+      cirugias: "no",
+      cirugias_cual: "",
+      medicamentos: "no",
+      medicamentos_cual: "",
+      clinical_flags: emptyCommercialClinicalFlags(),
       clasificacion_inicial: "No Q",
       clasificacion_motivo: "",
       referido_por: "",
@@ -2837,9 +2896,9 @@ function imprimirRegistroComercial() {
                 <div className="rounded-2xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-semibold text-slate-900">Condiciones descalificantes</h3>
+                      <h3 className="text-base font-semibold text-slate-900">Antecedentes básicos</h3>
                       <p className="mt-1 text-sm text-slate-500">
-                        Marca solo si el cliente presenta alguna de estas condiciones.
+                        Registra lo que el cliente refiere y marca internamente si alguno descalifica.
                       </p>
                     </div>
                     <button
@@ -2847,7 +2906,13 @@ function imprimirRegistroComercial() {
                       onClick={() =>
                         setCommercialForm((prev) => ({
                           ...prev,
-                          condiciones_descalificantes: emptyCommercialDisqualifyingFlags(),
+                          hipertenso: "no",
+                          diabetico: "no",
+                          cirugias: "no",
+                          cirugias_cual: "",
+                          medicamentos: "no",
+                          medicamentos_cual: "",
+                          clinical_flags: emptyCommercialClinicalFlags(),
                         }))
                       }
                       className="rounded-xl border border-slate-300 px-3 py-2 text-sm font-medium text-slate-700"
@@ -2856,33 +2921,251 @@ function imprimirRegistroComercial() {
                     </button>
                   </div>
 
-                  <div className="mt-4 grid gap-3 md:grid-cols-2">
-                    {commercialDisqualifyingOptions.map((item) => (
-                      <label
-                        key={item.key}
-                        className="flex items-center gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700"
-                      >
+                  <div className="mt-4 space-y-4">
+                    <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
+                      <Field
+                        label="¿Hipertenso?"
+                        input={
+                          <select
+                            className={inputClass}
+                            value={commercialForm.hipertenso}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                hipertenso: e.target.value,
+                                clinical_flags: {
+                                  ...prev.clinical_flags,
+                                  hipertenso_descalifica:
+                                    e.target.value === "si" ? prev.clinical_flags.hipertenso_descalifica : false,
+                                },
+                              }))
+                            }
+                          >
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                          </select>
+                        }
+                      />
+                      <div />
+                      <label className="flex items-end gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
                         <input
                           type="checkbox"
-                          checked={commercialForm.condiciones_descalificantes[item.key]}
+                          checked={commercialForm.clinical_flags.hipertenso_descalifica}
+                          disabled={commercialForm.hipertenso !== "si"}
                           onChange={(e) =>
                             setCommercialForm((prev) => ({
                               ...prev,
-                              condiciones_descalificantes: {
-                                ...prev.condiciones_descalificantes,
-                                [item.key]: e.target.checked,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                hipertenso_descalifica: e.target.checked,
                               },
                             }))
                           }
                         />
-                        <span>{item.label}</span>
+                        <span>Descalifica</span>
                       </label>
-                    ))}
-                  </div>
+                    </div>
 
-                  {!Object.values(commercialForm.condiciones_descalificantes).some(Boolean) ? (
-                    <p className="mt-3 text-sm text-emerald-700">Ninguna de las anteriores.</p>
-                  ) : null}
+                    <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
+                      <Field
+                        label="¿Diabético?"
+                        input={
+                          <select
+                            className={inputClass}
+                            value={commercialForm.diabetico}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                diabetico: e.target.value,
+                                clinical_flags: {
+                                  ...prev.clinical_flags,
+                                  diabetico_descalifica:
+                                    e.target.value === "si" ? prev.clinical_flags.diabetico_descalifica : false,
+                                },
+                              }))
+                            }
+                          >
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                          </select>
+                        }
+                      />
+                      <div />
+                      <label className="flex items-end gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={commercialForm.clinical_flags.diabetico_descalifica}
+                          disabled={commercialForm.diabetico !== "si"}
+                          onChange={(e) =>
+                            setCommercialForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                diabetico_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        <span>Descalifica</span>
+                      </label>
+                    </div>
+
+                    <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
+                      <Field
+                        label="¿Cirugías?"
+                        input={
+                          <select
+                            className={inputClass}
+                            value={commercialForm.cirugias}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                cirugias: e.target.value,
+                                cirugias_cual: e.target.value === "si" ? prev.cirugias_cual : "",
+                                clinical_flags: {
+                                  ...prev.clinical_flags,
+                                  cirugias_descalifica:
+                                    e.target.value === "si" ? prev.clinical_flags.cirugias_descalifica : false,
+                                },
+                              }))
+                            }
+                          >
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                          </select>
+                        }
+                      />
+                      <Field
+                        label="¿Cuál cirugía?"
+                        input={
+                          <input
+                            className={inputClass}
+                            placeholder="Escribe cuál"
+                            value={commercialForm.cirugias_cual}
+                            disabled={commercialForm.cirugias !== "si"}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                cirugias_cual: e.target.value,
+                              }))
+                            }
+                          />
+                        }
+                      />
+                      <label className="flex items-end gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={commercialForm.clinical_flags.cirugias_descalifica}
+                          disabled={commercialForm.cirugias !== "si"}
+                          onChange={(e) =>
+                            setCommercialForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                cirugias_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        <span>Descalifica</span>
+                      </label>
+                    </div>
+
+                    <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
+                      <Field
+                        label="¿Toma medicamentos?"
+                        input={
+                          <select
+                            className={inputClass}
+                            value={commercialForm.medicamentos}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                medicamentos: e.target.value,
+                                medicamentos_cual: e.target.value === "si" ? prev.medicamentos_cual : "",
+                                clinical_flags: {
+                                  ...prev.clinical_flags,
+                                  medicamentos_descalifica:
+                                    e.target.value === "si" ? prev.clinical_flags.medicamentos_descalifica : false,
+                                },
+                              }))
+                            }
+                          >
+                            <option value="no">No</option>
+                            <option value="si">Sí</option>
+                          </select>
+                        }
+                      />
+                      <Field
+                        label="¿Cuáles medicamentos?"
+                        input={
+                          <input
+                            className={inputClass}
+                            placeholder="Escribe cuáles"
+                            value={commercialForm.medicamentos_cual}
+                            disabled={commercialForm.medicamentos !== "si"}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                medicamentos_cual: e.target.value,
+                              }))
+                            }
+                          />
+                        }
+                      />
+                      <label className="flex items-end gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={commercialForm.clinical_flags.medicamentos_descalifica}
+                          disabled={commercialForm.medicamentos !== "si"}
+                          onChange={(e) =>
+                            setCommercialForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                medicamentos_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        <span>Descalifica</span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <Field
+                    label="Nombre del acompañante"
+                    input={
+                      <input
+                        className={inputClass}
+                        value={commercialForm.acompanante_nombre}
+                        onChange={(e) =>
+                          setCommercialForm((prev) => ({
+                            ...prev,
+                            acompanante_nombre: e.target.value,
+                          }))
+                        }
+                      />
+                    }
+                  />
+
+                  <Field
+                    label="Parentesco"
+                    input={
+                      <input
+                        className={inputClass}
+                        value={commercialForm.acompanante_parentesco}
+                        onChange={(e) =>
+                          setCommercialForm((prev) => ({
+                            ...prev,
+                            acompanante_parentesco: e.target.value,
+                          }))
+                        }
+                      />
+                    }
+                  />
                 </div>
 
                 <Field
@@ -2921,7 +3204,7 @@ function imprimirRegistroComercial() {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Ingresos comerciales del día</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Estos clientes deben aparecer después en la cola del gerente comercial.
+                    Aquí solo aparecen los ingresos comerciales creados el día de hoy.
                   </p>
                 </div>
 
