@@ -37,7 +37,6 @@ type LeadOption = {
   phone: string;
   city: string | null;
   status: string;
-  commission_source_type: string | null;
 };
 
 type AppointmentRow = {
@@ -208,31 +207,6 @@ const manualSourceOptions = [
   { value: "cliente_directo", label: "Cliente directo" },
   { value: "otro", label: "Otro" },
 ];
-
-const commissionSourceOptions = [
-  { value: "opc", label: "OPC" },
-  { value: "redes", label: "Redes" },
-  { value: "base", label: "Base" },
-  { value: "otro", label: "Otro" },
-];
-
-function traducirFuenteComision(value: string) {
-  const found = commissionSourceOptions.find((item) => item.value === value);
-  return found?.label || value || "Sin fuente";
-}
-
-function inferCommissionSourceFromManualSource(value: string) {
-  switch (value) {
-    case "opc":
-      return "opc";
-    case "redes":
-      return "redes";
-    case "tmk":
-      return "base";
-    default:
-      return "otro";
-  }
-}
 
 function hoyISO() {
   const hoy = new Date();
@@ -685,7 +659,6 @@ function RecepcionContent() {
     city: "",
     documento: "",
     fuente: "",
-    commission_source_type: "",
     observaciones: "",
     tiene_eps: "si",
     afiliacion: "",
@@ -717,6 +690,11 @@ function RecepcionContent() {
 
   const isReadOnlyAgendaForCall =
     currentRoleCode === "tmk" || currentRoleCode === "confirmador";
+
+  const isLimitedReceptionForCall =
+    currentRoleCode === "tmk" ||
+    currentRoleCode === "confirmador" ||
+    currentRoleCode === "supervisor_call_center";
 
   const serviceOptions = useMemo(() => activeSection === "nutricion_entregas" ? [] : getServiceOptionsBySection(activeSection), [activeSection]);
   const serviceFieldLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Servicio" : getServiceFieldLabel(activeSection), [activeSection]);
@@ -862,8 +840,7 @@ function RecepcionContent() {
             full_name,
             phone,
             city,
-            status,
-            commission_source_type
+            status
           `)
           .order("created_at", { ascending: false })
           .limit(300),
@@ -1051,6 +1028,7 @@ function RecepcionContent() {
   }, [form.lead_id, leads]);
 
   function cambiarSeccion(section: ReceptionSection) {
+    if (isLimitedReceptionForCall && section !== "agenda") return;
     setActiveSection(section);
     setEditingAppointmentId(null);
     setSelectedQuickAppointmentId(null);
@@ -1861,9 +1839,6 @@ function imprimirRegistroComercial() {
 
       const notesParts = [
         commercialForm.fuente ? `Fuente: ${commercialForm.fuente}` : "",
-        commercialForm.commission_source_type
-          ? `Fuente comisión: ${traducirFuenteComision(commercialForm.commission_source_type)}`
-          : "",
         `Clasificación inicial: ${clasificacion}`,
         commercialForm.clasificacion_motivo ? `Motivo clasificación: ${commercialForm.clasificacion_motivo}` : "",
         `Tiene EPS: ${commercialForm.tiene_eps === "si" ? "Sí" : "No"}`,
@@ -1908,7 +1883,6 @@ function imprimirRegistroComercial() {
           phone: commercialForm.phone.trim(),
           city: commercialForm.city.trim() || null,
           status: "pendiente_asignacion_comercial",
-          commission_source_type: commercialForm.commission_source_type || null,
           created_by_user_id: currentUserId,
           updated_by_user_id: currentUserId,
           sale_result: notesParts || null,
@@ -1986,21 +1960,12 @@ function imprimirRegistroComercial() {
     setSelectedCommercialAppointmentId(item.id);
     setFechaFiltro(item.appointment_date);
     setBusquedaAgenda(item.patient_name || item.phone || "");
-    const leadRelacionado = item.lead_id
-      ? leads.find((lead) => lead.id === item.lead_id) || null
-      : null;
-
-    const manualSource = item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes);
-
     setCommercialForm({
       customer_name: item.patient_name || "",
       phone: item.phone || "",
       city: item.city || "",
       documento: "",
-      fuente: manualSource,
-      commission_source_type:
-        leadRelacionado?.commission_source_type ||
-        (item.lead_id ? "" : inferCommissionSourceFromManualSource(manualSource)),
+      fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
       observaciones: limpiarFuenteManualDeNotas(item.notes),
       tiene_eps: "si",
       afiliacion: "",
@@ -2409,14 +2374,16 @@ function imprimirRegistroComercial() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-medium text-[#7FA287]">
-                {isReadOnlyAgendaForCall ? "Agenda" : "Recepción"}
+                {isLimitedReceptionForCall ? "Agenda" : "Recepción"}
               </p>
               <h1 className="mt-2 text-3xl font-bold text-[#24312A]">
-                {isReadOnlyAgendaForCall ? "Agendar cita" : "Agenda y admisión"}
+                {isLimitedReceptionForCall ? "Agenda visible" : "Agenda y admisión"}
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                {isReadOnlyAgendaForCall
-                  ? "Desde aquí puedes crear una cita para tu lead sin entrar al módulo completo de recepción."
+                {isLimitedReceptionForCall
+                  ? currentRoleCode === "supervisor_call_center"
+                    ? "Desde aquí puedes ver la agenda, crear citas y organizar los cupos sin entrar a los demás módulos de recepción."
+                    : "Desde aquí puedes crear una cita para tu lead sin entrar al módulo completo de recepción."
                   : "Crear citas, ubicar clientes, registrar llegada y actualizar estado."}
               </p>
             </div>
@@ -2432,7 +2399,15 @@ function imprimirRegistroComercial() {
               Inicio
             </a>
 
-            {!isReadOnlyAgendaForCall && (
+            {isLimitedReceptionForCall ? (
+              <button
+                type="button"
+                onClick={() => cambiarSeccion("agenda")}
+                className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "agenda" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+              >
+                Agenda
+              </button>
+            ) : (
               <>
                 <button
                   type="button"
@@ -2712,48 +2687,11 @@ function imprimirRegistroComercial() {
                       <select
                         className={inputClass}
                         value={commercialForm.fuente}
-                        onChange={(e) =>
-                          setCommercialForm((prev) => {
-                            const nextFuente = e.target.value;
-                            const shouldAutofillCommission =
-                              !prev.commission_source_type ||
-                              prev.commission_source_type === inferCommissionSourceFromManualSource(prev.fuente);
-
-                            return {
-                              ...prev,
-                              fuente: nextFuente,
-                              commission_source_type: shouldAutofillCommission
-                                ? inferCommissionSourceFromManualSource(nextFuente)
-                                : prev.commission_source_type,
-                            };
-                          })
-                        }
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, fuente: e.target.value }))}
                       >
                         <option value="">Selecciona</option>
                         {manualSourceOptions.map((item) => (
                           <option key={item.value} value={item.label}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    }
-                  />
-                  <Field
-                    label="Fuente para comisión"
-                    input={
-                      <select
-                        className={inputClass}
-                        value={commercialForm.commission_source_type}
-                        onChange={(e) =>
-                          setCommercialForm((prev) => ({
-                            ...prev,
-                            commission_source_type: e.target.value,
-                          }))
-                        }
-                      >
-                        <option value="">Selecciona</option>
-                        {commissionSourceOptions.map((item) => (
-                          <option key={item.value} value={item.value}>
                             {item.label}
                           </option>
                         ))}
