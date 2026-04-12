@@ -23,6 +23,7 @@ type AdminCommercialCase = {
 type ProfileOption = {
   id: string;
   full_name: string;
+  job_title: string | null;
 };
 
 const allowedRoles = [
@@ -45,6 +46,30 @@ function normalizeRoleCode(roleCode?: string | null) {
   }
 
   return roleCode;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+}
+
+function normalizeArea(jobTitle: string | null | undefined) {
+  const value = normalizeText(jobTitle);
+
+  if (!value) return "Sin rol";
+  if (value.includes("supervisor") && value.includes("opc")) return "Supervisor OPC";
+  if (value.includes("supervisor") && value.includes("call")) return "Supervisor Call";
+  if (value.includes("promotor") || value === "opc" || value.includes(" opc")) return "OPC";
+  if (value.includes("call center") || value === "call" || value.includes("call")) return "Call center";
+  if (value.includes("tmk")) return "TMK";
+  if (value.includes("gerencia comercial") || value.includes("gerente comercial")) return "Gerencia comercial";
+  if (value.includes("comercial")) return "Comercial";
+  if (value.includes("admin")) return "Administrador";
+
+  return jobTitle || "Sin rol";
 }
 
 function hoyISO() {
@@ -124,6 +149,7 @@ export default function AdminPage() {
   const [dateFrom, setDateFrom] = useState(inicioMesISO());
   const [dateTo, setDateTo] = useState(hoyISO());
   const [search, setSearch] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
   const [collaboratorFilter, setCollaboratorFilter] = useState("");
 
   async function validarAcceso() {
@@ -136,9 +162,7 @@ export default function AdminPage() {
         error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        throw sessionError;
-      }
+      if (sessionError) throw sessionError;
 
       if (!session) {
         setAuthorized(false);
@@ -165,9 +189,7 @@ export default function AdminPage() {
           .eq("id", session.user.id)
           .maybeSingle();
 
-        if (profileError) {
-          throw profileError;
-        }
+        if (profileError) throw profileError;
 
         const fallbackRole = normalizeRoleCode(profileFallback?.job_title || null);
 
@@ -211,7 +233,7 @@ export default function AdminPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("profiles")
-          .select("id, full_name")
+          .select("id, full_name, job_title")
           .order("full_name", { ascending: true }),
       ]);
 
@@ -238,10 +260,43 @@ export default function AdminPage() {
   }, [authorized]);
 
   const profileMap = useMemo(() => {
-    const map = new Map<string, string>();
-    profiles.forEach((item) => map.set(item.id, item.full_name || "Sin nombre"));
+    const map = new Map<string, ProfileOption>();
+    profiles.forEach((item) => map.set(item.id, item));
     return map;
   }, [profiles]);
+
+  const collaboratorOptions = useMemo(() => {
+    return profiles.map((profile) => ({
+      id: profile.id,
+      name: profile.full_name || "Sin nombre",
+      area: normalizeArea(profile.job_title),
+    }));
+  }, [profiles]);
+
+  const areaOptions = useMemo(() => {
+    const unique = new Set<string>();
+    collaboratorOptions.forEach((item) => {
+      if (item.area) unique.add(item.area);
+    });
+    return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
+  }, [collaboratorOptions]);
+
+  const filteredCollaboratorOptions = useMemo(() => {
+    if (!areaFilter) return collaboratorOptions;
+    return collaboratorOptions.filter((item) => item.area === areaFilter);
+  }, [collaboratorOptions, areaFilter]);
+
+  useEffect(() => {
+    if (!collaboratorFilter) return;
+
+    const stillExists = filteredCollaboratorOptions.some(
+      (item) => item.id === collaboratorFilter
+    );
+
+    if (!stillExists) {
+      setCollaboratorFilter("");
+    }
+  }, [areaFilter, collaboratorFilter, filteredCollaboratorOptions]);
 
   const ventasReales = useMemo(() => {
     return cases.filter((item) => {
@@ -253,24 +308,38 @@ export default function AdminPage() {
   }, [cases]);
 
   const ventasFiltradas = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = normalizeText(search);
 
     return ventasReales.filter((item) => {
       const createdDate = item.created_at?.slice(0, 10) || "";
+      const profile = item.assigned_commercial_user_id
+        ? profileMap.get(item.assigned_commercial_user_id)
+        : null;
+      const collaboratorName = profile?.full_name || "";
+      const collaboratorArea = normalizeArea(profile?.job_title);
+
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
-      const matchesSearch = q
-        ? (item.customer_name || "").toLowerCase().includes(q) ||
-          (item.phone || "").toLowerCase().includes(q) ||
-          (item.city || "").toLowerCase().includes(q)
-        : true;
+      const matchesArea = areaFilter ? collaboratorArea === areaFilter : true;
       const matchesCollaborator = collaboratorFilter
         ? (item.assigned_commercial_user_id || "") === collaboratorFilter
         : true;
+      const matchesSearch = q
+        ? normalizeText(item.customer_name).includes(q) ||
+          normalizeText(item.phone).includes(q) ||
+          normalizeText(item.city).includes(q) ||
+          normalizeText(collaboratorName).includes(q)
+        : true;
 
-      return matchesDateFrom && matchesDateTo && matchesSearch && matchesCollaborator;
+      return (
+        matchesDateFrom &&
+        matchesDateTo &&
+        matchesArea &&
+        matchesCollaborator &&
+        matchesSearch
+      );
     });
-  }, [ventasReales, dateFrom, dateTo, search, collaboratorFilter]);
+  }, [ventasReales, profileMap, dateFrom, dateTo, areaFilter, collaboratorFilter, search]);
 
   const ventasHoy = useMemo(() => {
     const today = hoyISO();
@@ -397,7 +466,7 @@ export default function AdminPage() {
         </section>
 
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Desde</label>
               <input
@@ -419,6 +488,22 @@ export default function AdminPage() {
             </div>
 
             <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Área o rol</label>
+              <select
+                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                value={areaFilter}
+                onChange={(e) => setAreaFilter(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {areaOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Colaborador</label>
               <select
                 className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
@@ -426,9 +511,9 @@ export default function AdminPage() {
                 onChange={(e) => setCollaboratorFilter(e.target.value)}
               >
                 <option value="">Todos</option>
-                {profiles.map((item) => (
+                {filteredCollaboratorOptions.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.full_name}
+                    {item.name}
                   </option>
                 ))}
               </select>
@@ -438,7 +523,7 @@ export default function AdminPage() {
               <label className="mb-2 block text-sm font-medium text-slate-700">Buscar</label>
               <input
                 className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                placeholder="Cliente, teléfono o ciudad"
+                placeholder="Cliente, teléfono, ciudad o colaborador"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -462,8 +547,9 @@ export default function AdminPage() {
               onClick={() => {
                 setDateFrom(inicioMesISO());
                 setDateTo(hoyISO());
-                setSearch("");
+                setAreaFilter("");
                 setCollaboratorFilter("");
+                setSearch("");
               }}
               className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
@@ -513,6 +599,7 @@ export default function AdminPage() {
                     <th className="px-3 py-3">Cliente</th>
                     <th className="px-3 py-3">Fecha</th>
                     <th className="px-3 py-3">Colaborador</th>
+                    <th className="px-3 py-3">Área</th>
                     <th className="px-3 py-3">Volumen</th>
                     <th className="px-3 py-3">Caja</th>
                     <th className="px-3 py-3">Cartera</th>
@@ -521,25 +608,30 @@ export default function AdminPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {ventasFiltradas.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100 align-top">
-                      <td className="px-3 py-3">
-                        <div className="font-medium text-slate-900">{item.customer_name}</div>
-                        <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
-                      </td>
-                      <td className="px-3 py-3 text-slate-700">{formatDateTime(item.created_at)}</td>
-                      <td className="px-3 py-3 text-slate-700">
-                        {item.assigned_commercial_user_id
-                          ? profileMap.get(item.assigned_commercial_user_id) || "Sin nombre"
-                          : "Sin asignar"}
-                      </td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.net_commission_base || 0))}</td>
-                      <td className="px-3 py-3 text-slate-700">{paymentMethodLabel(item.payment_method)}</td>
-                    </tr>
-                  ))}
+                  {ventasFiltradas.map((item) => {
+                    const profile = item.assigned_commercial_user_id
+                      ? profileMap.get(item.assigned_commercial_user_id)
+                      : null;
+
+                    return (
+                      <tr key={item.id} className="border-b border-slate-100 align-top">
+                        <td className="px-3 py-3">
+                          <div className="font-medium text-slate-900">{item.customer_name}</div>
+                          <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">{formatDateTime(item.created_at)}</td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {profile?.full_name || "Sin asignar"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">{normalizeArea(profile?.job_title)}</td>
+                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
+                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
+                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
+                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.net_commission_base || 0))}</td>
+                        <td className="px-3 py-3 text-slate-700">{paymentMethodLabel(item.payment_method)}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
