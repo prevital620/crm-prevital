@@ -93,14 +93,13 @@ function normalizeArea(jobTitle: string | null | undefined) {
   const value = normalizeText(jobTitle);
 
   if (!value) return "Sin rol";
-  if (value.includes("promotor") || value.includes("opc")) return "OPC";
-  if (value.includes("call")) return "Call center";
-  if (value.includes("tmk")) return "TMK";
-  if (value.includes("supervisor opc")) return "Supervisor OPC";
+  if (value.includes("supervisor") && value.includes("opc")) return "Supervisor OPC";
   if (value.includes("supervisor") && value.includes("call")) return "Supervisor Call";
-  if (value.includes("supervisor")) return "Supervisor";
-  if (value.includes("comercial")) return "Comercial";
+  if (value.includes("promotor") || value === "opc" || value.includes(" opc")) return "OPC";
+  if (value.includes("call center") || value === "call" || value.includes("call")) return "Call center";
+  if (value.includes("tmk")) return "TMK";
   if (value.includes("gerencia comercial") || value.includes("gerente comercial")) return "Gerencia comercial";
+  if (value.includes("comercial")) return "Comercial";
   if (value.includes("admin")) return "Administrador";
 
   return jobTitle || "Sin rol";
@@ -241,6 +240,23 @@ export default function AdminComisionesPage() {
 
     return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
   }, [collaboratorOptions]);
+
+  const filteredCollaboratorOptions = useMemo(() => {
+    if (!areaFilter) return collaboratorOptions;
+    return collaboratorOptions.filter((item) => item.area === areaFilter);
+  }, [collaboratorOptions, areaFilter]);
+
+  useEffect(() => {
+    if (!collaboratorFilter) return;
+
+    const stillExists = filteredCollaboratorOptions.some(
+      (item) => item.id === collaboratorFilter
+    );
+
+    if (!stillExists) {
+      setCollaboratorFilter("");
+    }
+  }, [areaFilter, collaboratorFilter, filteredCollaboratorOptions]);
 
   const ventasReales = useMemo(() => {
     return cases.filter((item) => {
@@ -470,7 +486,7 @@ export default function AdminComisionesPage() {
                 onChange={(e) => setCollaboratorFilter(e.target.value)}
               >
                 <option value="">Todos</option>
-                {collaboratorOptions.map((item) => (
+                {filteredCollaboratorOptions.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.name}
                   </option>
