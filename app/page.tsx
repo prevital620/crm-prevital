@@ -82,7 +82,14 @@ const quickActions: QuickAction[] = [
     title: "Nuevo lead",
     subtitle: "Registrar un lead nuevo.",
     href: "/leads/nuevo",
-    roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
+    roles: [
+      "super_user",
+      "promotor_opc",
+      "supervisor_opc",
+      "supervisor_call_center",
+      "confirmador",
+      "tmk",
+    ],
   },
   {
     title: "Consultar leads",
@@ -161,7 +168,7 @@ const quickActions: QuickAction[] = [
     title: "Admin",
     subtitle: "Ver resumen administrativo, ventas, cartera y base comisionable.",
     href: "/admin",
-    roles: ["super_user", "gerente", "gerente_comercial", "gerencia_comercial", "administrador"],
+    roles: ["super_user", "gerencia_comercial", "administrador"],
   },
 ];
 
@@ -198,7 +205,11 @@ export default function HomePage() {
     const auth = await getCurrentUserRole();
     const normalizedRole = normalizeRoleCode(auth.roleCode);
     const normalizedAllRoles = Array.from(
-      new Set((auth.allRoleCodes || []).map((role) => normalizeRoleCode(role)).filter(Boolean))
+      new Set(
+        (auth.allRoleCodes || [])
+          .map((role) => normalizeRoleCode(role))
+          .filter(Boolean),
+      ),
     ) as string[];
 
     setCurrentRoleCode(normalizedRole);
@@ -216,16 +227,13 @@ export default function HomePage() {
     setCurrentUserName(profile?.full_name || "Usuario");
 
     const singleReceptionAccess =
-      normalizedRole === "recepcion" &&
-      normalizedAllRoles.length === 1;
+      normalizedRole === "recepcion" && normalizedAllRoles.length === 1;
 
     const singleCommercialAccess =
-      normalizedRole === "comercial" &&
-      normalizedAllRoles.length === 1;
+      normalizedRole === "comercial" && normalizedAllRoles.length === 1;
 
     const singleAdminAccess =
-      normalizedRole === "administrador" &&
-      normalizedAllRoles.length === 1;
+      normalizedRole === "administrador" && normalizedAllRoles.length === 1;
 
     if (singleReceptionAccess) {
       router.push("/recepcion");
@@ -316,13 +324,13 @@ export default function HomePage() {
 
   const visibleQuickActions = useMemo(() => {
     const effectiveRoles = Array.from(
-      new Set([...(allRoleCodes || []), ...(currentRoleCode ? [currentRoleCode] : [])].filter(Boolean))
+      new Set([...(allRoleCodes || []), ...(currentRoleCode ? [currentRoleCode] : [])].filter(Boolean)),
     );
 
     if (effectiveRoles.length === 0) return [];
 
     const base = quickActions.filter((action) =>
-      action.roles.some((role) => effectiveRoles.includes(role))
+      action.roles.some((role) => effectiveRoles.includes(role)),
     );
 
     if (effectiveRoles.includes("promotor_opc")) {
@@ -661,9 +669,7 @@ function LeadCard({
           <p className="mt-1 text-sm text-slate-600">
             {lead.phone} · {lead.city || "Sin ciudad"}
           </p>
-          <p className="mt-2 text-xs text-slate-500">
-            {formatDate(lead.created_at)}
-          </p>
+          <p className="mt-2 text-xs text-slate-500">{formatDate(lead.created_at)}</p>
         </div>
 
         <span className="inline-flex w-fit rounded-full border border-[#D6E8DA] bg-[#F4FAF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">

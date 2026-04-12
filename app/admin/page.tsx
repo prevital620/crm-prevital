@@ -3,267 +3,369 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { useRouter } from "next/navigation";
+import LogoutButton from "@/components/logout-button";
 import { getCurrentUserRole } from "@/lib/auth";
-import SessionBadge from "@/components/session-badge";
+import { PrevitalButton } from "@/components/ui/prevital-button";
+import {
+  PrevitalCard,
+  PrevitalCardContent,
+  PrevitalCardHeader,
+} from "@/components/ui/prevital-card";
+import { PrevitalPageHeader } from "@/components/layout/prevital-page-header";
+import {
+  PrevitalFilterBar,
+  PrevitalFilterGroup,
+} from "@/components/layout/prevital-filter-bar";
+import {
+  Activity,
+  Building2,
+  LayoutGrid,
+  RefreshCcw,
+  ShieldCheck,
+  Users,
+} from "lucide-react";
 
-type AdminCommercialCase = {
+type Lead = {
   id: string;
-  customer_name: string;
-  phone: string | null;
+  full_name: string | null;
+  first_name: string;
+  last_name: string | null;
+  phone: string;
   city: string | null;
+  status: string;
   created_at: string;
-  volume_amount: number | null;
-  cash_amount: number | null;
-  portfolio_amount: number | null;
-  net_commission_base: number | null;
-  payment_method: string | null;
-  assigned_commercial_user_id: string | null;
 };
 
-type ProfileOption = {
+type Department = {
+  id: string;
+  name: string;
+};
+
+type Role = {
+  id: string;
+  name: string;
+  code: string;
+};
+
+type Profile = {
   id: string;
   full_name: string;
+  job_title: string | null;
+  is_active: boolean;
+  created_at: string;
 };
 
-const allowedRoles = [
-  "super_user",
-  "gerente",
-  "gerente_comercial",
-  "gerencia_comercial",
-  "administrador",
+type QuickAction = {
+  title: string;
+  subtitle: string;
+  href: string;
+  roles: string[];
+};
+
+function normalizeRoleCode(roleCode?: string | null) {
+  if (!roleCode) return null;
+
+  if (
+    roleCode === "gerente" ||
+    roleCode === "gerente_comercial" ||
+    roleCode === "gerencia_comercial"
+  ) {
+    return "gerencia_comercial";
+  }
+
+  return roleCode;
+}
+
+const quickActions: QuickAction[] = [
+  {
+    title: "Nuevo lead",
+    subtitle: "Registrar un lead nuevo.",
+    href: "/leads/nuevo",
+    roles: [
+      "super_user",
+      "promotor_opc",
+      "supervisor_opc",
+      "supervisor_call_center",
+      "confirmador",
+      "tmk",
+    ],
+  },
+  {
+    title: "Consultar leads",
+    subtitle: "Revisar leads creados y su estado.",
+    href: "/leads",
+    roles: [
+      "super_user",
+      "promotor_opc",
+      "supervisor_opc",
+      "supervisor_call_center",
+      "confirmador",
+      "tmk",
+    ],
+  },
+  {
+    title: "Crear usuario",
+    subtitle: "Registrar usuario y asignar departamento y rol.",
+    href: "/usuarios/nuevo",
+    roles: ["super_user"],
+  },
+  {
+    title: "Usuarios y roles",
+    subtitle: "Consultar usuarios creados en el sistema.",
+    href: "/usuarios",
+    roles: ["super_user"],
+  },
+  {
+    title: "Call Center",
+    subtitle: "Asignar y gestionar leads del call center.",
+    href: "/call-center",
+    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
+  },
+  {
+    title: "Ver agenda",
+    subtitle: "Consultar agenda visible y gestionar citas.",
+    href: "/recepcion",
+    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
+  },
+  {
+    title: "Configurar cupos",
+    subtitle: "Abrir agenda y organizar cupos del día.",
+    href: "/recepcion",
+    roles: ["super_user", "supervisor_call_center"],
+  },
+  {
+    title: "Recepción",
+    subtitle: "Ver agenda, citas y admisión del sistema.",
+    href: "/recepcion",
+    roles: ["super_user", "recepcion"],
+  },
+  {
+    title: "Nutrición",
+    subtitle: "Ver agenda, pacientes y valoración nutricional.",
+    href: "/nutricion",
+    roles: ["super_user", "nutricionista"],
+  },
+  {
+    title: "Fisioterapia",
+    subtitle: "Ver agenda, pacientes y atención de fisioterapia.",
+    href: "/fisioterapia",
+    roles: ["super_user", "fisioterapeuta"],
+  },
+  {
+    title: "Comercial",
+    subtitle: "Gestionar seguimiento y cierre comercial.",
+    href: "/comercial",
+    roles: ["super_user", "comercial", "gerencia_comercial"],
+  },
+  {
+    title: "Gerencia comercial",
+    subtitle: "Supervisar cartera, ventas y desempeño comercial.",
+    href: "/gerencia/comercial",
+    roles: ["super_user", "gerencia_comercial"],
+  },
+  {
+    title: "Admin",
+    subtitle: "Ver resumen administrativo, ventas, cartera y base comisionable.",
+    href: "/admin",
+    roles: ["super_user", "gerencia_comercial", "administrador"],
+  },
 ];
 
-function hoyISO() {
-  const hoy = new Date();
-  const y = hoy.getFullYear();
-  const m = String(hoy.getMonth() + 1).padStart(2, "0");
-  const d = String(hoy.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
+export default function HomePage() {
+  const router = useRouter();
 
-function inicioMesISO() {
-  const hoy = new Date();
-  const y = hoy.getFullYear();
-  const m = String(hoy.getMonth() + 1).padStart(2, "0");
-  return `${y}-${m}-01`;
-}
-
-function formatMoney(value: number) {
-  return `$${value.toLocaleString("es-CO")}`;
-}
-
-function formatDateTime(value: string | null | undefined) {
-  if (!value) return "Sin fecha";
-  try {
-    return new Date(value).toLocaleString("es-CO", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return value;
-  }
-}
-
-function paymentMethodLabel(value: string | null | undefined) {
-  const map: Record<string, string> = {
-    contado: "Contado",
-    tarjeta: "Tarjeta",
-    transferencia: "Transferencia",
-    mixto: "Mixto",
-    cartera: "Cartera",
-    addi: "Addi",
-    welly: "Welly",
-    medipay: "Medipay",
-  };
-  if (!value) return "Sin definir";
-  return map[value] || value;
-}
-
-function StatCard({
-  title,
-  value,
-  subtitle,
-}: {
-  title: string;
-  value: string;
-  subtitle: string;
-}) {
-  return (
-    <div className="overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm">
-      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
-      <p className="text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-[#24312A]">{value}</p>
-      <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
-    </div>
-  );
-}
-
-export default function AdminPage() {
-  const [loadingAuth, setLoadingAuth] = useState(true);
-  const [authorized, setAuthorized] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [loading, setLoading] = useState(true);
 
-  const [cases, setCases] = useState<AdminCommercialCase[]>([]);
-  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
-  const [error, setError] = useState("");
+  const [currentRoleCode, setCurrentRoleCode] = useState<string | null>(null);
+  const [currentRoleName, setCurrentRoleName] = useState<string | null>(null);
+  const [allRoleCodes, setAllRoleCodes] = useState<string[]>([]);
+  const [allRoleNames, setAllRoleNames] = useState<string[]>([]);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
-  const [dateFrom, setDateFrom] = useState(inicioMesISO());
-  const [dateTo, setDateTo] = useState(hoyISO());
-  const [search, setSearch] = useState("");
-  const [collaboratorFilter, setCollaboratorFilter] = useState("");
+  const [leads, setLeads] = useState<Lead[]>([]);
+  const [departments, setDepartments] = useState<Department[]>([]);
+  const [roles, setRoles] = useState<Role[]>([]);
+  const [profiles, setProfiles] = useState<Profile[]>([]);
 
-  async function validarAcceso() {
-    try {
-      setLoadingAuth(true);
-      setError("");
+  const [errorMessage, setErrorMessage] = useState("");
 
-      const auth = await getCurrentUserRole();
+  async function checkSessionAndLoad() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
 
-      if (!auth.user || !auth.roleCode) {
-        setAuthorized(false);
-        setError("Debes iniciar sesión para usar este módulo.");
-        return;
-      }
-
-      if (!allowedRoles.includes(auth.roleCode)) {
-        setAuthorized(false);
-        setError("No tienes permiso para entrar a Admin.");
-        return;
-      }
-
-      setAuthorized(true);
-    } catch (err: any) {
-      setAuthorized(false);
-      setError(err?.message || "No se pudo validar el acceso.");
-    } finally {
-      setLoadingAuth(false);
+    if (!session) {
+      router.push("/login");
+      return;
     }
+
+    const auth = await getCurrentUserRole();
+    const normalizedRole = normalizeRoleCode(auth.roleCode);
+    const normalizedAllRoles = Array.from(
+      new Set(
+        (auth.allRoleCodes || [])
+          .map((role) => normalizeRoleCode(role))
+          .filter(Boolean),
+      ),
+    ) as string[];
+
+    setCurrentRoleCode(normalizedRole);
+    setCurrentRoleName(auth.roleName);
+    setAllRoleCodes(normalizedAllRoles);
+    setAllRoleNames(auth.allRoleNames || []);
+    setCurrentUserId(session.user.id);
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", session.user.id)
+      .single();
+
+    setCurrentUserName(profile?.full_name || "Usuario");
+
+    const singleReceptionAccess =
+      normalizedRole === "recepcion" && normalizedAllRoles.length === 1;
+
+    const singleCommercialAccess =
+      normalizedRole === "comercial" && normalizedAllRoles.length === 1;
+
+    const singleAdminAccess =
+      normalizedRole === "administrador" && normalizedAllRoles.length === 1;
+
+    if (singleReceptionAccess) {
+      router.push("/recepcion");
+      return;
+    }
+
+    if (singleCommercialAccess) {
+      router.push("/comercial");
+      return;
+    }
+
+    if (singleAdminAccess) {
+      router.push("/admin");
+      return;
+    }
+
+    setCheckingSession(false);
+    loadDashboard(normalizedRole, session.user.id);
   }
 
-  async function cargarDatos() {
+  async function loadDashboard(roleCode?: string | null, userId?: string | null) {
     try {
       setLoading(true);
-      setError("");
+      setErrorMessage("");
 
-      const [casesResult, profilesResult] = await Promise.all([
-        supabase
-          .from("commercial_cases")
-          .select(`
-            id,
-            customer_name,
-            phone,
-            city,
-            created_at,
-            volume_amount,
-            cash_amount,
-            portfolio_amount,
-            net_commission_base,
-            payment_method,
-            assigned_commercial_user_id
-          `)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("profiles")
-          .select("id, full_name")
-          .order("full_name", { ascending: true }),
-      ]);
+      const effectiveRole = normalizeRoleCode(roleCode ?? currentRoleCode);
+      const effectiveUserId = userId ?? currentUserId ?? null;
 
-      if (casesResult.error) throw casesResult.error;
+      let leadsQuery = supabase
+        .from("leads")
+        .select("id, full_name, first_name, last_name, phone, city, status, created_at")
+        .order("created_at", { ascending: false })
+        .limit(20);
+
+      if (effectiveRole === "promotor_opc" && effectiveUserId) {
+        leadsQuery = supabase
+          .from("leads")
+          .select("id, full_name, first_name, last_name, phone, city, status, created_at")
+          .eq("created_by_user_id", effectiveUserId)
+          .order("created_at", { ascending: false })
+          .limit(20);
+      }
+
+      if (
+        (effectiveRole === "confirmador" ||
+          effectiveRole === "tmk" ||
+          effectiveRole === "supervisor_call_center") &&
+        effectiveUserId
+      ) {
+        leadsQuery = supabase
+          .from("leads")
+          .select("id, full_name, first_name, last_name, phone, city, status, created_at")
+          .or(`assigned_to_user_id.eq.${effectiveUserId},created_by_user_id.eq.${effectiveUserId}`)
+          .order("created_at", { ascending: false })
+          .limit(20);
+      }
+
+      const [leadsResult, departmentsResult, rolesResult, profilesResult] =
+        await Promise.all([
+          leadsQuery,
+          supabase.from("departments").select("id, name").order("name", { ascending: true }),
+          supabase.from("roles").select("id, name, code").order("name", { ascending: true }),
+          supabase
+            .from("profiles")
+            .select("id, full_name, job_title, is_active, created_at")
+            .order("created_at", { ascending: false }),
+        ]);
+
+      if (leadsResult.error) throw leadsResult.error;
+      if (departmentsResult.error) throw departmentsResult.error;
+      if (rolesResult.error) throw rolesResult.error;
       if (profilesResult.error) throw profilesResult.error;
 
-      setCases((casesResult.data as AdminCommercialCase[]) || []);
-      setProfiles((profilesResult.data as ProfileOption[]) || []);
-    } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar los datos de admin.");
+      setLeads((leadsResult.data as Lead[]) ?? []);
+      setDepartments((departmentsResult.data as Department[]) ?? []);
+      setRoles((rolesResult.data as Role[]) ?? []);
+      setProfiles((profilesResult.data as Profile[]) ?? []);
+    } catch (error: any) {
+      setErrorMessage(error?.message || "Ocurrió un error cargando el dashboard.");
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    void validarAcceso();
+    void checkSessionAndLoad();
   }, []);
 
-  useEffect(() => {
-    if (authorized) {
-      void cargarDatos();
-    }
-  }, [authorized]);
+  const visibleQuickActions = useMemo(() => {
+    const effectiveRoles = Array.from(
+      new Set([...(allRoleCodes || []), ...(currentRoleCode ? [currentRoleCode] : [])].filter(Boolean)),
+    );
 
-  const profileMap = useMemo(() => {
-    const map = new Map<string, string>();
-    profiles.forEach((item) => map.set(item.id, item.full_name || "Sin nombre"));
-    return map;
+    if (effectiveRoles.length === 0) return [];
+
+    const base = quickActions.filter((action) =>
+      action.roles.some((role) => effectiveRoles.includes(role)),
+    );
+
+    if (effectiveRoles.includes("promotor_opc")) {
+      return base.sort((a, b) => {
+        const order: Record<string, number> = {
+          "/leads/nuevo": 1,
+          "/leads": 2,
+        };
+        return (order[a.href] ?? 99) - (order[b.href] ?? 99);
+      });
+    }
+
+    return base;
+  }, [allRoleCodes, currentRoleCode]);
+
+  const isSuperUser = currentRoleCode === "super_user";
+
+  const totalLeads = leads.length;
+  const totalDepartments = departments.length;
+  const totalRoles = roles.length;
+  const totalUsers = profiles.length;
+
+  const activeUsers = useMemo(() => {
+    return profiles.filter((item) => item.is_active).length;
   }, [profiles]);
 
-  const ventasReales = useMemo(() => {
-    return cases.filter((item) => {
-      const volume = Number(item.volume_amount || 0);
-      const cash = Number(item.cash_amount || 0);
-      const portfolio = Number(item.portfolio_amount || 0);
-      return volume > 0 || cash > 0 || portfolio > 0;
-    });
-  }, [cases]);
-
-  const ventasFiltradas = useMemo(() => {
-    const q = search.trim().toLowerCase();
-
-    return ventasReales.filter((item) => {
-      const createdDate = item.created_at?.slice(0, 10) || "";
-      const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
-      const matchesDateTo = dateTo ? createdDate <= dateTo : true;
-      const matchesSearch = q
-        ? (item.customer_name || "").toLowerCase().includes(q) ||
-          (item.phone || "").toLowerCase().includes(q) ||
-          (item.city || "").toLowerCase().includes(q)
-        : true;
-      const matchesCollaborator = collaboratorFilter
-        ? (item.assigned_commercial_user_id || "") === collaboratorFilter
-        : true;
-
-      return matchesDateFrom && matchesDateTo && matchesSearch && matchesCollaborator;
-    });
-  }, [ventasReales, dateFrom, dateTo, search, collaboratorFilter]);
-
-  const ventasHoy = useMemo(() => {
-    const today = hoyISO();
-    const items = ventasReales.filter((item) => item.created_at?.slice(0, 10) === today);
-
-    return {
-      total: items.length,
-      volumen: items.reduce((acc, item) => acc + Number(item.volume_amount || 0), 0),
-      caja: items.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
-      cartera: items.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
-    };
-  }, [ventasReales]);
-
-  const resumenRango = useMemo(() => {
-    return {
-      total: ventasFiltradas.length,
-      volumen: ventasFiltradas.reduce((acc, item) => acc + Number(item.volume_amount || 0), 0),
-      caja: ventasFiltradas.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
-      cartera: ventasFiltradas.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
-      baseNeta: ventasFiltradas.reduce((acc, item) => acc + Number(item.net_commission_base || 0), 0),
-    };
-  }, [ventasFiltradas]);
-
-  if (loadingAuth) {
+  if (checkingSession) {
     return (
       <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">Validando acceso...</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (!authorized) {
-    return (
-      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-red-700">
-            {error || "No tienes permiso para entrar a este módulo."}
-          </p>
+        <div className="mx-auto max-w-4xl">
+          <PrevitalCard>
+            <PrevitalCardContent className="p-8">
+              <p className="text-sm text-slate-500">Validando sesión...</p>
+            </PrevitalCardContent>
+          </PrevitalCard>
         </div>
       </main>
     );
@@ -272,7 +374,7 @@ export default function AdminPage() {
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-        <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
+        <div className="relative h-[420px] w-[420px] opacity-[0.05] md:h-[520px] md:w-[520px]">
           <Image
             src="/prevital-logo.jpeg"
             alt="Prevital"
@@ -282,7 +384,6 @@ export default function AdminPage() {
           />
         </div>
       </div>
-
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
           <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
@@ -295,210 +396,337 @@ export default function AdminPage() {
             />
           </div>
         </div>
-
-        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
-
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-sm font-medium text-[#7FA287]">Admin</p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Resumen administrativo</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Vista simple enfocada solo en ventas reales, cartera, caja y base neta.
-              </p>
+        <PrevitalPageHeader
+          title="CRM Prevital"
+          subtitle="Accesos y resumen según el rol autenticado."
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="rounded-2xl border border-[#D6E8DA] bg-[#EAF4EC] px-5 py-3 text-[#4F6F5B]">
+                <p className="text-sm font-semibold">{currentUserName || "Usuario"}</p>
+                <p className="text-xs text-[#5E8F6C]">
+                  {allRoleNames.length > 0 ? allRoleNames.join(" · ") : currentRoleName || "Rol"}
+                </p>
+              </div>
+              <LogoutButton />
             </div>
+          }
+        />
 
-            <SessionBadge />
-          </div>
+        <PrevitalFilterBar>
+          <PrevitalFilterGroup>
+            <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm text-slate-600">
+              <LayoutGrid className="h-4 w-4 text-[#5E8F6C]" />
+              <span>Panel principal</span>
+            </div>
+            <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm text-slate-600">
+              <ShieldCheck className="h-4 w-4 text-[#5E8F6C]" />
+              <span>{allRoleNames.length > 0 ? allRoleNames.join(" · ") : currentRoleName || "Rol"}</span>
+            </div>
+          </PrevitalFilterGroup>
 
-          <div className="mt-4 flex flex-wrap gap-3">
-            <a
-              href="/"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Inicio
-            </a>
+          <PrevitalButton
+            variant="secondary"
+            leftIcon={<RefreshCcw className="h-4 w-4" />}
+            onClick={() => void loadDashboard(currentRoleCode, currentUserId)}
+          >
+            Actualizar panel
+          </PrevitalButton>
+        </PrevitalFilterBar>
 
-            <button
-              type="button"
-              onClick={() => void cargarDatos()}
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Actualizar
-            </button>
-
-            <a
-              href="/admin/comisiones"
-              className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
-            >
-              Ver comisiones
-            </a>
-          </div>
-        </section>
-
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
+        {errorMessage ? (
+          <div className="rounded-3xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            {errorMessage}
           </div>
         ) : null}
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard title="Ventas del día" value={String(ventasHoy.total)} subtitle="Ventas reales hoy" />
-          <StatCard title="Volumen del día" value={formatMoney(ventasHoy.volumen)} subtitle="Ventas reales hoy" />
-          <StatCard title="Caja del día" value={formatMoney(ventasHoy.caja)} subtitle="Pagado hoy" />
-          <StatCard title="Cartera del día" value={formatMoney(ventasHoy.cartera)} subtitle="Pendiente hoy" />
-        </section>
-
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Desde</label>
-              <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+        {isSuperUser ? (
+          <>
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <StatCard
+                title="Leads"
+                value={loading ? "..." : String(totalLeads)}
+                subtitle="Según tu rol"
+                icon={<Activity className="h-5 w-5" />}
               />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Hasta</label>
-              <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
+              <StatCard
+                title="Departamentos"
+                value={loading ? "..." : String(totalDepartments)}
+                subtitle="Estructura base"
+                icon={<Building2 className="h-5 w-5" />}
               />
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Colaborador</label>
-              <select
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                value={collaboratorFilter}
-                onChange={(e) => setCollaboratorFilter(e.target.value)}
-              >
-                <option value="">Todos</option>
-                {profiles.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.full_name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Buscar</label>
-              <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                placeholder="Cliente, teléfono o ciudad"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
+              <StatCard
+                title="Roles"
+                value={loading ? "..." : String(totalRoles)}
+                subtitle="Roles configurados"
+                icon={<ShieldCheck className="h-5 w-5" />}
               />
-            </div>
-          </div>
+              <StatCard
+                title="Usuarios"
+                value={loading ? "..." : String(totalUsers)}
+                subtitle="Perfiles internos"
+                icon={<Users className="h-5 w-5" />}
+              />
+              <StatCard
+                title="Usuarios activos"
+                value={loading ? "..." : String(activeUsers)}
+                subtitle="Perfiles habilitados"
+                icon={<Users className="h-5 w-5" />}
+              />
+            </section>
 
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setDateFrom(hoyISO());
-                setDateTo(hoyISO());
-              }}
-              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Hoy
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setDateFrom(inicioMesISO());
-                setDateTo(hoyISO());
-                setSearch("");
-                setCollaboratorFilter("");
-              }}
-              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        </section>
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard title="Ventas del rango" value={String(resumenRango.total)} subtitle="Solo ventas reales" />
-          <StatCard title="Volumen del rango" value={formatMoney(resumenRango.volumen)} subtitle="Suma del rango" />
-          <StatCard title="Caja del rango" value={formatMoney(resumenRango.caja)} subtitle="Pagado en el rango" />
-          <StatCard title="Cartera del rango" value={formatMoney(resumenRango.cartera)} subtitle="Pendiente por cobrar" />
-          <StatCard title="Base neta del rango" value={formatMoney(resumenRango.baseNeta)} subtitle="Base comisionable" />
-        </section>
-
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">Ventas reales del rango</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Solo aparecen registros con volumen, caja o cartera mayor a cero.
-              </p>
-            </div>
-
-            <a
-              href="/admin/comisiones"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Ir a comisiones
-            </a>
-          </div>
-
-          {loading ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              Cargando ventas...
-            </div>
-          ) : ventasFiltradas.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              No hay ventas reales para esos filtros.
-            </div>
-          ) : (
-            <div className="mt-5 overflow-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-500">
-                    <th className="px-3 py-3">Cliente</th>
-                    <th className="px-3 py-3">Fecha</th>
-                    <th className="px-3 py-3">Colaborador</th>
-                    <th className="px-3 py-3">Volumen</th>
-                    <th className="px-3 py-3">Caja</th>
-                    <th className="px-3 py-3">Cartera</th>
-                    <th className="px-3 py-3">Base neta</th>
-                    <th className="px-3 py-3">Pago</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ventasFiltradas.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100 align-top">
-                      <td className="px-3 py-3">
-                        <div className="font-medium text-slate-900">{item.customer_name}</div>
-                        <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
-                      </td>
-                      <td className="px-3 py-3 text-slate-700">{formatDateTime(item.created_at)}</td>
-                      <td className="px-3 py-3 text-slate-700">
-                        {item.assigned_commercial_user_id
-                          ? profileMap.get(item.assigned_commercial_user_id) || "Sin nombre"
-                          : "Sin asignar"}
-                      </td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.net_commission_base || 0))}</td>
-                      <td className="px-3 py-3 text-slate-700">{paymentMethodLabel(item.payment_method)}</td>
-                    </tr>
+            <PrevitalCard>
+              <PrevitalCardHeader
+                title="Accesos disponibles"
+                description="Solo ves los módulos permitidos para tu rol."
+                action={
+                  <PrevitalButton
+                    variant="secondary"
+                    size="sm"
+                    leftIcon={<RefreshCcw className="h-4 w-4" />}
+                    onClick={() => void loadDashboard(currentRoleCode, currentUserId)}
+                  >
+                    Actualizar
+                  </PrevitalButton>
+                }
+              />
+              <PrevitalCardContent>
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  {visibleQuickActions.map((action) => (
+                    <a
+                      key={action.title}
+                      href={action.href}
+                      className="group rounded-3xl border border-[#D6E8DA] bg-[#F8F7F4] p-5 transition hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:bg-white"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-slate-800">{action.title}</h3>
+                          <p className="mt-2 text-sm text-slate-500">{action.subtitle}</p>
+                        </div>
+                        <span className="rounded-full border border-[#D6E8DA] bg-white px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+                          Abrir
+                        </span>
+                      </div>
+                    </a>
                   ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
+                </div>
+              </PrevitalCardContent>
+            </PrevitalCard>
+
+            <section className="grid gap-6 xl:grid-cols-3">
+              <div className="xl:col-span-2">
+                <PrevitalCard>
+                  <PrevitalCardHeader
+                    title="Leads recientes"
+                    description="Vista rápida según tu rol."
+                  />
+                  <PrevitalCardContent>
+                    {loading ? (
+                      <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                        Cargando leads...
+                      </div>
+                    ) : leads.length === 0 ? (
+                      <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                        No hay leads visibles para este usuario.
+                      </div>
+                    ) : (
+                      <div className="space-y-3">
+                        {leads.slice(0, 6).map((lead) => (
+                          <LeadCard key={lead.id} lead={lead} formatDate={formatDate} />
+                        ))}
+                      </div>
+                    )}
+                  </PrevitalCardContent>
+                </PrevitalCard>
+              </div>
+
+              <div className="space-y-6">
+                <SimpleListCard
+                  title="Departamentos"
+                  subtitle="Resumen general."
+                  items={departments.map((x) => x.name)}
+                  loading={loading}
+                  emptyText="No hay departamentos registrados."
+                />
+                <SimpleListCard
+                  title="Roles"
+                  subtitle="Estructura configurada."
+                  items={roles.map((x) => `${x.name} · ${x.code}`)}
+                  loading={loading}
+                  emptyText="No hay roles registrados."
+                />
+              </div>
+            </section>
+          </>
+        ) : (
+          <PrevitalCard>
+            <PrevitalCardHeader
+              title="Accesos disponibles"
+              description="Solo ves los módulos permitidos para tu rol."
+              action={
+                <PrevitalButton
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<RefreshCcw className="h-4 w-4" />}
+                  onClick={() => void loadDashboard(currentRoleCode, currentUserId)}
+                >
+                  Actualizar
+                </PrevitalButton>
+              }
+            />
+            <PrevitalCardContent>
+              {visibleQuickActions.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                  No hay accesos configurados para este rol.
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
+                  {visibleQuickActions.map((action) => (
+                    <a
+                      key={action.title}
+                      href={action.href}
+                      className="group relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md"
+                    >
+                      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+
+                      <div className="flex items-start justify-between gap-4">
+                        <div className="pr-2">
+                          <h3 className="text-lg font-semibold text-[#24312A] transition group-hover:text-[#4F6F5B]">
+                            {action.title}
+                          </h3>
+                          <p className="mt-2 text-sm leading-6 text-slate-500">
+                            {action.subtitle}
+                          </p>
+                        </div>
+
+                        <span className="shrink-0 rounded-full border border-[#D6E8DA] bg-[#F4FAF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B] transition group-hover:bg-white">
+                          Abrir
+                        </span>
+                      </div>
+                    </a>
+                  ))}
+                </div>
+              )}
+            </PrevitalCardContent>
+          </PrevitalCard>
+        )}
       </div>
     </main>
   );
+}
+
+function StatCard({
+  title,
+  value,
+  subtitle,
+  icon,
+}: {
+  title: string;
+  value: string;
+  subtitle: string;
+  icon: React.ReactNode;
+}) {
+  return (
+    <PrevitalCard className="group overflow-hidden border border-[#D6E8DA] bg-white shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md">
+      <div className="h-1 w-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+      <PrevitalCardContent className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div>
+            <p className="text-sm font-medium text-slate-500">{title}</p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">
+              {value}
+            </p>
+            <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
+          </div>
+
+          <div className="rounded-2xl border border-[#D6E8DA] bg-[#F4FAF6] p-3 text-[#5E8F6C] transition group-hover:bg-white">
+            {icon}
+          </div>
+        </div>
+      </PrevitalCardContent>
+    </PrevitalCard>
+  );
+}
+
+function LeadCard({
+  lead,
+  formatDate,
+}: {
+  lead: Lead;
+  formatDate: (value: string | null | undefined) => string;
+}) {
+  const displayName =
+    lead.full_name?.trim() ||
+    `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
+    "Sin nombre";
+
+  return (
+    <div className="group rounded-3xl border border-[#D6E8DA] bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md">
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div className="min-w-0">
+          <h3 className="truncate text-base font-semibold text-[#24312A] transition group-hover:text-[#4F6F5B]">
+            {displayName}
+          </h3>
+          <p className="mt-1 text-sm text-slate-600">
+            {lead.phone} · {lead.city || "Sin ciudad"}
+          </p>
+          <p className="mt-2 text-xs text-slate-500">{formatDate(lead.created_at)}</p>
+        </div>
+
+        <span className="inline-flex w-fit rounded-full border border-[#D6E8DA] bg-[#F4FAF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+          {lead.status || "Sin estado"}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function SimpleListCard({
+  title,
+  subtitle,
+  items,
+  loading,
+  emptyText,
+}: {
+  title: string;
+  subtitle: string;
+  items: string[];
+  loading: boolean;
+  emptyText: string;
+}) {
+  return (
+    <PrevitalCard>
+      <PrevitalCardHeader title={title} description={subtitle} />
+      <PrevitalCardContent>
+        <div className="max-h-[320px] space-y-3 overflow-auto pr-1">
+          {loading ? (
+            <p className="text-sm text-slate-500">Cargando...</p>
+          ) : items.length === 0 ? (
+            <p className="text-sm text-slate-500">{emptyText}</p>
+          ) : (
+            items.map((item) => (
+              <div
+                key={item}
+                className="rounded-2xl border border-slate-200 bg-[#F8F7F4] px-4 py-3 text-sm font-medium text-slate-700"
+              >
+                {item}
+              </div>
+            ))
+          )}
+        </div>
+      </PrevitalCardContent>
+    </PrevitalCard>
+  );
+}
+
+function formatDate(value: string | null | undefined) {
+  if (!value) return "Sin fecha";
+
+  try {
+    return new Date(value).toLocaleString("es-CO", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return value;
+  }
 }
