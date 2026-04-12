@@ -6,10 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/logout-button";
 import { getCurrentUserRole } from "@/lib/auth";
-import { PrevitalBadge } from "@/components/ui/prevital-badge";
-import {
-  PrevitalButton,
-} from "@/components/ui/prevital-button";
+import { PrevitalButton } from "@/components/ui/prevital-button";
 import {
   PrevitalCard,
   PrevitalCardContent,
@@ -85,7 +82,7 @@ const quickActions: QuickAction[] = [
     title: "Nuevo lead",
     subtitle: "Registrar un lead nuevo.",
     href: "/leads/nuevo",
-    roles: ["super_user", "promotor_opc", "supervisor_opc", "confirmador", "tmk"],
+    roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
     title: "Consultar leads",
@@ -116,6 +113,12 @@ const quickActions: QuickAction[] = [
     title: "Call Center",
     subtitle: "Asignar y gestionar leads del call center.",
     href: "/call-center",
+    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
+  },
+  {
+    title: "Ver agenda",
+    subtitle: "Consultar agenda visible y gestionar citas.",
+    href: "/recepcion",
     roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
@@ -154,6 +157,12 @@ const quickActions: QuickAction[] = [
     href: "/gerencia/comercial",
     roles: ["super_user", "gerencia_comercial"],
   },
+  {
+    title: "Admin",
+    subtitle: "Ver resumen administrativo, ventas, cartera y base comisionable.",
+    href: "/admin",
+    roles: ["super_user", "gerente", "gerente_comercial", "gerencia_comercial"],
+  },
 ];
 
 export default function HomePage() {
@@ -188,10 +197,13 @@ export default function HomePage() {
 
     const auth = await getCurrentUserRole();
     const normalizedRole = normalizeRoleCode(auth.roleCode);
+    const normalizedAllRoles = Array.from(
+      new Set((auth.allRoleCodes || []).map((role) => normalizeRoleCode(role)).filter(Boolean))
+    ) as string[];
 
     setCurrentRoleCode(normalizedRole);
     setCurrentRoleName(auth.roleName);
-    setAllRoleCodes(auth.allRoleCodes || []);
+    setAllRoleCodes(normalizedAllRoles);
     setAllRoleNames(auth.allRoleNames || []);
     setCurrentUserId(session.user.id);
 
@@ -202,10 +214,6 @@ export default function HomePage() {
       .single();
 
     setCurrentUserName(profile?.full_name || "Usuario");
-
-    const normalizedAllRoles = Array.from(
-      new Set((auth.allRoleCodes || []).map((role) => normalizeRoleCode(role)).filter(Boolean))
-    ) as string[];
 
     const singleReceptionAccess =
       normalizedRole === "recepcion" &&
@@ -252,7 +260,12 @@ export default function HomePage() {
           .limit(20);
       }
 
-      if ((effectiveRole === "confirmador" || effectiveRole === "tmk") && effectiveUserId) {
+      if (
+        (effectiveRole === "confirmador" ||
+          effectiveRole === "tmk" ||
+          effectiveRole === "supervisor_call_center") &&
+        effectiveUserId
+      ) {
         leadsQuery = supabase
           .from("leads")
           .select("id, full_name, first_name, last_name, phone, city, status, created_at")
@@ -289,7 +302,7 @@ export default function HomePage() {
   }
 
   useEffect(() => {
-    checkSessionAndLoad();
+    void checkSessionAndLoad();
   }, []);
 
   const visibleQuickActions = useMemo(() => {
@@ -397,7 +410,7 @@ export default function HomePage() {
           <PrevitalButton
             variant="secondary"
             leftIcon={<RefreshCcw className="h-4 w-4" />}
-            onClick={() => loadDashboard(currentRoleCode, currentUserId)}
+            onClick={() => void loadDashboard(currentRoleCode, currentUserId)}
           >
             Actualizar panel
           </PrevitalButton>
@@ -413,7 +426,7 @@ export default function HomePage() {
           <>
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <StatCard
-                title="D"
+                title="Leads"
                 value={loading ? "..." : String(totalLeads)}
                 subtitle="Según tu rol"
                 icon={<Activity className="h-5 w-5" />}
@@ -453,7 +466,7 @@ export default function HomePage() {
                     variant="secondary"
                     size="sm"
                     leftIcon={<RefreshCcw className="h-4 w-4" />}
-                    onClick={() => loadDashboard(currentRoleCode, currentUserId)}
+                    onClick={() => void loadDashboard(currentRoleCode, currentUserId)}
                   >
                     Actualizar
                   </PrevitalButton>
@@ -537,7 +550,7 @@ export default function HomePage() {
                   variant="secondary"
                   size="sm"
                   leftIcon={<RefreshCcw className="h-4 w-4" />}
-                  onClick={() => loadDashboard(currentRoleCode, currentUserId)}
+                  onClick={() => void loadDashboard(currentRoleCode, currentUserId)}
                 >
                   Actualizar
                 </PrevitalButton>
@@ -616,6 +629,7 @@ function StatCard({
     </PrevitalCard>
   );
 }
+
 function LeadCard({
   lead,
   formatDate,
@@ -650,6 +664,7 @@ function LeadCard({
     </div>
   );
 }
+
 function SimpleListCard({
   title,
   subtitle,
