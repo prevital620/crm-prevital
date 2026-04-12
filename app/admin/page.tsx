@@ -1,4 +1,4 @@
-\"use client\";
+"use client";
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
@@ -212,7 +212,7 @@ export default function AdminPage() {
 
   useEffect(() => {
     if (authorized) {
-      cargarDatos();
+      void cargarDatos();
     }
   }, [authorized]);
 
