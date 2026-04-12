@@ -50,6 +50,8 @@ type QuickFilter =
   | "sin_asignar"
   | "asignados"
   | "pendientes"
+  | "no_contestan"
+  | "interesados"
   | "pendientes_cita"
   | "agendados"
   | "no_asistio"
@@ -117,6 +119,8 @@ function estadoBadge(estado: string | null) {
       return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "agendado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "no_asistio":
+      return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
     case "dato_falso":
       return "border-rose-200 bg-rose-50 text-rose-700";
     case "no_interesa":
@@ -135,6 +139,7 @@ function traducirEstado(estado: string | null) {
     no_responde: "No responde",
     contactado: "Contactado",
     agendado: "Agendado",
+    no_asistio: "No asistió",
     dato_falso: "Dato falso",
     no_interesa: "No interesa",
   };
@@ -186,10 +191,12 @@ function traducirFuenteComision(value: string | null) {
 
 const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "todos", label: "Todos" },
-  { key: "nuevos", label: "Nuevos" },
   { key: "sin_asignar", label: "Sin asignar" },
-  { key: "asignados", label: "Asignados" },
   { key: "pendientes", label: "Pendientes" },
+  { key: "no_contestan", label: "No contestan" },
+  { key: "interesados", label: "Interesados" },
+  { key: "nuevos", label: "Nuevos" },
+  { key: "asignados", label: "Asignados" },
   { key: "pendientes_cita", label: "Pendientes de cita" },
   { key: "agendados", label: "Agendados" },
   { key: "no_asistio", label: "No asistió" },
@@ -392,12 +399,12 @@ export default function CallCenterPage() {
   }
 
   useEffect(() => {
-    validarAcceso();
+    void validarAcceso();
   }, []);
 
   useEffect(() => {
     if (authorized) {
-      cargarTodo();
+      void cargarTodo();
     }
   }, [authorized]);
 
@@ -602,6 +609,14 @@ export default function CallCenterPage() {
     );
   }
 
+  function esNoContesta(lead: Lead) {
+    return obtenerEstadoVisible(lead) === "no_responde";
+  }
+
+  function esInteresado(lead: Lead) {
+    return obtenerEstadoVisible(lead) === "interesado";
+  }
+
   function esPendienteDeCita(lead: Lead) {
     const estado = obtenerEstadoVisible(lead);
     return !tieneCitaActiva(lead) && estado === "contactado";
@@ -626,30 +641,32 @@ export default function CallCenterPage() {
     return base;
   }, [leads, currentRoleCode, currentUserId]);
 
-  const resumen = useMemo(() => {
-    const delDia = leadsBasePorRol.filter(
-      (lead) => (fechaFiltro ? soloFecha(lead.created_at) === fechaFiltro : true)
+  const leadsDelDia = useMemo(() => {
+    return leadsBasePorRol.filter((lead) =>
+      fechaFiltro ? soloFecha(lead.created_at) === fechaFiltro : true
     );
+  }, [leadsBasePorRol, fechaFiltro]);
 
+  const resumen = useMemo(() => {
     return {
-      total: delDia.length,
-      nuevos: delDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo").length,
-      sinAsignar: delDia.filter((lead) => !estaAsignado(lead)).length,
-      asignados: delDia.filter((lead) => obtenerEstadoVisible(lead) === "asignado").length,
-      pendientes: delDia.filter((lead) => esPendiente(lead)).length,
-      pendientesCita: delDia.filter((lead) => esPendienteDeCita(lead)).length,
-      agendados: delDia.filter((lead) => tieneCitaActiva(lead)).length,
-      noAsistio: delDia.filter((lead) => soloFecha(activeAppointmentByLeadId[lead.id]?.appointment_date) === fechaFiltro && obtenerEstadoVisible(lead) === "no_asistio").length,
-      cerrados: delDia.filter((lead) => esCerrado(lead)).length,
+      total: leadsDelDia.length,
+      nuevos: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo").length,
+      sinAsignar: leadsDelDia.filter((lead) => !estaAsignado(lead)).length,
+      asignados: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "asignado").length,
+      pendientes: leadsDelDia.filter((lead) => esPendiente(lead)).length,
+      noContestan: leadsDelDia.filter((lead) => esNoContesta(lead)).length,
+      interesados: leadsDelDia.filter((lead) => esInteresado(lead)).length,
+      pendientesCita: leadsDelDia.filter((lead) => esPendienteDeCita(lead)).length,
+      agendados: leadsDelDia.filter((lead) => tieneCitaActiva(lead)).length,
+      noAsistio: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio").length,
+      cerrados: leadsDelDia.filter((lead) => esCerrado(lead)).length,
     };
-  }, [leadsBasePorRol, fechaFiltro, activeAppointmentByLeadId]);
+  }, [leadsDelDia, activeAppointmentByLeadId]);
 
   const leadsFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
 
-    let base = leadsBasePorRol.filter(
-      (lead) => (fechaFiltro ? soloFecha(lead.created_at) === fechaFiltro : true)
-    );
+    let base = [...leadsDelDia];
 
     if (quickFilter === "nuevos") {
       base = base.filter((lead) => obtenerEstadoVisible(lead) === "nuevo");
@@ -665,6 +682,14 @@ export default function CallCenterPage() {
 
     if (quickFilter === "pendientes") {
       base = base.filter((lead) => esPendiente(lead));
+    }
+
+    if (quickFilter === "no_contestan") {
+      base = base.filter((lead) => esNoContesta(lead));
+    }
+
+    if (quickFilter === "interesados") {
+      base = base.filter((lead) => esInteresado(lead));
     }
 
     if (quickFilter === "pendientes_cita") {
@@ -703,8 +728,7 @@ export default function CallCenterPage() {
       );
     });
   }, [
-    leadsBasePorRol,
-    fechaFiltro,
+    leadsDelDia,
     busqueda,
     quickFilter,
     creatorNames,
@@ -836,10 +860,12 @@ export default function CallCenterPage() {
 
         <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
           <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
+          <StatCard title="Sin asignar" value={resumen.sinAsignar} active={quickFilter === "sin_asignar"} onClick={() => setQuickFilter("sin_asignar")} highlight={resumen.sinAsignar > 0} />
+          <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} highlight={resumen.pendientes > 0} />
+          <StatCard title="No contestan" value={resumen.noContestan} active={quickFilter === "no_contestan"} onClick={() => setQuickFilter("no_contestan")} highlight={resumen.noContestan > 0} />
+          <StatCard title="Interesados" value={resumen.interesados} active={quickFilter === "interesados"} onClick={() => setQuickFilter("interesados")} />
           <StatCard title="Nuevos" value={resumen.nuevos} active={quickFilter === "nuevos"} onClick={() => setQuickFilter("nuevos")} />
-          <StatCard title="Sin asignar" value={resumen.sinAsignar} active={quickFilter === "sin_asignar"} onClick={() => setQuickFilter("sin_asignar")} />
           <StatCard title="Asignados" value={resumen.asignados} active={quickFilter === "asignados"} onClick={() => setQuickFilter("asignados")} />
-          <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
           <StatCard title="Pendientes de cita" value={resumen.pendientesCita} active={quickFilter === "pendientes_cita"} onClick={() => setQuickFilter("pendientes_cita")} />
           <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
           <StatCard title="No asistió" value={resumen.noAsistio} active={quickFilter === "no_asistio"} onClick={() => setQuickFilter("no_asistio")} />
@@ -847,6 +873,15 @@ export default function CallCenterPage() {
         </section>
 
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="mb-4 rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4">
+            <p className="text-sm font-semibold text-[#24312A]">Control rápido del supervisor</p>
+            <p className="mt-1 text-sm text-slate-600">
+              Prioriza primero <span className="font-medium text-[#4F6F5B]">Sin asignar</span>,{" "}
+              <span className="font-medium text-[#4F6F5B]">Pendientes</span> y{" "}
+              <span className="font-medium text-[#4F6F5B]">No contestan</span> para que no se pierdan leads.
+            </p>
+          </div>
+
           <div className="mb-4 flex flex-wrap gap-2">
             {quickFilterButtons.map((item) => (
               <button
@@ -1151,11 +1186,13 @@ function StatCard({
   value,
   active,
   onClick,
+  highlight = false,
 }: {
   title: string;
   value: number;
   active: boolean;
   onClick: () => void;
+  highlight?: boolean;
 }) {
   return (
     <button
@@ -1164,6 +1201,8 @@ function StatCard({
       className={`group overflow-hidden rounded-3xl border bg-white p-5 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md ${
         active
           ? "border-[#7FA287] ring-2 ring-[#DDECE1]"
+          : highlight
+          ? "border-amber-200 bg-amber-50/40 hover:border-amber-300"
           : "border-[#D6E8DA] hover:border-[#BCD7C2]"
       }`}
     >
