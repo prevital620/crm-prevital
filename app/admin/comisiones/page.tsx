@@ -6,23 +6,23 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 
-type CommercialCase = {
+type AdminCommercialCase = {
   id: string;
   customer_name: string;
+  phone: string | null;
+  city: string | null;
   created_at: string;
-  status: string;
-  assigned_commercial_user_id: string | null;
   volume_amount: number | null;
   cash_amount: number | null;
+  portfolio_amount: number | null;
   net_commission_base: number | null;
-  gross_bonus_base: number | null;
+  payment_method: string | null;
+  assigned_commercial_user_id: string | null;
 };
 
-type ProfileRow = {
+type ProfileOption = {
   id: string;
   full_name: string;
-  role_code: string;
-  role_name: string;
 };
 
 const allowedRoles = [
@@ -30,6 +30,7 @@ const allowedRoles = [
   "gerente",
   "gerente_comercial",
   "gerencia_comercial",
+  "administrador",
 ];
 
 function hoyISO() {
@@ -51,7 +52,7 @@ function formatMoney(value: number) {
   return `$${value.toLocaleString("es-CO")}`;
 }
 
-function formatDate(value: string | null | undefined) {
+function formatDateTime(value: string | null | undefined) {
   if (!value) return "Sin fecha";
   try {
     return new Date(value).toLocaleString("es-CO", {
@@ -63,22 +64,19 @@ function formatDate(value: string | null | undefined) {
   }
 }
 
-function getCommercialRate(netBase: number) {
-  if (netBase <= 500000) return 0.05;
-  if (netBase <= 1200000) return 0.06;
-  if (netBase <= 2300000) return 0.07;
-  if (netBase <= 3000000) return 0.10;
-  if (netBase <= 4000000) return 0.12;
-  return 0.15;
-}
-
-function getCommercialBonus(grossVolume: number) {
-  if (grossVolume >= 52000000) return 3000000;
-  if (grossVolume >= 42000000) return 2100000;
-  if (grossVolume >= 32000000) return 1500000;
-  if (grossVolume >= 27000000) return 1000000;
-  if (grossVolume >= 21000000) return 600000;
-  return 0;
+function paymentMethodLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    contado: "Contado",
+    tarjeta: "Tarjeta",
+    transferencia: "Transferencia",
+    mixto: "Mixto",
+    cartera: "Cartera",
+    addi: "Addi",
+    welly: "Welly",
+    medipay: "Medipay",
+  };
+  if (!value) return "Sin definir";
+  return map[value] || value;
 }
 
 function StatCard({
@@ -100,17 +98,18 @@ function StatCard({
   );
 }
 
-export default function AdminComisionesPage() {
+export default function AdminPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
 
-  const [cases, setCases] = useState<CommercialCase[]>([]);
-  const [profiles, setProfiles] = useState<ProfileRow[]>([]);
+  const [cases, setCases] = useState<AdminCommercialCase[]>([]);
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [error, setError] = useState("");
 
   const [dateFrom, setDateFrom] = useState(inicioMesISO());
   const [dateTo, setDateTo] = useState(hoyISO());
+  const [search, setSearch] = useState("");
   const [collaboratorFilter, setCollaboratorFilter] = useState("");
 
   async function validarAcceso() {
@@ -128,7 +127,7 @@ export default function AdminComisionesPage() {
 
       if (!allowedRoles.includes(auth.roleCode)) {
         setAuthorized(false);
-        setError("No tienes permiso para entrar a Comisiones.");
+        setError("No tienes permiso para entrar a Admin.");
         return;
       }
 
@@ -152,47 +151,30 @@ export default function AdminComisionesPage() {
           .select(`
             id,
             customer_name,
+            phone,
+            city,
             created_at,
-            status,
-            assigned_commercial_user_id,
             volume_amount,
             cash_amount,
+            portfolio_amount,
             net_commission_base,
-            gross_bonus_base
+            payment_method,
+            assigned_commercial_user_id
           `)
           .order("created_at", { ascending: false }),
         supabase
           .from("profiles")
-          .select(`
-            id,
-            full_name,
-            user_roles!user_roles_user_id_fkey (
-              roles (
-                code,
-                name
-              )
-            )
-          `),
+          .select("id, full_name")
+          .order("full_name", { ascending: true }),
       ]);
 
       if (casesResult.error) throw casesResult.error;
       if (profilesResult.error) throw profilesResult.error;
 
-      const rawProfiles = (profilesResult.data as any[]) || [];
-      const mappedProfiles: ProfileRow[] = rawProfiles.map((row) => {
-        const role = row.user_roles?.[0]?.roles;
-        return {
-          id: row.id,
-          full_name: row.full_name || "Sin nombre",
-          role_code: role?.code || "",
-          role_name: role?.name || "",
-        };
-      });
-
-      setCases((casesResult.data as CommercialCase[]) || []);
-      setProfiles(mappedProfiles);
+      setCases((casesResult.data as AdminCommercialCase[]) || []);
+      setProfiles((profilesResult.data as ProfileOption[]) || []);
     } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar los datos de comisiones.");
+      setError(err?.message || "No se pudieron cargar los datos de admin.");
     } finally {
       setLoading(false);
     }
@@ -208,117 +190,62 @@ export default function AdminComisionesPage() {
     }
   }, [authorized]);
 
-  const advisorProfiles = useMemo(() => {
-    return profiles.filter((item) => item.role_code === "comercial");
+  const profileMap = useMemo(() => {
+    const map = new Map<string, string>();
+    profiles.forEach((item) => map.set(item.id, item.full_name || "Sin nombre"));
+    return map;
   }, [profiles]);
 
-  const managerProfiles = useMemo(() => {
-    return profiles.filter((item) =>
-      ["gerente", "gerente_comercial", "gerencia_comercial"].includes(item.role_code)
-    );
-  }, [profiles]);
-
-  const finalizedCases = useMemo(() => {
-    return cases.filter((item) => item.status === "finalizado");
+  const ventasReales = useMemo(() => {
+    return cases.filter((item) => {
+      const volume = Number(item.volume_amount || 0);
+      const cash = Number(item.cash_amount || 0);
+      const portfolio = Number(item.portfolio_amount || 0);
+      return volume > 0 || cash > 0 || portfolio > 0;
+    });
   }, [cases]);
 
-  const filteredCases = useMemo(() => {
-    return finalizedCases.filter((item) => {
+  const ventasFiltradas = useMemo(() => {
+    const q = search.trim().toLowerCase();
+
+    return ventasReales.filter((item) => {
       const createdDate = item.created_at?.slice(0, 10) || "";
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
+      const matchesSearch = q
+        ? (item.customer_name || "").toLowerCase().includes(q) ||
+          (item.phone || "").toLowerCase().includes(q) ||
+          (item.city || "").toLowerCase().includes(q)
+        : true;
       const matchesCollaborator = collaboratorFilter
-        ? item.assigned_commercial_user_id === collaboratorFilter
+        ? (item.assigned_commercial_user_id || "") === collaboratorFilter
         : true;
 
-      return matchesDateFrom && matchesDateTo && matchesCollaborator;
+      return matchesDateFrom && matchesDateTo && matchesSearch && matchesCollaborator;
     });
-  }, [finalizedCases, dateFrom, dateTo, collaboratorFilter]);
+  }, [ventasReales, dateFrom, dateTo, search, collaboratorFilter]);
 
-  const advisorsTable = useMemo(() => {
-    const grouped = new Map<string, CommercialCase[]>();
-
-    filteredCases.forEach((item) => {
-      if (!item.assigned_commercial_user_id) return;
-      const key = item.assigned_commercial_user_id;
-      const current = grouped.get(key) || [];
-      current.push(item);
-      grouped.set(key, current);
-    });
-
-    return Array.from(grouped.entries())
-      .map(([userId, items]) => {
-        const profile = advisorProfiles.find((item) => item.id === userId);
-        const salesCount = items.length;
-        const grossVolume = items.reduce((acc, item) => acc + Number(item.gross_bonus_base || item.volume_amount || 0), 0);
-        const totalCash = items.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0);
-        const totalNetBase = items.reduce((acc, item) => acc + Number(item.net_commission_base || 0), 0);
-
-        const perSaleCommission = items.reduce((acc, item) => {
-          const netBase = Number(item.net_commission_base || 0);
-          const rate = getCommercialRate(netBase);
-          return acc + Math.round(netBase * rate);
-        }, 0);
-
-        const effectiveRate =
-          totalNetBase > 0 ? perSaleCommission / totalNetBase : 0;
-
-        const bonus = getCommercialBonus(grossVolume);
-        const totalCommission = perSaleCommission + bonus;
-
-        return {
-          user_id: userId,
-          full_name: profile?.full_name || "Sin nombre",
-          role_name: profile?.role_name || "Comercial",
-          salesCount,
-          grossVolume,
-          totalCash,
-          totalNetBase,
-          effectiveRate,
-          commission: perSaleCommission,
-          bonus,
-          totalCommission,
-        };
-      })
-      .sort((a, b) => b.totalCommission - a.totalCommission);
-  }, [filteredCases, advisorProfiles]);
-
-  const managerSummary = useMemo(() => {
-    const totalNetBase = filteredCases.reduce(
-      (acc, item) => acc + Number(item.net_commission_base || 0),
-      0
-    );
-    const managerCommission = Math.round(totalNetBase * 0.035);
+  const ventasHoy = useMemo(() => {
+    const today = hoyISO();
+    const items = ventasReales.filter((item) => item.created_at?.slice(0, 10) === today);
 
     return {
-      managers: managerProfiles,
-      totalNetBase,
-      managerCommission,
+      total: items.length,
+      volumen: items.reduce((acc, item) => acc + Number(item.volume_amount || 0), 0),
+      caja: items.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
+      cartera: items.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
     };
-  }, [filteredCases, managerProfiles]);
+  }, [ventasReales]);
 
-  const totals = useMemo(() => {
-    const totalCommercialCommission = advisorsTable.reduce(
-      (acc, item) => acc + item.commission,
-      0
-    );
-    const totalCommercialBonus = advisorsTable.reduce(
-      (acc, item) => acc + item.bonus,
-      0
-    );
-    const totalCommercialToPay = advisorsTable.reduce(
-      (acc, item) => acc + item.totalCommission,
-      0
-    );
-
+  const resumenRango = useMemo(() => {
     return {
-      totalCommercialCommission,
-      totalCommercialBonus,
-      totalCommercialToPay,
-      totalManagerCommission: managerSummary.managerCommission,
-      totalAreaToPay: totalCommercialToPay + managerSummary.managerCommission,
+      total: ventasFiltradas.length,
+      volumen: ventasFiltradas.reduce((acc, item) => acc + Number(item.volume_amount || 0), 0),
+      caja: ventasFiltradas.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
+      cartera: ventasFiltradas.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
+      baseNeta: ventasFiltradas.reduce((acc, item) => acc + Number(item.net_commission_base || 0), 0),
     };
-  }, [advisorsTable, managerSummary]);
+  }, [ventasFiltradas]);
 
   if (loadingAuth) {
     return (
@@ -375,9 +302,9 @@ export default function AdminComisionesPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-medium text-[#7FA287]">Admin</p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Comisiones comerciales</h1>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Resumen administrativo</h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Primera versión para liquidar el área comercial y la comisión del gerente comercial en el rango elegido.
+                Vista simple enfocada solo en ventas reales, cartera, caja y base neta.
               </p>
             </div>
 
@@ -386,10 +313,10 @@ export default function AdminComisionesPage() {
 
           <div className="mt-4 flex flex-wrap gap-3">
             <a
-              href="/admin"
+              href="/"
               className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
-              Volver a Admin
+              Inicio
             </a>
 
             <button
@@ -399,6 +326,13 @@ export default function AdminComisionesPage() {
             >
               Actualizar
             </button>
+
+            <a
+              href="/admin/comisiones"
+              className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+            >
+              Ver comisiones
+            </a>
           </div>
         </section>
 
@@ -408,8 +342,15 @@ export default function AdminComisionesPage() {
           </div>
         ) : null}
 
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <StatCard title="Ventas del día" value={String(ventasHoy.total)} subtitle="Ventas reales hoy" />
+          <StatCard title="Volumen del día" value={formatMoney(ventasHoy.volumen)} subtitle="Ventas reales hoy" />
+          <StatCard title="Caja del día" value={formatMoney(ventasHoy.caja)} subtitle="Pagado hoy" />
+          <StatCard title="Cartera del día" value={formatMoney(ventasHoy.cartera)} subtitle="Pendiente hoy" />
+        </section>
+
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-3">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Desde</label>
               <input
@@ -438,152 +379,84 @@ export default function AdminComisionesPage() {
                 onChange={(e) => setCollaboratorFilter(e.target.value)}
               >
                 <option value="">Todos</option>
-                {advisorProfiles.map((item) => (
+                {profiles.map((item) => (
                   <option key={item.id} value={item.id}>
                     {item.full_name}
                   </option>
                 ))}
               </select>
             </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Buscar</label>
+              <input
+                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                placeholder="Cliente, teléfono o ciudad"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom(hoyISO());
+                setDateTo(hoyISO());
+              }}
+              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+            >
+              Hoy
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                setDateFrom(inicioMesISO());
+                setDateTo(hoyISO());
+                setSearch("");
+                setCollaboratorFilter("");
+              }}
+              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+            >
+              Limpiar filtros
+            </button>
           </div>
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard title="Comisión comercial" value={formatMoney(totals.totalCommercialCommission)} subtitle="Por venta escalonada" />
-          <StatCard title="Bono comercial" value={formatMoney(totals.totalCommercialBonus)} subtitle="Por volumen bruto" />
-          <StatCard title="Comisión gerente" value={formatMoney(totals.totalManagerCommission)} subtitle="3.5% sobre caja neta" />
-          <StatCard title="Total área comercial" value={formatMoney(totals.totalAreaToPay)} subtitle="Comercial + gerente" />
-          <StatCard title="Ventas finalizadas" value={String(filteredCases.length)} subtitle="Casos dentro del rango" />
-        </section>
-
-        <section className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-bold text-slate-900">Asesores comerciales</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Comisión escalonada por venta y bono por volumen bruto acumulado.
-            </p>
-
-            {loading ? (
-              <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                Cargando comisiones...
-              </div>
-            ) : advisorsTable.length === 0 ? (
-              <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                No hay ventas finalizadas para ese filtro.
-              </div>
-            ) : (
-              <div className="mt-5 overflow-auto">
-                <table className="min-w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 text-left text-slate-500">
-                      <th className="px-3 py-3">Colaborador</th>
-                      <th className="px-3 py-3">Ventas</th>
-                      <th className="px-3 py-3">Volumen bruto</th>
-                      <th className="px-3 py-3">Caja</th>
-                      <th className="px-3 py-3">Base neta</th>
-                      <th className="px-3 py-3">% efectivo</th>
-                      <th className="px-3 py-3">Comisión</th>
-                      <th className="px-3 py-3">Bono</th>
-                      <th className="px-3 py-3">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {advisorsTable.map((item) => (
-                      <tr key={item.user_id} className="border-b border-slate-100 align-top">
-                        <td className="px-3 py-3">
-                          <div className="font-medium text-slate-900">{item.full_name}</div>
-                          <div className="text-slate-500">{item.role_name}</div>
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">{item.salesCount}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(item.grossVolume)}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(item.totalCash)}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(item.totalNetBase)}</td>
-                        <td className="px-3 py-3 text-slate-700">{(item.effectiveRate * 100).toFixed(2)}%</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(item.commission)}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(item.bonus)}</td>
-                        <td className="px-3 py-3 font-semibold text-slate-900">{formatMoney(item.totalCommission)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-6">
-            <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">Gerente comercial</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Comisión del 3.5% sobre la caja neta del rango.
-              </p>
-
-              <div className="mt-5 space-y-3">
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-sm text-slate-500">Base neta del rango</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-900">
-                    {formatMoney(managerSummary.totalNetBase)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-sm text-slate-500">Comisión gerente</p>
-                  <p className="mt-2 text-2xl font-bold text-slate-900">
-                    {formatMoney(managerSummary.managerCommission)}
-                  </p>
-                </div>
-
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="text-sm text-slate-500">Perfiles gerente</p>
-                  <div className="mt-3 space-y-2">
-                    {managerSummary.managers.length === 0 ? (
-                      <p className="text-sm text-slate-500">No se encontró perfil gerente.</p>
-                    ) : (
-                      managerSummary.managers.map((item) => (
-                        <div key={item.id} className="rounded-xl bg-[#F8F7F4] px-3 py-2 text-sm text-slate-700">
-                          {item.full_name} · {item.role_name}
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">Reglas usadas</h2>
-              <div className="mt-4 space-y-2 text-sm text-slate-700">
-                <p>Hasta 500.000 → 5%</p>
-                <p>500.001 a 1.200.000 → 6%</p>
-                <p>1.200.001 a 2.300.000 → 7%</p>
-                <p>2.300.001 a 3.000.000 → 10%</p>
-                <p>3.000.001 a 4.000.000 → 12%</p>
-                <p>4.000.000 en adelante → 15%</p>
-                <hr className="my-3 border-slate-200" />
-                <p>Bono 21M → 600.000</p>
-                <p>Bono 27M → 1.000.000</p>
-                <p>Bono 32M → 1.500.000</p>
-                <p>Bono 42M → 2.100.000</p>
-                <p>Bono 52M → 3.000.000</p>
-                <hr className="my-3 border-slate-200" />
-                <p>Gerente comercial → 3.5% sobre caja neta</p>
-              </div>
-            </div>
-          </div>
+          <StatCard title="Ventas del rango" value={String(resumenRango.total)} subtitle="Solo ventas reales" />
+          <StatCard title="Volumen del rango" value={formatMoney(resumenRango.volumen)} subtitle="Suma del rango" />
+          <StatCard title="Caja del rango" value={formatMoney(resumenRango.caja)} subtitle="Pagado en el rango" />
+          <StatCard title="Cartera del rango" value={formatMoney(resumenRango.cartera)} subtitle="Pendiente por cobrar" />
+          <StatCard title="Base neta del rango" value={formatMoney(resumenRango.baseNeta)} subtitle="Base comisionable" />
         </section>
 
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-bold text-slate-900">Ventas incluidas en el cálculo</h2>
-          <p className="mt-1 text-sm text-slate-500">
-            Soporte rápido para revisar qué casos están entrando en la liquidación.
-          </p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Ventas reales del rango</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Solo aparecen registros con volumen, caja o cartera mayor a cero.
+              </p>
+            </div>
+
+            <a
+              href="/admin/comisiones"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+            >
+              Ir a comisiones
+            </a>
+          </div>
 
           {loading ? (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
               Cargando ventas...
             </div>
-          ) : filteredCases.length === 0 ? (
+          ) : ventasFiltradas.length === 0 ? (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              No hay ventas finalizadas para ese filtro.
+              No hay ventas reales para esos filtros.
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
@@ -592,38 +465,34 @@ export default function AdminComisionesPage() {
                   <tr className="border-b border-slate-200 text-left text-slate-500">
                     <th className="px-3 py-3">Cliente</th>
                     <th className="px-3 py-3">Fecha</th>
-                    <th className="px-3 py-3">Asesor</th>
+                    <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Volumen</th>
                     <th className="px-3 py-3">Caja</th>
+                    <th className="px-3 py-3">Cartera</th>
                     <th className="px-3 py-3">Base neta</th>
-                    <th className="px-3 py-3">Comisión venta</th>
+                    <th className="px-3 py-3">Pago</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredCases.map((item) => {
-                    const netBase = Number(item.net_commission_base || 0);
-                    const rate = getCommercialRate(netBase);
-                    const commission = Math.round(netBase * rate);
-                    const advisor =
-                      advisorProfiles.find((profile) => profile.id === item.assigned_commercial_user_id)?.full_name ||
-                      "Sin asignar";
-
-                    return (
-                      <tr key={item.id} className="border-b border-slate-100 align-top">
-                        <td className="px-3 py-3">
-                          <div className="font-medium text-slate-900">{item.customer_name}</div>
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">{formatDate(item.created_at)}</td>
-                        <td className="px-3 py-3 text-slate-700">{advisor}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(netBase)}</td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {formatMoney(commission)} · {(rate * 100).toFixed(0)}%
-                        </td>
-                      </tr>
-                    );
-                  })}
+                  {ventasFiltradas.map((item) => (
+                    <tr key={item.id} className="border-b border-slate-100 align-top">
+                      <td className="px-3 py-3">
+                        <div className="font-medium text-slate-900">{item.customer_name}</div>
+                        <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">{formatDateTime(item.created_at)}</td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {item.assigned_commercial_user_id
+                          ? profileMap.get(item.assigned_commercial_user_id) || "Sin nombre"
+                          : "Sin asignar"}
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.net_commission_base || 0))}</td>
+                      <td className="px-3 py-3 text-slate-700">{paymentMethodLabel(item.payment_method)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
