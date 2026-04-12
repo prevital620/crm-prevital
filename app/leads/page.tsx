@@ -661,6 +661,7 @@ export default function LeadsPage() {
             {(roleCode === "super_user" ||
               roleCode === "promotor_opc" ||
               roleCode === "supervisor_opc" ||
+              roleCode === "supervisor_call_center" ||
               roleCode === "confirmador" ||
               roleCode === "tmk") && (
               <a

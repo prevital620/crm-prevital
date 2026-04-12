@@ -37,6 +37,7 @@ const allowedRoles = [
   "super_user",
   "promotor_opc",
   "supervisor_opc",
+  "supervisor_call_center",
   "confirmador",
   "tmk",
 ];
@@ -138,7 +139,9 @@ export default function NuevoLeadPage() {
 
     try {
       const debeAutoAsignarse =
-        currentRoleCode === "tmk" || currentRoleCode === "confirmador";
+        currentRoleCode === "tmk" ||
+        currentRoleCode === "confirmador" ||
+        currentRoleCode === "supervisor_call_center";
 
       const { error } = await supabase.from("leads").insert([
         {
@@ -293,7 +296,9 @@ export default function NuevoLeadPage() {
               <p className="mt-1 text-base font-semibold text-[#24312A]">
                 {currentUserName}
               </p>
-              {(currentRoleCode === "tmk" || currentRoleCode === "confirmador") && (
+              {(currentRoleCode === "tmk" ||
+                currentRoleCode === "confirmador" ||
+                currentRoleCode === "supervisor_call_center") && (
                 <p className="mt-2 text-sm text-slate-600">
                   Este lead se asignará automáticamente a tu usuario.
                 </p>

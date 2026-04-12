@@ -37,6 +37,7 @@ type LeadOption = {
   phone: string;
   city: string | null;
   status: string;
+  commission_source_type: string | null;
 };
 
 type AppointmentRow = {
@@ -207,6 +208,31 @@ const manualSourceOptions = [
   { value: "cliente_directo", label: "Cliente directo" },
   { value: "otro", label: "Otro" },
 ];
+
+const commissionSourceOptions = [
+  { value: "opc", label: "OPC" },
+  { value: "redes", label: "Redes" },
+  { value: "base", label: "Base" },
+  { value: "otro", label: "Otro" },
+];
+
+function traducirFuenteComision(value: string) {
+  const found = commissionSourceOptions.find((item) => item.value === value);
+  return found?.label || value || "Sin fuente";
+}
+
+function inferCommissionSourceFromManualSource(value: string) {
+  switch (value) {
+    case "opc":
+      return "opc";
+    case "redes":
+      return "redes";
+    case "tmk":
+      return "base";
+    default:
+      return "otro";
+  }
+}
 
 function hoyISO() {
   const hoy = new Date();
@@ -659,6 +685,7 @@ function RecepcionContent() {
     city: "",
     documento: "",
     fuente: "",
+    commission_source_type: "",
     observaciones: "",
     tiene_eps: "si",
     afiliacion: "",
@@ -835,7 +862,8 @@ function RecepcionContent() {
             full_name,
             phone,
             city,
-            status
+            status,
+            commission_source_type
           `)
           .order("created_at", { ascending: false })
           .limit(300),
@@ -1833,6 +1861,9 @@ function imprimirRegistroComercial() {
 
       const notesParts = [
         commercialForm.fuente ? `Fuente: ${commercialForm.fuente}` : "",
+        commercialForm.commission_source_type
+          ? `Fuente comisión: ${traducirFuenteComision(commercialForm.commission_source_type)}`
+          : "",
         `Clasificación inicial: ${clasificacion}`,
         commercialForm.clasificacion_motivo ? `Motivo clasificación: ${commercialForm.clasificacion_motivo}` : "",
         `Tiene EPS: ${commercialForm.tiene_eps === "si" ? "Sí" : "No"}`,
@@ -1877,6 +1908,7 @@ function imprimirRegistroComercial() {
           phone: commercialForm.phone.trim(),
           city: commercialForm.city.trim() || null,
           status: "pendiente_asignacion_comercial",
+          commission_source_type: commercialForm.commission_source_type || null,
           created_by_user_id: currentUserId,
           updated_by_user_id: currentUserId,
           sale_result: notesParts || null,
@@ -1954,12 +1986,21 @@ function imprimirRegistroComercial() {
     setSelectedCommercialAppointmentId(item.id);
     setFechaFiltro(item.appointment_date);
     setBusquedaAgenda(item.patient_name || item.phone || "");
+    const leadRelacionado = item.lead_id
+      ? leads.find((lead) => lead.id === item.lead_id) || null
+      : null;
+
+    const manualSource = item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes);
+
     setCommercialForm({
       customer_name: item.patient_name || "",
       phone: item.phone || "",
       city: item.city || "",
       documento: "",
-      fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
+      fuente: manualSource,
+      commission_source_type:
+        leadRelacionado?.commission_source_type ||
+        (item.lead_id ? "" : inferCommissionSourceFromManualSource(manualSource)),
       observaciones: limpiarFuenteManualDeNotas(item.notes),
       tiene_eps: "si",
       afiliacion: "",
@@ -2671,11 +2712,48 @@ function imprimirRegistroComercial() {
                       <select
                         className={inputClass}
                         value={commercialForm.fuente}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, fuente: e.target.value }))}
+                        onChange={(e) =>
+                          setCommercialForm((prev) => {
+                            const nextFuente = e.target.value;
+                            const shouldAutofillCommission =
+                              !prev.commission_source_type ||
+                              prev.commission_source_type === inferCommissionSourceFromManualSource(prev.fuente);
+
+                            return {
+                              ...prev,
+                              fuente: nextFuente,
+                              commission_source_type: shouldAutofillCommission
+                                ? inferCommissionSourceFromManualSource(nextFuente)
+                                : prev.commission_source_type,
+                            };
+                          })
+                        }
                       >
                         <option value="">Selecciona</option>
                         {manualSourceOptions.map((item) => (
                           <option key={item.value} value={item.label}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
+                    }
+                  />
+                  <Field
+                    label="Fuente para comisión"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.commission_source_type}
+                        onChange={(e) =>
+                          setCommercialForm((prev) => ({
+                            ...prev,
+                            commission_source_type: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Selecciona</option>
+                        {commissionSourceOptions.map((item) => (
+                          <option key={item.value} value={item.value}>
                             {item.label}
                           </option>
                         ))}
