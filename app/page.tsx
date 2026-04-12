@@ -85,7 +85,7 @@ const quickActions: QuickAction[] = [
     title: "Nuevo lead",
     subtitle: "Registrar un lead nuevo.",
     href: "/leads/nuevo",
-    roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
+    roles: ["super_user", "promotor_opc", "supervisor_opc", "confirmador", "tmk"],
   },
   {
     title: "Consultar leads",
@@ -116,12 +116,6 @@ const quickActions: QuickAction[] = [
     title: "Call Center",
     subtitle: "Asignar y gestionar leads del call center.",
     href: "/call-center",
-    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
-  },
-  {
-    title: "Ver agenda",
-    subtitle: "Consultar agenda visible y gestionar citas.",
-    href: "/recepcion",
     roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
@@ -194,10 +188,13 @@ export default function HomePage() {
 
     const auth = await getCurrentUserRole();
     const normalizedRole = normalizeRoleCode(auth.roleCode);
+    const normalizedAllRoles = Array.from(
+      new Set((auth.allRoleCodes || []).map((role) => normalizeRoleCode(role)).filter(Boolean))
+    ) as string[];
 
     setCurrentRoleCode(normalizedRole);
     setCurrentRoleName(auth.roleName);
-    setAllRoleCodes(auth.allRoleCodes || []);
+    setAllRoleCodes(normalizedAllRoles);
     setAllRoleNames(auth.allRoleNames || []);
     setCurrentUserId(session.user.id);
 
@@ -208,6 +205,15 @@ export default function HomePage() {
       .single();
 
     setCurrentUserName(profile?.full_name || "Usuario");
+
+    const singleReceptionAccess =
+      normalizedRole === "recepcion" &&
+      normalizedAllRoles.length === 1;
+
+    if (singleReceptionAccess) {
+      router.push("/recepcion");
+      return;
+    }
 
     setCheckingSession(false);
     loadDashboard(normalizedRole, session.user.id);
