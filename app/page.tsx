@@ -188,13 +188,10 @@ export default function HomePage() {
 
     const auth = await getCurrentUserRole();
     const normalizedRole = normalizeRoleCode(auth.roleCode);
-    const normalizedAllRoles = Array.from(
-      new Set((auth.allRoleCodes || []).map((role) => normalizeRoleCode(role)).filter(Boolean))
-    ) as string[];
 
     setCurrentRoleCode(normalizedRole);
     setCurrentRoleName(auth.roleName);
-    setAllRoleCodes(normalizedAllRoles);
+    setAllRoleCodes(auth.allRoleCodes || []);
     setAllRoleNames(auth.allRoleNames || []);
     setCurrentUserId(session.user.id);
 
@@ -206,12 +203,25 @@ export default function HomePage() {
 
     setCurrentUserName(profile?.full_name || "Usuario");
 
+    const normalizedAllRoles = Array.from(
+      new Set((auth.allRoleCodes || []).map((role) => normalizeRoleCode(role)).filter(Boolean))
+    ) as string[];
+
     const singleReceptionAccess =
       normalizedRole === "recepcion" &&
       normalizedAllRoles.length === 1;
 
+    const singleCommercialAccess =
+      normalizedRole === "comercial" &&
+      normalizedAllRoles.length === 1;
+
     if (singleReceptionAccess) {
       router.push("/recepcion");
+      return;
+    }
+
+    if (singleCommercialAccess) {
+      router.push("/comercial");
       return;
     }
 
