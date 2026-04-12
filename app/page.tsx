@@ -82,14 +82,7 @@ const quickActions: QuickAction[] = [
     title: "Nuevo lead",
     subtitle: "Registrar un lead nuevo.",
     href: "/leads/nuevo",
-    roles: [
-      "super_user",
-      "promotor_opc",
-      "supervisor_opc",
-      "supervisor_call_center",
-      "confirmador",
-      "tmk",
-    ],
+    roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
     title: "Consultar leads",
@@ -168,7 +161,7 @@ const quickActions: QuickAction[] = [
     title: "Admin",
     subtitle: "Ver resumen administrativo, ventas, cartera y base comisionable.",
     href: "/admin",
-    roles: ["super_user", "gerencia_comercial", "administrador"],
+    roles: ["super_user", "gerente", "gerente_comercial", "gerencia_comercial", "administrador"],
   },
 ];
 
@@ -193,65 +186,115 @@ export default function HomePage() {
   const [errorMessage, setErrorMessage] = useState("");
 
   async function checkSessionAndLoad() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    try {
+      setCheckingSession(true);
+      setErrorMessage("");
 
-    if (!session) {
-      router.push("/login");
-      return;
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        throw sessionError;
+      }
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      let auth: any = null;
+
+      try {
+        auth = await getCurrentUserRole();
+      } catch (error: any) {
+        setCurrentUserId(session.user.id);
+
+        const { data: profileFallback } = await supabase
+          .from("profiles")
+          .select("full_name, job_title")
+          .eq("id", session.user.id)
+          .maybeSingle();
+
+        const fallbackRole = normalizeRoleCode(profileFallback?.job_title || null);
+
+        setCurrentRoleCode(fallbackRole);
+        setCurrentRoleName(profileFallback?.job_title || "Usuario");
+        setAllRoleCodes(fallbackRole ? [fallbackRole] : []);
+        setAllRoleNames(profileFallback?.job_title ? [profileFallback.job_title] : ["Usuario"]);
+        setCurrentUserName(profileFallback?.full_name || "Usuario");
+
+        if (fallbackRole === "administrador") {
+          router.push("/admin");
+          return;
+        }
+
+        setCheckingSession(false);
+        setLoading(false);
+        setErrorMessage(
+          error?.message || "No se pudieron cargar los roles del usuario."
+        );
+        return;
+      }
+
+      const normalizedRole = normalizeRoleCode(auth?.roleCode);
+      const normalizedAllRoles = Array.from(
+        new Set(
+          (auth?.allRoleCodes || [])
+            .map((role: string) => normalizeRoleCode(role))
+            .filter(Boolean)
+        )
+      ) as string[];
+
+      setCurrentRoleCode(normalizedRole);
+      setCurrentRoleName(auth?.roleName || null);
+      setAllRoleCodes(normalizedAllRoles);
+      setAllRoleNames(auth?.allRoleNames || []);
+      setCurrentUserId(session.user.id);
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      setCurrentUserName(profile?.full_name || "Usuario");
+
+      const singleReceptionAccess =
+        normalizedRole === "recepcion" &&
+        normalizedAllRoles.length === 1;
+
+      const singleCommercialAccess =
+        normalizedRole === "comercial" &&
+        normalizedAllRoles.length === 1;
+
+      const singleAdminAccess =
+        normalizedRole === "administrador" &&
+        normalizedAllRoles.length === 1;
+
+      if (singleReceptionAccess) {
+        router.push("/recepcion");
+        return;
+      }
+
+      if (singleCommercialAccess) {
+        router.push("/comercial");
+        return;
+      }
+
+      if (singleAdminAccess) {
+        router.push("/admin");
+        return;
+      }
+
+      setCheckingSession(false);
+      await loadDashboard(normalizedRole, session.user.id);
+    } catch (error: any) {
+      setErrorMessage(error?.message || "No se pudo validar la sesión.");
+      setCheckingSession(false);
+      setLoading(false);
     }
-
-    const auth = await getCurrentUserRole();
-    const normalizedRole = normalizeRoleCode(auth.roleCode);
-    const normalizedAllRoles = Array.from(
-      new Set(
-        (auth.allRoleCodes || [])
-          .map((role) => normalizeRoleCode(role))
-          .filter(Boolean),
-      ),
-    ) as string[];
-
-    setCurrentRoleCode(normalizedRole);
-    setCurrentRoleName(auth.roleName);
-    setAllRoleCodes(normalizedAllRoles);
-    setAllRoleNames(auth.allRoleNames || []);
-    setCurrentUserId(session.user.id);
-
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("full_name")
-      .eq("id", session.user.id)
-      .single();
-
-    setCurrentUserName(profile?.full_name || "Usuario");
-
-    const singleReceptionAccess =
-      normalizedRole === "recepcion" && normalizedAllRoles.length === 1;
-
-    const singleCommercialAccess =
-      normalizedRole === "comercial" && normalizedAllRoles.length === 1;
-
-    const singleAdminAccess =
-      normalizedRole === "administrador" && normalizedAllRoles.length === 1;
-
-    if (singleReceptionAccess) {
-      router.push("/recepcion");
-      return;
-    }
-
-    if (singleCommercialAccess) {
-      router.push("/comercial");
-      return;
-    }
-
-    if (singleAdminAccess) {
-      router.push("/admin");
-      return;
-    }
-
-    setCheckingSession(false);
-    loadDashboard(normalizedRole, session.user.id);
   }
 
   async function loadDashboard(roleCode?: string | null, userId?: string | null) {
@@ -324,13 +367,13 @@ export default function HomePage() {
 
   const visibleQuickActions = useMemo(() => {
     const effectiveRoles = Array.from(
-      new Set([...(allRoleCodes || []), ...(currentRoleCode ? [currentRoleCode] : [])].filter(Boolean)),
+      new Set([...(allRoleCodes || []), ...(currentRoleCode ? [currentRoleCode] : [])].filter(Boolean))
     );
 
     if (effectiveRoles.length === 0) return [];
 
     const base = quickActions.filter((action) =>
-      action.roles.some((role) => effectiveRoles.includes(role)),
+      action.roles.some((role) => effectiveRoles.includes(role))
     );
 
     if (effectiveRoles.includes("promotor_opc")) {
@@ -669,7 +712,9 @@ function LeadCard({
           <p className="mt-1 text-sm text-slate-600">
             {lead.phone} · {lead.city || "Sin ciudad"}
           </p>
-          <p className="mt-2 text-xs text-slate-500">{formatDate(lead.created_at)}</p>
+          <p className="mt-2 text-xs text-slate-500">
+            {formatDate(lead.created_at)}
+          </p>
         </div>
 
         <span className="inline-flex w-fit rounded-full border border-[#D6E8DA] bg-[#F4FAF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
