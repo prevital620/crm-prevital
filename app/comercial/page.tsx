@@ -46,6 +46,20 @@ type CommercialCase = {
   next_notes: string | null;
   next_appointment_created: boolean;
   next_appointment_id: string | null;
+  sale_origin_type: string | null;
+  lead_source_type: string | null;
+  commission_source_type: string | null;
+  call_contact_result: string | null;
+  call_user_id: string | null;
+  opc_user_id: string | null;
+  is_credit_payment: boolean | null;
+  credit_provider: string | null;
+  credit_discount_amount: number | null;
+  admin_discount_amount: number | null;
+  net_commission_base: number | null;
+  counts_for_commission: boolean | null;
+  counts_for_commercial_bonus: boolean | null;
+  gross_bonus_base: number | null;
   created_at: string;
 };
 
@@ -66,6 +80,15 @@ type InstallmentPlanItem = {
   number: number;
   date: string;
   value: number;
+};
+
+type LeadInheritance = {
+  id: string;
+  created_by_user_id: string | null;
+  assigned_to_user_id: string | null;
+  source: string | null;
+  status: string | null;
+  commission_source_type: string | null;
 };
 
 const allowedRoles = [
@@ -139,6 +162,45 @@ function paymentMethodLabel(value: string) {
 function nextStepLabel(value: string) {
   const found = nextStepOptions.find((item) => item.value === value);
   return found?.label || value || "No definida";
+}
+
+function leadSourceLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    opc: "OPC",
+    redes_sociales: "Redes sociales",
+    referido: "Referido",
+    evento: "Evento",
+    punto_fisico: "Punto físico",
+    otro: "Otro",
+  };
+  if (!value) return "Sin definir";
+  return map[value] || value;
+}
+
+function commissionSourceLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    opc: "OPC",
+    redes: "Redes",
+    base: "Base",
+    otro: "Otro",
+  };
+  if (!value) return "Sin definir";
+  return map[value] || value;
+}
+
+function callContactResultLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    pendiente_contacto: "Pendiente de contacto",
+    interesado: "Interesado",
+    no_responde: "No responde",
+    contactado: "Contactado",
+    agendado: "Agendado",
+    dato_falso: "Dato falso",
+    no_interesa: "No interesa",
+    no_asistio: "No asistió",
+  };
+  if (!value) return "Sin definir";
+  return map[value] || value;
 }
 
 function ahoraHora() {
@@ -264,6 +326,12 @@ function buildClosingNotes(
   return lines.join("\n").trim() || null;
 }
 
+function inferSaleOriginType(caseItem: CommercialCase) {
+  if (caseItem.commission_source_type === "base") return "lead";
+  if (caseItem.lead_id) return "lead";
+  return "directo";
+}
+
 export default function ComercialPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
@@ -319,6 +387,21 @@ export default function ComercialPage() {
   );
 
   const todayIso = useMemo(() => hoyISO(), []);
+
+  const currentCaseCommissionSummary = useMemo(() => {
+    if (!currentCase) return null;
+
+    return {
+      origenVenta: currentCase.sale_origin_type || inferSaleOriginType(currentCase),
+      origenLead: currentCase.lead_source_type || null,
+      fuenteComision: currentCase.commission_source_type || null,
+      resultadoCall: currentCase.call_contact_result || null,
+      descuentoCredito: Number(currentCase.credit_discount_amount || 0),
+      descuentoAdmin: Number(currentCase.admin_discount_amount || 0),
+      baseNeta: Number(currentCase.net_commission_base || 0),
+      proveedorCredito: currentCase.credit_provider || null,
+    };
+  }, [currentCase]);
 
   const calculatedVolume = useMemo(() => numberFromString(form.volume_amount), [form.volume_amount]);
   const calculatedCash = useMemo(() => numberFromString(form.cash_amount), [form.cash_amount]);
@@ -435,6 +518,20 @@ export default function ComercialPage() {
             next_notes,
             next_appointment_created,
             next_appointment_id,
+            sale_origin_type,
+            lead_source_type,
+            commission_source_type,
+            call_contact_result,
+            call_user_id,
+            opc_user_id,
+            is_credit_payment,
+            credit_provider,
+            credit_discount_amount,
+            admin_discount_amount,
+            net_commission_base,
+            counts_for_commission,
+            counts_for_commercial_bonus,
+            gross_bonus_base,
             created_at
           `)
           .order("created_at", { ascending: false }),
@@ -660,6 +757,19 @@ export default function ComercialPage() {
     });
   }
 
+  async function obtenerHerenciaLead(leadId: string | null) {
+    if (!leadId) return null;
+
+    const { data, error } = await supabase
+      .from("leads")
+      .select("id, created_by_user_id, assigned_to_user_id, source, status, commission_source_type")
+      .eq("id", leadId)
+      .maybeSingle();
+
+    if (error) throw error;
+    return (data as LeadInheritance | null) || null;
+  }
+
   async function guardarCaso(finalizar: boolean) {
     if (!editingCaseId || !currentUserId) {
       setError("No se encontró el caso o el usuario actual.");
@@ -672,6 +782,7 @@ export default function ComercialPage() {
 
     try {
       const currentCaseFound = cases.find((item) => item.id === editingCaseId);
+      const leadInheritance = await obtenerHerenciaLead(currentCaseFound?.lead_id || null);
       const statusFinal = finalizar ? "finalizado" : "en_atencion_comercial";
       const volumeNumber = numberFromString(form.volume_amount);
       const cashNumber = numberFromString(form.cash_amount);
@@ -697,6 +808,13 @@ export default function ComercialPage() {
           ? currentCaseFound.sale_result
           : saleOutcome;
 
+      const paymentMethod = form.payment_method || null;
+      const isCreditPayment = ["addi", "welly", "medipay"].includes(paymentMethod || "");
+      const creditDiscountAmount = isCreditPayment ? Math.round(cashNumber * 0.1) : 0;
+      const adminDiscountAmount = 200000;
+      const netCommissionBase = Math.max(0, cashNumber - creditDiscountAmount - adminDiscountAmount);
+      const grossBonusBase = volumeNumber || 0;
+
       const updatePayload: any = {
         status: statusFinal,
         commercial_notes: form.commercial_notes.trim() || null,
@@ -705,11 +823,28 @@ export default function ComercialPage() {
         sale_result: preservedReceptionSummary,
         purchased_service: form.purchased_service || null,
         sale_value: volumeNumber || null,
-        payment_method: form.payment_method || null,
+        payment_method: paymentMethod,
         cash_amount: cashNumber || null,
         portfolio_amount: portfolioNumber || null,
         volume_amount: volumeNumber || null,
         closing_notes: closingNotes,
+        sale_origin_type: leadInheritance ? "lead" : "directo",
+        lead_source_type: leadInheritance?.source || currentCaseFound?.lead_source_type || null,
+        commission_source_type:
+          leadInheritance?.commission_source_type ||
+          currentCaseFound?.commission_source_type ||
+          null,
+        call_contact_result: leadInheritance?.status || currentCaseFound?.call_contact_result || null,
+        call_user_id: leadInheritance?.assigned_to_user_id || currentCaseFound?.call_user_id || null,
+        opc_user_id: leadInheritance?.created_by_user_id || currentCaseFound?.opc_user_id || null,
+        is_credit_payment: isCreditPayment,
+        credit_provider: isCreditPayment ? paymentMethod : null,
+        credit_discount_amount: creditDiscountAmount,
+        admin_discount_amount: adminDiscountAmount,
+        net_commission_base: netCommissionBase,
+        counts_for_commission: hayVenta,
+        counts_for_commercial_bonus: hayVenta,
+        gross_bonus_base: grossBonusBase || null,
         next_step_type: form.next_step_type || null,
         next_appointment_date: form.next_step_type ? form.next_appointment_date : null,
         next_appointment_time: form.next_step_type ? form.next_appointment_time : null,
@@ -927,7 +1062,7 @@ export default function ComercialPage() {
                 </div>
 
                 {currentCase ? (
-                  <div className="grid gap-4 xl:grid-cols-2">
+                  <div className="grid gap-4 xl:grid-cols-3">
                     <div className="rounded-2xl border border-[#D6E8DA] bg-white p-4 shadow-sm">
                       <h3 className="text-lg font-semibold text-[#24312A]">
                         Información básica
@@ -954,6 +1089,29 @@ export default function ComercialPage() {
                       ) : (
                         <p className="mt-3 text-sm text-slate-500">
                           Aquí aparecerá todo lo que recepción haya guardado dentro del ingreso comercial.
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="rounded-2xl border border-[#D6E8DA] bg-white p-4 shadow-sm">
+                      <h3 className="text-lg font-semibold text-[#24312A]">
+                        Trazabilidad para admin
+                      </h3>
+
+                      {currentCaseCommissionSummary ? (
+                        <div className="mt-3 grid gap-3 text-sm text-slate-700">
+                          <InfoItem label="Origen de venta" value={currentCaseCommissionSummary.origenVenta === "lead" ? "Lead" : "Directo"} />
+                          <InfoItem label="Origen real del lead" value={leadSourceLabel(currentCaseCommissionSummary.origenLead)} />
+                          <InfoItem label="Fuente para comisión" value={commissionSourceLabel(currentCaseCommissionSummary.fuenteComision)} />
+                          <InfoItem label="Resultado Call" value={callContactResultLabel(currentCaseCommissionSummary.resultadoCall)} />
+                          <InfoItem label="Proveedor crédito" value={currentCaseCommissionSummary.proveedorCredito || "No aplica"} />
+                          <InfoItem label="Descuento crédito" value={currentCaseCommissionSummary.descuentoCredito > 0 ? `$${currentCaseCommissionSummary.descuentoCredito.toLocaleString("es-CO")}` : "$0"} />
+                          <InfoItem label="Descuento admin" value={`$${currentCaseCommissionSummary.descuentoAdmin.toLocaleString("es-CO")}`} />
+                          <InfoItem label="Base neta comisionable" value={`$${currentCaseCommissionSummary.baseNeta.toLocaleString("es-CO")}`} />
+                        </div>
+                      ) : (
+                        <p className="mt-3 text-sm text-slate-500">
+                          La trazabilidad administrativa se completará cuando guardes avances o finalices el caso.
                         </p>
                       )}
                     </div>
