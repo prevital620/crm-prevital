@@ -809,13 +809,14 @@ export default function ComercialPage() {
           : saleOutcome;
 
       const paymentMethod = form.payment_method || null;
-      const isCreditPayment = ["addi", "welly", "medipay"].includes(paymentMethod || "");
-      const creditDiscountAmount = isCreditPayment ? Math.round(cashNumber * 0.1) : 0;
-      const adminDiscountAmount = 200000;
-      const netCommissionBase = Math.max(0, cashNumber - creditDiscountAmount - adminDiscountAmount);
-      const grossBonusBase = volumeNumber || 0;
+const isCreditPayment = ["addi", "welly", "medipay"].includes(paymentMethod || "");
+const creditDiscountAmount = isCreditPayment ? Math.round(cashNumber * 0.1) : 0;
+const adminDiscountAmount = 200000;
+const netCommissionBase = Math.max(0, cashNumber - creditDiscountAmount - adminDiscountAmount);
+const grossBonusBase = volumeNumber || 0;
+const hayVenta = volumeNumber > 0 || !!form.purchased_service;
 
-      const updatePayload: any = {
+const updatePayload: any = {
         status: statusFinal,
         commercial_notes: form.commercial_notes.trim() || null,
         sales_assessment: form.sales_assessment.trim() || null,
@@ -858,7 +859,6 @@ export default function ComercialPage() {
         updatePayload.closed_at = new Date().toISOString();
       }
 
-      const hayVenta = volumeNumber > 0 || !!form.purchased_service;
 
       if (
         statusFinal === "finalizado" &&
