@@ -363,28 +363,6 @@ export default function AdminPage() {
     };
   }, [ventasFiltradas]);
 
-  if (loadingAuth) {
-    return (
-      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">Validando acceso...</p>
-        </div>
-      </main>
-    );
-  }
-
-  if (!authorized) {
-    return (
-      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-red-700">
-            {error || "No tienes permiso para entrar a este módulo."}
-          </p>
-        </div>
-      </main>
-    );
-  }
-
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -399,245 +377,268 @@ export default function AdminPage() {
         </div>
       </div>
 
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
-            <Image
-              src="/prevital-logo.jpeg"
-              alt="Prevital"
-              fill
-              className="object-contain p-1"
-              priority
-            />
+      {loadingAuth ? (
+        <div className="mx-auto max-w-7xl">
+          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <p className="text-sm text-slate-500">Validando acceso...</p>
           </div>
         </div>
-
-        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
-
-          <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-            <div>
-              <p className="text-sm font-medium text-[#7FA287]">Admin</p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Resumen administrativo</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Vista simple enfocada solo en ventas reales, cartera, caja y base neta.
-              </p>
-            </div>
-
-            <SessionBadge />
+      ) : !authorized ? (
+        <div className="mx-auto max-w-7xl">
+          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <p className="text-sm font-medium text-red-700">
+              {error || "No tienes permiso para entrar a este módulo."}
+            </p>
           </div>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            <a
-              href="/"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Inicio
-            </a>
-
-            <button
-              type="button"
-              onClick={() => void cargarDatos()}
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Actualizar
-            </button>
-
-            <a
-              href="/admin/comisiones"
-              className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
-            >
-              Ver comisiones
-            </a>
-          </div>
-        </section>
-
-        {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {error}
-          </div>
-        ) : null}
-
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-          <StatCard title="Ventas del día" value={String(ventasHoy.total)} subtitle="Ventas reales hoy" />
-          <StatCard title="Volumen del día" value={formatMoney(ventasHoy.volumen)} subtitle="Ventas reales hoy" />
-          <StatCard title="Caja del día" value={formatMoney(ventasHoy.caja)} subtitle="Pagado hoy" />
-          <StatCard title="Cartera del día" value={formatMoney(ventasHoy.cartera)} subtitle="Pendiente hoy" />
-        </section>
-
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Desde</label>
-              <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
+        </div>
+      ) : (
+        <div className="mx-auto max-w-7xl space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+              <Image
+                src="/prevital-logo.jpeg"
+                alt="Prevital"
+                fill
+                className="object-contain p-1"
+                priority
               />
             </div>
+          </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Hasta</label>
-              <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-              />
+          <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="text-sm font-medium text-[#7FA287]">Admin</p>
+                <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Resumen administrativo</h1>
+                <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+                  Vista simple enfocada solo en ventas reales, cartera, caja y base neta.
+                </p>
+              </div>
+
+              <SessionBadge />
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Área o rol</label>
-              <select
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                value={areaFilter}
-                onChange={(e) => setAreaFilter(e.target.value)}
+            <div className="mt-4 flex flex-wrap gap-3">
+              <a
+                href="/"
+                className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
               >
-                <option value="">Todos</option>
-                {areaOptions.map((item) => (
-                  <option key={item} value={item}>
-                    {item}
-                  </option>
-                ))}
-              </select>
-            </div>
+                Inicio
+              </a>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Colaborador</label>
-              <select
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                value={collaboratorFilter}
-                onChange={(e) => setCollaboratorFilter(e.target.value)}
+              <button
+                type="button"
+                onClick={() => void cargarDatos()}
+                className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
               >
-                <option value="">Todos</option>
-                {filteredCollaboratorOptions.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name}
-                  </option>
-                ))}
-              </select>
+                Actualizar
+              </button>
+
+              <a
+                href="/admin/comisiones"
+                className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+              >
+                Ver comisiones
+              </a>
+
+              <a
+                href="/admin/cartera"
+                className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              >
+                Ver cartera
+              </a>
+            </div>
+          </section>
+
+          {error ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {error}
+            </div>
+          ) : null}
+
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Ventas del día" value={String(ventasHoy.total)} subtitle="Ventas reales hoy" />
+            <StatCard title="Volumen del día" value={formatMoney(ventasHoy.volumen)} subtitle="Ventas reales hoy" />
+            <StatCard title="Caja del día" value={formatMoney(ventasHoy.caja)} subtitle="Pagado hoy" />
+            <StatCard title="Cartera del día" value={formatMoney(ventasHoy.cartera)} subtitle="Pendiente hoy" />
+          </section>
+
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Desde</label>
+                <input
+                  className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                  type="date"
+                  value={dateFrom}
+                  onChange={(e) => setDateFrom(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Hasta</label>
+                <input
+                  className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                  type="date"
+                  value={dateTo}
+                  onChange={(e) => setDateTo(e.target.value)}
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Área o rol</label>
+                <select
+                  className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                  value={areaFilter}
+                  onChange={(e) => setAreaFilter(e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {areaOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Colaborador</label>
+                <select
+                  className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                  value={collaboratorFilter}
+                  onChange={(e) => setCollaboratorFilter(e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {filteredCollaboratorOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Buscar</label>
+                <input
+                  className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                  placeholder="Cliente, teléfono, ciudad o colaborador"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
             </div>
 
-            <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Buscar</label>
-              <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                placeholder="Cliente, teléfono, ciudad o colaborador"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            <div className="mt-4 flex flex-wrap gap-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setDateFrom(hoyISO());
+                  setDateTo(hoyISO());
+                }}
+                className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              >
+                Hoy
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setDateFrom(inicioMesISO());
+                  setDateTo(hoyISO());
+                  setAreaFilter("");
+                  setCollaboratorFilter("");
+                  setSearch("");
+                }}
+                className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              >
+                Limpiar filtros
+              </button>
             </div>
-          </div>
+          </section>
 
-          <div className="mt-4 flex flex-wrap gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                setDateFrom(hoyISO());
-                setDateTo(hoyISO());
-              }}
-              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Hoy
-            </button>
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <StatCard title="Ventas del rango" value={String(resumenRango.total)} subtitle="Solo ventas reales" />
+            <StatCard title="Volumen del rango" value={formatMoney(resumenRango.volumen)} subtitle="Suma del rango" />
+            <StatCard title="Caja del rango" value={formatMoney(resumenRango.caja)} subtitle="Pagado en el rango" />
+            <StatCard title="Cartera del rango" value={formatMoney(resumenRango.cartera)} subtitle="Pendiente por cobrar" />
+            <StatCard title="Base neta del rango" value={formatMoney(resumenRango.baseNeta)} subtitle="Base comisionable" />
+          </section>
 
-            <button
-              type="button"
-              onClick={() => {
-                setDateFrom(inicioMesISO());
-                setDateTo(hoyISO());
-                setAreaFilter("");
-                setCollaboratorFilter("");
-                setSearch("");
-              }}
-              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Limpiar filtros
-            </button>
-          </div>
-        </section>
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-bold text-slate-900">Ventas reales del rango</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Solo aparecen registros con volumen, caja o cartera mayor a cero.
+                </p>
+              </div>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard title="Ventas del rango" value={String(resumenRango.total)} subtitle="Solo ventas reales" />
-          <StatCard title="Volumen del rango" value={formatMoney(resumenRango.volumen)} subtitle="Suma del rango" />
-          <StatCard title="Caja del rango" value={formatMoney(resumenRango.caja)} subtitle="Pagado en el rango" />
-          <StatCard title="Cartera del rango" value={formatMoney(resumenRango.cartera)} subtitle="Pendiente por cobrar" />
-          <StatCard title="Base neta del rango" value={formatMoney(resumenRango.baseNeta)} subtitle="Base comisionable" />
-        </section>
-
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-slate-900">Ventas reales del rango</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Solo aparecen registros con volumen, caja o cartera mayor a cero.
-              </p>
+              <a
+                href="/admin/comisiones"
+                className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              >
+                Ir a comisiones
+              </a>
             </div>
 
-            <a
-              href="/admin/comisiones"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
-            >
-              Ir a comisiones
-            </a>
-          </div>
+            {loading ? (
+              <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                Cargando ventas...
+              </div>
+            ) : ventasFiltradas.length === 0 ? (
+              <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                No hay ventas reales para esos filtros.
+              </div>
+            ) : (
+              <div className="mt-5 overflow-auto">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-slate-500">
+                      <th className="px-3 py-3">Cliente</th>
+                      <th className="px-3 py-3">Fecha</th>
+                      <th className="px-3 py-3">Colaborador</th>
+                      <th className="px-3 py-3">Área</th>
+                      <th className="px-3 py-3">Volumen</th>
+                      <th className="px-3 py-3">Caja</th>
+                      <th className="px-3 py-3">Cartera</th>
+                      <th className="px-3 py-3">Base neta</th>
+                      <th className="px-3 py-3">Pago</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ventasFiltradas.map((item) => {
+                      const profile = item.assigned_commercial_user_id
+                        ? profileMap.get(item.assigned_commercial_user_id)
+                        : null;
 
-          {loading ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              Cargando ventas...
-            </div>
-          ) : ventasFiltradas.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              No hay ventas reales para esos filtros.
-            </div>
-          ) : (
-            <div className="mt-5 overflow-auto">
-              <table className="min-w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-500">
-                    <th className="px-3 py-3">Cliente</th>
-                    <th className="px-3 py-3">Fecha</th>
-                    <th className="px-3 py-3">Colaborador</th>
-                    <th className="px-3 py-3">Área</th>
-                    <th className="px-3 py-3">Volumen</th>
-                    <th className="px-3 py-3">Caja</th>
-                    <th className="px-3 py-3">Cartera</th>
-                    <th className="px-3 py-3">Base neta</th>
-                    <th className="px-3 py-3">Pago</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {ventasFiltradas.map((item) => {
-                    const profile = item.assigned_commercial_user_id
-                      ? profileMap.get(item.assigned_commercial_user_id)
-                      : null;
-
-                    return (
-                      <tr key={item.id} className="border-b border-slate-100 align-top">
-                        <td className="px-3 py-3">
-                          <div className="font-medium text-slate-900">{item.customer_name}</div>
-                          <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">{formatDateTime(item.created_at)}</td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {profile?.full_name || "Sin asignar"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">{normalizeArea(profile?.job_title)}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.net_commission_base || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{paymentMethodLabel(item.payment_method)}</td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </section>
-      </div>
+                      return (
+                        <tr key={item.id} className="border-b border-slate-100 align-top">
+                          <td className="px-3 py-3">
+                            <div className="font-medium text-slate-900">{item.customer_name}</div>
+                            <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
+                          </td>
+                          <td className="px-3 py-3 text-slate-700">{formatDateTime(item.created_at)}</td>
+                          <td className="px-3 py-3 text-slate-700">
+                            {profile?.full_name || "Sin asignar"}
+                          </td>
+                          <td className="px-3 py-3 text-slate-700">{normalizeArea(profile?.job_title)}</td>
+                          <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
+                          <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
+                          <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
+                          <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.net_commission_base || 0))}</td>
+                          <td className="px-3 py-3 text-slate-700">{paymentMethodLabel(item.payment_method)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
     </main>
   );
 }
