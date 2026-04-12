@@ -161,7 +161,7 @@ const quickActions: QuickAction[] = [
     title: "Admin",
     subtitle: "Ver resumen administrativo, ventas, cartera y base comisionable.",
     href: "/admin",
-    roles: ["super_user", "gerente", "gerente_comercial", "gerencia_comercial"],
+    roles: ["super_user", "gerente", "gerente_comercial", "gerencia_comercial", "administrador"],
   },
 ];
 
@@ -223,6 +223,10 @@ export default function HomePage() {
       normalizedRole === "comercial" &&
       normalizedAllRoles.length === 1;
 
+    const singleAdminAccess =
+      normalizedRole === "administrador" &&
+      normalizedAllRoles.length === 1;
+
     if (singleReceptionAccess) {
       router.push("/recepcion");
       return;
@@ -230,6 +234,11 @@ export default function HomePage() {
 
     if (singleCommercialAccess) {
       router.push("/comercial");
+      return;
+    }
+
+    if (singleAdminAccess) {
+      router.push("/admin");
       return;
     }
 

@@ -30,6 +30,7 @@ const allowedRoles = [
   "gerente",
   "gerente_comercial",
   "gerencia_comercial",
+  "administrador",
 ];
 
 function hoyISO() {
