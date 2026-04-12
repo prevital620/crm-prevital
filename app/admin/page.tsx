@@ -454,6 +454,13 @@ export default function AdminPage() {
             >
               Actualizar
             </button>
+
+            <a
+              href="/admin/comisiones"
+              className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+            >
+              Ver comisiones
+            </a>
           </div>
         </section>
 
@@ -643,10 +650,14 @@ export default function AdminPage() {
 
           <div className="space-y-6">
             <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">Resumen por fuente</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Así puedes ver de dónde viene el negocio del rango filtrado.
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Resumen por fuente</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Así puedes ver de dónde viene el negocio del rango filtrado.
+                  </p>
+                </div>
+              </div>
 
               <div className="mt-5 space-y-3">
                 {resumenPorFuente.map((item) => (
@@ -668,10 +679,20 @@ export default function AdminPage() {
             </div>
 
             <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">Trazabilidad rápida</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Vista resumida del origen que está llegando al área administrativa.
-              </p>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-2xl font-bold text-slate-900">Trazabilidad rápida</h2>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Vista resumida del origen que está llegando al área administrativa.
+                  </p>
+                </div>
+                <a
+                  href="/admin/comisiones"
+                  className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                >
+                  Ir a comisiones
+                </a>
+              </div>
 
               <div className="mt-5 space-y-3">
                 {filteredCases.slice(0, 5).map((item) => (
