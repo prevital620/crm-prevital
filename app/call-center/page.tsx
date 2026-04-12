@@ -21,7 +21,6 @@ type Lead = {
   created_at: string;
   created_by_user_id: string | null;
   assigned_to_user_id: string | null;
-  commission_source_type: string | null;
 };
 
 type CallCenterUser = {
@@ -55,8 +54,6 @@ type QuickFilter =
   | "no_asistio"
   | "cerrados";
 
-type CommissionSourceType = "opc" | "redes" | "base" | "otro";
-
 const statusOptions = [
   { value: "nuevo", label: "Nuevo" },
   { value: "pendiente_contacto", label: "Pendiente" },
@@ -66,13 +63,6 @@ const statusOptions = [
   { value: "agendado", label: "Agendado" },
   { value: "dato_falso", label: "Dato falso" },
   { value: "no_interesa", label: "No interesa" },
-];
-
-const commissionSourceOptions: Array<{ value: CommissionSourceType; label: string }> = [
-  { value: "opc", label: "OPC" },
-  { value: "redes", label: "Redes" },
-  { value: "base", label: "Base" },
-  { value: "otro", label: "Otro" },
 ];
 
 const allowedRoles = [
@@ -174,18 +164,6 @@ function traducirOrigen(source: string | null) {
   return map[source] || source;
 }
 
-function traducirFuenteComision(value: string | null) {
-  const map: Record<string, string> = {
-    opc: "OPC",
-    redes: "Redes",
-    base: "Base",
-    otro: "Otro",
-  };
-
-  if (!value) return "Sin definir";
-  return map[value] || value;
-}
-
 const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "todos", label: "Todos" },
   { key: "nuevos", label: "Nuevos" },
@@ -214,7 +192,6 @@ export default function CallCenterPage() {
   const [busqueda, setBusqueda] = useState("");
   const [selectedAssignments, setSelectedAssignments] = useState<Record<string, string>>({});
   const [selectedStatuses, setSelectedStatuses] = useState<Record<string, string>>({});
-  const [selectedCommissionSources, setSelectedCommissionSources] = useState<Record<string, CommissionSourceType | "">>({});
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [savingStatusLeadId, setSavingStatusLeadId] = useState<string | null>(null);
   const [cancelingAppointmentId, setCancelingAppointmentId] = useState<string | null>(null);
@@ -224,7 +201,7 @@ export default function CallCenterPage() {
     const { data, error } = await supabase
       .from("leads")
       .select(
-        "id, first_name, last_name, full_name, phone, city, interest_service, capture_location, source, status, observations, created_at, created_by_user_id, assigned_to_user_id, commission_source_type"
+        "id, first_name, last_name, full_name, phone, city, interest_service, capture_location, source, status, observations, created_at, created_by_user_id, assigned_to_user_id"
       )
       .order("created_at", { ascending: false });
 
@@ -344,17 +321,14 @@ export default function CallCenterPage() {
 
       const assignments: Record<string, string> = {};
       const statuses: Record<string, string> = {};
-      const commissionSources: Record<string, CommissionSourceType | ""> = {};
 
       leadsData.forEach((lead) => {
         assignments[lead.id] = lead.assigned_to_user_id || "";
         statuses[lead.id] = lead.status || "nuevo";
-        commissionSources[lead.id] = (lead.commission_source_type as CommissionSourceType | null) || "";
       });
 
       setSelectedAssignments(assignments);
       setSelectedStatuses(statuses);
-      setSelectedCommissionSources(commissionSources);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los datos del módulo.");
     } finally {
@@ -473,46 +447,6 @@ export default function CallCenterPage() {
       setError(err?.message || "No se pudo actualizar el estado.");
     } finally {
       setSavingStatusLeadId(null);
-    }
-  }
-
-  async function guardarFuenteComision(leadId: string) {
-    try {
-      const commissionSource = selectedCommissionSources[leadId] || null;
-
-      setSavingLeadId(leadId);
-      setMensaje("");
-      setError("");
-
-      const { error } = await supabase
-        .from("leads")
-        .update({
-          commission_source_type: commissionSource,
-        })
-        .eq("id", leadId);
-
-      if (error) {
-        console.error("Error guardando fuente de comisión:", error);
-        throw new Error(error.message || "No se pudo guardar la fuente de comisión.");
-      }
-
-      setLeads((prev) =>
-        prev.map((lead) =>
-          lead.id === leadId
-            ? { ...lead, commission_source_type: commissionSource }
-            : lead
-        )
-      );
-
-      setMensaje(
-        commissionSource
-          ? "Fuente de comisión guardada correctamente."
-          : "Se quitó la fuente de comisión correctamente."
-      );
-    } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la fuente de comisión.");
-    } finally {
-      setSavingLeadId(null);
     }
   }
 
@@ -797,12 +731,28 @@ export default function CallCenterPage() {
             </a>
 
             {(currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user") && (
-              <a
-                href="/recepcion"
-                className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
-              >
-                Configurar cupos
-              </a>
+              <>
+                <a
+                  href="/leads/nuevo"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                >
+                  Nuevo lead
+                </a>
+
+                <a
+                  href="/recepcion"
+                  className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
+                >
+                  Agenda visible
+                </a>
+
+                <a
+                  href="/recepcion"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                >
+                  Configurar cupos
+                </a>
+              </>
             )}
           </div>
         </section>
@@ -941,7 +891,6 @@ export default function CallCenterPage() {
                             <p>{lead.phone || "Sin teléfono"} · {lead.city || "Sin ciudad"}</p>
                             <p>Servicio: {traducirServicio(lead.interest_service)}</p>
                             <p>Origen: {traducirOrigen(lead.source)}</p>
-                            <p>Fuente comisión: {traducirFuenteComision(lead.commission_source_type)}</p>
                             <p>Captación: {lead.capture_location || "No registrado"}</p>
                             <p>Creado por: {creatorNames[lead.created_by_user_id || ""] || "Sin nombre"}</p>
                             <p className="text-[#4F6F5B]">
@@ -1033,43 +982,6 @@ export default function CallCenterPage() {
                           </div>
                         </div>
                       ) : null}
-
-                      <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
-                        <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
-                          Fuente para comisión
-                        </p>
-
-                        <div className="flex flex-col gap-3 md:flex-row">
-                          <select
-                            className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
-                            value={selectedCommissionSources[lead.id] || ""}
-                            onChange={(e) =>
-                              setSelectedCommissionSources((prev) => ({
-                                ...prev,
-                                [lead.id]: e.target.value as CommissionSourceType | "",
-                              }))
-                            }
-                          >
-                            <option value="">Sin definir</option>
-                            {commissionSourceOptions.map((item) => (
-                              <option key={item.value} value={item.value}>
-                                {item.label}
-                              </option>
-                            ))}
-                          </select>
-
-                          <button
-                            type="button"
-                            onClick={() => guardarFuenteComision(lead.id)}
-                            disabled={savingLeadId === lead.id}
-                            className="rounded-2xl border border-[#5F7D66] bg-white px-5 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
-                          >
-                            {savingLeadId === lead.id
-                              ? "Guardando..."
-                              : "Guardar fuente"}
-                          </button>
-                        </div>
-                      </div>
 
                       {canChangeStatus ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
