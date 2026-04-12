@@ -9,40 +9,21 @@ import SessionBadge from "@/components/session-badge";
 type AdminCommercialCase = {
   id: string;
   customer_name: string;
+  phone: string | null;
+  city: string | null;
   created_at: string;
   volume_amount: number | null;
   cash_amount: number | null;
   portfolio_amount: number | null;
   net_commission_base: number | null;
+  payment_method: string | null;
   assigned_commercial_user_id: string | null;
 };
 
-type Profile = {
+type ProfileOption = {
   id: string;
   full_name: string;
-};
-
-type ProfileRole = {
-  profile_id: string;
-  role_id: string;
-};
-
-type Role = {
-  id: string;
-  name: string;
-  code: string;
-};
-
-type CollaboratorRow = {
-  id: string;
-  full_name: string;
-  roleCodes: string[];
-  roleLabels: string[];
-  ventas: number;
-  volumen: number;
-  caja: number;
-  cartera: number;
-  baseNeta: number;
+  job_title: string | null;
 };
 
 const allowedRoles = [
@@ -52,43 +33,6 @@ const allowedRoles = [
   "gerencia_comercial",
   "administrador",
 ];
-
-const roleGroupOptions = [
-  { value: "promotor_opc", label: "OPC" },
-  { value: "confirmador", label: "Call center" },
-  { value: "tmk", label: "TMK" },
-  { value: "supervisor_opc", label: "Supervisor OPC" },
-  { value: "supervisor_call_center", label: "Supervisor call" },
-  { value: "comercial", label: "Comercial" },
-  { value: "gerencia_comercial", label: "Gerencia comercial" },
-  { value: "administrador", label: "Administrador" },
-];
-
-function normalizeRoleCode(roleCode?: string | null) {
-  if (!roleCode) return null;
-
-  if (
-    roleCode === "gerente" ||
-    roleCode === "gerente_comercial" ||
-    roleCode === "gerencia_comercial"
-  ) {
-    return "gerencia_comercial";
-  }
-
-  return roleCode;
-}
-
-function hasAdminAccess(roleCode?: string | null, allRoleCodes?: string[]) {
-  const roles = Array.from(
-    new Set(
-      [roleCode, ...(allRoleCodes || [])]
-        .map((item) => normalizeRoleCode(item))
-        .filter(Boolean),
-    ),
-  ) as string[];
-
-  return roles.some((role) => allowedRoles.includes(role));
-}
 
 function hoyISO() {
   const hoy = new Date();
@@ -121,6 +65,47 @@ function formatDateTime(value: string | null | undefined) {
   }
 }
 
+function paymentMethodLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    contado: "Contado",
+    tarjeta: "Tarjeta",
+    transferencia: "Transferencia",
+    mixto: "Mixto",
+    cartera: "Cartera",
+    addi: "Addi",
+    welly: "Welly",
+    medipay: "Medipay",
+  };
+
+  if (!value) return "Sin definir";
+  return map[value] || value;
+}
+
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+}
+
+function normalizeArea(jobTitle: string | null | undefined) {
+  const value = normalizeText(jobTitle);
+
+  if (!value) return "Sin rol";
+  if (value.includes("promotor") || value.includes("opc")) return "OPC";
+  if (value.includes("call")) return "Call center";
+  if (value.includes("tmk")) return "TMK";
+  if (value.includes("supervisor opc")) return "Supervisor OPC";
+  if (value.includes("supervisor") && value.includes("call")) return "Supervisor Call";
+  if (value.includes("supervisor")) return "Supervisor";
+  if (value.includes("comercial")) return "Comercial";
+  if (value.includes("gerencia comercial") || value.includes("gerente comercial")) return "Gerencia comercial";
+  if (value.includes("admin")) return "Administrador";
+
+  return jobTitle || "Sin rol";
+}
+
 function StatCard({
   title,
   value,
@@ -144,18 +129,16 @@ export default function AdminComisionesPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   const [cases, setCases] = useState<AdminCommercialCase[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [profileRoles, setProfileRoles] = useState<ProfileRole[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
+  const [error, setError] = useState("");
 
   const [dateFrom, setDateFrom] = useState(inicioMesISO());
   const [dateTo, setDateTo] = useState(hoyISO());
   const [search, setSearch] = useState("");
-  const [roleGroupFilter, setRoleGroupFilter] = useState("");
   const [collaboratorFilter, setCollaboratorFilter] = useState("");
+  const [areaFilter, setAreaFilter] = useState("");
 
   async function validarAcceso() {
     try {
@@ -164,13 +147,13 @@ export default function AdminComisionesPage() {
 
       const auth = await getCurrentUserRole();
 
-      if (!auth.user) {
+      if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
         setError("Debes iniciar sesión para usar este módulo.");
         return;
       }
 
-      if (!hasAdminAccess(auth.roleCode, auth.allRoleCodes || [])) {
+      if (!allowedRoles.includes(auth.roleCode)) {
         setAuthorized(false);
         setError("No tienes permiso para entrar a Comisiones.");
         return;
@@ -190,36 +173,34 @@ export default function AdminComisionesPage() {
       setLoading(true);
       setError("");
 
-      const [casesResult, profilesResult, profileRolesResult, rolesResult] = await Promise.all([
+      const [casesResult, profilesResult] = await Promise.all([
         supabase
           .from("commercial_cases")
-          .select(
-            `
+          .select(`
             id,
             customer_name,
+            phone,
+            city,
             created_at,
             volume_amount,
             cash_amount,
             portfolio_amount,
             net_commission_base,
+            payment_method,
             assigned_commercial_user_id
-          `,
-          )
+          `)
           .order("created_at", { ascending: false }),
-        supabase.from("profiles").select("id, full_name").order("full_name", { ascending: true }),
-        supabase.from("profile_roles").select("profile_id, role_id"),
-        supabase.from("roles").select("id, name, code").order("name", { ascending: true }),
+        supabase
+          .from("profiles")
+          .select("id, full_name, job_title")
+          .order("full_name", { ascending: true }),
       ]);
 
       if (casesResult.error) throw casesResult.error;
       if (profilesResult.error) throw profilesResult.error;
-      if (profileRolesResult.error) throw profileRolesResult.error;
-      if (rolesResult.error) throw rolesResult.error;
 
       setCases((casesResult.data as AdminCommercialCase[]) || []);
-      setProfiles((profilesResult.data as Profile[]) || []);
-      setProfileRoles((profileRolesResult.data as ProfileRole[]) || []);
-      setRoles((rolesResult.data as Role[]) || []);
+      setProfiles((profilesResult.data as ProfileOption[]) || []);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los datos de comisiones.");
     } finally {
@@ -237,41 +218,29 @@ export default function AdminComisionesPage() {
     }
   }, [authorized]);
 
-  const roleMap = useMemo(() => {
-    const map = new Map<string, Role>();
-    roles.forEach((role) => map.set(role.id, role));
-    return map;
-  }, [roles]);
-
   const profileMap = useMemo(() => {
-    const map = new Map<string, Profile>();
-    profiles.forEach((profile) => map.set(profile.id, profile));
+    const map = new Map<string, ProfileOption>();
+    profiles.forEach((item) => map.set(item.id, item));
     return map;
   }, [profiles]);
 
-  const rolesByProfile = useMemo(() => {
-    const map = new Map<string, { codes: string[]; labels: string[] }>();
+  const collaboratorOptions = useMemo(() => {
+    return profiles.map((profile) => ({
+      id: profile.id,
+      name: profile.full_name || "Sin nombre",
+      area: normalizeArea(profile.job_title),
+    }));
+  }, [profiles]);
 
-    profileRoles.forEach((item) => {
-      const role = roleMap.get(item.role_id);
-      if (!role) return;
+  const areaOptions = useMemo(() => {
+    const unique = new Set<string>();
 
-      const normalizedCode = normalizeRoleCode(role.code) || role.code;
-      const current = map.get(item.profile_id) || { codes: [], labels: [] };
-
-      if (!current.codes.includes(normalizedCode)) {
-        current.codes.push(normalizedCode);
-      }
-
-      if (!current.labels.includes(role.name)) {
-        current.labels.push(role.name);
-      }
-
-      map.set(item.profile_id, current);
+    collaboratorOptions.forEach((item) => {
+      if (item.area) unique.add(item.area);
     });
 
-    return map;
-  }, [profileRoles, roleMap]);
+    return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
+  }, [collaboratorOptions]);
 
   const ventasReales = useMemo(() => {
     return cases.filter((item) => {
@@ -282,74 +251,37 @@ export default function AdminComisionesPage() {
     });
   }, [cases]);
 
-  const collaboratorRows = useMemo<CollaboratorRow[]>(() => {
-    const map = new Map<string, CollaboratorRow>();
-
-    ventasReales.forEach((item) => {
-      const profileId = item.assigned_commercial_user_id || "sin_asignar";
-      const profile = profileMap.get(profileId);
-      const roleData = rolesByProfile.get(profileId) || { codes: [], labels: [] };
-      const current = map.get(profileId) || {
-        id: profileId,
-        full_name: profile?.full_name || (profileId === "sin_asignar" ? "Sin asignar" : "Sin nombre"),
-        roleCodes: roleData.codes,
-        roleLabels: roleData.labels,
-        ventas: 0,
-        volumen: 0,
-        caja: 0,
-        cartera: 0,
-        baseNeta: 0,
-      };
-
-      current.ventas += 1;
-      current.volumen += Number(item.volume_amount || 0);
-      current.caja += Number(item.cash_amount || 0);
-      current.cartera += Number(item.portfolio_amount || 0);
-      current.baseNeta += Number(item.net_commission_base || 0);
-
-      map.set(profileId, current);
-    });
-
-    return Array.from(map.values()).sort((a, b) => b.baseNeta - a.baseNeta);
-  }, [ventasReales, profileMap, rolesByProfile]);
-
-  const collaboratorOptions = useMemo(() => {
-    return collaboratorRows
-      .filter((item) => item.id !== "sin_asignar")
-      .sort((a, b) => a.full_name.localeCompare(b.full_name, "es"));
-  }, [collaboratorRows]);
-
   const ventasFiltradas = useMemo(() => {
-    const q = search.trim().toLowerCase();
+    const q = normalizeText(search);
 
     return ventasReales.filter((item) => {
       const createdDate = item.created_at?.slice(0, 10) || "";
+      const profile = item.assigned_commercial_user_id
+        ? profileMap.get(item.assigned_commercial_user_id)
+        : null;
+      const collaboratorName = profile?.full_name || "";
+      const collaboratorArea = normalizeArea(profile?.job_title);
+
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
-      const collaboratorId = item.assigned_commercial_user_id || "sin_asignar";
-      const roleData = rolesByProfile.get(collaboratorId) || { codes: [], labels: [] };
-      const collaboratorName = profileMap.get(collaboratorId)?.full_name || "Sin asignar";
-
-      const matchesSearch = q
-        ? (item.customer_name || "").toLowerCase().includes(q) ||
-          collaboratorName.toLowerCase().includes(q)
-        : true;
-
       const matchesCollaborator = collaboratorFilter
-        ? collaboratorId === collaboratorFilter
+        ? (item.assigned_commercial_user_id || "") === collaboratorFilter
+        : true;
+      const matchesArea = areaFilter ? collaboratorArea === areaFilter : true;
+      const matchesSearch = q
+        ? normalizeText(item.customer_name).includes(q) ||
+          normalizeText(item.phone).includes(q) ||
+          normalizeText(item.city).includes(q) ||
+          normalizeText(collaboratorName).includes(q)
         : true;
 
-      const matchesRoleGroup = roleGroupFilter
-        ? roleData.codes.includes(roleGroupFilter)
-        : true;
-
-      return matchesDateFrom && matchesDateTo && matchesSearch && matchesCollaborator && matchesRoleGroup;
+      return matchesDateFrom && matchesDateTo && matchesCollaborator && matchesArea && matchesSearch;
     });
-  }, [ventasReales, dateFrom, dateTo, search, collaboratorFilter, roleGroupFilter, rolesByProfile, profileMap]);
+  }, [ventasReales, profileMap, dateFrom, dateTo, collaboratorFilter, areaFilter, search]);
 
   const resumen = useMemo(() => {
     return {
-      ventas: ventasFiltradas.length,
+      total: ventasFiltradas.length,
       volumen: ventasFiltradas.reduce((acc, item) => acc + Number(item.volume_amount || 0), 0),
       caja: ventasFiltradas.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
       cartera: ventasFiltradas.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
@@ -358,35 +290,51 @@ export default function AdminComisionesPage() {
   }, [ventasFiltradas]);
 
   const resumenPorColaborador = useMemo(() => {
-    const map = new Map<string, CollaboratorRow>();
+    const map = new Map<
+      string,
+      {
+        collaboratorId: string;
+        collaboratorName: string;
+        area: string;
+        ventas: number;
+        volumen: number;
+        caja: number;
+        cartera: number;
+        baseNeta: number;
+      }
+    >();
 
     ventasFiltradas.forEach((item) => {
-      const profileId = item.assigned_commercial_user_id || "sin_asignar";
-      const profile = profileMap.get(profileId);
-      const roleData = rolesByProfile.get(profileId) || { codes: [], labels: [] };
-      const current = map.get(profileId) || {
-        id: profileId,
-        full_name: profile?.full_name || (profileId === "sin_asignar" ? "Sin asignar" : "Sin nombre"),
-        roleCodes: roleData.codes,
-        roleLabels: roleData.labels,
-        ventas: 0,
-        volumen: 0,
-        caja: 0,
-        cartera: 0,
-        baseNeta: 0,
-      };
+      const collaboratorId = item.assigned_commercial_user_id || "sin_asignar";
+      const profile = item.assigned_commercial_user_id
+        ? profileMap.get(item.assigned_commercial_user_id)
+        : null;
+      const collaboratorName = profile?.full_name || "Sin asignar";
+      const area = normalizeArea(profile?.job_title);
 
+      if (!map.has(collaboratorId)) {
+        map.set(collaboratorId, {
+          collaboratorId,
+          collaboratorName,
+          area,
+          ventas: 0,
+          volumen: 0,
+          caja: 0,
+          cartera: 0,
+          baseNeta: 0,
+        });
+      }
+
+      const current = map.get(collaboratorId)!;
       current.ventas += 1;
       current.volumen += Number(item.volume_amount || 0);
       current.caja += Number(item.cash_amount || 0);
       current.cartera += Number(item.portfolio_amount || 0);
       current.baseNeta += Number(item.net_commission_base || 0);
-
-      map.set(profileId, current);
     });
 
     return Array.from(map.values()).sort((a, b) => b.baseNeta - a.baseNeta);
-  }, [ventasFiltradas, profileMap, rolesByProfile]);
+  }, [ventasFiltradas, profileMap]);
 
   if (loadingAuth) {
     return (
@@ -445,7 +393,7 @@ export default function AdminComisionesPage() {
               <p className="text-sm font-medium text-[#7FA287]">Admin</p>
               <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Comisiones</h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Vista administrativa separada para revisar base neta, ventas y resumen por colaborador.
+                Vista separada para revisar base neta, ventas y resumen por colaborador.
               </p>
             </div>
 
@@ -502,13 +450,13 @@ export default function AdminComisionesPage() {
               <label className="mb-2 block text-sm font-medium text-slate-700">Área o rol</label>
               <select
                 className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
-                value={roleGroupFilter}
-                onChange={(e) => setRoleGroupFilter(e.target.value)}
+                value={areaFilter}
+                onChange={(e) => setAreaFilter(e.target.value)}
               >
                 <option value="">Todos</option>
-                {roleGroupOptions.map((item) => (
-                  <option key={item.value} value={item.value}>
-                    {item.label}
+                {areaOptions.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
                   </option>
                 ))}
               </select>
@@ -524,7 +472,7 @@ export default function AdminComisionesPage() {
                 <option value="">Todos</option>
                 {collaboratorOptions.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.full_name}
+                    {item.name}
                   </option>
                 ))}
               </select>
@@ -558,7 +506,7 @@ export default function AdminComisionesPage() {
               onClick={() => {
                 setDateFrom(inicioMesISO());
                 setDateTo(hoyISO());
-                setRoleGroupFilter("");
+                setAreaFilter("");
                 setCollaboratorFilter("");
                 setSearch("");
               }}
@@ -570,7 +518,7 @@ export default function AdminComisionesPage() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard title="Ventas" value={String(resumen.ventas)} subtitle="Ventas reales filtradas" />
+          <StatCard title="Ventas" value={String(resumen.total)} subtitle="Ventas reales filtradas" />
           <StatCard title="Volumen" value={formatMoney(resumen.volumen)} subtitle="Suma filtrada" />
           <StatCard title="Caja" value={formatMoney(resumen.caja)} subtitle="Pago recibido" />
           <StatCard title="Cartera" value={formatMoney(resumen.cartera)} subtitle="Saldo pendiente" />
@@ -578,11 +526,13 @@ export default function AdminComisionesPage() {
         </section>
 
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">Resumen por colaborador</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Aquí puedes filtrar por OPC, call center, supervisores, comerciales y gerencia comercial.
-            </p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Resumen por colaborador</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Agrupado según las ventas reales del rango filtrado.
+              </p>
+            </div>
           </div>
 
           {loading ? (
@@ -591,7 +541,7 @@ export default function AdminComisionesPage() {
             </div>
           ) : resumenPorColaborador.length === 0 ? (
             <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-              No hay resultados para esos filtros.
+              No hay datos para esos filtros.
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
@@ -599,7 +549,7 @@ export default function AdminComisionesPage() {
                 <thead>
                   <tr className="border-b border-slate-200 text-left text-slate-500">
                     <th className="px-3 py-3">Colaborador</th>
-                    <th className="px-3 py-3">Roles</th>
+                    <th className="px-3 py-3">Área</th>
                     <th className="px-3 py-3">Ventas</th>
                     <th className="px-3 py-3">Volumen</th>
                     <th className="px-3 py-3">Caja</th>
@@ -609,11 +559,9 @@ export default function AdminComisionesPage() {
                 </thead>
                 <tbody>
                   {resumenPorColaborador.map((item) => (
-                    <tr key={item.id} className="border-b border-slate-100 align-top">
-                      <td className="px-3 py-3 font-medium text-slate-900">{item.full_name}</td>
-                      <td className="px-3 py-3 text-slate-700">
-                        {item.roleLabels.length > 0 ? item.roleLabels.join(" · ") : "Sin rol visible"}
-                      </td>
+                    <tr key={item.collaboratorId} className="border-b border-slate-100">
+                      <td className="px-3 py-3 font-medium text-slate-900">{item.collaboratorName}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.area}</td>
                       <td className="px-3 py-3 text-slate-700">{item.ventas}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.volumen)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.caja)}</td>
@@ -628,11 +576,13 @@ export default function AdminComisionesPage() {
         </section>
 
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div>
-            <h2 className="text-2xl font-bold text-slate-900">Detalle de ventas para comisiones</h2>
-            <p className="mt-1 text-sm text-slate-500">
-              Base operativa para revisar qué registros están alimentando las comisiones.
-            </p>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Detalle base para comisiones</h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Detalle de ventas reales con base neta filtrada.
+              </p>
+            </div>
           </div>
 
           {loading ? (
@@ -651,26 +601,36 @@ export default function AdminComisionesPage() {
                     <th className="px-3 py-3">Cliente</th>
                     <th className="px-3 py-3">Fecha</th>
                     <th className="px-3 py-3">Colaborador</th>
+                    <th className="px-3 py-3">Área</th>
                     <th className="px-3 py-3">Volumen</th>
                     <th className="px-3 py-3">Caja</th>
                     <th className="px-3 py-3">Cartera</th>
                     <th className="px-3 py-3">Base neta</th>
+                    <th className="px-3 py-3">Pago</th>
                   </tr>
                 </thead>
                 <tbody>
                   {ventasFiltradas.map((item) => {
-                    const collaboratorId = item.assigned_commercial_user_id || "sin_asignar";
-                    const collaboratorName = profileMap.get(collaboratorId)?.full_name || "Sin asignar";
+                    const profile = item.assigned_commercial_user_id
+                      ? profileMap.get(item.assigned_commercial_user_id)
+                      : null;
 
                     return (
                       <tr key={item.id} className="border-b border-slate-100 align-top">
-                        <td className="px-3 py-3 font-medium text-slate-900">{item.customer_name}</td>
+                        <td className="px-3 py-3">
+                          <div className="font-medium text-slate-900">{item.customer_name}</div>
+                          <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
+                        </td>
                         <td className="px-3 py-3 text-slate-700">{formatDateTime(item.created_at)}</td>
-                        <td className="px-3 py-3 text-slate-700">{collaboratorName}</td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {profile?.full_name || "Sin asignar"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">{normalizeArea(profile?.job_title)}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.net_commission_base || 0))}</td>
+                        <td className="px-3 py-3 text-slate-700">{paymentMethodLabel(item.payment_method)}</td>
                       </tr>
                     );
                   })}
