@@ -85,7 +85,7 @@ const quickActions: QuickAction[] = [
     title: "Nuevo lead",
     subtitle: "Registrar un lead nuevo.",
     href: "/leads/nuevo",
-    roles: ["super_user", "promotor_opc", "supervisor_opc", "confirmador", "tmk"],
+    roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
     title: "Consultar leads",
@@ -116,6 +116,12 @@ const quickActions: QuickAction[] = [
     title: "Call Center",
     subtitle: "Asignar y gestionar leads del call center.",
     href: "/call-center",
+    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
+  },
+  {
+    title: "Ver agenda",
+    subtitle: "Consultar agenda visible y gestionar citas.",
+    href: "/recepcion",
     roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
