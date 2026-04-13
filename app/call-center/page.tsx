@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
+import { getLeadSourceLabel } from "@/lib/lead-source";
 
 type Lead = {
   id: string;
@@ -48,6 +49,7 @@ type QuickFilter =
   | "todos"
   | "nuevos"
   | "sin_asignar"
+  | "sin_asignar_pendientes_no_contestan"
   | "asignados"
   | "pendientes"
   | "no_contestan"
@@ -164,17 +166,7 @@ function traducirServicio(servicio: string | null) {
 }
 
 function traducirOrigen(source: string | null) {
-  const map: Record<string, string> = {
-    opc: "OPC",
-    redes_sociales: "Redes sociales",
-    referido: "Referido",
-    evento: "Evento",
-    punto_fisico: "Punto físico",
-    otro: "Otro",
-  };
-
-  if (!source) return "Sin origen";
-  return map[source] || source;
+  return getLeadSourceLabel(source);
 }
 
 function traducirFuenteComision(value: string | null) {
@@ -191,6 +183,10 @@ function traducirFuenteComision(value: string | null) {
 
 const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "todos", label: "Todos" },
+  {
+    key: "sin_asignar_pendientes_no_contestan",
+    label: "Sin asignar: nuevos / pendientes / no contestan",
+  },
   { key: "sin_asignar", label: "Sin asignar" },
   { key: "pendientes", label: "Pendientes" },
   { key: "no_contestan", label: "No contestan" },
@@ -627,6 +623,19 @@ export default function CallCenterPage() {
     return estado === "dato_falso" || estado === "no_interesa";
   }
 
+  function esSinAsignarPendienteONoContesta(lead: Lead) {
+    const estado = obtenerEstadoVisible(lead);
+
+    return (
+      !estaAsignado(lead) &&
+      (
+        estado === "nuevo" ||
+        estado === "pendiente_contacto" ||
+        estado === "no_responde"
+      )
+    );
+  }
+
   const leadsBasePorRol = useMemo(() => {
     let base = leads;
 
@@ -652,6 +661,9 @@ export default function CallCenterPage() {
       total: leadsDelDia.length,
       nuevos: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo").length,
       sinAsignar: leadsDelDia.filter((lead) => !estaAsignado(lead)).length,
+      sinAsignarPendientesNoContestan: leadsDelDia.filter((lead) =>
+        esSinAsignarPendienteONoContesta(lead)
+      ).length,
       asignados: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "asignado").length,
       pendientes: leadsDelDia.filter((lead) => esPendiente(lead)).length,
       noContestan: leadsDelDia.filter((lead) => esNoContesta(lead)).length,
@@ -674,6 +686,10 @@ export default function CallCenterPage() {
 
     if (quickFilter === "sin_asignar") {
       base = base.filter((lead) => !estaAsignado(lead));
+    }
+
+    if (quickFilter === "sin_asignar_pendientes_no_contestan") {
+      base = base.filter((lead) => esSinAsignarPendienteONoContesta(lead));
     }
 
     if (quickFilter === "asignados") {
@@ -860,6 +876,13 @@ export default function CallCenterPage() {
 
         <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
           <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
+          <StatCard
+            title="Sin asignar nuevos / pendientes / no contestan"
+            value={resumen.sinAsignarPendientesNoContestan}
+            active={quickFilter === "sin_asignar_pendientes_no_contestan"}
+            onClick={() => setQuickFilter("sin_asignar_pendientes_no_contestan")}
+            highlight={resumen.sinAsignarPendientesNoContestan > 0}
+          />
           <StatCard title="Sin asignar" value={resumen.sinAsignar} active={quickFilter === "sin_asignar"} onClick={() => setQuickFilter("sin_asignar")} highlight={resumen.sinAsignar > 0} />
           <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} highlight={resumen.pendientes > 0} />
           <StatCard title="No contestan" value={resumen.noContestan} active={quickFilter === "no_contestan"} onClick={() => setQuickFilter("no_contestan")} highlight={resumen.noContestan > 0} />

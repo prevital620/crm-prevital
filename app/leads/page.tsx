@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
+import { getLeadSourceLabel } from "@/lib/lead-source";
 
 type LeadRow = {
   id: string;
@@ -568,18 +569,7 @@ export default function LeadsPage() {
   }
 
   function translateSource(source: string | null) {
-    if (!source) return "Sin origen";
-
-    const map: Record<string, string> = {
-      opc: "OPC",
-      redes_sociales: "Redes sociales",
-      referido: "Referido",
-      punto_fisico: "Punto físico",
-      evento: "Evento",
-      otro: "Otro",
-    };
-
-    return map[source] || source;
+    return getLeadSourceLabel(source);
   }
 
   function getCreatorName(userId: string) {

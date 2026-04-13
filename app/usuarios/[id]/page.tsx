@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -125,37 +126,25 @@ export default function EditarUsuarioPage() {
     setMensaje("");
 
     try {
-      const { error: profileError } = await supabase
-        .from("profiles")
-        .update({
+      const response = await fetch(`/api/usuarios/${userId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
           full_name: form.full_name.trim(),
           phone: form.phone.trim() || null,
           job_title: form.job_title.trim() || null,
           department_id: form.department_id || null,
           is_active: form.is_active,
-        })
-        .eq("id", userId);
+          role_ids: selectedRoleIds,
+        }),
+      });
 
-      if (profileError) throw profileError;
+      const result = await response.json();
 
-      const { error: deleteRoleError } = await supabase
-        .from("user_roles")
-        .delete()
-        .eq("user_id", userId);
-
-      if (deleteRoleError) throw deleteRoleError;
-
-      if (selectedRoleIds.length > 0) {
-        const rows = selectedRoleIds.map((roleId) => ({
-          user_id: userId,
-          role_id: roleId,
-        }));
-
-        const { error: insertRoleError } = await supabase
-          .from("user_roles")
-          .insert(rows);
-
-        if (insertRoleError) throw insertRoleError;
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo actualizar el usuario.");
       }
 
       setMensaje("Usuario actualizado correctamente.");
@@ -266,21 +255,21 @@ export default function EditarUsuarioPage() {
               </p>
             </div>
 
-            <a
+            <Link
               href="/"
               className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
               Inicio
-            </a>
+            </Link>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a
+            <Link
               href="/usuarios"
               className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
               Volver a usuarios
-            </a>
+            </Link>
           </div>
         </section>
 

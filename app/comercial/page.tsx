@@ -10,6 +10,7 @@ import StatCard from "@/components/ui/StatCard";
 import Field from "@/components/ui/Field";
 import InfoItem from "@/components/ui/InfoItem";
 import StatusBadge from "@/components/ui/StatusBadge";
+import { getLeadSourceLabel } from "@/lib/lead-source";
 import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import { hoyISO, dateToLocalISO, isSameLocalDay } from "@/lib/datetime/dateHelpers";
 import { formatDate, formatDateOnly } from "@/lib/datetime/dateFormat";
@@ -165,16 +166,7 @@ function nextStepLabel(value: string) {
 }
 
 function leadSourceLabel(value: string | null | undefined) {
-  const map: Record<string, string> = {
-    opc: "OPC",
-    redes_sociales: "Redes sociales",
-    referido: "Referido",
-    evento: "Evento",
-    punto_fisico: "Punto físico",
-    otro: "Otro",
-  };
-  if (!value) return "Sin definir";
-  return map[value] || value;
+  return getLeadSourceLabel(value, "Sin definir");
 }
 
 function commissionSourceLabel(value: string | null | undefined) {

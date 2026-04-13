@@ -1,21 +1,24 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabaseAdmin = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.SUPABASE_SERVICE_ROLE_KEY!,
-  {
-    auth: {
-      autoRefreshToken: false,
-      persistSession: false,
-    },
-  }
-);
-
-const TEMP_PASSWORD = "Prevital2026*";
+import { supabaseAdmin } from "@/lib/supabase-admin";
+import { createRouteHandlerSupabaseClient } from "@/lib/server/supabase-server";
+import {
+  getErrorMessage,
+  getTemporaryUserPassword,
+  requireSuperUser,
+} from "@/lib/server/user-security";
 
 export async function POST(request: Request) {
   try {
+    const supabase = await createRouteHandlerSupabaseClient();
+    const authCheck = await requireSuperUser(supabase);
+
+    if (!authCheck.ok) {
+      return NextResponse.json(
+        { error: authCheck.error },
+        { status: authCheck.status }
+      );
+    }
+
     const body = await request.json();
 
     const full_name = String(body?.full_name || "").trim();
@@ -54,7 +57,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const tempPassword = TEMP_PASSWORD;
+    const tempPassword = getTemporaryUserPassword();
 
     const { data: createdUser, error: createError } =
       await supabaseAdmin.auth.admin.createUser({
@@ -120,9 +123,9 @@ export async function POST(request: Request) {
       userId,
       tempPassword,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     return NextResponse.json(
-      { error: error?.message || "Error interno del servidor." },
+      { error: getErrorMessage(error, "Error interno del servidor.") },
       { status: 500 }
     );
   }

@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -202,21 +203,21 @@ export default function NuevoUsuarioPage() {
               </p>
             </div>
 
-            <a
+            <Link
               href="/"
               className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
               Inicio
-            </a>
+            </Link>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a
+            <Link
               href="/usuarios"
               className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
               Usuarios y roles
-            </a>
+            </Link>
           </div>
         </section>
 

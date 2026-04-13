@@ -5,6 +5,7 @@ import Image from "next/image";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
+import { leadSourceOptions, normalizeLeadSource } from "@/lib/lead-source";
 
 const maritalStatusOptions = [
   { value: "soltero", label: "Soltero(a)" },
@@ -21,15 +22,6 @@ const interestServiceOptions = [
   { value: "nutricion", label: "Nutrición" },
   { value: "fisioterapia", label: "Fisioterapia" },
   { value: "medicina_general", label: "Medicina general" },
-  { value: "otro", label: "Otro" },
-];
-
-const sourceOptions = [
-  { value: "opc", label: "OPC" },
-  { value: "redes_sociales", label: "Redes sociales" },
-  { value: "referido", label: "Referido" },
-  { value: "evento", label: "Evento" },
-  { value: "punto_fisico", label: "Punto físico" },
   { value: "otro", label: "Otro" },
 ];
 
@@ -159,7 +151,7 @@ export default function NuevoLeadPage() {
           affiliation_type: form.affiliation_type || null,
           capture_location: form.capture_location.trim() || null,
           interest_service: form.interest_service.trim() || null,
-          source: form.source || null,
+          source: normalizeLeadSource(form.source),
           observations: form.observations.trim() || null,
           city: form.city.trim() || null,
           status: form.status,
@@ -472,7 +464,7 @@ export default function NuevoLeadPage() {
                     }
                   >
                     <option value="">Selecciona</option>
-                    {sourceOptions.map((option) => (
+                    {leadSourceOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>

@@ -4,6 +4,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
+import { leadSourceOptions, normalizeLeadSource } from "@/lib/lead-source";
 
 type LeadData = {
   id: string;
@@ -40,14 +41,6 @@ const interestServiceOptions = [
   { value: "nutricion", label: "Nutrición" },
   { value: "fisioterapia", label: "Fisioterapia" },
   { value: "medicina_general", label: "Medicina general" },
-  { value: "otro", label: "Otro" },
-];
-
-const sourceOptions = [
-  { value: "opc", label: "OPC" },
-  { value: "redes_sociales", label: "Redes sociales" },
-  { value: "referido", label: "Referido" },
-  { value: "punto_fisico", label: "Punto físico" },
   { value: "otro", label: "Otro" },
 ];
 
@@ -234,7 +227,7 @@ export default function EditarLeadPage() {
         affiliation_type: lead.affiliation_type || "",
         capture_location: lead.capture_location || "",
         interest_service: lead.interest_service || "",
-        source: lead.source || "",
+        source: normalizeLeadSource(lead.source) || "",
         observations: lead.observations || "",
         city: lead.city || "",
         status: lead.status || "nuevo",
@@ -287,7 +280,7 @@ export default function EditarLeadPage() {
           affiliation_type: form.affiliation_type || null,
           capture_location: form.capture_location.trim() || null,
           interest_service: form.interest_service || null,
-          source: form.source || null,
+          source: normalizeLeadSource(form.source),
           observations: form.observations.trim() || null,
           city: form.city.trim() || null,
           status: form.status || "nuevo",
@@ -560,7 +553,7 @@ export default function EditarLeadPage() {
                     disabled={!canEdit}
                   >
                     <option value="">Selecciona</option>
-                    {sourceOptions.map((option) => (
+                    {leadSourceOptions.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>

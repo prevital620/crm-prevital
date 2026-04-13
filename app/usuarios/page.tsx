@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -85,12 +86,23 @@ export default function UsuariosPage() {
       setError("");
       setMensaje("");
 
-      const { error } = await supabase
-        .from("profiles")
-        .update({ is_active: nextActive })
-        .eq("id", user.id);
+      const response = await fetch(`/api/usuarios/${user.id}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          is_active: nextActive,
+        }),
+      });
 
-      if (error) throw error;
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          result.error || "No se pudo actualizar el estado del usuario."
+        );
+      }
 
       setUsers((prev) =>
         prev.map((item) =>
@@ -265,20 +277,20 @@ export default function UsuariosPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a
+            <Link
               href="/"
               className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
             >
               Inicio
-            </a>
+            </Link>
 
             {authorized ? (
-              <a
+              <Link
                 href="/usuarios/nuevo"
                 className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
               >
                 Crear usuario
-              </a>
+              </Link>
             ) : null}
           </div>
         </section>
@@ -393,12 +405,12 @@ export default function UsuariosPage() {
                           <p className="mb-3 text-sm font-medium text-slate-700">Acciones</p>
 
                           <div className="flex flex-wrap gap-2">
-                            <a
+                            <Link
                               href={`/usuarios/${user.id}`}
                               className="rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
                             >
                               Editar
-                            </a>
+                            </Link>
 
                             <button
                               type="button"
