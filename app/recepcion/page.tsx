@@ -129,6 +129,13 @@ type CommercialCaseRow = {
   created_at: string;
 };
 
+type SourceUserOption = {
+  id: string;
+  full_name: string;
+  role_name: string;
+  role_code: string;
+};
+
 type CommercialClinicalFlags = {
   hipertenso_descalifica: boolean;
   diabetico_descalifica: boolean;
@@ -761,6 +768,7 @@ function RecepcionContent() {
   const [commercialCases, setCommercialCases] = useState<CommercialCaseRow[]>([]);
   const [savingCommercialIntake, setSavingCommercialIntake] = useState(false);
   const [commercialSearch, setCommercialSearch] = useState("");
+  const [sourceUsers, setSourceUsers] = useState<SourceUserOption[]>([]);
   const [commercialForm, setCommercialForm] = useState({
     customer_name: "",
     phone: "",
@@ -768,6 +776,7 @@ function RecepcionContent() {
     documento: "",
     fuente: "",
     fuente_detalle: "",
+    fuente_usuario_id: "",
     observaciones: "",
     acompanante_nombre: "",
     acompanante_parentesco: "",
@@ -827,6 +836,28 @@ function RecepcionContent() {
   const canManageAgendaConfig =
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
   const commercialSourceDetailMeta = getCommercialSourceDetailMeta(commercialForm.fuente);
+  const normalizedCommercialSource = normalizarFuenteManual(commercialForm.fuente);
+  const sourceNeedsUserSelection =
+    normalizedCommercialSource === "opc" || normalizedCommercialSource === "tmk";
+  const availableSourceUsers = useMemo(() => {
+    if (normalizedCommercialSource === "opc") {
+      return sourceUsers.filter((item) =>
+        ["promotor_opc", "supervisor_opc"].includes(item.role_code)
+      );
+    }
+
+    if (normalizedCommercialSource === "tmk") {
+      return sourceUsers.filter((item) =>
+        ["tmk", "confirmador", "supervisor_call_center"].includes(item.role_code)
+      );
+    }
+
+    return [];
+  }, [normalizedCommercialSource, sourceUsers]);
+  const selectedSourceUser = useMemo(
+    () => sourceUsers.find((item) => item.id === commercialForm.fuente_usuario_id) || null,
+    [sourceUsers, commercialForm.fuente_usuario_id]
+  );
 
   useEffect(() => {
     if (activeSection === "nutricion_entregas") return;
@@ -948,6 +979,7 @@ function RecepcionContent() {
         daySettingsResult,
         slotSettingsResult,
         commercialCasesResult,
+        sourceUsersResult,
       ] = await Promise.all([
         supabase
           .from("appointments")
@@ -1009,6 +1041,19 @@ function RecepcionContent() {
             created_at
           `)
           .order("created_at", { ascending: false }),
+        supabase
+          .from("user_roles")
+          .select(`
+            user_id,
+            profiles!user_roles_user_id_fkey (
+              id,
+              full_name
+            ),
+            roles!user_roles_role_id_fkey (
+              name,
+              code
+            )
+          `),
       ]);
 
       if (appointmentsResult.error) throw appointmentsResult.error;
@@ -1016,12 +1061,31 @@ function RecepcionContent() {
       if (daySettingsResult.error) throw daySettingsResult.error;
       if (slotSettingsResult.error) throw slotSettingsResult.error;
       if (commercialCasesResult.error) throw commercialCasesResult.error;
+      if (sourceUsersResult.error) throw sourceUsersResult.error;
 
       const appointmentsData = (appointmentsResult.data as AppointmentRow[]) || [];
       const leadsData = (leadsResult.data as LeadOption[]) || [];
       const dayRows = (daySettingsResult.data as AgendaDaySetting[]) || [];
       const slotRows = (slotSettingsResult.data as AgendaSlotSetting[]) || [];
       const commercialCasesData = (commercialCasesResult.data as CommercialCaseRow[]) || [];
+      const sourceUserRows = (sourceUsersResult.data as any[]) || [];
+      const sourceUserMap = new Map<string, SourceUserOption>();
+      sourceUserRows.forEach((row) => {
+        const roleCode = row.roles?.code || "";
+        if (!["promotor_opc", "supervisor_opc", "tmk", "confirmador", "supervisor_call_center"].includes(roleCode)) {
+          return;
+        }
+
+        const id = row.profiles?.id || row.user_id;
+        if (!id || sourceUserMap.has(id)) return;
+
+        sourceUserMap.set(id, {
+          id,
+          full_name: row.profiles?.full_name || "Sin nombre",
+          role_name: row.roles?.name || "",
+          role_code: roleCode,
+        });
+      });
 
       const hoy = hoyISO();
       const staleAppointments = appointmentsData.filter((item) => {
@@ -1083,6 +1147,11 @@ function RecepcionContent() {
       setDaySettings(dayMap);
       setSlotSettings(slotMap);
       setCommercialCases(commercialCasesData);
+      setSourceUsers(
+        Array.from(sourceUserMap.values()).sort((a, b) =>
+          a.full_name.localeCompare(b.full_name, "es")
+        )
+      );
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los datos de recepción.");
     } finally {
@@ -1792,6 +1861,7 @@ function RecepcionContent() {
       documento: "",
       fuente: "",
       fuente_detalle: "",
+      fuente_usuario_id: "",
       observaciones: "",
       acompanante_nombre: "",
       acompanante_parentesco: "",
@@ -1845,7 +1915,10 @@ function imprimirRegistroComercial() {
       document: commercialForm.documento || "Sin documento",
       source: traducirFuenteManual(commercialForm.fuente) || "Sin fuente",
       sourceDetailLabel: commercialSourceDetailMeta?.label || null,
-      sourceDetail: commercialForm.referido_por || "No aplica",
+      sourceDetail:
+        (sourceNeedsUserSelection
+          ? selectedSourceUser?.full_name
+          : commercialForm.referido_por) || "No aplica",
       initialClassification: commercialForm.clasificacion_inicial || "Sin definir",
       classificationReason: commercialForm.clasificacion_motivo || "Sin motivo",
       hasEps: commercialForm.tiene_eps === "si" ? "Sí" : "No",
@@ -1942,7 +2015,11 @@ function imprimirRegistroComercial() {
         throw new Error("Debes seleccionar la fuente del lead.");
       }
 
-      if (commercialSourceDetailMeta?.required && !commercialForm.referido_por.trim()) {
+      if (sourceNeedsUserSelection && !commercialForm.fuente_usuario_id) {
+        throw new Error(`Debes seleccionar ${commercialSourceDetailMeta?.label.toLowerCase() || "el usuario de la fuente"}.`);
+      }
+
+      if (!sourceNeedsUserSelection && commercialSourceDetailMeta?.required && !commercialForm.referido_por.trim()) {
         throw new Error(`Debes completar ${commercialSourceDetailMeta.label.toLowerCase()}.`);
       }
 
@@ -1967,6 +2044,15 @@ function imprimirRegistroComercial() {
       const ocupacionLabel = traducirOcupacionComercial(commercialForm.ocupacion, commercialForm.ocupacion_otro);
       const fuenteLabel = traducirFuenteManual(commercialForm.fuente);
       const fuenteDetalleLabel = commercialSourceDetailMeta?.noteLabel || "Detalle fuente";
+      const fuenteDetalleValor = sourceNeedsUserSelection
+        ? selectedSourceUser?.full_name || ""
+        : commercialForm.referido_por.trim();
+      const commissionSourceType =
+        normalizedCommercialSource === "opc"
+          ? "opc"
+          : normalizedCommercialSource === "redes"
+          ? "redes"
+          : "otro";
 
       try {
         const identifier = commercialForm.documento.trim() || commercialForm.phone.trim();
@@ -2058,7 +2144,7 @@ function imprimirRegistroComercial() {
           ? `Enfermedades cuales: ${commercialForm.enfermedades_cual}`
           : "",
         `Tiempo disponible para terapia detox 30 min: ${commercialForm.tiempo_detox_30_min === "si" ? "Si" : "No"}`,
-        commercialForm.referido_por ? `${fuenteDetalleLabel}: ${commercialForm.referido_por}` : "",
+        fuenteDetalleValor ? `${fuenteDetalleLabel}: ${fuenteDetalleValor}` : "",
         commercialForm.observaciones ? `Observaciones recepción: ${commercialForm.observaciones}` : "",
       ].filter(Boolean).join(" | ");
 
@@ -2093,6 +2179,16 @@ function imprimirRegistroComercial() {
           phone: commercialForm.phone.trim(),
           city: commercialForm.city.trim() || null,
           status: "pendiente_asignacion_comercial",
+          lead_source_type: normalizedCommercialSource || null,
+          commission_source_type: commissionSourceType,
+          opc_user_id:
+            normalizedCommercialSource === "opc"
+              ? commercialForm.fuente_usuario_id || null
+              : null,
+          call_user_id:
+            normalizedCommercialSource === "tmk"
+              ? commercialForm.fuente_usuario_id || null
+              : null,
           created_by_user_id: currentUserId,
           updated_by_user_id: currentUserId,
           sale_result: notesParts || null,
@@ -2177,6 +2273,7 @@ function imprimirRegistroComercial() {
       documento: "",
       fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
       fuente_detalle: "",
+      fuente_usuario_id: "",
       observaciones: limpiarFuenteManualDeNotas(item.notes),
       acompanante_nombre: "",
       acompanante_parentesco: "",
@@ -2918,6 +3015,7 @@ function imprimirRegistroComercial() {
                           setCommercialForm((prev) => ({
                             ...prev,
                             fuente: normalizarFuenteManual(e.target.value),
+                            fuente_usuario_id: "",
                             referido_por: "",
                           }))
                         }
@@ -2935,12 +3033,32 @@ function imprimirRegistroComercial() {
                     <Field
                       label={commercialSourceDetailMeta.label}
                       input={
-                        <input
-                          className={inputClass}
-                          placeholder={commercialSourceDetailMeta.placeholder}
-                          value={commercialForm.referido_por}
-                          onChange={(e) => setCommercialForm((prev) => ({ ...prev, referido_por: e.target.value }))}
-                        />
+                        sourceNeedsUserSelection ? (
+                          <select
+                            className={inputClass}
+                            value={commercialForm.fuente_usuario_id}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                fuente_usuario_id: e.target.value,
+                              }))
+                            }
+                          >
+                            <option value="">Selecciona usuario</option>
+                            {availableSourceUsers.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.full_name} · {item.role_name || item.role_code}
+                              </option>
+                            ))}
+                          </select>
+                        ) : (
+                          <input
+                            className={inputClass}
+                            placeholder={commercialSourceDetailMeta.placeholder}
+                            value={commercialForm.referido_por}
+                            onChange={(e) => setCommercialForm((prev) => ({ ...prev, referido_por: e.target.value }))}
+                          />
+                        )
                       }
                     />
                   ) : (
