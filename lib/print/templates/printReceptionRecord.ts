@@ -8,7 +8,8 @@ type ReceptionRecordPrintData = {
   city?: string | null;
   document?: string | null;
   source?: string | null;
-  referredBy?: string | null;
+  sourceDetailLabel?: string | null;
+  sourceDetail?: string | null;
   initialClassification?: string | null;
   classificationReason?: string | null;
   hasEps?: string | null;
@@ -17,6 +18,7 @@ type ReceptionRecordPrintData = {
   bringsId?: string | null;
   smartphone?: string | null;
   occupation?: string | null;
+  hasDetoxTime?: string | null;
   disqualifyingConditions?: string[];
   observations?: string | null;
 };
@@ -53,7 +55,7 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
             <div><div class="item-label">Ciudad</div><div class="item-value">${escapeHtml(data.city || "Sin ciudad")}</div></div>
             <div><div class="item-label">Documento</div><div class="item-value">${escapeHtml(data.document || "Sin documento")}</div></div>
             <div><div class="item-label">Fuente</div><div class="item-value">${escapeHtml(data.source || "Sin fuente")}</div></div>
-            <div><div class="item-label">Referido por</div><div class="item-value">${escapeHtml(data.referredBy || "No aplica")}</div></div>
+            <div><div class="item-label">${escapeHtml(data.sourceDetailLabel || "Detalle fuente")}</div><div class="item-value">${escapeHtml(data.sourceDetail || "No aplica")}</div></div>
           </div>
         </div>
 
@@ -73,6 +75,7 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
             <div><div class="item-label">Edad</div><div class="item-value">${escapeHtml(data.age || "Sin dato")}</div></div>
             <div><div class="item-label">Asiste con cédula</div><div class="item-value">${escapeHtml(data.bringsId || "Sin definir")}</div></div>
             <div><div class="item-label">Celular inteligente</div><div class="item-value">${escapeHtml(data.smartphone || "Sin definir")}</div></div>
+            <div><div class="item-label">Tiempo para detox 30 min</div><div class="item-value">${escapeHtml(data.hasDetoxTime || "Sin definir")}</div></div>
             <div><div class="item-label">Ocupación</div><div class="item-value">${escapeHtml(data.occupation || "Sin definir")}</div></div>
           </div>
         </div>

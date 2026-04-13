@@ -134,6 +134,7 @@ type CommercialClinicalFlags = {
   diabetico_descalifica: boolean;
   cirugias_descalifica: boolean;
   medicamentos_descalifica: boolean;
+  enfermedades_descalifica: boolean;
 };
 
 type NutritionProfileRow = {
@@ -203,6 +204,13 @@ const manualSourceOptions = [
   { value: "otro", label: "Otro" },
 ];
 
+type CommercialSourceDetailMeta = {
+  label: string;
+  placeholder: string;
+  noteLabel: string;
+  required?: boolean;
+};
+
 function hoyISO() {
   const hoy = new Date();
   const y = hoy.getFullYear();
@@ -224,8 +232,20 @@ function fullLeadName(lead: LeadOption) {
   );
 }
 
+function normalizarFuenteManual(value: string | null | undefined) {
+  const normalized = (value || "").trim().toLowerCase();
+  if (!normalized) return "";
+
+  const found = manualSourceOptions.find(
+    (item) => item.value.toLowerCase() === normalized || item.label.toLowerCase() === normalized
+  );
+
+  return found?.value || normalized;
+}
+
 function traducirFuenteManual(value: string) {
-  const found = manualSourceOptions.find((item) => item.value === value);
+  const normalized = normalizarFuenteManual(value);
+  const found = manualSourceOptions.find((item) => item.value === normalized);
   return found?.label || value || "Sin fuente";
 }
 
@@ -233,13 +253,69 @@ function extraerFuenteManualDesdeNotas(notes: string | null | undefined) {
   if (!notes) return "";
   const match = notes.match(/^Fuente:\s*(.+)$/im);
   if (!match?.[1]) return "";
+  return normalizarFuenteManual(match[1]);
+}
 
-  const normalized = match[1].trim().toLowerCase();
-  const found = manualSourceOptions.find(
-    (item) => item.value.toLowerCase() === normalized || item.label.toLowerCase() === normalized
-  );
-
-  return found?.value || normalized;
+function getCommercialSourceDetailMeta(value: string): CommercialSourceDetailMeta | null {
+  switch (normalizarFuenteManual(value)) {
+    case "opc":
+      return {
+        label: "¿Qué OPC fue?",
+        placeholder: "Ej: OPC Centro",
+        noteLabel: "Detalle OPC",
+        required: true,
+      };
+    case "tmk":
+      return {
+        label: "¿Qué TMK fue?",
+        placeholder: "Ej: TMK campaña abril",
+        noteLabel: "Detalle TMK",
+        required: true,
+      };
+    case "redes":
+      return {
+        label: "¿Qué red fue?",
+        placeholder: "Ej: Facebook, Instagram",
+        noteLabel: "Detalle red",
+        required: true,
+      };
+    case "referido":
+      return {
+        label: "¿Quién lo refirió?",
+        placeholder: "Escribe quién refirió",
+        noteLabel: "Referido por",
+        required: true,
+      };
+    case "lugar":
+      return {
+        label: "¿Qué lugar fue?",
+        placeholder: "Ej: Centro comercial, clínica",
+        noteLabel: "Detalle lugar",
+        required: true,
+      };
+    case "evento":
+      return {
+        label: "¿Qué evento fue?",
+        placeholder: "Ej: Feria de salud",
+        noteLabel: "Detalle evento",
+        required: true,
+      };
+    case "cliente_directo":
+      return {
+        label: "Detalle del cliente directo",
+        placeholder: "Opcional",
+        noteLabel: "Detalle cliente directo",
+      };
+    case "otro":
+      return {
+        label: "¿Cuál fue la fuente?",
+        placeholder: "Describe la fuente",
+        noteLabel: "Detalle fuente",
+        required: true,
+      };
+    default:
+      return null;
+  }
 }
 
 function limpiarFuenteManualDeNotas(notes: string | null | undefined) {
@@ -483,6 +559,7 @@ function emptyCommercialClinicalFlags(): CommercialClinicalFlags {
     diabetico_descalifica: false,
     cirugias_descalifica: false,
     medicamentos_descalifica: false,
+    enfermedades_descalifica: false,
   };
 }
 
@@ -523,6 +600,8 @@ function calcularClasificacionInicial(values: {
   cirugias_cual?: string;
   medicamentos: string;
   medicamentos_cual?: string;
+  enfermedades: string;
+  enfermedades_cual?: string;
   clinical_flags: CommercialClinicalFlags;
 }) {
   const motivos: string[] = [];
@@ -576,6 +655,10 @@ function calcularClasificacionInicial(values: {
     motivos.push("medicamento descalificante");
   }
 
+  if (values.enfermedades === "si" && values.clinical_flags.enfermedades_descalifica) {
+    motivos.push("enfermedad descalificante");
+  }
+
   return {
     clasificacion: motivos.length === 0 ? "Q" : "No Q",
     motivo:
@@ -583,6 +666,33 @@ function calcularClasificacionInicial(values: {
         ? "Q inicial: cumple todos los criterios base."
         : `No Q por ${motivos.join(", ")}.`,
   };
+}
+
+function getCommercialDisqualifyingConditions(values: {
+  hipertenso: string;
+  diabetico: string;
+  cirugias: string;
+  medicamentos: string;
+  enfermedades: string;
+  clinical_flags: CommercialClinicalFlags;
+}) {
+  return [
+    values.hipertenso === "si" && values.clinical_flags.hipertenso_descalifica
+      ? "Hipertensión descalificante"
+      : "",
+    values.diabetico === "si" && values.clinical_flags.diabetico_descalifica
+      ? "Diabetes descalificante"
+      : "",
+    values.cirugias === "si" && values.clinical_flags.cirugias_descalifica
+      ? "Cirugía descalificante"
+      : "",
+    values.medicamentos === "si" && values.clinical_flags.medicamentos_descalifica
+      ? "Medicamento descalificante"
+      : "",
+    values.enfermedades === "si" && values.clinical_flags.enfermedades_descalifica
+      ? "Enfermedad descalificante"
+      : "",
+  ].filter(Boolean);
 }
 
 function normalizarHora(value: string) {
@@ -657,6 +767,7 @@ function RecepcionContent() {
     city: "",
     documento: "",
     fuente: "",
+    fuente_detalle: "",
     observaciones: "",
     acompanante_nombre: "",
     acompanante_parentesco: "",
@@ -673,6 +784,9 @@ function RecepcionContent() {
     cirugias_cual: "",
     medicamentos: "no",
     medicamentos_cual: "",
+    enfermedades: "no",
+    enfermedades_cual: "",
+    tiempo_detox_30_min: "",
     clinical_flags: emptyCommercialClinicalFlags(),
     clasificacion_inicial: "No Q",
     clasificacion_motivo: "",
@@ -712,6 +826,7 @@ function RecepcionContent() {
 
   const canManageAgendaConfig =
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
+  const commercialSourceDetailMeta = getCommercialSourceDetailMeta(commercialForm.fuente);
 
   useEffect(() => {
     if (activeSection === "nutricion_entregas") return;
@@ -757,6 +872,8 @@ function RecepcionContent() {
       cirugias_cual: commercialForm.cirugias_cual,
       medicamentos: commercialForm.medicamentos,
       medicamentos_cual: commercialForm.medicamentos_cual,
+      enfermedades: commercialForm.enfermedades,
+      enfermedades_cual: commercialForm.enfermedades_cual,
       clinical_flags: commercialForm.clinical_flags,
     });
 
@@ -784,6 +901,8 @@ function RecepcionContent() {
     commercialForm.cirugias_cual,
     commercialForm.medicamentos,
     commercialForm.medicamentos_cual,
+    commercialForm.enfermedades,
+    commercialForm.enfermedades_cual,
     commercialForm.clinical_flags,
   ]);
 
@@ -1672,6 +1791,7 @@ function RecepcionContent() {
       city: "",
       documento: "",
       fuente: "",
+      fuente_detalle: "",
       observaciones: "",
       acompanante_nombre: "",
       acompanante_parentesco: "",
@@ -1688,6 +1808,9 @@ function RecepcionContent() {
       cirugias_cual: "",
       medicamentos: "no",
       medicamentos_cual: "",
+      enfermedades: "no",
+      enfermedades_cual: "",
+      tiempo_detox_30_min: "",
       clinical_flags: emptyCommercialClinicalFlags(),
       clasificacion_inicial: "No Q",
       clasificacion_motivo: "",
@@ -1720,8 +1843,9 @@ function imprimirRegistroComercial() {
       phone: commercialForm.phone || "Sin teléfono",
       city: commercialForm.city || "Sin ciudad",
       document: commercialForm.documento || "Sin documento",
-      source: commercialForm.fuente || "Sin fuente",
-      referredBy: commercialForm.referido_por || "No aplica",
+      source: traducirFuenteManual(commercialForm.fuente) || "Sin fuente",
+      sourceDetailLabel: commercialSourceDetailMeta?.label || null,
+      sourceDetail: commercialForm.referido_por || "No aplica",
       initialClassification: commercialForm.clasificacion_inicial || "Sin definir",
       classificationReason: commercialForm.clasificacion_motivo || "Sin motivo",
       hasEps: commercialForm.tiene_eps === "si" ? "Sí" : "No",
@@ -1729,8 +1853,21 @@ function imprimirRegistroComercial() {
       age: commercialForm.edad || "Sin dato",
       bringsId: commercialForm.trae_cedula === "si" ? "Sí" : "No",
       smartphone: commercialForm.celular_inteligente === "si" ? "Sí" : "No",
+      hasDetoxTime:
+        commercialForm.tiempo_detox_30_min === "si"
+          ? "SÃ­"
+          : commercialForm.tiempo_detox_30_min === "no"
+          ? "No"
+          : "Sin definir",
       occupation: ocupacion || "Sin definir",
-      disqualifyingConditions: [],
+      disqualifyingConditions: getCommercialDisqualifyingConditions({
+        hipertenso: commercialForm.hipertenso,
+        diabetico: commercialForm.diabetico,
+        cirugias: commercialForm.cirugias,
+        medicamentos: commercialForm.medicamentos,
+        enfermedades: commercialForm.enfermedades,
+        clinical_flags: commercialForm.clinical_flags,
+      }),
       observations: commercialForm.observaciones || "Sin observaciones registradas.",
     });
   }
@@ -1801,6 +1938,18 @@ function imprimirRegistroComercial() {
         throw new Error("Debes escribir el teléfono del cliente.");
       }
 
+      if (!commercialForm.fuente) {
+        throw new Error("Debes seleccionar la fuente del lead.");
+      }
+
+      if (commercialSourceDetailMeta?.required && !commercialForm.referido_por.trim()) {
+        throw new Error(`Debes completar ${commercialSourceDetailMeta.label.toLowerCase()}.`);
+      }
+
+      if (!commercialForm.tiempo_detox_30_min) {
+        throw new Error("Debes confirmar si cuenta con el tiempo de 30 min para la terapia detox.");
+      }
+
       const yaExiste = commercialCases.find(
         (item) =>
           (
@@ -1816,6 +1965,8 @@ function imprimirRegistroComercial() {
 
       const clasificacion = commercialForm.clasificacion_inicial || "No Q";
       const ocupacionLabel = traducirOcupacionComercial(commercialForm.ocupacion, commercialForm.ocupacion_otro);
+      const fuenteLabel = traducirFuenteManual(commercialForm.fuente);
+      const fuenteDetalleLabel = commercialSourceDetailMeta?.noteLabel || "Detalle fuente";
 
       try {
         const identifier = commercialForm.documento.trim() || commercialForm.phone.trim();
@@ -1837,7 +1988,7 @@ function imprimirRegistroComercial() {
               estado_actual: "pendiente valoracion",
               clasificacion_inicial: clasificacion,
               clasificacion_final: clasificacion,
-              incentivo: commercialForm.fuente || null,
+              incentivo: fuenteLabel || null,
             })
             .eq("id", existingUsers[0].id);
         } else if (identifier) {
@@ -1851,7 +2002,7 @@ function imprimirRegistroComercial() {
               estado_actual: "pendiente valoracion",
               clasificacion_inicial: clasificacion,
               clasificacion_final: clasificacion,
-              incentivo: commercialForm.fuente || null,
+              incentivo: fuenteLabel || null,
             },
           ]);
         }
@@ -1872,12 +2023,15 @@ function imprimirRegistroComercial() {
         commercialForm.medicamentos === "si" && commercialForm.clinical_flags.medicamentos_descalifica
           ? "Medicamento descalificante"
           : "",
+        commercialForm.enfermedades === "si" && commercialForm.clinical_flags.enfermedades_descalifica
+          ? "Enfermedad descalificante"
+          : "",
       ]
         .filter(Boolean)
         .join(", ");
 
       const notesParts = [
-        commercialForm.fuente ? `Fuente: ${commercialForm.fuente}` : "",
+        fuenteLabel ? `Fuente: ${fuenteLabel}` : "",
         `Clasificación inicial: ${clasificacion}`,
         commercialForm.clasificacion_motivo ? `Motivo clasificación: ${commercialForm.clasificacion_motivo}` : "",
         `Tiene EPS: ${commercialForm.tiene_eps === "si" ? "Sí" : "No"}`,
@@ -1899,7 +2053,12 @@ function imprimirRegistroComercial() {
         condicionesInternas ? `Marcación interna recepción: ${condicionesInternas}` : "",
         commercialForm.acompanante_nombre ? `Acompañante: ${commercialForm.acompanante_nombre}` : "",
         commercialForm.acompanante_parentesco ? `Parentesco acompañante: ${commercialForm.acompanante_parentesco}` : "",
-        commercialForm.referido_por ? `Referido por: ${commercialForm.referido_por}` : "",
+        `Enfermedades: ${commercialForm.enfermedades === "si" ? "Si" : "No"}`,
+        commercialForm.enfermedades === "si" && commercialForm.enfermedades_cual
+          ? `Enfermedades cuales: ${commercialForm.enfermedades_cual}`
+          : "",
+        `Tiempo disponible para terapia detox 30 min: ${commercialForm.tiempo_detox_30_min === "si" ? "Si" : "No"}`,
+        commercialForm.referido_por ? `${fuenteDetalleLabel}: ${commercialForm.referido_por}` : "",
         commercialForm.observaciones ? `Observaciones recepción: ${commercialForm.observaciones}` : "",
       ].filter(Boolean).join(" | ");
 
@@ -2017,6 +2176,7 @@ function imprimirRegistroComercial() {
       city: item.city || "",
       documento: "",
       fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
+      fuente_detalle: "",
       observaciones: limpiarFuenteManualDeNotas(item.notes),
       acompanante_nombre: "",
       acompanante_parentesco: "",
@@ -2033,6 +2193,9 @@ function imprimirRegistroComercial() {
       cirugias_cual: "",
       medicamentos: "no",
       medicamentos_cual: "",
+      enfermedades: "no",
+      enfermedades_cual: "",
+      tiempo_detox_30_min: "",
       clinical_flags: emptyCommercialClinicalFlags(),
       clasificacion_inicial: "No Q",
       clasificacion_motivo: "",
@@ -2683,7 +2846,7 @@ function imprimirRegistroComercial() {
 
         {activeSection === "comercial" && !isReadOnlyAgendaForCall ? (
           <section className="mb-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Ingreso comercial</h2>
@@ -2751,28 +2914,38 @@ function imprimirRegistroComercial() {
                       <select
                         className={inputClass}
                         value={commercialForm.fuente}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, fuente: e.target.value }))}
+                        onChange={(e) =>
+                          setCommercialForm((prev) => ({
+                            ...prev,
+                            fuente: normalizarFuenteManual(e.target.value),
+                            referido_por: "",
+                          }))
+                        }
                       >
                         <option value="">Selecciona</option>
                         {manualSourceOptions.map((item) => (
-                          <option key={item.value} value={item.label}>
+                          <option key={item.value} value={item.value}>
                             {item.label}
                           </option>
                         ))}
                       </select>
                     }
                   />
-                  <Field
-                    label="Referido por"
-                    input={
-                      <input
-                        className={inputClass}
-                        placeholder="Opcional"
-                        value={commercialForm.referido_por}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, referido_por: e.target.value }))}
-                      />
-                    }
-                  />
+                  {commercialSourceDetailMeta ? (
+                    <Field
+                      label={commercialSourceDetailMeta.label}
+                      input={
+                        <input
+                          className={inputClass}
+                          placeholder={commercialSourceDetailMeta.placeholder}
+                          value={commercialForm.referido_por}
+                          onChange={(e) => setCommercialForm((prev) => ({ ...prev, referido_por: e.target.value }))}
+                        />
+                      }
+                    />
+                  ) : (
+                    <div />
+                  )}
                   <Field
                     label="¿Tiene EPS?"
                     input={
@@ -2881,6 +3054,25 @@ function imprimirRegistroComercial() {
                       }
                     />
                   ) : null}
+                  <Field
+                    label="Cuenta con 30 min para terapia detox?"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={commercialForm.tiempo_detox_30_min}
+                        onChange={(e) =>
+                          setCommercialForm((prev) => ({
+                            ...prev,
+                            tiempo_detox_30_min: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Selecciona</option>
+                        <option value="si">Si</option>
+                        <option value="no">No</option>
+                      </select>
+                    }
+                  />
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -2917,6 +3109,8 @@ function imprimirRegistroComercial() {
                           cirugias_cual: "",
                           medicamentos: "no",
                           medicamentos_cual: "",
+                          enfermedades: "no",
+                          enfermedades_cual: "",
                           clinical_flags: emptyCommercialClinicalFlags(),
                         }))
                       }
@@ -3136,6 +3330,66 @@ function imprimirRegistroComercial() {
                         <span>Descalifica</span>
                       </label>
                     </div>
+                    <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
+                      <Field
+                        label="Enfermedades?"
+                        input={
+                          <select
+                            className={inputClass}
+                            value={commercialForm.enfermedades}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                enfermedades: e.target.value,
+                                enfermedades_cual: e.target.value === "si" ? prev.enfermedades_cual : "",
+                                clinical_flags: {
+                                  ...prev.clinical_flags,
+                                  enfermedades_descalifica:
+                                    e.target.value === "si" ? prev.clinical_flags.enfermedades_descalifica : false,
+                                },
+                              }))
+                            }
+                          >
+                            <option value="no">No</option>
+                            <option value="si">Si</option>
+                          </select>
+                        }
+                      />
+                      <Field
+                        label="Cuales enfermedades?"
+                        input={
+                          <input
+                            className={inputClass}
+                            placeholder="Escribe cuales"
+                            value={commercialForm.enfermedades_cual}
+                            disabled={commercialForm.enfermedades !== "si"}
+                            onChange={(e) =>
+                              setCommercialForm((prev) => ({
+                                ...prev,
+                                enfermedades_cual: e.target.value,
+                              }))
+                            }
+                          />
+                        }
+                      />
+                      <label className="flex items-end gap-3 rounded-2xl border border-slate-200 px-4 py-3 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          checked={commercialForm.clinical_flags.enfermedades_descalifica}
+                          disabled={commercialForm.enfermedades !== "si"}
+                          onChange={(e) =>
+                            setCommercialForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                enfermedades_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        <span>Descalifica</span>
+                      </label>
+                    </div>
                   </div>
                 </div>
 
@@ -3204,7 +3458,7 @@ function imprimirRegistroComercial() {
               </form>
             </div>
 
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Ingresos comerciales del día</h2>
@@ -3214,7 +3468,7 @@ function imprimirRegistroComercial() {
                 </div>
 
                 <input
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none md:max-w-xs"
+                  className="w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] md:max-w-xs"
                   placeholder="Buscar por nombre o teléfono"
                   value={commercialSearch}
                   onChange={(e) => setCommercialSearch(e.target.value)}
@@ -3223,12 +3477,12 @@ function imprimirRegistroComercial() {
 
               <div className="mt-5 space-y-3">
                 {commercialCasesFiltered.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  <div className="rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                     Aún no hay ingresos comerciales registrados.
                   </div>
                 ) : (
                   commercialCasesFiltered.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                    <div key={item.id} className="rounded-[26px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_16px_34px_rgba(95,125,102,0.08)]">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <div className="flex flex-wrap items-center gap-2">
@@ -3258,7 +3512,7 @@ function imprimirRegistroComercial() {
           </section>
         ) : activeSection === "nutricion_entregas" && !isReadOnlyAgendaForCall ? (
           <section className="mb-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Pendientes nutrición</h2>
@@ -3268,7 +3522,7 @@ function imprimirRegistroComercial() {
                 </div>
 
                 <input
-                  className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none md:max-w-xs"
+                  className="w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] md:max-w-xs"
                   placeholder="Buscar por nombre o teléfono"
                   value={nutritionDeliverySearch}
                   onChange={(e) => setNutritionDeliverySearch(e.target.value)}
@@ -3277,14 +3531,14 @@ function imprimirRegistroComercial() {
 
               <div className="mt-5 space-y-3">
                 {nutritionPendingAppointments.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  <div className="rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                     No hay clientes pendientes de entrega nutricional.
                   </div>
                 ) : (
                   nutritionPendingAppointments.map((item) => (
                     <div
                       key={item.id}
-                      className={`rounded-2xl border p-4 ${selectedNutritionDeliveryId === item.id ? "border-[#7FA287] bg-[#F8F7F4]" : "border-slate-200 bg-white"}`}
+                      className={`rounded-[26px] border p-4 transition ${selectedNutritionDeliveryId === item.id ? "border-[#7FA287] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] shadow-[0_16px_32px_rgba(95,125,102,0.12)]" : "border-[#D6E8DA] bg-white/92 shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F8FCF9]"}`}
                     >
                       <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
                         <div>
@@ -3301,7 +3555,7 @@ function imprimirRegistroComercial() {
                           <button
                             type="button"
                             onClick={() => abrirEntregaNutricion(item)}
-                            className="rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                            className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
                           >
                             Abrir
                           </button>
@@ -3313,23 +3567,23 @@ function imprimirRegistroComercial() {
               </div>
             </div>
 
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
               <h2 className="text-2xl font-bold text-slate-900">Entrega e impresión</h2>
               <p className="mt-1 text-sm text-slate-500">
                 Selecciona un cliente pendiente, imprime el documento y descuenta los productos entregados.
               </p>
 
               {loadingNutritionSelection ? (
-                <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                   Cargando información nutricional...
                 </div>
               ) : !nutritionSelection ? (
-                <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                   Abre un cliente pendiente para imprimir su documento y registrar los productos.
                 </div>
               ) : (
                 <div className="mt-5 space-y-4">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="rounded-[26px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
                     <p className="text-lg font-semibold text-slate-900">{nutritionSelection.appointment.patient_name}</p>
                     <p className="mt-1 text-sm text-slate-600">
                       {nutritionSelection.document || "Sin documento"} · {nutritionSelection.appointment.phone || "Sin teléfono"}
@@ -3353,7 +3607,7 @@ function imprimirRegistroComercial() {
                         profile: nutritionSelection.profile,
                       })
                     }
-                    className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                    className="w-full rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
                   >
                     Imprimir documento nutricional
                   </button>
@@ -3393,7 +3647,7 @@ function imprimirRegistroComercial() {
                       }
                     />
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-4">
+                    <div className="rounded-[24px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] px-4 py-4 shadow-inner">
                       <p className="text-sm font-medium text-slate-700">Stock disponible</p>
                       <p className="mt-2 text-lg font-semibold text-slate-900">
                         {selectedNutritionInventoryItem ? selectedNutritionInventoryItem.stock : "-"}
@@ -3416,7 +3670,7 @@ function imprimirRegistroComercial() {
                     type="button"
                     onClick={registrarEntregaNutricion}
                     disabled={savingNutritionDelivery}
-                    className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                    className="w-full rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-4 text-base font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
                   >
                     {savingNutritionDelivery ? "Guardando..." : "Registrar entrega y descontar inventario"}
                   </button>
@@ -3542,7 +3796,7 @@ function imprimirRegistroComercial() {
                   <button
                     type="button"
                     onClick={registrarEntregaLocal}
-                    className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white"
+                    className="mt-4 w-full rounded-[22px] bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] px-4 py-4 text-base font-semibold text-white shadow-[0_18px_38px_rgba(95,125,102,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(95,125,102,0.24)]"
                   >
                     Registrar entrega
                   </button>
@@ -3551,38 +3805,38 @@ function imprimirRegistroComercial() {
             </div>
 
             <div className="rounded-3xl bg-white p-6 shadow-sm">
-              <h2 className="text-2xl font-bold text-slate-900">Entregas recientes</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <h2 className="text-2xl font-bold text-[#1F3128]">Entregas recientes</h2>
+              <p className="mt-1 text-sm text-[#607368]">
                 Vista rápida de lo entregado desde este dispositivo.
               </p>
 
               <div className="mt-5 space-y-3">
                 {deliveryLogs.length === 0 ? (
-                  <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                  <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                     Aún no hay entregas registradas.
                   </div>
                 ) : (
                   deliveryLogs.map((item) => (
-                    <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                    <div key={item.id} className="rounded-[24px] border border-[#D8E9DD] bg-white/92 p-4 shadow-[0_12px_28px_rgba(95,125,102,0.08)]">
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-base font-semibold text-slate-900">{item.patient_name}</p>
-                          <p className="mt-1 text-sm text-slate-600">
+                          <p className="mt-1 text-sm text-[#5F7468]">
                             {item.phone || "Sin teléfono"}
                           </p>
-                          <p className="mt-2 text-sm text-slate-700">
+                          <p className="mt-2 text-sm text-[#496356]">
                             <span className="font-medium">Producto:</span> {item.product}
                           </p>
-                          <p className="mt-1 text-sm text-slate-700">
+                          <p className="mt-1 text-sm text-[#496356]">
                             <span className="font-medium">Cantidad:</span> {item.quantity}
                           </p>
                           {item.notes ? (
-                            <p className="mt-1 text-sm text-slate-700">
+                            <p className="mt-1 text-sm text-[#496356]">
                               <span className="font-medium">Observaciones:</span> {item.notes}
                             </p>
                           ) : null}
                         </div>
-                        <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
+                        <span className="rounded-full border border-[#D6E8DA] bg-[#F5FBF7] px-3 py-1 text-xs text-[#4D6356]">
                           {new Date(item.created_at).toLocaleDateString()}
                         </span>
                       </div>
@@ -3594,11 +3848,11 @@ function imprimirRegistroComercial() {
           </section>
         ) : activeSection === "inventario" && !isReadOnlyAgendaForCall ? (
           <section className="mb-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
-            <div className="rounded-3xl bg-white p-6 shadow-sm">
+            <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Inventario</h2>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <h2 className="text-2xl font-bold text-[#1F3128]">Inventario</h2>
+                  <p className="mt-1 text-sm text-[#607368]">
                     Control básico de nutracéuticos, entradas, salidas y alertas de stock.
                   </p>
                 </div>
@@ -3707,24 +3961,24 @@ function imprimirRegistroComercial() {
               <button
                 type="button"
                 onClick={registrarMovimientoInventario}
-                className="mt-4 w-full rounded-2xl bg-slate-900 px-4 py-4 text-base font-semibold text-white"
+                className="mt-4 w-full rounded-[22px] bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] px-4 py-4 text-base font-semibold text-white shadow-[0_18px_38px_rgba(95,125,102,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(95,125,102,0.24)]"
               >
                 Registrar movimiento
               </button>
             </div>
 
             <div className="space-y-6">
-              <div className="rounded-3xl bg-white p-6 shadow-sm">
+              <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
                 <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                   <div>
-                    <h2 className="text-2xl font-bold text-slate-900">Stock actual</h2>
-                    <p className="mt-1 text-sm text-slate-500">
+                    <h2 className="text-2xl font-bold text-[#1F3128]">Stock actual</h2>
+                    <p className="mt-1 text-sm text-[#607368]">
                       Vista rápida del inventario disponible en este dispositivo.
                     </p>
                   </div>
 
                   <input
-                    className="w-full rounded-2xl border border-slate-300 px-4 py-3 text-sm outline-none md:max-w-xs"
+                    className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] md:max-w-xs"
                     placeholder="Buscar producto o categoría"
                     value={inventorySearch}
                     onChange={(e) => setInventorySearch(e.target.value)}
@@ -3733,22 +3987,22 @@ function imprimirRegistroComercial() {
 
                 <div className="mt-5 space-y-3">
                   {inventoryFilteredItems.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                    <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                       Aún no hay productos registrados en el inventario.
                     </div>
                   ) : (
                     inventoryFilteredItems.map((item) => {
                       const inventoryStatus = getInventoryStatus(item);
                       return (
-                        <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                        <div key={item.id} className="rounded-[24px] border border-[#D8E9DD] bg-white/92 p-4 shadow-[0_12px_28px_rgba(95,125,102,0.08)]">
                           <div className="flex items-start justify-between gap-3">
                             <div>
                               <p className="text-base font-semibold text-slate-900">{item.name}</p>
-                              <p className="mt-1 text-sm text-slate-600">{item.category}</p>
-                              <p className="mt-2 text-sm text-slate-700">
+                              <p className="mt-1 text-sm text-[#5F7468]">{item.category}</p>
+                              <p className="mt-2 text-sm text-[#496356]">
                                 <span className="font-medium">Stock:</span> {item.stock}
                               </p>
-                              <p className="mt-1 text-sm text-slate-700">
+                              <p className="mt-1 text-sm text-[#496356]">
                                 <span className="font-medium">Mínimo:</span> {item.min_stock}
                               </p>
                             </div>
@@ -3763,36 +4017,36 @@ function imprimirRegistroComercial() {
                 </div>
               </div>
 
-              <div className="rounded-3xl bg-white p-6 shadow-sm">
-                <h2 className="text-2xl font-bold text-slate-900">Movimientos recientes</h2>
-                <p className="mt-1 text-sm text-slate-500">
+              <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
+                <h2 className="text-2xl font-bold text-[#1F3128]">Movimientos recientes</h2>
+                <p className="mt-1 text-sm text-[#607368]">
                   Últimos registros de entrada, salida o ajuste.
                 </p>
 
                 <div className="mt-5 space-y-3">
                   {inventoryRecentMovements.length === 0 ? (
-                    <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                    <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                       Aún no hay movimientos registrados.
                     </div>
                   ) : (
                     inventoryRecentMovements.map((item) => (
-                      <div key={item.id} className="rounded-2xl border border-slate-200 p-4">
+                      <div key={item.id} className="rounded-[24px] border border-[#D8E9DD] bg-white/92 p-4 shadow-[0_12px_28px_rgba(95,125,102,0.08)]">
                         <div className="flex items-start justify-between gap-3">
                           <div>
                             <p className="text-base font-semibold text-slate-900">{item.product_name}</p>
-                            <p className="mt-1 text-sm text-slate-700">
+                            <p className="mt-1 text-sm text-[#496356]">
                               <span className="font-medium">Tipo:</span> {item.type}
                             </p>
-                            <p className="mt-1 text-sm text-slate-700">
+                            <p className="mt-1 text-sm text-[#496356]">
                               <span className="font-medium">Cantidad:</span> {item.quantity}
                             </p>
                             {item.notes ? (
-                              <p className="mt-1 text-sm text-slate-700">
+                              <p className="mt-1 text-sm text-[#496356]">
                                 <span className="font-medium">Observaciones:</span> {item.notes}
                               </p>
                             ) : null}
                           </div>
-                          <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
+                          <span className="rounded-full border border-[#D6E8DA] bg-[#F5FBF7] px-3 py-1 text-xs text-[#4D6356]">
                             {new Date(item.created_at).toLocaleDateString()}
                           </span>
                         </div>
@@ -4076,7 +4330,7 @@ function imprimirRegistroComercial() {
                 <button
                   type="submit"
                   disabled={savingAppointment}
-                  className="w-full rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                  className="w-full rounded-[22px] bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] px-4 py-4 text-base font-semibold text-white shadow-[0_18px_38px_rgba(95,125,102,0.2)] transition hover:-translate-y-0.5 hover:shadow-[0_20px_40px_rgba(95,125,102,0.24)] disabled:translate-y-0 disabled:opacity-60"
                 >
                   {savingAppointment
                     ? "Guardando..."
@@ -4088,7 +4342,7 @@ function imprimirRegistroComercial() {
                 <button
                   type="button"
                   onClick={imprimirCitaActualDesdeFormulario}
-                  className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/88 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
                 >
                   Imprimir cita actual
                 </button>
@@ -4097,18 +4351,18 @@ function imprimirRegistroComercial() {
           </div>
 
           {!isReadOnlyAgendaForCall && (
-            <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
               <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Agenda visible</h2>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <h2 className="text-2xl font-bold text-[#1F3128]">Agenda visible</h2>
+                  <p className="mt-1 text-sm text-[#607368]">
                     {`Vista de ${sectionLabel.toLowerCase()} por nombre, teléfono y fecha.`}
                   </p>
                 </div>
 
                 <button
                   onClick={cargarTodo}
-                  className="rounded-xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2.5 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
                 >
                   Actualizar
                 </button>
@@ -4116,7 +4370,7 @@ function imprimirRegistroComercial() {
 
               <div className="mb-6 grid gap-3 md:grid-cols-[1fr_auto_auto_1fr]">
                 <input
-                  className="w-full rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
+                  className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/92 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="date"
                   value={fechaFiltro}
                   onChange={(e) => setFechaFiltro(e.target.value)}
@@ -4124,20 +4378,20 @@ function imprimirRegistroComercial() {
                 <button
                   type="button"
                   onClick={() => setFechaFiltro(hoyISO())}
-                  className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="rounded-[22px] border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
                 >
                   Hoy
                 </button>
                 <button
                   type="button"
                   onClick={() => setFechaFiltro("")}
-                  className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="rounded-[22px] border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
                 >
                   Todas
                 </button>
 
                 <input
-                  className="rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
+                  className="rounded-[22px] border border-[#CFE4D8] bg-white/92 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
                   placeholder="Buscar por nombre o teléfono"
                   value={busquedaAgenda}
@@ -4146,11 +4400,11 @@ function imprimirRegistroComercial() {
               </div>
 
               {loading ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                   Cargando citas...
                 </div>
               ) : agendaFiltrada.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+                <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                   No hay citas con esos filtros.
                 </div>
               ) : (
@@ -4164,10 +4418,10 @@ function imprimirRegistroComercial() {
                     <div
                       key={item.id}
                       onDoubleClick={() => abrirIngresoComercialDesdeCita(item)}
-                      className={`rounded-3xl border p-5 shadow-sm transition duration-200 ${
+                      className={`rounded-[28px] border p-5 shadow-[0_14px_32px_rgba(95,125,102,0.1)] transition duration-200 ${
                             isSelected
-                              ? "border-[#7FA287] bg-[#F8F7F4] shadow-md"
-                              : "border-[#D6E8DA] bg-white hover:border-[#BCD7C2] hover:shadow-md"
+                              ? "border-[#7FA287] bg-[linear-gradient(135deg,_rgba(245,252,247,0.98)_0%,_rgba(230,243,233,0.95)_100%)] shadow-[0_20px_44px_rgba(95,125,102,0.18)]"
+                              : "border-[#D6E8DA] bg-white/94 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-[0_18px_38px_rgba(95,125,102,0.14)]"
                           }`}
                     >
                       <div className="flex flex-col gap-4">
@@ -4186,36 +4440,36 @@ function imprimirRegistroComercial() {
                                 {traducirEstado(item.status)}
                               </span>
 
-                              <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
+                              <span className="rounded-full border border-[#D6E8DA] bg-[#F5FBF7] px-3 py-1 text-xs text-[#4D6356]">
                                 {item.appointment_date}
                               </span>
 
-                              <span className="rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs text-slate-700">
+                              <span className="rounded-full border border-[#D6E8DA] bg-[#F5FBF7] px-3 py-1 text-xs text-[#4D6356]">
                                 {formatHora(item.appointment_time)}
                               </span>
 
                               {isSelected ? (
-                                <span className="rounded-full bg-[#5F7D66] px-3 py-1 text-xs text-white">
+                                <span className="rounded-full bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] px-3 py-1 text-xs text-white shadow-sm">
                                   Seleccionada
                                 </span>
                               ) : null}
                             </div>
 
-                            <p className="mt-2 text-sm text-slate-600">
+                            <p className="mt-2 text-sm text-[#5F7468]">
                               {item.phone || "Sin teléfono"} · {item.city || "Sin ciudad"}
                             </p>
 
-                            <p className="mt-1 text-sm text-slate-600">
+                            <p className="mt-1 text-sm text-[#5F7468]">
                               Fuente: {item.lead_id ? "Lead existente" : traducirFuenteManual(extraerFuenteManualDesdeNotas(item.notes))}
                             </p>
 
-                            <p className="mt-1 text-sm text-slate-600">
+                            <p className="mt-1 text-sm text-[#5F7468]">
                               {getServiceFieldLabel(getSectionForService(item.service_type))}: {item.service_type || "Sin dato"}
                             </p>
 
                             {item.notes ? (
-                              <p className="mt-2 text-sm text-slate-600">
-                                <span className="font-medium text-slate-800">Notas:</span>{" "}
+                              <p className="mt-2 text-sm text-[#5F7468]">
+                                <span className="font-medium text-[#2E4638]">Notas:</span>{" "}
                                 {limpiarFuenteManualDeNotas(item.notes)}
                               </p>
                             ) : null}
@@ -4225,7 +4479,7 @@ function imprimirRegistroComercial() {
                             <button
                               type="button"
                               onClick={() => abrirIngresoComercialDesdeCita(item)}
-                              className="rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                              className="rounded-[20px] bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] px-4 py-2.5 text-sm font-medium text-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-[0_16px_30px_rgba(95,125,102,0.2)]"
                             >
                               Registro comercial
                             </button>
@@ -4248,21 +4502,21 @@ function imprimirRegistroComercial() {
                             <button
                               type="button"
                               onClick={() => cargarCitaParaEditar(item)}
-                              className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                              className="rounded-[20px] border border-[#CFE4D8] bg-white/85 px-4 py-2.5 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
                             >
                               Reagendar
                             </button>
                           </div>
                         </div>
 
-                        <div className="rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
-                          <p className="mb-3 text-sm font-medium text-slate-700">
+                        <div className="rounded-[24px] border border-[#D8E9DD] bg-[linear-gradient(180deg,_rgba(248,252,249,0.98)_0%,_rgba(240,248,242,0.98)_100%)] p-4">
+                          <p className="mb-3 text-sm font-medium text-[#496356]">
                             Estado de la cita
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
                             <select
-                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 outline-none transition focus:border-[#7FA287]"
+                              className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/92 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                               value={statusById[item.id] || item.status}
                               onChange={(e) =>
                                 setStatusById((prev) => ({
@@ -4284,7 +4538,7 @@ function imprimirRegistroComercial() {
                               type="button"
                               onClick={() => guardarEstado(item.id)}
                               disabled={savingStatusId === item.id}
-                              className="rounded-2xl border border-[#5F7D66] px-5 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                              className="rounded-[22px] border border-[#A9CCB5] bg-white/90 px-5 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#F5FCF7] disabled:translate-y-0 disabled:opacity-60"
                             >
                               {savingStatusId === item.id
                                 ? "Guardando..."
