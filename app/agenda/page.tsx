@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 
@@ -55,6 +56,21 @@ const horasDisponibles = [
   { value: "16:30", label: "4:30 pm" },
   { value: "17:30", label: "5:30 pm" },
 ];
+
+const panelClass =
+  "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
+
+const inputClass =
+  "rounded-2xl border border-[#CFE4D8] bg-white/92 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
+
+const primaryButtonClass =
+  "rounded-2xl bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(63,105,82,0.22)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60";
+
+const secondaryButtonClass =
+  "rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]";
+
+const smallActionButtonClass =
+  "rounded-2xl border border-[#CFE4D8] bg-white/90 px-3 py-2 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F4FAF6]";
 
 function badgeEstado(estado: string | null) {
   switch (estado) {
@@ -360,29 +376,63 @@ export default function AgendaPage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-100 p-6 md:p-10">
-      <div className="mx-auto max-w-7xl space-y-6">
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_38%,_#FFFCF8_100%)] p-6 md:p-10">
+      <div className="pointer-events-none absolute -left-16 top-0 h-72 w-72 rounded-full bg-[#BFE7D7]/35 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-24 h-80 w-80 rounded-full bg-[#8CB88D]/16 blur-3xl" />
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <div className="relative h-[420px] w-[420px] opacity-[0.04] md:h-[540px] md:w-[540px]">
+          <Image
+            src="/prevital-logo.jpeg"
+            alt="Prevital"
+            fill
+            className="object-contain"
+            priority
+          />
+        </div>
+      </div>
+
+      <div className="relative mx-auto max-w-7xl space-y-6">
+        <div className="flex items-center gap-3">
+          <div className="relative h-14 w-14 overflow-hidden rounded-[20px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_#FFFFFF_0%,_#F0FBF5_60%,_#E2F4EA_100%)] shadow-[0_14px_30px_rgba(95,125,102,0.18)]">
+            <Image
+              src="/prevital-logo.jpeg"
+              alt="Prevital"
+              fill
+              className="object-contain p-1"
+              priority
+            />
+          </div>
+        </div>
+        <section className="relative overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(242,251,246,0.95)_52%,_rgba(231,245,236,0.92)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.16)]">
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <div>
-              <p className="text-sm text-slate-500">Agenda de servicios</p>
-              <h1 className="text-3xl font-bold text-slate-900">Agenda Prevital</h1>
-              <p className="mt-2 text-slate-600">
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Agenda</p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3rem]">Agenda Prevital</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 Agenda en tiempo real para especialistas, detox y sueroterapias.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
+                <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">
+                  Operaci&oacute;n diaria
+                </span>
+                <span className="rounded-full bg-[#E8F6EE] px-3 py-1 ring-1 ring-[#CFE4D8]">
+                  Vista m&aacute;s clara y r&aacute;pida
+                </span>
+              </div>
             </div>
 
             <div className="flex flex-wrap gap-3">
               <a
                 href="/usuarios"
-                className="rounded-2xl bg-slate-900 px-4 py-2 text-sm font-medium text-white text-center"
+                className="rounded-2xl bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] px-4 py-2 text-sm font-medium text-white text-center shadow-[0_16px_30px_rgba(63,105,82,0.22)] transition hover:-translate-y-0.5 hover:brightness-105"
               >
                 Usuarios
               </a>
 
               <a
                 href="/comercial"
-                className="rounded-2xl border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 text-center"
+                className="rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] text-center shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
               >
                 Comercial
               </a>
@@ -391,65 +441,65 @@ export default function AgendaPage() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-5">
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Citas del día</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{resumen.total}</p>
+          <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
+            <p className="text-sm text-[#5B6E63]">Citas del día</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{resumen.total}</p>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Especialistas</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{resumen.especialistas}</p>
+          <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
+            <p className="text-sm text-[#5B6E63]">Especialistas</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{resumen.especialistas}</p>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Detox</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{resumen.detox}</p>
+          <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
+            <p className="text-sm text-[#5B6E63]">Detox</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{resumen.detox}</p>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Sueroterapia</p>
-            <p className="mt-2 text-3xl font-bold text-slate-900">{resumen.sueroterapia}</p>
+          <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
+            <p className="text-sm text-[#5B6E63]">Sueroterapia</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{resumen.sueroterapia}</p>
           </div>
 
-          <div className="rounded-3xl bg-white p-5 shadow-sm">
-            <p className="text-sm text-slate-500">Confirmadas</p>
+          <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
+            <p className="text-sm text-[#5B6E63]">Confirmadas</p>
             <p className="mt-2 text-3xl font-bold text-emerald-700">{resumen.confirmadas}</p>
           </div>
         </section>
 
         <section className="grid gap-6 xl:grid-cols-3">
-          <div className="rounded-3xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">Buscar usuario</h2>
+          <div className={panelClass}>
+            <h2 className="text-xl font-semibold text-[#24312A]">Buscar usuario</h2>
 
             <input
-              className="mt-4 w-full rounded-2xl border border-slate-300 p-4 outline-none"
+              className={`mt-4 w-full ${inputClass}`}
               placeholder="Buscar por nombre, documento o teléfono"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
 
             {cargando ? (
-              <p className="mt-4 text-slate-600">Cargando usuarios...</p>
+              <p className="mt-4 text-[#607368]">Cargando usuarios...</p>
             ) : (
               <div className="mt-4 space-y-3">
                 {usuariosFiltrados.map((usuario) => (
                   <button
                     key={usuario.id}
                     onClick={() => setUsuarioSeleccionado(usuario)}
-                    className={`w-full rounded-2xl border p-4 text-left ${
+                    className={`w-full rounded-[26px] border p-4 text-left transition ${
                       usuarioSeleccionado?.id === usuario.id
-                        ? "border-slate-900 bg-slate-50"
-                        : "border-slate-200 bg-white"
+                        ? "border-[#6C9C88] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] shadow-[0_16px_32px_rgba(95,125,102,0.12)]"
+                        : "border-[#D6E8DA] bg-white/92 shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F8FCF9]"
                     }`}
                   >
-                    <p className="font-semibold text-slate-900">
+                    <p className="font-semibold text-[#24312A]">
                       {usuario.nombre || "Sin nombre"}
                     </p>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="mt-1 text-sm text-[#607368]">
                       {usuario.documento || "Sin documento"} ·{" "}
                       {usuario.telefono || "Sin teléfono"}
                     </p>
-                    <p className="mt-1 text-sm text-slate-600">
+                    <p className="mt-1 text-sm text-[#607368]">
                       Estado: {usuario.estado_actual || "Sin estado"}
                     </p>
                   </button>
@@ -458,20 +508,20 @@ export default function AgendaPage() {
             )}
           </div>
 
-          <div className="xl:col-span-2 rounded-3xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">Agendar cita</h2>
+          <div className={`xl:col-span-2 ${panelClass}`}>
+            <h2 className="text-xl font-semibold text-[#24312A]">Agendar cita</h2>
 
             {!usuarioSeleccionado ? (
-              <p className="mt-4 text-slate-600">
+              <p className="mt-4 text-[#607368]">
                 Selecciona un usuario para agendar.
               </p>
             ) : (
               <div className="mt-4 space-y-6">
-                <div className="rounded-2xl border border-slate-200 p-4">
-                  <p className="font-semibold text-slate-900">
+                <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                  <p className="font-semibold text-[#24312A]">
                     {usuarioSeleccionado.nombre || "Sin nombre"}
                   </p>
-                  <p className="mt-1 text-sm text-slate-600">
+                  <p className="mt-1 text-sm text-[#607368]">
                     {usuarioSeleccionado.documento || "Sin documento"} ·{" "}
                     {usuarioSeleccionado.telefono || "Sin teléfono"}
                   </p>
@@ -479,7 +529,7 @@ export default function AgendaPage() {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <select
-                    className="rounded-2xl border border-slate-300 p-4 outline-none"
+                    className={inputClass}
                     value={form.tipo_cita}
                     onChange={(e) => setForm({ ...form, tipo_cita: e.target.value })}
                   >
@@ -490,21 +540,21 @@ export default function AgendaPage() {
                   </select>
 
                   <input
-                    className="rounded-2xl border border-slate-300 p-4 outline-none"
+                    className={inputClass}
                     placeholder="Profesional o responsable"
                     value={form.profesional}
                     onChange={(e) => setForm({ ...form, profesional: e.target.value })}
                   />
 
                   <input
-                    className="rounded-2xl border border-slate-300 p-4 outline-none"
+                    className={inputClass}
                     type="date"
                     value={form.fecha}
                     onChange={(e) => setForm({ ...form, fecha: e.target.value })}
                   />
 
                   <select
-                    className="rounded-2xl border border-slate-300 p-4 outline-none"
+                    className={inputClass}
                     value={form.hora}
                     onChange={(e) => setForm({ ...form, hora: e.target.value })}
                   >
@@ -517,14 +567,14 @@ export default function AgendaPage() {
                   </select>
 
                   <input
-                    className="rounded-2xl border border-slate-300 p-4 outline-none md:col-span-2"
+                    className={`${inputClass} md:col-span-2`}
                     placeholder="Sede"
                     value={form.sede}
                     onChange={(e) => setForm({ ...form, sede: e.target.value })}
                   />
 
                   <textarea
-                    className="min-h-28 rounded-2xl border border-slate-300 p-4 outline-none md:col-span-2"
+                    className={`min-h-28 ${inputClass} md:col-span-2`}
                     placeholder="Observaciones"
                     value={form.observaciones}
                     onChange={(e) => setForm({ ...form, observaciones: e.target.value })}
@@ -535,33 +585,33 @@ export default function AgendaPage() {
                   type="button"
                   onClick={guardarCita}
                   disabled={guardando}
-                  className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                  className={primaryButtonClass}
                 >
                   {guardando ? "Guardando..." : "Agendar cita"}
                 </button>
 
-                {mensaje && <p className="text-sm text-slate-600">{mensaje}</p>}
+                {mensaje && <p className="text-sm text-[#607368]">{mensaje}</p>}
               </div>
             )}
           </div>
         </section>
 
         {citaReagendar && (
-          <section className="rounded-3xl bg-white p-6 shadow-sm">
-            <h2 className="text-xl font-semibold text-slate-900">Reagendar cita</h2>
+          <section className={panelClass}>
+            <h2 className="text-xl font-semibold text-[#24312A]">Reagendar cita</h2>
 
-            <div className="mt-4 rounded-2xl border border-slate-200 p-4">
-              <p className="font-semibold text-slate-900">
+            <div className="mt-4 rounded-[26px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+              <p className="font-semibold text-[#24312A]">
                 {citaReagendar.usuario_nombre || "Sin usuario"}
               </p>
-              <p className="mt-1 text-sm text-slate-600">
+              <p className="mt-1 text-sm text-[#607368]">
                 Actual: {citaReagendar.fecha} · {horaLabel(citaReagendar.hora)}
               </p>
             </div>
 
             <div className="mt-4 grid gap-4 md:grid-cols-2">
               <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 type="date"
                 value={formReagendar.fecha}
                 onChange={(e) =>
@@ -570,7 +620,7 @@ export default function AgendaPage() {
               />
 
               <select
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 value={formReagendar.hora}
                 onChange={(e) =>
                   setFormReagendar({ ...formReagendar, hora: e.target.value })
@@ -585,7 +635,7 @@ export default function AgendaPage() {
               </select>
 
               <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 placeholder="Sede"
                 value={formReagendar.sede}
                 onChange={(e) =>
@@ -594,7 +644,7 @@ export default function AgendaPage() {
               />
 
               <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 placeholder="Profesional o responsable"
                 value={formReagendar.profesional}
                 onChange={(e) =>
@@ -603,7 +653,7 @@ export default function AgendaPage() {
               />
 
               <textarea
-                className="min-h-28 rounded-2xl border border-slate-300 p-4 outline-none md:col-span-2"
+                className={`min-h-28 ${inputClass} md:col-span-2`}
                 placeholder="Observaciones de reagendación"
                 value={formReagendar.observaciones}
                 onChange={(e) =>
@@ -617,7 +667,7 @@ export default function AgendaPage() {
                 type="button"
                 onClick={guardarReagendacion}
                 disabled={guardando}
-                className="rounded-2xl bg-slate-900 px-4 py-3 text-sm font-medium text-white disabled:opacity-60"
+                className={primaryButtonClass}
               >
                 {guardando ? "Guardando..." : "Guardar reagendación"}
               </button>
@@ -625,7 +675,7 @@ export default function AgendaPage() {
               <button
                 type="button"
                 onClick={() => setCitaReagendar(null)}
-                className="rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700"
+                className={secondaryButtonClass}
               >
                 Cancelar
               </button>
@@ -633,13 +683,13 @@ export default function AgendaPage() {
           </section>
         )}
 
-        <section className="rounded-3xl bg-white p-6 shadow-sm">
+        <section className={panelClass}>
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <h2 className="text-xl font-semibold text-slate-900">Agenda del día</h2>
+              <h2 className="text-xl font-semibold text-[#24312A]">Agenda del día</h2>
 
               <input
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 type="date"
                 value={fechaFiltro}
                 onChange={(e) => setFechaFiltro(e.target.value)}
@@ -648,7 +698,7 @@ export default function AgendaPage() {
 
             <div className="grid gap-3 md:grid-cols-4">
               <select
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 value={filtroTipo}
                 onChange={(e) => setFiltroTipo(e.target.value)}
               >
@@ -659,7 +709,7 @@ export default function AgendaPage() {
               </select>
 
               <select
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 value={filtroEstado}
                 onChange={(e) => setFiltroEstado(e.target.value)}
               >
@@ -673,7 +723,7 @@ export default function AgendaPage() {
               </select>
 
               <select
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 value={filtroProfesional}
                 onChange={(e) => setFiltroProfesional(e.target.value)}
               >
@@ -686,7 +736,7 @@ export default function AgendaPage() {
               </select>
 
               <select
-                className="rounded-2xl border border-slate-300 p-4 outline-none"
+                className={inputClass}
                 value={filtroSede}
                 onChange={(e) => setFiltroSede(e.target.value)}
               >
@@ -701,24 +751,24 @@ export default function AgendaPage() {
           </div>
 
           {cargando ? (
-            <p className="mt-4 text-slate-600">Cargando agenda...</p>
+            <p className="mt-4 text-[#607368]">Cargando agenda...</p>
           ) : citasFiltradas.length === 0 ? (
-            <p className="mt-4 text-slate-600">No hay citas para ese filtro.</p>
+            <p className="mt-4 text-[#607368]">No hay citas para ese filtro.</p>
           ) : (
             <div className="mt-4 space-y-4">
               {citasFiltradas.map((cita) => (
                 <div
                   key={cita.id}
-                  className="rounded-2xl border border-slate-200 p-4"
+                  className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_16px_34px_rgba(95,125,102,0.08)]"
                 >
                   <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                     <div>
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="text-lg font-semibold text-slate-900">
+                        <p className="text-lg font-semibold text-[#24312A]">
                           {horaLabel(cita.hora)}
                         </p>
 
-                        <span className="rounded-full bg-slate-100 px-3 py-1 text-xs text-slate-700">
+                        <span className="rounded-full border border-[#D7EADF] bg-white/85 px-3 py-1 text-xs font-medium text-[#4F6F5B] shadow-sm">
                           {cita.tipo_cita}
                         </span>
 
@@ -731,22 +781,22 @@ export default function AgendaPage() {
                         </span>
                       </div>
 
-                      <p className="mt-2 text-sm text-slate-700">
+                      <p className="mt-2 text-sm text-[#32453A]">
                         {cita.usuario_nombre || "Sin usuario"}
                       </p>
 
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="mt-1 text-sm text-[#607368]">
                         {cita.documento || "Sin documento"} ·{" "}
                         {cita.telefono || "Sin teléfono"}
                       </p>
 
-                      <p className="mt-1 text-sm text-slate-600">
+                      <p className="mt-1 text-sm text-[#607368]">
                         Profesional: {cita.profesional || "No registrado"} · Sede:{" "}
                         {cita.sede || "No registrada"}
                       </p>
 
                       {cita.observaciones && (
-                        <p className="mt-1 text-sm text-slate-600">
+                        <p className="mt-1 text-sm text-[#607368]">
                           Observaciones: {cita.observaciones}
                         </p>
                       )}
@@ -755,35 +805,35 @@ export default function AgendaPage() {
                     <div className="flex flex-wrap gap-2">
                       <button
                         onClick={() => cambiarEstadoCita(cita.id, "confirmada")}
-                        className="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
+                        className={smallActionButtonClass}
                       >
                         Confirmar
                       </button>
 
                       <button
                         onClick={() => cambiarEstadoCita(cita.id, "asistió")}
-                        className="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
+                        className={smallActionButtonClass}
                       >
                         Asistió
                       </button>
 
                       <button
                         onClick={() => cambiarEstadoCita(cita.id, "no asistió")}
-                        className="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
+                        className={smallActionButtonClass}
                       >
                         No asistió
                       </button>
 
                       <button
                         onClick={() => abrirReagendar(cita)}
-                        className="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
+                        className={smallActionButtonClass}
                       >
                         Reagendar
                       </button>
 
                       <button
                         onClick={() => cancelarCita(cita.id)}
-                        className="rounded-2xl border border-slate-300 px-3 py-2 text-xs font-medium text-slate-700"
+                        className={smallActionButtonClass}
                       >
                         Cancelar
                       </button>
@@ -794,7 +844,7 @@ export default function AgendaPage() {
             </div>
           )}
 
-          {mensaje && <p className="mt-4 text-sm text-slate-600">{mensaje}</p>}
+          {mensaje && <p className="mt-4 text-sm text-[#607368]">{mensaje}</p>}
         </section>
       </div>
     </main>

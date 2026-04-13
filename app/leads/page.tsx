@@ -599,7 +599,9 @@ export default function LeadsPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
+      <div className="pointer-events-none absolute -left-16 top-0 h-72 w-72 rounded-full bg-[#BFE7D7]/35 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-24 h-80 w-80 rounded-full bg-[#8CB88D]/16 blur-3xl" />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[420px] w-[420px] opacity-[0.04] md:h-[560px] md:w-[560px]">
           <Image
@@ -614,7 +616,7 @@ export default function LeadsPage() {
 
       <div className="relative mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+          <div className="relative h-14 w-14 overflow-hidden rounded-[20px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_#FFFFFF_0%,_#F0FBF5_60%,_#E2F4EA_100%)] shadow-[0_14px_30px_rgba(95,125,102,0.18)]">
             <Image
               src="/prevital-logo.jpeg"
               alt="Prevital"
@@ -625,16 +627,21 @@ export default function LeadsPage() {
           </div>
         </div>
 
-        <section className="rounded-[28px] border border-[#D6E8DA] bg-white p-6 shadow-sm">
+        <section className="relative overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(242,251,246,0.95)_52%,_rgba(231,245,236,0.92)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.16)]">
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-[#7FA287]">Leads</p>
-              <h1 className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Leads</p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">
                 Gestión de leads
               </h1>
-              <p className="mt-3 max-w-2xl text-sm text-slate-500">
+              <p className="mt-3 max-w-2xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 Consulta, filtra y administra los leads visibles según el rol autenticado.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
+                <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">Vista de prospección</span>
+                <span className="rounded-full bg-[#E8F6EE] px-3 py-1 ring-1 ring-[#CFE4D8]">Prevital menta + hoja</span>
+              </div>
             </div>
 
             <SessionBadge />
@@ -643,7 +650,7 @@ export default function LeadsPage() {
           <div className="mt-5 flex flex-wrap gap-3">
             <a
               href="/"
-              className="inline-flex items-center rounded-2xl border border-[#D6E8DA] bg-white px-5 py-3 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
+              className="inline-flex items-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-5 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Inicio
             </a>
@@ -656,7 +663,7 @@ export default function LeadsPage() {
               roleCode === "tmk") && (
               <a
                 href="/leads/nuevo"
-                className="inline-flex items-center rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-[#4F6F5B]"
+                className="inline-flex items-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-medium text-white shadow-[0_14px_28px_rgba(95,125,102,0.26)] transition hover:-translate-y-0.5 hover:brightness-105"
               >
                 Nuevo lead
               </a>
@@ -665,13 +672,13 @@ export default function LeadsPage() {
         </section>
 
         {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-200 bg-[linear-gradient(135deg,_#FFF5F5_0%,_#FFF0F0_100%)] p-4 text-sm text-red-700 shadow-sm">
             {error}
           </div>
         ) : null}
 
         {successMessage ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+          <div className="rounded-2xl border border-[#BFE0CD] bg-[linear-gradient(135deg,_#F1FBF5_0%,_#E8F7EF_100%)] p-4 text-sm text-[#2D6B4A] shadow-sm">
             {successMessage}
           </div>
         ) : null}
@@ -689,20 +696,20 @@ export default function LeadsPage() {
 
         {showSupervisorOpcTools ? (
           <section className="grid gap-6 xl:grid-cols-2">
-            <section className="rounded-[28px] border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <section className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
               <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="text-2xl font-bold tracking-tight text-[#24312A]">
                     Leads visibles para tu rol
                   </h2>
-                  <p className="mt-1 text-sm text-slate-500">
+                  <p className="mt-1 text-sm leading-6 text-[#51695C]">
                     Busca por nombre, teléfono o nombre del OPC y filtra por fecha.
                   </p>
                 </div>
 
                 <button
                   onClick={cargarLeads}
-                  className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
+                  className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
                 >
                   Actualizar
                 </button>
@@ -724,8 +731,8 @@ export default function LeadsPage() {
                     onClick={() => setQuickFilter(item.key as QuickFilter)}
                     className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
                       quickFilter === item.key
-                        ? "bg-[#5F7D66] text-white shadow-sm"
-                        : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"
+                        ? "bg-[linear-gradient(135deg,_#6D9D88_0%,_#5F7D66_100%)] text-white shadow-[0_14px_26px_rgba(95,125,102,0.22)]"
+                        : "border border-[#D6E8DA] bg-white/90 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
                     }`}
                   >
                     {item.label}
@@ -735,14 +742,14 @@ export default function LeadsPage() {
 
               <div className="mb-6 grid gap-3">
                 <input
-                  className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
+                  className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="date"
                   value={dateFilter}
                   onChange={(e) => setDateFilter(e.target.value)}
                 />
 
                 <input
-                  className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
+                  className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
                   placeholder="Buscar por nombre, teléfono u OPC"
                   value={search}
@@ -751,11 +758,11 @@ export default function LeadsPage() {
               </div>
 
               {loading ? (
-                <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
                   Cargando leads...
                 </div>
               ) : leadsFiltrados.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
                   No hay leads visibles con esos filtros.
                 </div>
               ) : (
@@ -766,7 +773,7 @@ export default function LeadsPage() {
                     return (
                       <div
                         key={lead.id}
-                        className="group rounded-3xl border border-[#D6E8DA] bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md"
+                        className="group rounded-[30px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_40px_rgba(95,125,102,0.1)] transition duration-200 hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:shadow-[0_22px_48px_rgba(95,125,102,0.16)]"
                       >
                         <div className="flex flex-col gap-3">
                           <div className="flex flex-wrap items-center gap-2">
@@ -803,7 +810,7 @@ export default function LeadsPage() {
                           <div className="flex flex-wrap gap-2">
                             <a
                               href={`/leads/${lead.id}`}
-                              className="inline-flex rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white shadow-sm transition hover:bg-[#4F6F5B]"
+                              className="inline-flex rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-medium text-white shadow-[0_12px_22px_rgba(95,125,102,0.22)] transition hover:-translate-y-0.5 hover:brightness-105"
                             >
                               Ver / editar
                             </a>
@@ -827,26 +834,26 @@ export default function LeadsPage() {
               )}
             </section>
 
-            <section className="rounded-[28px] border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <section className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
               <div className="mb-5">
                 <h2 className="text-2xl font-bold tracking-tight text-[#24312A]">
                   Citas agendadas del equipo
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm leading-6 text-[#51695C]">
                   Filtra las citas por fecha para ver la agenda futura del equipo OPC.
                 </p>
               </div>
 
               <div className="mb-6 grid gap-3">
                 <input
-                  className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
+                  className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="date"
                   value={appointmentsDateFilter}
                   onChange={(e) => setAppointmentsDateFilter(e.target.value)}
                 />
 
                 <input
-                  className="rounded-2xl border border-[#D6E8DA] bg-[#FCFDFC] p-4 text-[#24312A] outline-none transition focus:border-[#A8CDBD] focus:ring-2 focus:ring-[#A8CDBD]/30"
+                  className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
                   placeholder="Buscar por nombre o teléfono"
                   value={appointmentsSearch}
@@ -855,11 +862,11 @@ export default function LeadsPage() {
               </div>
 
               {loading ? (
-                <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
                   Cargando citas...
                 </div>
               ) : citasFiltradas.length === 0 ? (
-                <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+                <div className="rounded-3xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
                   No hay citas del equipo con esos filtros.
                 </div>
               ) : (
@@ -870,7 +877,7 @@ export default function LeadsPage() {
                     return (
                       <div
                         key={appointment.id}
-                        className="group rounded-3xl border border-[#D6E8DA] bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md"
+                        className="group rounded-[30px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_40px_rgba(95,125,102,0.1)] transition duration-200 hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:shadow-[0_22px_48px_rgba(95,125,102,0.16)]"
                       >
                         <div className="flex flex-col gap-3">
                           <div className="flex flex-wrap items-center gap-2">
@@ -1095,13 +1102,13 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
-      className={`group overflow-hidden rounded-3xl border bg-white p-0 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md ${
-        active ? "border-[#7FA287] ring-2 ring-[#A8CDBD]/40" : "border-[#D6E8DA]"
+      className={`group overflow-hidden rounded-[28px] border bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.94)_100%)] p-0 text-left shadow-[0_18px_40px_rgba(95,125,102,0.12)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_22px_48px_rgba(95,125,102,0.18)] ${
+        active ? "border-[#7FA287] ring-2 ring-[#A8CDBD]/40" : "border-[#D6E8DA] hover:border-[#9BC4AF]"
       }`}
     >
-      <div className="h-1 w-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+      <div className="h-1.5 w-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
       <div className="p-5">
-        <p className="text-sm font-medium text-slate-500">{title}</p>
+        <p className="text-sm font-medium text-[#5B6E63]">{title}</p>
         <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">
           {value}
         </p>

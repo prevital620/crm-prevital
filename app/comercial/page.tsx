@@ -931,7 +931,9 @@ const updatePayload: any = {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
+      <div className="pointer-events-none absolute -left-16 top-0 h-72 w-72 rounded-full bg-[#BFE7D7]/35 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-24 h-80 w-80 rounded-full bg-[#8CB88D]/16 blur-3xl" />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
           <Image
@@ -945,7 +947,7 @@ const updatePayload: any = {
       </div>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+          <div className="relative h-14 w-14 overflow-hidden rounded-[20px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_#FFFFFF_0%,_#F0FBF5_60%,_#E2F4EA_100%)] shadow-[0_14px_30px_rgba(95,125,102,0.18)]">
             <Image
               src="/prevital-logo.jpeg"
               alt="Prevital"
@@ -955,15 +957,19 @@ const updatePayload: any = {
             />
           </div>
         </div>
-        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+        <section className="relative overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(242,251,246,0.95)_52%,_rgba(231,245,236,0.92)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.16)]">
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-[#7FA287]">Comercial</p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Gestión comercial</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Comercial</p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">Gestión comercial</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 Atiende solo los casos asignados hoy y registra el cierre comercial del día.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
+                <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">Cierre comercial</span>
+                <span className="rounded-full bg-[#E8F6EE] px-3 py-1 ring-1 ring-[#CFE4D8]">Prevital menta + hoja</span>
+              </div>
             </div>
 
             <SessionBadge />
@@ -972,7 +978,7 @@ const updatePayload: any = {
           <div className="mt-4 flex flex-wrap gap-3">
             <a
               href="/"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Inicio
             </a>
@@ -980,7 +986,7 @@ const updatePayload: any = {
             <button
               type="button"
               onClick={() => void cargarDatos()}
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Actualizar
             </button>
@@ -988,13 +994,13 @@ const updatePayload: any = {
         </section>
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 rounded-2xl border border-red-200 bg-[linear-gradient(135deg,_#FFF5F5_0%,_#FFF0F0_100%)] p-4 text-sm text-red-700 shadow-sm">
             {error}
           </div>
         ) : null}
 
         {mensaje ? (
-          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          <div className="mb-6 rounded-2xl border border-[#BFE0CD] bg-[linear-gradient(135deg,_#F1FBF5_0%,_#E8F7EF_100%)] p-4 text-sm text-[#2D6B4A] shadow-sm">
             {mensaje}
           </div>
         ) : null}
@@ -1010,13 +1016,13 @@ const updatePayload: any = {
         </section>
 
         <section className="mb-6 grid gap-6 xl:grid-cols-2">
-          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">
                   {editingCaseId ? "Atender caso" : "Selecciona un caso"}
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm leading-6 text-[#51695C]">
                   Aquí ves lo registrado en recepción y completas el cierre comercial.
                 </p>
               </div>
@@ -1025,7 +1031,7 @@ const updatePayload: any = {
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
                 >
                   Cancelar
                 </button>
@@ -1033,7 +1039,7 @@ const updatePayload: any = {
             </div>
 
             {!editingCaseId ? (
-              <div className="mt-6 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+              <div className="mt-6 rounded-2xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
                 Selecciona un caso de la lista para empezar a atenderlo.
               </div>
             ) : (
@@ -1055,7 +1061,7 @@ const updatePayload: any = {
 
                 {currentCase ? (
                   <div className="grid gap-4 xl:grid-cols-3">
-                    <div className="rounded-2xl border border-[#D6E8DA] bg-white p-4 shadow-sm">
+                    <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_40px_rgba(95,125,102,0.1)]">
                       <h3 className="text-lg font-semibold text-[#24312A]">
                         Información básica
                       </h3>
@@ -1067,7 +1073,7 @@ const updatePayload: any = {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-[#D6E8DA] bg-white p-4 shadow-sm">
+                    <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_40px_rgba(95,125,102,0.1)]">
                       <h3 className="text-lg font-semibold text-[#24312A]">
                         Información registrada en recepción
                       </h3>
@@ -1085,7 +1091,7 @@ const updatePayload: any = {
                       )}
                     </div>
 
-                    <div className="rounded-2xl border border-[#D6E8DA] bg-white p-4 shadow-sm">
+                    <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_40px_rgba(95,125,102,0.1)]">
                       <h3 className="text-lg font-semibold text-[#24312A]">
                         Trazabilidad para admin
                       </h3>
@@ -1461,7 +1467,7 @@ const updatePayload: any = {
                     type="button"
                     onClick={() => void guardarCaso(false)}
                     disabled={saving}
-                    className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                    className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7] disabled:opacity-60"
                   >
                     {saving ? "Guardando..." : "Guardar avances"}
                   </button>
@@ -1470,7 +1476,7 @@ const updatePayload: any = {
                     type="button"
                     onClick={() => void guardarCaso(true)}
                     disabled={saving}
-                    className="rounded-2xl bg-[#5F7D66] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                    className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-4 text-base font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
                   >
                     {saving ? "Guardando..." : "Finalizar caso"}
                   </button>
@@ -1479,50 +1485,50 @@ const updatePayload: any = {
                     type="button"
                     onClick={imprimirInstruccionesPlan}
                     disabled={!canPrintPlan}
-                    className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     Imprimir instrucciones del plan
                   </button>
                 </div>
 
-                <div className="rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4 text-sm text-slate-600">
+                <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 text-sm text-[#51695C] shadow-inner">
                   El botón de impresión se habilita cuando el caso ya tenga servicio adquirido o volumen diligenciado.
                 </div>
               </div>
             )}
           </div>
 
-          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">Casos visibles</h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-1 text-sm leading-6 text-[#51695C]">
                   Solo aparecen los casos asignados hoy y aún activos para trabajar.
                 </p>
               </div>
 
               <button
                 onClick={() => void cargarDatos()}
-                className="rounded-xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
               >
                 Actualizar
               </button>
             </div>
 
-            <div className="mb-4 rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4 text-sm text-slate-600">
+            <div className="mb-4 rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 text-sm text-[#51695C] shadow-inner">
               Los casos finalizados ya no quedan en esta bandeja. Siguen contando en el resumen diario.
             </div>
 
             <div className="mb-6 grid gap-3 md:grid-cols-2">
               <input
-                className="rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
+                className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                 placeholder="Buscar por cliente o teléfono"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
 
               <select
-                className="rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
+                className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
               >
@@ -1533,11 +1539,11 @@ const updatePayload: any = {
             </div>
 
             {loading ? (
-              <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
                 Cargando casos...
               </div>
             ) : filteredCases.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+              <div className="rounded-2xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
                 No hay casos activos asignados hoy.
               </div>
             ) : (
@@ -1547,7 +1553,7 @@ const updatePayload: any = {
                   return (
                     <div
                       key={item.id}
-                      className="group rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md"
+                      className="group rounded-[30px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.1)] transition duration-200 hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:shadow-[0_22px_48px_rgba(95,125,102,0.16)]"
                     >
                       <div className="flex flex-col gap-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1574,7 +1580,7 @@ const updatePayload: any = {
                                 </p>
                               </div>
 
-                              <div className="rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-3">
+                              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-3 shadow-inner">
                                 <p className="text-sm font-semibold text-[#24312A]">
                                   Recepción
                                 </p>
@@ -1596,7 +1602,7 @@ const updatePayload: any = {
                           <button
                             type="button"
                             onClick={() => void iniciarAtencion(item)}
-                            className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                            className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
                           >
                             Atender
                           </button>
@@ -1616,4 +1622,4 @@ const updatePayload: any = {
 
 
 const inputClass =
-  "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
+  "w-full rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-4 text-base text-slate-900 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";

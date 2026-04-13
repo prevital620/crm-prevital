@@ -8,11 +8,11 @@ type StatCardProps = {
 
 export default function StatCard({ title, value, subtitle }: StatCardProps) {
   return (
-    <div className="group overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md">
-      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
-      <p className="text-sm font-medium text-slate-500">{title}</p>
+    <div className="group overflow-hidden rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)] transition duration-200 hover:-translate-y-1 hover:border-[#9BC4AF] hover:shadow-[0_22px_48px_rgba(95,125,102,0.18)]">
+      <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
+      <p className="text-sm font-medium text-[#5B6E63]">{title}</p>
       <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
-      {subtitle ? <p className="mt-2 text-xs text-slate-500">{subtitle}</p> : null}
+      {subtitle ? <p className="mt-2 text-xs text-[#6B7F74]">{subtitle}</p> : null}
     </div>
   );
 }

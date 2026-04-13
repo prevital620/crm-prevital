@@ -2381,9 +2381,9 @@ function imprimirRegistroComercial() {
 
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">Validando acceso...</p>
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)] backdrop-blur">
+          <p className="text-sm font-medium text-[#607368]">Validando acceso...</p>
         </div>
       </main>
     );
@@ -2391,9 +2391,9 @@ function imprimirRegistroComercial() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-red-700">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-[32px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(150,102,95,0.12)] backdrop-blur">
+          <p className="text-sm font-medium text-[#9A4E43]">
             {error || "No tienes permiso para entrar a este módulo."}
           </p>
         </div>
@@ -2402,7 +2402,9 @@ function imprimirRegistroComercial() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
+      <div className="pointer-events-none absolute -left-20 top-0 h-72 w-72 rounded-full bg-[#BFE7D7]/35 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-16 h-80 w-80 rounded-full bg-[#8CB88D]/18 blur-3xl" />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
           <Image
@@ -2417,7 +2419,7 @@ function imprimirRegistroComercial() {
 
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+          <div className="relative h-14 w-14 overflow-hidden rounded-[20px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_#FFFFFF_0%,_#F0FBF5_60%,_#E2F4EA_100%)] shadow-[0_14px_30px_rgba(95,125,102,0.18)]">
             <Image
               src="/prevital-logo.jpeg"
               alt="Prevital"
@@ -2428,17 +2430,17 @@ function imprimirRegistroComercial() {
           </div>
         </div>
 
-        <section className="relative mb-6 overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+        <section className="relative mb-6 overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(242,251,246,0.95)_52%,_rgba(231,245,236,0.92)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.16)]">
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-[#7FA287]">
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">
                 {isLimitedReceptionForCall ? "Agenda" : "Recepción"}
               </p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">
                 {isLimitedReceptionForCall ? "Agenda visible" : "Agenda y admisión"}
               </h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 {isLimitedReceptionForCall
                   ? currentRoleCode === "supervisor_call_center"
                     ? "Desde aquí puedes ver la agenda, crear citas y organizar los cupos sin entrar a los demás módulos de recepción."
@@ -2453,7 +2455,7 @@ function imprimirRegistroComercial() {
           <div className="mt-4 flex flex-wrap gap-3">
             <a
               href="/"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Inicio
             </a>
@@ -2523,13 +2525,13 @@ function imprimirRegistroComercial() {
         </section>
 
         {error ? (
-          <div className="mb-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="mb-6 rounded-[26px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-4 text-sm text-[#9A4E43] shadow-[0_16px_32px_rgba(150,102,95,0.08)]">
             {error}
           </div>
         ) : null}
 
         {mensaje ? (
-          <div className="mb-6 rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+          <div className="mb-6 rounded-[26px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(245,252,247,0.98)_0%,_rgba(237,248,241,0.98)_100%)] p-4 text-sm text-[#4F6F5B] shadow-[0_16px_32px_rgba(95,125,102,0.08)]">
             {mensaje}
           </div>
         ) : null}
@@ -2561,13 +2563,16 @@ function imprimirRegistroComercial() {
         )}
 
         {canManageAgendaConfig && activeSection !== "impresiones" && activeSection !== "inventario" && activeSection !== "comercial" && activeSection !== "nutricion_entregas" ? (
-          <section className="mb-6 rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <section className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
-                <h2 className="text-2xl font-bold text-[#24312A]">
+                <p className="inline-flex rounded-full border border-[#D7EADF] bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5F7D66] shadow-sm">
+                  Configuraci&oacute;n
+                </p>
+                <h2 className="mt-3 text-2xl font-bold text-[#24312A]">
                   Configuración de cupos
                 </h2>
-                <p className="mt-1 text-sm text-slate-500">
+                <p className="mt-2 text-sm leading-6 text-[#607368]">
                   Define cupos diarios y bloquea horarios por fecha.
                 </p>
               </div>
@@ -2576,7 +2581,7 @@ function imprimirRegistroComercial() {
                 type="button"
                 onClick={guardarConfiguracionAgenda}
                 disabled={savingConfig}
-                className="rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                className="rounded-2xl bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(63,105,82,0.22)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
               >
                 {savingConfig ? "Guardando..." : "Guardar configuración"}
               </button>
@@ -4305,9 +4310,9 @@ export default function RecepcionPage() {
   return (
     <Suspense
       fallback={
-        <main className="min-h-screen bg-slate-100 p-6 md:p-8">
-          <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
-            <p className="text-sm text-slate-500">Cargando recepción...</p>
+        <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-8">
+          <div className="mx-auto max-w-7xl rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
+            <p className="text-sm font-medium text-[#607368]">Cargando recepción...</p>
           </div>
         </main>
       }
@@ -4319,4 +4324,4 @@ export default function RecepcionPage() {
 
 
 const inputClass =
-  "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
+  "w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-4 text-base text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
