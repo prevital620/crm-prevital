@@ -781,8 +781,8 @@ export default function CallCenterPage() {
 
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-10">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-10">
+        <div className="mx-auto max-w-7xl rounded-[32px] border border-[#CFE4D8] bg-white/90 p-6 shadow-[0_18px_50px_rgba(95,125,102,0.12)] backdrop-blur">
           <p className="text-sm text-slate-500">Validando acceso...</p>
         </div>
       </main>
@@ -791,8 +791,8 @@ export default function CallCenterPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-10">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-10">
+        <div className="mx-auto max-w-7xl rounded-[32px] border border-[#CFE4D8] bg-white/90 p-6 shadow-[0_18px_50px_rgba(95,125,102,0.12)] backdrop-blur">
           <p className="text-sm font-medium text-red-700">
             {error || "No tienes permiso para entrar a este módulo."}
           </p>
@@ -802,7 +802,11 @@ export default function CallCenterPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-10">
+    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-10">
+      <div className="pointer-events-none absolute -left-20 top-0 h-72 w-72 rounded-full bg-[#BFE7D7]/35 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-16 h-80 w-80 rounded-full bg-[#8CB88D]/18 blur-3xl" />
+      <div className="pointer-events-none absolute bottom-10 left-1/3 h-64 w-64 rounded-full bg-[#DDF4E8]/45 blur-3xl" />
+
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[420px] w-[420px] opacity-[0.04] md:h-[560px] md:w-[560px]">
           <Image
@@ -817,7 +821,7 @@ export default function CallCenterPage() {
 
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+          <div className="relative h-14 w-14 overflow-hidden rounded-[20px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_#FFFFFF_0%,_#F0FBF5_60%,_#E2F4EA_100%)] shadow-[0_14px_30px_rgba(95,125,102,0.18)]">
             <Image
               src="/prevital-logo.jpeg"
               alt="Prevital"
@@ -828,20 +832,30 @@ export default function CallCenterPage() {
           </div>
         </div>
 
-        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+        <section className="relative overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(242,251,246,0.95)_52%,_rgba(231,245,236,0.92)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.16)]">
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
+          <div className="pointer-events-none absolute -right-16 top-8 h-40 w-40 rounded-full bg-[#BFE7D7]/30 blur-3xl" />
+          <div className="pointer-events-none absolute bottom-0 left-0 h-32 w-48 bg-[radial-gradient(circle_at_bottom_left,_rgba(168,205,189,0.22),_transparent_68%)]" />
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-[#7FA287]">Call Center</p>
-              <h1 className="mt-1 text-3xl font-bold text-[#24312A]">Gestión de leads</h1>
-              <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Call Center</p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.2rem]">Gestión de leads</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 {currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user"
                   ? "Puedes consultar, asignar, organizar por bloques, cancelar citas y actualizar el estado de los leads."
                   : currentRoleCode === "confirmador"
                   ? "Puedes consultar todos los leads, cancelar citas y actualizar su estado."
                   : "Puedes consultar tus leads asignados o creados por ti, cancelar citas y actualizar su estado."}
               </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
+                <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">
+                  Paleta Prevital
+                </span>
+                <span className="rounded-full bg-[#E8F6EE] px-3 py-1 ring-1 ring-[#CFE4D8]">
+                  Menta, hoja y crema
+                </span>
+              </div>
             </div>
 
             <SessionBadge />
@@ -850,7 +864,7 @@ export default function CallCenterPage() {
           <div className="mt-4 flex flex-wrap gap-3">
             <a
               href="/"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Inicio
             </a>
@@ -859,21 +873,21 @@ export default function CallCenterPage() {
               <>
                 <a
                   href="/leads/nuevo"
-                  className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-medium text-white shadow-[0_14px_28px_rgba(95,125,102,0.26)] transition hover:-translate-y-0.5 hover:brightness-105"
                 >
                   Nuevo lead
                 </a>
 
                 <a
                   href="/recepcion"
-                  className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:border-[#BCD7C2] hover:bg-[#F4FAF6]"
+                  className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
                 >
                   Agenda visible
                 </a>
 
                 <a
                   href="/recepcion"
-                  className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#A8CDBD_0%,_#7FA287_55%,_#5F7D66_100%)] px-4 py-2 text-sm font-medium text-[#1F3128] shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
                 >
                   Configurar cupos
                 </a>
@@ -883,8 +897,8 @@ export default function CallCenterPage() {
                   onClick={() => setQuickFilter("sin_asignar_pendientes_no_contestan")}
                   className={`inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium transition ${
                     quickFilter === "sin_asignar_pendientes_no_contestan"
-                      ? "bg-[#24312A] text-white shadow-sm"
-                      : "border border-[#D6E8DA] bg-[#F4FAF6] text-[#4F6F5B] hover:border-[#BCD7C2] hover:bg-white"
+                      ? "bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] text-white shadow-[0_16px_30px_rgba(63,105,82,0.3)]"
+                      : "border border-[#CFE4D8] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#ECF8F1_100%)] text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-white"
                   }`}
                 >
                   Sin asignar 30 días ({resumen.sinAsignarPendientesNoContestan})
@@ -895,13 +909,13 @@ export default function CallCenterPage() {
         </section>
 
         {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-2xl border border-red-200 bg-[linear-gradient(135deg,_#FFF5F5_0%,_#FFF0F0_100%)] p-4 text-sm text-red-700 shadow-sm">
             {error}
           </div>
         ) : null}
 
         {mensaje ? (
-          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+          <div className="rounded-2xl border border-[#BFE0CD] bg-[linear-gradient(135deg,_#F1FBF5_0%,_#E8F7EF_100%)] p-4 text-sm text-[#2D6B4A] shadow-sm">
             {mensaje}
           </div>
         ) : null}
@@ -927,10 +941,10 @@ export default function CallCenterPage() {
           <StatCard title="Descartados" value={resumen.cerrados} active={quickFilter === "cerrados"} onClick={() => setQuickFilter("cerrados")} />
         </section>
 
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="mb-4 rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4">
-            <p className="text-sm font-semibold text-[#24312A]">Control rápido del supervisor</p>
-            <p className="mt-1 text-sm text-slate-600">
+        <section className="rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
+          <div className="mb-5 rounded-[28px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-5 shadow-inner">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F6F5B]">Control rápido del supervisor</p>
+            <p className="mt-2 text-sm leading-7 text-[#51695C]">
               Prioriza primero <span className="font-medium text-[#4F6F5B]">Sin asignar</span>,{" "}
               <span className="font-medium text-[#4F6F5B]">Pendientes</span> y{" "}
               <span className="font-medium text-[#4F6F5B]">No contestan</span> para que no se pierdan leads. El acceso
@@ -944,11 +958,11 @@ export default function CallCenterPage() {
                 key={item.key}
                 type="button"
                 onClick={() => setQuickFilter(item.key)}
-                className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
-                  quickFilter === item.key
-                    ? "bg-[#5F7D66] text-white shadow-sm"
-                    : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"
-                }`}
+                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${
+                    quickFilter === item.key
+                      ? "bg-[linear-gradient(135deg,_#6D9D88_0%,_#5F7D66_100%)] text-white shadow-[0_14px_26px_rgba(95,125,102,0.22)]"
+                      : "border border-[#D6E8DA] bg-white/90 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                  }`}
               >
                 {item.label}
               </button>
@@ -957,7 +971,7 @@ export default function CallCenterPage() {
 
           <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_1fr]">
             <input
-              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
+              className="w-full rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-slate-800 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
               type="date"
               value={fechaFiltro}
               onChange={(e) => setFechaFiltro(e.target.value)}
@@ -966,7 +980,7 @@ export default function CallCenterPage() {
             <button
               type="button"
               onClick={() => setFechaFiltro(hoyISO())}
-              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#F5FCF7]"
             >
               Hoy
             </button>
@@ -974,13 +988,13 @@ export default function CallCenterPage() {
             <button
               type="button"
               onClick={() => setFechaFiltro("")}
-              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#F5FCF7]"
             >
               Todos
             </button>
 
             <input
-              className="rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
+              className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-slate-800 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
               placeholder="Buscar por teléfono, nombre, creador o asignado"
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
@@ -988,11 +1002,11 @@ export default function CallCenterPage() {
           </div>
 
           {cargando ? (
-            <div className="mt-6 rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+            <div className="mt-6 rounded-3xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
               Cargando leads...
             </div>
           ) : leadsFiltrados.length === 0 ? (
-            <div className="mt-6 rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
+            <div className="mt-6 rounded-3xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
               No hay leads para ese día o filtro.
             </div>
           ) : (
@@ -1026,7 +1040,7 @@ export default function CallCenterPage() {
                 return (
                   <div
                     key={lead.id}
-                    className="group rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md"
+                    className="group rounded-[30px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.1)] transition duration-200 hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:shadow-[0_22px_48px_rgba(95,125,102,0.16)]"
                   >
                     <div className="flex flex-col gap-4">
                       <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -1254,17 +1268,17 @@ function StatCard({
     <button
       type="button"
       onClick={onClick}
-      className={`group overflow-hidden rounded-3xl border bg-white p-5 text-left shadow-sm transition duration-200 hover:-translate-y-1 hover:shadow-md ${
+      className={`group overflow-hidden rounded-[28px] border bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.94)_100%)] p-5 text-left shadow-[0_18px_40px_rgba(95,125,102,0.12)] transition duration-200 hover:-translate-y-1 hover:shadow-[0_22px_48px_rgba(95,125,102,0.18)] ${
         active
           ? "border-[#7FA287] ring-2 ring-[#DDECE1]"
           : highlight
-          ? "border-amber-200 bg-amber-50/40 hover:border-amber-300"
-          : "border-[#D6E8DA] hover:border-[#BCD7C2]"
+          ? "border-[#B7D6B9] bg-[linear-gradient(180deg,_rgba(248,255,249,0.98)_0%,_rgba(233,247,236,0.95)_100%)] hover:border-[#8CB88D]"
+          : "border-[#D6E8DA] hover:border-[#9BC4AF]"
       }`}
     >
-      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
-      <p className="text-sm font-medium text-slate-500">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-[#24312A]">{value}</p>
+      <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
+      <p className="text-sm font-medium text-[#5B6E63]">{title}</p>
+      <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
     </button>
   );
 }
