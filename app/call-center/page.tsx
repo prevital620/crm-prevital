@@ -100,6 +100,16 @@ function hoyISO() {
   return `${y}-${m}-${d}`;
 }
 
+function restarDiasISO(dias: number) {
+  const fecha = new Date();
+  fecha.setHours(0, 0, 0, 0);
+  fecha.setDate(fecha.getDate() - dias);
+  const y = fecha.getFullYear();
+  const m = String(fecha.getMonth() + 1).padStart(2, "0");
+  const d = String(fecha.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
 function soloFecha(fecha: string | null | undefined) {
   if (!fecha) return "";
   return fecha.slice(0, 10);
@@ -183,10 +193,6 @@ function traducirFuenteComision(value: string | null) {
 
 const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "todos", label: "Todos" },
-  {
-    key: "sin_asignar_pendientes_no_contestan",
-    label: "Sin asignar: nuevos / pendientes / no contestan",
-  },
   { key: "sin_asignar", label: "Sin asignar" },
   { key: "pendientes", label: "Pendientes" },
   { key: "no_contestan", label: "No contestan" },
@@ -656,12 +662,22 @@ export default function CallCenterPage() {
     );
   }, [leadsBasePorRol, fechaFiltro]);
 
+  const leadsUltimos30Dias = useMemo(() => {
+    const inicioVentana = restarDiasISO(29);
+    const finVentana = hoyISO();
+
+    return leadsBasePorRol.filter((lead) => {
+      const fechaLead = soloFecha(lead.created_at);
+      return fechaLead >= inicioVentana && fechaLead <= finVentana;
+    });
+  }, [leadsBasePorRol]);
+
   const resumen = useMemo(() => {
     return {
       total: leadsDelDia.length,
       nuevos: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo").length,
       sinAsignar: leadsDelDia.filter((lead) => !estaAsignado(lead)).length,
-      sinAsignarPendientesNoContestan: leadsDelDia.filter((lead) =>
+      sinAsignarPendientesNoContestan: leadsUltimos30Dias.filter((lead) =>
         esSinAsignarPendienteONoContesta(lead)
       ).length,
       asignados: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "asignado").length,
@@ -673,12 +689,15 @@ export default function CallCenterPage() {
       noAsistio: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio").length,
       cerrados: leadsDelDia.filter((lead) => esCerrado(lead)).length,
     };
-  }, [leadsDelDia, activeAppointmentByLeadId]);
+  }, [leadsDelDia, leadsUltimos30Dias, activeAppointmentByLeadId]);
 
   const leadsFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
 
-    let base = [...leadsDelDia];
+    let base =
+      quickFilter === "sin_asignar_pendientes_no_contestan"
+        ? [...leadsUltimos30Dias]
+        : [...leadsDelDia];
 
     if (quickFilter === "nuevos") {
       base = base.filter((lead) => obtenerEstadoVisible(lead) === "nuevo");
@@ -745,6 +764,7 @@ export default function CallCenterPage() {
     });
   }, [
     leadsDelDia,
+    leadsUltimos30Dias,
     busqueda,
     quickFilter,
     creatorNames,
@@ -857,6 +877,18 @@ export default function CallCenterPage() {
                 >
                   Configurar cupos
                 </a>
+
+                <button
+                  type="button"
+                  onClick={() => setQuickFilter("sin_asignar_pendientes_no_contestan")}
+                  className={`inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium transition ${
+                    quickFilter === "sin_asignar_pendientes_no_contestan"
+                      ? "bg-[#24312A] text-white shadow-sm"
+                      : "border border-[#D6E8DA] bg-[#F4FAF6] text-[#4F6F5B] hover:border-[#BCD7C2] hover:bg-white"
+                  }`}
+                >
+                  Sin asignar 30 días ({resumen.sinAsignarPendientesNoContestan})
+                </button>
               </>
             )}
           </div>
@@ -877,7 +909,7 @@ export default function CallCenterPage() {
         <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
           <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
           <StatCard
-            title="Sin asignar nuevos / pendientes / no contestan"
+            title="Sin asignar nuevos / pendientes / no contestan (30 días)"
             value={resumen.sinAsignarPendientesNoContestan}
             active={quickFilter === "sin_asignar_pendientes_no_contestan"}
             onClick={() => setQuickFilter("sin_asignar_pendientes_no_contestan")}
@@ -901,7 +933,8 @@ export default function CallCenterPage() {
             <p className="mt-1 text-sm text-slate-600">
               Prioriza primero <span className="font-medium text-[#4F6F5B]">Sin asignar</span>,{" "}
               <span className="font-medium text-[#4F6F5B]">Pendientes</span> y{" "}
-              <span className="font-medium text-[#4F6F5B]">No contestan</span> para que no se pierdan leads.
+              <span className="font-medium text-[#4F6F5B]">No contestan</span> para que no se pierdan leads. El acceso
+              directo superior revisa siempre los Ãºltimos 30 dÃ­as.
             </p>
           </div>
 
