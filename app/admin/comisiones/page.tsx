@@ -105,6 +105,12 @@ function normalizeArea(jobTitle: string | null | undefined) {
   return jobTitle || "Sin rol";
 }
 
+const panelClass =
+  "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
+
+const inputClass =
+  "w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
+
 function StatCard({
   title,
   value,
@@ -115,11 +121,11 @@ function StatCard({
   subtitle: string;
 }) {
   return (
-    <div className="overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm">
-      <div className="mb-3 h-1 w-full rounded-full bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
-      <p className="text-sm font-medium text-slate-500">{title}</p>
+    <div className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.96)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
+      <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
+      <p className="text-sm font-medium text-[#5B6E63]">{title}</p>
       <p className="mt-2 text-3xl font-bold text-[#24312A]">{value}</p>
-      <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
+      <p className="mt-2 text-xs text-[#607368]">{subtitle}</p>
     </div>
   );
 }
@@ -354,9 +360,9 @@ export default function AdminComisionesPage() {
 
   if (loadingAuth) {
     return (
-      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">Validando acceso...</p>
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
+        <div className={`mx-auto max-w-7xl ${panelClass}`}>
+          <p className="text-sm font-medium text-[#607368]">Validando acceso...</p>
         </div>
       </main>
     );
@@ -364,9 +370,9 @@ export default function AdminComisionesPage() {
 
   if (!authorized) {
     return (
-      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
-        <div className="mx-auto max-w-7xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <p className="text-sm font-medium text-red-700">
+      <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
+        <div className="mx-auto max-w-7xl rounded-[32px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(150,102,95,0.12)]">
+          <p className="text-sm font-medium text-[#9A4E43]">
             {error || "No tienes permiso para entrar a este módulo."}
           </p>
         </div>
@@ -375,7 +381,9 @@ export default function AdminComisionesPage() {
   }
 
   return (
-    <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
+    <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
+      <div className="pointer-events-none absolute -left-16 top-0 h-72 w-72 rounded-full bg-[#BFE7D7]/35 blur-3xl" />
+      <div className="pointer-events-none absolute right-0 top-24 h-80 w-80 rounded-full bg-[#8CB88D]/16 blur-3xl" />
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
           <Image
@@ -390,7 +398,7 @@ export default function AdminComisionesPage() {
 
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+          <div className="relative h-14 w-14 overflow-hidden rounded-[20px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_#FFFFFF_0%,_#F0FBF5_60%,_#E2F4EA_100%)] shadow-[0_14px_30px_rgba(95,125,102,0.18)]">
             <Image
               src="/prevital-logo.jpeg"
               alt="Prevital"
@@ -401,14 +409,14 @@ export default function AdminComisionesPage() {
           </div>
         </div>
 
-        <section className="relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+        <section className="relative overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(242,251,246,0.95)_52%,_rgba(231,245,236,0.92)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.16)]">
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-[#7FA287]">Admin</p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Comisiones</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Admin</p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3rem]">Comisiones</h1>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 Vista separada para revisar base neta, ventas y resumen por colaborador.
               </p>
             </div>
@@ -419,7 +427,7 @@ export default function AdminComisionesPage() {
           <div className="mt-4 flex flex-wrap gap-3">
             <a
               href="/admin"
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Volver a admin
             </a>
@@ -427,7 +435,7 @@ export default function AdminComisionesPage() {
             <button
               type="button"
               onClick={() => void cargarDatos()}
-              className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Actualizar
             </button>
@@ -435,17 +443,17 @@ export default function AdminComisionesPage() {
         </section>
 
         {error ? (
-          <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+          <div className="rounded-[26px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-4 text-sm text-[#9A4E43] shadow-[0_16px_32px_rgba(150,102,95,0.08)]">
             {error}
           </div>
         ) : null}
 
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+        <section className={panelClass}>
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Desde</label>
               <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                className={inputClass}
                 type="date"
                 value={dateFrom}
                 onChange={(e) => setDateFrom(e.target.value)}
@@ -455,7 +463,7 @@ export default function AdminComisionesPage() {
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Hasta</label>
               <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                className={inputClass}
                 type="date"
                 value={dateTo}
                 onChange={(e) => setDateTo(e.target.value)}
@@ -465,7 +473,7 @@ export default function AdminComisionesPage() {
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Área o rol</label>
               <select
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                className={inputClass}
                 value={areaFilter}
                 onChange={(e) => setAreaFilter(e.target.value)}
               >
@@ -481,7 +489,7 @@ export default function AdminComisionesPage() {
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Colaborador</label>
               <select
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                className={inputClass}
                 value={collaboratorFilter}
                 onChange={(e) => setCollaboratorFilter(e.target.value)}
               >
@@ -497,7 +505,7 @@ export default function AdminComisionesPage() {
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Buscar</label>
               <input
-                className="w-full rounded-2xl border border-[#D6E8DA] px-4 py-3 outline-none transition focus:border-[#7FA287]"
+                className={inputClass}
                 placeholder="Cliente o colaborador"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -512,7 +520,7 @@ export default function AdminComisionesPage() {
                 setDateFrom(hoyISO());
                 setDateTo(hoyISO());
               }}
-              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Hoy
             </button>
@@ -526,7 +534,7 @@ export default function AdminComisionesPage() {
                 setCollaboratorFilter("");
                 setSearch("");
               }}
-              className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+              className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Limpiar filtros
             </button>
@@ -541,29 +549,29 @@ export default function AdminComisionesPage() {
           <StatCard title="Base neta" value={formatMoney(resumen.baseNeta)} subtitle="Base comisionable" />
         </section>
 
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+        <section className={panelClass}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">Resumen por colaborador</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-[#607368]">
                 Agrupado según las ventas reales del rango filtrado.
               </p>
             </div>
           </div>
 
           {loading ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+            <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
               Cargando resumen...
             </div>
           ) : resumenPorColaborador.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+            <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
               No hay datos para esos filtros.
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-500">
+                  <tr className="border-b border-[#D7EADF] text-left text-[#5B6E63]">
                     <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Área</th>
                     <th className="px-3 py-3">Ventas</th>
@@ -591,29 +599,29 @@ export default function AdminComisionesPage() {
           )}
         </section>
 
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+        <section className={panelClass}>
           <div className="flex items-center justify-between gap-3">
             <div>
               <h2 className="text-2xl font-bold text-slate-900">Detalle base para comisiones</h2>
-              <p className="mt-1 text-sm text-slate-500">
+              <p className="mt-1 text-sm text-[#607368]">
                 Detalle de ventas reales con base neta filtrada.
               </p>
             </div>
           </div>
 
           {loading ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+            <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
               Cargando detalle...
             </div>
           ) : ventasFiltradas.length === 0 ? (
-            <div className="mt-5 rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
+            <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
               No hay ventas reales para esos filtros.
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
               <table className="min-w-full text-sm">
                 <thead>
-                  <tr className="border-b border-slate-200 text-left text-slate-500">
+                  <tr className="border-b border-[#D7EADF] text-left text-[#5B6E63]">
                     <th className="px-3 py-3">Cliente</th>
                     <th className="px-3 py-3">Fecha</th>
                     <th className="px-3 py-3">Colaborador</th>
