@@ -15,6 +15,17 @@ import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import { hoyISO, dateToLocalISO, isSameLocalDay } from "@/lib/datetime/dateHelpers";
 import { formatDate, formatDateOnly } from "@/lib/datetime/dateFormat";
 import { traducirEstadoComercial, commercialStatusClass } from "@/lib/status/commercialStatus";
+import {
+  buildCommercialFollowUpMetadata,
+  CommercialFollowUpDraft,
+  createEmptyCommercialFollowUp,
+  parseCommercialFollowUpFromAppointment,
+} from "@/lib/commercial/followUps";
+import {
+  CommercialTeamKey,
+  inferCommercialTeam,
+  inferCommercialTeamFromDate,
+} from "@/lib/commercial/team";
 
 type CommercialCase = {
   id: string;
@@ -71,6 +82,16 @@ type SpecialistOption = {
   role_code: string;
 };
 
+type ProfileOption = {
+  id: string;
+  full_name: string;
+  role_name: string;
+  role_code: string;
+  job_title: string | null;
+  departments: { name: string | null }[] | null;
+  team_key: CommercialTeamKey | null;
+};
+
 type PortfolioFields = {
   installments_count: string;
   installment_value: string;
@@ -90,6 +111,15 @@ type LeadInheritance = {
   source: string | null;
   status: string | null;
   commission_source_type: string | null;
+};
+
+type AppointmentLookupRow = {
+  service_type: string | null;
+  appointment_date: string | null;
+  appointment_time: string | null;
+  specialist_user_id: string | null;
+  notes: string | null;
+  instructions_text: string | null;
 };
 
 const allowedRoles = [
@@ -324,22 +354,88 @@ function inferSaleOriginType(caseItem: CommercialCase) {
   return "directo";
 }
 
+function inferCaseTeamKey(
+  item: Pick<CommercialCase, "assigned_commercial_user_id" | "assigned_by_user_id" | "assigned_at" | "created_at">,
+  profileMap: Map<string, ProfileOption>
+) {
+  const assignedTeam = item.assigned_commercial_user_id
+    ? profileMap.get(item.assigned_commercial_user_id)?.team_key || null
+    : null;
+
+  if (assignedTeam) return assignedTeam;
+
+  const managerTeam = item.assigned_by_user_id
+    ? profileMap.get(item.assigned_by_user_id)?.team_key || null
+    : null;
+
+  if (managerTeam) return managerTeam;
+
+  return inferCommercialTeamFromDate(item.assigned_at || item.created_at);
+}
+
+function getPrimaryFollowUp(
+  form: {
+    next_step_type: string;
+    next_appointment_date: string;
+    next_appointment_time: string;
+    next_specialist_user_id: string;
+    next_notes: string;
+  },
+  extraFollowUps: CommercialFollowUpDraft[]
+) {
+  const items: CommercialFollowUpDraft[] = [];
+
+  if (form.next_step_type) {
+    items.push({
+      service_type: form.next_step_type,
+      appointment_date: form.next_appointment_date,
+      appointment_time: form.next_appointment_time,
+      specialist_user_id: form.next_specialist_user_id,
+      notes: form.next_notes,
+    });
+  }
+
+  extraFollowUps.forEach((item) => {
+    const hasAnyValue =
+      !!item.service_type ||
+      !!item.appointment_date ||
+      !!item.appointment_time ||
+      !!item.specialist_user_id ||
+      !!item.notes.trim();
+
+    if (!hasAnyValue) return;
+    items.push(item);
+  });
+
+  return items;
+}
+
 export default function ComercialPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [requestedCaseId, setRequestedCaseId] = useState<string | null>(null);
 
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentRoleCode, setCurrentRoleCode] = useState<string | null>(null);
+  const [currentTeamKey, setCurrentTeamKey] = useState<CommercialTeamKey | null>(null);
 
   const [cases, setCases] = useState<CommercialCase[]>([]);
   const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
+  const [nextAppointments, setNextAppointments] = useState<CommercialFollowUpDraft[]>([]);
 
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
 
   const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [creatingClient, setCreatingClient] = useState(false);
+
+  const [newClientForm, setNewClientForm] = useState({
+    customer_name: "",
+    phone: "",
+    city: "",
+  });
 
   const [form, setForm] = useState({
     status: "en_atencion_comercial",
@@ -533,6 +629,10 @@ export default function ComercialPage() {
           .select(`
             id,
             full_name,
+            job_title,
+            departments (
+              name
+            ),
             user_roles!user_roles_user_id_fkey (
               roles (
                 name,
@@ -552,13 +652,7 @@ export default function ComercialPage() {
         ? managementRoles.includes(currentRoleCode)
         : false;
 
-      if (!isManagementView && currentUserId) {
-        casesData = casesData.filter(
-          (item) => item.assigned_commercial_user_id === currentUserId
-        );
-      }
-
-      const specialistList: SpecialistOption[] = profileRows
+      const profiles: ProfileOption[] = profileRows
         .map((row) => {
           const role = row.user_roles?.[0]?.roles;
           return {
@@ -566,8 +660,45 @@ export default function ComercialPage() {
             full_name: row.full_name || "Sin nombre",
             role_name: role?.name || "",
             role_code: role?.code || "",
+            job_title: row.job_title || null,
+            departments: Array.isArray(row.departments) ? row.departments : [],
+            team_key: inferCommercialTeam({
+              job_title: row.job_title || null,
+              departments: Array.isArray(row.departments) ? row.departments : [],
+            }),
           };
         })
+        .filter((item) => item.role_code);
+
+      const profileMap = new Map<string, ProfileOption>();
+      profiles.forEach((item) => {
+        profileMap.set(item.id, item);
+      });
+
+      const currentProfile = currentUserId ? profileMap.get(currentUserId) || null : null;
+      const detectedTeam = currentRoleCode === "super_user" ? null : currentProfile?.team_key || null;
+      setCurrentTeamKey(detectedTeam);
+
+      if (!isManagementView && currentUserId) {
+        casesData = casesData.filter(
+          (item) => item.assigned_commercial_user_id === currentUserId
+        );
+      } else if (isManagementView && currentRoleCode !== "super_user") {
+        casesData = casesData.filter((item) => {
+          const caseTeam = inferCaseTeamKey(item, profileMap);
+
+          if (detectedTeam) {
+            return caseTeam === detectedTeam;
+          }
+
+          return (
+            item.assigned_by_user_id === currentUserId ||
+            item.assigned_commercial_user_id === currentUserId
+          );
+        });
+      }
+
+      const specialistList: SpecialistOption[] = profiles
         .filter((item) =>
           ["nutricionista", "medico_general", "fisioterapeuta"].includes(item.role_code)
         )
@@ -638,6 +769,50 @@ export default function ComercialPage() {
     }
   }, [filteredCases, editingCaseId]);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    setRequestedCaseId(params.get("caseId"));
+  }, []);
+
+  useEffect(() => {
+    if (!requestedCaseId || !cases.length) return;
+    if (editingCaseId === requestedCaseId) return;
+
+    const found = cases.find((item) => item.id === requestedCaseId);
+    if (found) {
+      void iniciarAtencion(found);
+    }
+  }, [requestedCaseId, cases, editingCaseId]);
+
+  function actualizarCitaAdicional(
+    index: number,
+    field: keyof CommercialFollowUpDraft,
+    value: string
+  ) {
+    setNextAppointments((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
+      )
+    );
+  }
+
+  function agregarCitaAdicional() {
+    setNextAppointments((prev) => [
+      ...prev,
+      createEmptyCommercialFollowUp(hoyISO(), ahoraHora()),
+    ]);
+  }
+
+  function eliminarCitaAdicional(index: number) {
+    setNextAppointments((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  }
+
   async function iniciarAtencion(item: CommercialCase) {
     try {
       setError("");
@@ -656,6 +831,37 @@ export default function ComercialPage() {
       }
 
       const portfolioData = parsePortfolioDetails(item.closing_notes);
+      let loadedFollowUps: CommercialFollowUpDraft[] = [];
+
+      const { data: appointmentRows, error: appointmentsError } = await supabase
+        .from("appointments")
+        .select("service_type, appointment_date, appointment_time, specialist_user_id, notes, instructions_text")
+        .ilike("instructions_text", `%[commercial_case_id:${item.id}]%`)
+        .order("appointment_date", { ascending: true })
+        .order("appointment_time", { ascending: true });
+
+      if (appointmentsError) throw appointmentsError;
+
+      loadedFollowUps =
+        ((appointmentRows as AppointmentLookupRow[] | null) || [])
+          .map((row) => parseCommercialFollowUpFromAppointment(row))
+          .filter((row): row is CommercialFollowUpDraft => Boolean(row)) || [];
+
+      if (loadedFollowUps.length === 0 && item.next_step_type) {
+        loadedFollowUps = [
+          {
+            service_type: item.next_step_type || "",
+            appointment_date: item.next_appointment_date || hoyISO(),
+            appointment_time: item.next_appointment_time
+              ? item.next_appointment_time.slice(0, 5)
+              : ahoraHora(),
+            specialist_user_id: item.next_specialist_user_id || "",
+            notes: item.next_notes || "",
+          },
+        ];
+      }
+
+      const primaryFollowUp = loadedFollowUps[0] || null;
 
       setEditingCaseId(item.id);
       setForm({
@@ -670,14 +876,13 @@ export default function ComercialPage() {
         volume_amount:
           item.volume_amount || item.sale_value ? String(item.volume_amount || item.sale_value) : "",
         closing_notes: stripPortfolioDetails(item.closing_notes || ""),
-        next_step_type: item.next_step_type || "",
-        next_appointment_date: item.next_appointment_date || hoyISO(),
-        next_appointment_time: item.next_appointment_time
-          ? item.next_appointment_time.slice(0, 5)
-          : ahoraHora(),
-        next_specialist_user_id: item.next_specialist_user_id || "",
-        next_notes: item.next_notes || "",
+        next_step_type: primaryFollowUp?.service_type || "",
+        next_appointment_date: primaryFollowUp?.appointment_date || hoyISO(),
+        next_appointment_time: primaryFollowUp?.appointment_time || ahoraHora(),
+        next_specialist_user_id: primaryFollowUp?.specialist_user_id || "",
+        next_notes: primaryFollowUp?.notes || "",
       });
+      setNextAppointments(loadedFollowUps.slice(1));
       setPortfolioForm({
         ...portfolioData,
         installment_value: "",
@@ -699,6 +904,7 @@ export default function ComercialPage() {
 
   function resetForm() {
     setEditingCaseId(null);
+    setNextAppointments([]);
     setForm({
       status: "en_atencion_comercial",
       commercial_notes: "",
@@ -727,6 +933,8 @@ export default function ComercialPage() {
   function imprimirInstruccionesPlan() {
     if (!currentCase) return;
 
+    const allFollowUps = getPrimaryFollowUp(form, nextAppointments);
+
     printPlanInstructions({
       customerName: currentCase.customer_name,
       phone: currentCase.phone,
@@ -737,16 +945,130 @@ export default function ComercialPage() {
       volumeAmount: calculatedVolume,
       cashAmount: calculatedCash,
       portfolioAmount: calculatedPortfolio,
-      nextStep: nextStepLabel(form.next_step_type),
+      nextStep:
+        allFollowUps.length > 1
+          ? `${allFollowUps.length} citas agendadas`
+          : nextStepLabel(allFollowUps[0]?.service_type || form.next_step_type),
       receptionSummary: currentReceptionSummary,
       assessment: form.sales_assessment,
       proposal: form.proposal_text,
       closingNotes: form.closing_notes,
-      nextAppointmentDate: form.next_appointment_date || null,
-      nextAppointmentTime: form.next_appointment_time || null,
-      nextNotes: form.next_notes,
+      nextAppointmentDate: allFollowUps[0]?.appointment_date || form.next_appointment_date || null,
+      nextAppointmentTime: allFollowUps[0]?.appointment_time || form.next_appointment_time || null,
+      nextNotes: allFollowUps[0]?.notes || form.next_notes,
+      nextAppointments: allFollowUps.map((item) => ({
+        serviceName: nextStepLabel(item.service_type),
+        appointmentDate: item.appointment_date,
+        appointmentTime: item.appointment_time,
+        specialistName:
+          specialists.find((specialist) => specialist.id === item.specialist_user_id)?.full_name ||
+          null,
+        notes: item.notes,
+      })),
       installmentPlan,
     });
+  }
+
+  async function crearClienteNuevo() {
+    if (!currentUserId) {
+      setError("No se encontró el usuario actual.");
+      return;
+    }
+
+    if (!newClientForm.customer_name.trim() || !newClientForm.phone.trim()) {
+      setError("Debes registrar nombre y teléfono para crear el cliente.");
+      return;
+    }
+
+    try {
+      setCreatingClient(true);
+      setError("");
+      setMensaje("");
+
+      const assignedAt = new Date().toISOString();
+
+      const { data, error } = await supabase
+        .from("commercial_cases")
+        .insert([
+          {
+            customer_name: newClientForm.customer_name.trim(),
+            phone: newClientForm.phone.trim(),
+            city: newClientForm.city.trim() || null,
+            status: "asignado_comercial",
+            assigned_commercial_user_id: currentUserId,
+            assigned_by_user_id: currentUserId,
+            assigned_at: assignedAt,
+            sale_origin_type: "directo",
+            created_by_user_id: currentUserId,
+            updated_by_user_id: currentUserId,
+          },
+        ])
+        .select(`
+          id,
+          lead_id,
+          appointment_id,
+          customer_name,
+          phone,
+          city,
+          assigned_commercial_user_id,
+          assigned_by_user_id,
+          assigned_at,
+          status,
+          commercial_notes,
+          sales_assessment,
+          proposal_text,
+          sale_result,
+          purchased_service,
+          sale_value,
+          payment_method,
+          cash_amount,
+          portfolio_amount,
+          volume_amount,
+          closing_notes,
+          closed_by_user_id,
+          closed_at,
+          next_step_type,
+          next_appointment_date,
+          next_appointment_time,
+          next_specialist_user_id,
+          next_notes,
+          next_appointment_created,
+          next_appointment_id,
+          sale_origin_type,
+          lead_source_type,
+          commission_source_type,
+          call_contact_result,
+          call_user_id,
+          opc_user_id,
+          is_credit_payment,
+          credit_provider,
+          credit_discount_amount,
+          admin_discount_amount,
+          net_commission_base,
+          counts_for_commission,
+          counts_for_commercial_bonus,
+          gross_bonus_base,
+          created_at
+        `)
+        .single();
+
+      if (error) throw error;
+
+      const createdCase = data as CommercialCase;
+
+      setNewClientForm({
+        customer_name: "",
+        phone: "",
+        city: "",
+      });
+      setCases((prev) => [createdCase, ...prev]);
+      setMensaje("Cliente creado y asignado para atención comercial.");
+      await iniciarAtencion(createdCase);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo crear el cliente nuevo.");
+    } finally {
+      setCreatingClient(false);
+    }
   }
 
   async function obtenerHerenciaLead(leadId: string | null) {
@@ -807,6 +1129,15 @@ const adminDiscountAmount = 200000;
 const netCommissionBase = Math.max(0, cashNumber - creditDiscountAmount - adminDiscountAmount);
 const grossBonusBase = volumeNumber || 0;
 const hayVenta = volumeNumber > 0 || !!form.purchased_service;
+      const plannedFollowUps = getPrimaryFollowUp(form, nextAppointments);
+
+      const incompleteFollowUp = plannedFollowUps.find(
+        (item) => !item.service_type || !item.appointment_date || !item.appointment_time
+      );
+
+      if (incompleteFollowUp) {
+        throw new Error("Completa servicio, fecha y hora en cada cita que quieras agendar.");
+      }
 
 const updatePayload: any = {
         status: statusFinal,
@@ -838,11 +1169,11 @@ const updatePayload: any = {
         counts_for_commission: hayVenta,
         counts_for_commercial_bonus: hayVenta,
         gross_bonus_base: grossBonusBase || null,
-        next_step_type: form.next_step_type || null,
-        next_appointment_date: form.next_step_type ? form.next_appointment_date : null,
-        next_appointment_time: form.next_step_type ? form.next_appointment_time : null,
-        next_specialist_user_id: form.next_specialist_user_id || null,
-        next_notes: form.next_notes.trim() || null,
+        next_step_type: plannedFollowUps[0]?.service_type || null,
+        next_appointment_date: plannedFollowUps[0]?.appointment_date || null,
+        next_appointment_time: plannedFollowUps[0]?.appointment_time || null,
+        next_specialist_user_id: plannedFollowUps[0]?.specialist_user_id || null,
+        next_notes: plannedFollowUps[0]?.notes.trim() || null,
         updated_by_user_id: currentUserId,
       };
 
@@ -855,36 +1186,36 @@ const updatePayload: any = {
       if (
         statusFinal === "finalizado" &&
         hayVenta &&
-        form.next_step_type &&
+        plannedFollowUps.length > 0 &&
         !currentCaseFound?.next_appointment_created
       ) {
+        const appointmentPayload = plannedFollowUps.map((item, index) => ({
+          lead_id: currentCaseFound?.lead_id || null,
+          patient_name: currentCaseFound?.customer_name || "Cliente",
+          phone: currentCaseFound?.phone || null,
+          city: currentCaseFound?.city || null,
+          appointment_date: item.appointment_date,
+          appointment_time: item.appointment_time,
+          status: "agendada",
+          service_type: item.service_type,
+          treatment_type: item.service_type,
+          specialist_user_id: item.specialist_user_id || null,
+          notes: item.notes.trim() || null,
+          instructions_text: buildCommercialFollowUpMetadata(editingCaseId, index),
+          created_by_user_id: currentUserId,
+          updated_by_user_id: currentUserId,
+        }));
+
         const { data: appointmentData, error: appointmentError } = await supabase
           .from("appointments")
-          .insert([
-            {
-              lead_id: currentCaseFound?.lead_id || null,
-              patient_name: currentCaseFound?.customer_name || "Cliente",
-              phone: currentCaseFound?.phone || null,
-              city: currentCaseFound?.city || null,
-              appointment_date: form.next_appointment_date,
-              appointment_time: form.next_appointment_time,
-              status: "agendada",
-              service_type: form.next_step_type,
-              treatment_type: form.next_step_type,
-              specialist_user_id: form.next_specialist_user_id || null,
-              notes: form.next_notes.trim() || null,
-              instructions_text: form.next_notes.trim() || null,
-              created_by_user_id: currentUserId,
-              updated_by_user_id: currentUserId,
-            },
-          ])
+          .insert(appointmentPayload)
           .select("id")
-          .single();
+          .order("id", { ascending: true });
 
         if (appointmentError) throw appointmentError;
 
         updatePayload.next_appointment_created = true;
-        updatePayload.next_appointment_id = appointmentData.id;
+        updatePayload.next_appointment_id = appointmentData?.[0]?.id || null;
       }
 
       const { error } = await supabase
@@ -1013,6 +1344,90 @@ const updatePayload: any = {
           <StatCard title="Seguimiento hoy" value={String(resumen.seguimientoHoy)} />
           <StatCard title="No vendidos hoy" value={String(resumen.noVendidosHoy)} />
           <StatCard title="Citas hoy" value={String(resumen.citasHoy)} />
+        </section>
+
+        <section className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
+          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <div>
+              <h2 className="text-2xl font-bold text-[#24312A]">Cliente nuevo directo</h2>
+              <p className="mt-1 text-sm leading-6 text-[#51695C]">
+                Si llega un cliente que no pasó por recepción o base previa, aquí lo creas y queda asignado a tu bandeja.
+              </p>
+
+              <div className="mt-4 grid gap-4 md:grid-cols-3">
+                <Field
+                  label="Nombre"
+                  input={
+                    <input
+                      className={inputClass}
+                      value={newClientForm.customer_name}
+                      onChange={(e) =>
+                        setNewClientForm((prev) => ({
+                          ...prev,
+                          customer_name: e.target.value,
+                        }))
+                      }
+                    />
+                  }
+                />
+
+                <Field
+                  label="Teléfono"
+                  input={
+                    <input
+                      className={inputClass}
+                      value={newClientForm.phone}
+                      onChange={(e) =>
+                        setNewClientForm((prev) => ({
+                          ...prev,
+                          phone: e.target.value,
+                        }))
+                      }
+                    />
+                  }
+                />
+
+                <Field
+                  label="Ciudad"
+                  input={
+                    <input
+                      className={inputClass}
+                      value={newClientForm.city}
+                      onChange={(e) =>
+                        setNewClientForm((prev) => ({
+                          ...prev,
+                          city: e.target.value,
+                        }))
+                      }
+                    />
+                  }
+                />
+              </div>
+
+              <div className="mt-4 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => void crearClienteNuevo()}
+                  disabled={creatingClient}
+                  className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
+                >
+                  {creatingClient ? "Creando..." : "Crear cliente"}
+                </button>
+              </div>
+            </div>
+
+            <div className="rounded-[28px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-5 shadow-inner">
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#5F7D66]">
+                Alcance visible
+              </p>
+              <h3 className="mt-3 text-2xl font-bold text-[#24312A]">
+                {currentTeamKey ? `Equipo ${currentTeamKey.toUpperCase()}` : "Mis casos comerciales"}
+              </h3>
+              <p className="mt-3 text-sm leading-6 text-[#51695C]">
+                La bandeja comercial sigue mostrando los casos del día. Cuando entra gerencia, solo se cargan los comerciales de su mismo equipo.
+              </p>
+            </div>
+          </div>
         </section>
 
         <section className="mb-6 grid gap-6 xl:grid-cols-2">
@@ -1459,6 +1874,127 @@ const updatePayload: any = {
                         />
                       }
                     />
+                  </div>
+
+                  {nextAppointments.length > 0 ? (
+                    <div className="mt-4 space-y-4">
+                      {nextAppointments.map((item, index) => (
+                        <div
+                          key={`follow-up-${index}`}
+                          className="rounded-2xl border border-[#D7EADF] bg-white p-4 shadow-sm"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <h4 className="text-sm font-semibold text-[#24312A]">
+                              Cita adicional {index + (form.next_step_type ? 2 : 1)}
+                            </h4>
+                            <button
+                              type="button"
+                              onClick={() => eliminarCitaAdicional(index)}
+                              className="rounded-xl border border-rose-200 px-3 py-2 text-xs font-medium text-rose-700 transition hover:bg-rose-50"
+                            >
+                              Quitar
+                            </button>
+                          </div>
+
+                          <div className="mt-4 grid gap-4 md:grid-cols-2">
+                            <Field
+                              label="Siguiente paso"
+                              input={
+                                <select
+                                  className={inputClass}
+                                  value={item.service_type}
+                                  onChange={(e) =>
+                                    actualizarCitaAdicional(index, "service_type", e.target.value)
+                                  }
+                                >
+                                  {nextStepOptions.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                      {option.label}
+                                    </option>
+                                  ))}
+                                </select>
+                              }
+                            />
+
+                            <Field
+                              label="Especialista"
+                              input={
+                                <select
+                                  className={inputClass}
+                                  value={item.specialist_user_id}
+                                  onChange={(e) =>
+                                    actualizarCitaAdicional(index, "specialist_user_id", e.target.value)
+                                  }
+                                >
+                                  <option value="">Selecciona</option>
+                                  {specialists.map((option) => (
+                                    <option key={option.id} value={option.id}>
+                                      {option.full_name} Â· {option.role_name}
+                                    </option>
+                                  ))}
+                                </select>
+                              }
+                            />
+
+                            <Field
+                              label="Fecha"
+                              input={
+                                <input
+                                  className={inputClass}
+                                  type="date"
+                                  value={item.appointment_date}
+                                  onChange={(e) =>
+                                    actualizarCitaAdicional(index, "appointment_date", e.target.value)
+                                  }
+                                />
+                              }
+                            />
+
+                            <Field
+                              label="Hora"
+                              input={
+                                <input
+                                  className={inputClass}
+                                  type="time"
+                                  value={item.appointment_time}
+                                  onChange={(e) =>
+                                    actualizarCitaAdicional(index, "appointment_time", e.target.value)
+                                  }
+                                />
+                              }
+                            />
+                          </div>
+
+                          <div className="mt-4">
+                            <Field
+                              label="Notas de continuidad"
+                              input={
+                                <textarea
+                                  className={`${inputClass} min-h-[90px] resize-none`}
+                                  value={item.notes}
+                                  onChange={(e) =>
+                                    actualizarCitaAdicional(index, "notes", e.target.value)
+                                  }
+                                />
+                              }
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  <div className="mt-4 flex flex-wrap gap-3">
+                    <button
+                      type="button"
+                      onClick={agregarCitaAdicional}
+                      className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                    >
+                      Agregar otra cita
+                    </button>
+                    <p className="text-sm text-slate-500">
+                      La primera cita queda como continuidad principal y las demás salen como adicionales al finalizar.
+                    </p>
                   </div>
                 </div>
 

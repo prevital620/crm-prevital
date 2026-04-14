@@ -5,6 +5,13 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
+import {
+  CommercialTeamKey,
+  getCommercialTeamLabel,
+  inferCommercialTeam,
+  inferCommercialTeamFromDate,
+} from "@/lib/commercial/team";
+import { hoyISO, dateToLocalISO } from "@/lib/datetime/dateHelpers";
 
 type CommercialCase = {
   id: string;
@@ -20,6 +27,7 @@ type CommercialCase = {
   sale_result: string | null;
   purchased_service: string | null;
   sale_value: number | null;
+  closed_at: string | null;
   created_at: string;
 };
 
@@ -28,6 +36,9 @@ type CommercialUser = {
   full_name: string;
   role_name: string;
   role_code: string;
+  job_title: string | null;
+  departments: { name: string | null }[] | null;
+  team_key: CommercialTeamKey | null;
 };
 
 type GerenciaTab = "pendientes" | "comerciales" | "en_gestion" | "finalizados";
@@ -155,6 +166,33 @@ function esHoy(dateString: string | null | undefined) {
   }
 }
 
+function formatMoney(value: number | null | undefined) {
+  return `$${Number(value || 0).toLocaleString("es-CO")}`;
+}
+
+function getCaseReferenceDate(item: CommercialCase) {
+  return item.closed_at || item.assigned_at || item.created_at;
+}
+
+function inferCaseTeamKey(
+  item: Pick<CommercialCase, "assigned_commercial_user_id" | "assigned_by_user_id" | "assigned_at" | "created_at">,
+  profileMap: Map<string, CommercialUser>
+) {
+  const assignedTeam = item.assigned_commercial_user_id
+    ? profileMap.get(item.assigned_commercial_user_id)?.team_key || null
+    : null;
+
+  if (assignedTeam) return assignedTeam;
+
+  const managerTeam = item.assigned_by_user_id
+    ? profileMap.get(item.assigned_by_user_id)?.team_key || null
+    : null;
+
+  if (managerTeam) return managerTeam;
+
+  return inferCommercialTeamFromDate(item.assigned_at || item.created_at);
+}
+
 export default function GerenciaComercialPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
@@ -166,12 +204,18 @@ export default function GerenciaComercialPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentRoleCode, setCurrentRoleCode] = useState<string | null>(null);
   const [currentRoleName, setCurrentRoleName] = useState<string | null>(null);
+  const [currentTeamKey, setCurrentTeamKey] = useState<CommercialTeamKey | null>(null);
 
   const [cases, setCases] = useState<CommercialCase[]>([]);
   const [commercialUsers, setCommercialUsers] = useState<CommercialUser[]>([]);
 
   const [activeTab, setActiveTab] = useState<GerenciaTab>("pendientes");
   const [search, setSearch] = useState("");
+  const [dateFrom, setDateFrom] = useState(hoyISO());
+  const [dateTo, setDateTo] = useState(hoyISO());
+  const [commercialFilter, setCommercialFilter] = useState("");
+  const [saleValueMin, setSaleValueMin] = useState("");
+  const [saleValueMax, setSaleValueMax] = useState("");
   const [selectedCommercialByCase, setSelectedCommercialByCase] = useState<Record<string, string>>({});
   const [savingCaseId, setSavingCaseId] = useState<string | null>(null);
 
@@ -229,6 +273,7 @@ export default function GerenciaComercialPage() {
             sale_result,
             purchased_service,
             sale_value,
+            closed_at,
             created_at
           `)
           .order("created_at", { ascending: false }),
@@ -238,6 +283,10 @@ export default function GerenciaComercialPage() {
           .select(`
             id,
             full_name,
+            job_title,
+            departments (
+              name
+            ),
             user_roles!user_roles_user_id_fkey (
               roles (
                 name,
@@ -262,6 +311,12 @@ export default function GerenciaComercialPage() {
             full_name: row.full_name || "Sin nombre",
             role_name: role?.name || "",
             role_code: role?.code || "",
+            job_title: row.job_title || null,
+            departments: Array.isArray(row.departments) ? row.departments : [],
+            team_key: inferCommercialTeam({
+              job_title: row.job_title || null,
+              departments: Array.isArray(row.departments) ? row.departments : [],
+            }),
           } as CommercialUser;
         })
         .filter((user) => visibleTeamRoleCodes.includes(user.role_code));
@@ -282,6 +337,9 @@ export default function GerenciaComercialPage() {
           full_name: "Gerencia comercial",
           role_name: currentRoleName || "Gerencia comercial",
           role_code: currentRoleCode,
+          job_title: null,
+          departments: [],
+          team_key: null,
         });
       }
 
@@ -289,13 +347,45 @@ export default function GerenciaComercialPage() {
         a.full_name.localeCompare(b.full_name)
       );
 
+      const detectedTeam =
+        currentRoleCode === "super_user"
+          ? null
+          : dedupedMap.get(currentUserId || "")?.team_key || null;
+      setCurrentTeamKey(detectedTeam);
+
+      const visibleUsers =
+        currentRoleCode === "super_user"
+          ? teamUsers
+          : teamUsers.filter((user) => {
+              if (user.id === currentUserId) return true;
+              if (detectedTeam) return user.team_key === detectedTeam;
+              return user.role_code === "comercial";
+            });
+
+      const visibleUserIds = new Set(visibleUsers.map((user) => user.id));
+      const visibleCaseRows =
+        currentRoleCode === "super_user"
+          ? casesData
+          : casesData.filter((item) => {
+              const caseTeam = inferCaseTeamKey(item, dedupedMap);
+
+              if (detectedTeam) {
+                return caseTeam === detectedTeam;
+              }
+
+              return (
+                item.assigned_by_user_id === currentUserId ||
+                item.assigned_commercial_user_id === currentUserId
+              );
+            });
+
       const selected: Record<string, string> = {};
-      casesData.forEach((item) => {
+      visibleCaseRows.forEach((item) => {
         selected[item.id] = item.assigned_commercial_user_id || "";
       });
 
-      setCases(casesData);
-      setCommercialUsers(teamUsers);
+      setCases(visibleCaseRows);
+      setCommercialUsers(visibleUsers);
       setSelectedCommercialByCase(selected);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los casos comerciales.");
@@ -314,60 +404,105 @@ export default function GerenciaComercialPage() {
     }
   }, [authorized, currentUserId, currentRoleCode, currentRoleName]);
 
+  const filteredCasesByRange = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const minValue = saleValueMin ? Number(saleValueMin) : null;
+    const maxValue = saleValueMax ? Number(saleValueMax) : null;
+
+    return cases.filter((item) => {
+      const referenceDate = dateToLocalISO(getCaseReferenceDate(item));
+      const matchesDateFrom = dateFrom ? (referenceDate || "") >= dateFrom : true;
+      const matchesDateTo = dateTo ? (referenceDate || "") <= dateTo : true;
+      const matchesCommercial = commercialFilter
+        ? item.assigned_commercial_user_id === commercialFilter
+        : true;
+      const saleValue = Number(item.sale_value || 0);
+      const matchesMinValue = minValue !== null ? saleValue >= minValue : true;
+      const matchesMaxValue = maxValue !== null ? saleValue <= maxValue : true;
+      const commercialName = nombreComercial(item.assigned_commercial_user_id).toLowerCase();
+      const matchesSearch = q
+        ? (item.customer_name || "").toLowerCase().includes(q) ||
+          (item.phone || "").toLowerCase().includes(q) ||
+          (item.city || "").toLowerCase().includes(q) ||
+          commercialName.includes(q)
+        : true;
+
+      return (
+        matchesDateFrom &&
+        matchesDateTo &&
+        matchesCommercial &&
+        matchesMinValue &&
+        matchesMaxValue &&
+        matchesSearch
+      );
+    });
+  }, [
+    cases,
+    search,
+    dateFrom,
+    dateTo,
+    commercialFilter,
+    saleValueMin,
+    saleValueMax,
+    commercialUsers,
+    currentUserId,
+    currentRoleName,
+  ]);
+
   const activeCasesByCommercial = useMemo(() => {
     const map: Record<string, number> = {};
 
-    cases.forEach((item) => {
+    filteredCasesByRange.forEach((item) => {
       if (item.assigned_commercial_user_id && activeCommercialStatuses.includes(item.status)) {
         map[item.assigned_commercial_user_id] = (map[item.assigned_commercial_user_id] || 0) + 1;
       }
     });
 
     return map;
-  }, [cases]);
+  }, [filteredCasesByRange]);
 
   const finishedTodayByCommercial = useMemo(() => {
     const map: Record<string, number> = {};
 
-    cases.forEach((item) => {
+    filteredCasesByRange.forEach((item) => {
       if (!item.assigned_commercial_user_id) return;
       if (item.status !== "finalizado") return;
-      if (!esHoy(item.created_at)) return;
+      if (!esHoy(getCaseReferenceDate(item))) return;
 
       map[item.assigned_commercial_user_id] = (map[item.assigned_commercial_user_id] || 0) + 1;
     });
 
     return map;
-  }, [cases]);
+  }, [filteredCasesByRange]);
 
   const salesTodayByCommercial = useMemo(() => {
     const map: Record<string, number> = {};
 
-    cases.forEach((item) => {
+    filteredCasesByRange.forEach((item) => {
       if (!item.assigned_commercial_user_id) return;
       if (item.status !== "finalizado") return;
       if (!esVentaReal(item)) return;
-      if (!esHoy(item.created_at)) return;
+      if (!esHoy(getCaseReferenceDate(item))) return;
 
       map[item.assigned_commercial_user_id] = (map[item.assigned_commercial_user_id] || 0) + 1;
     });
 
     return map;
-  }, [cases]);
+  }, [filteredCasesByRange]);
 
   const pendingCases = useMemo(
-    () => cases.filter((item) => item.status === "pendiente_asignacion_comercial"),
-    [cases]
+    () => filteredCasesByRange.filter((item) => item.status === "pendiente_asignacion_comercial"),
+    [filteredCasesByRange]
   );
 
   const inProgressCases = useMemo(
-    () => cases.filter((item) => activeCommercialStatuses.includes(item.status)),
-    [cases]
+    () => filteredCasesByRange.filter((item) => activeCommercialStatuses.includes(item.status)),
+    [filteredCasesByRange]
   );
 
   const finalizadosCases = useMemo(
-    () => cases.filter((item) => item.status === "finalizado"),
-    [cases]
+    () => filteredCasesByRange.filter((item) => item.status === "finalizado"),
+    [filteredCasesByRange]
   );
 
   const resumen = useMemo(() => {
@@ -376,32 +511,17 @@ export default function GerenciaComercialPage() {
       enAtencion: inProgressCases.length,
       finalizados: finalizadosCases.length,
       ventas: finalizadosCases.filter(esVentaReal).length,
-      seguimientos: cases.filter((x) => x.status === "seguimiento_comercial").length,
+      seguimientos: filteredCasesByRange.filter((x) => x.status === "seguimiento_comercial").length,
       disponibles: commercialUsers.filter((user) => (activeCasesByCommercial[user.id] || 0) === 0).length,
     };
-  }, [pendingCases, inProgressCases, finalizadosCases, cases, commercialUsers, activeCasesByCommercial]);
+  }, [pendingCases, inProgressCases, finalizadosCases, filteredCasesByRange, commercialUsers, activeCasesByCommercial]);
 
   const visibleCases = useMemo(() => {
-    const source =
-      activeTab === "pendientes"
-        ? pendingCases
-        : activeTab === "en_gestion"
-          ? inProgressCases
-          : activeTab === "finalizados"
-            ? finalizadosCases
-            : cases;
-
-    const q = search.trim().toLowerCase();
-    if (!q) return source;
-
-    return source.filter((item) => {
-      return (
-        (item.customer_name || "").toLowerCase().includes(q) ||
-        (item.phone || "").toLowerCase().includes(q) ||
-        (item.city || "").toLowerCase().includes(q)
-      );
-    });
-  }, [activeTab, pendingCases, inProgressCases, finalizadosCases, cases, search]);
+    if (activeTab === "pendientes") return pendingCases;
+    if (activeTab === "en_gestion") return inProgressCases;
+    if (activeTab === "finalizados") return finalizadosCases;
+    return filteredCasesByRange;
+  }, [activeTab, pendingCases, inProgressCases, finalizadosCases, filteredCasesByRange]);
 
   function nombreComercial(userId: string | null) {
     if (!userId) return "Sin asignar";
@@ -683,6 +803,14 @@ export default function GerenciaComercialPage() {
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 Asigna clientes, revisa disponibilidad del equipo y entra a la gestión solo cuando lo necesites.
               </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
+                <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">
+                  {currentTeamKey ? getCommercialTeamLabel(currentTeamKey) : "Vista comercial"}
+                </span>
+                <span className="rounded-full bg-[#E8F6EE] px-3 py-1 ring-1 ring-[#CFE4D8]">
+                  Resultados del dÃ­a por defecto
+                </span>
+              </div>
             </div>
 
             <SessionBadge />
@@ -710,6 +838,107 @@ export default function GerenciaComercialPage() {
           <StatCard title="Ventas" value={String(resumen.ventas)} />
           <StatCard title="Seguimientos" value={String(resumen.seguimientos)} />
           <StatCard title="Disponibles" value={String(resumen.disponibles)} />
+        </section>
+
+        <section className={panelClass}>
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Desde</label>
+              <input
+                className={inputClass}
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Hasta</label>
+              <input
+                className={inputClass}
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Comercial</label>
+              <select
+                className={inputClass}
+                value={commercialFilter}
+                onChange={(e) => setCommercialFilter(e.target.value)}
+              >
+                <option value="">Todos</option>
+                {commercialUsers
+                  .filter((user) => user.role_code === "comercial")
+                  .map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.full_name}
+                    </option>
+                  ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Valor mínimo</label>
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                value={saleValueMin}
+                onChange={(e) => setSaleValueMin(e.target.value)}
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Valor máximo</label>
+              <input
+                className={inputClass}
+                type="number"
+                min="0"
+                value={saleValueMax}
+                onChange={(e) => setSaleValueMax(e.target.value)}
+              />
+            </div>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-[1fr_auto_auto]">
+            <input
+              className={inputClass}
+              placeholder="Buscar por cliente, teléfono, ciudad o comercial"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+
+            <button
+              type="button"
+              onClick={() => {
+                const today = hoyISO();
+                setDateFrom(today);
+                setDateTo(today);
+              }}
+              className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+            >
+              Hoy
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const today = hoyISO();
+                setDateFrom(today);
+                setDateTo(today);
+                setCommercialFilter("");
+                setSaleValueMin("");
+                setSaleValueMax("");
+                setSearch("");
+              }}
+              className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+            >
+              Limpiar
+            </button>
+          </div>
         </section>
 
         <section className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-4 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">

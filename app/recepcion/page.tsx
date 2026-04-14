@@ -2594,6 +2594,44 @@ function imprimirRegistroComercial() {
     });
   }
 
+  function buscarSiguienteCita(item: AppointmentRow) {
+    const currentKey = `${item.appointment_date}T${normalizarHora(item.appointment_time)}`;
+
+    return appointments
+      .filter((candidate) => candidate.id !== item.id)
+      .filter((candidate) => {
+        const samePhone =
+          !!item.phone &&
+          !!candidate.phone &&
+          item.phone.trim() === candidate.phone.trim();
+        const sameName =
+          !!item.patient_name &&
+          !!candidate.patient_name &&
+          item.patient_name.trim().toLowerCase() === candidate.patient_name.trim().toLowerCase();
+
+        if (!samePhone && !sameName) return false;
+
+        const candidateKey = `${candidate.appointment_date}T${normalizarHora(candidate.appointment_time)}`;
+        return candidateKey > currentKey;
+      })
+      .sort((a, b) => {
+        const keyA = `${a.appointment_date}T${normalizarHora(a.appointment_time)}`;
+        const keyB = `${b.appointment_date}T${normalizarHora(b.appointment_time)}`;
+        return keyA.localeCompare(keyB);
+      })[0] || null;
+  }
+
+  function imprimirSiguienteCita(item: AppointmentRow) {
+    const nextAppointment = buscarSiguienteCita(item);
+    if (!nextAppointment) {
+      setError("Este paciente no tiene una siguiente cita agendada todavía.");
+      return;
+    }
+
+    imprimirCitaRecepcion(nextAppointment);
+    setMensaje("Siguiente cita lista para impresión.");
+  }
+
   function buildAppointmentPrintData() {
     return {
       id: editingAppointmentId || "actual",
@@ -3585,12 +3623,26 @@ function imprimirRegistroComercial() {
                       Sin pendientes de fisioterapia por ahora.
                     </div>
                   ) : (
-                    physiotherapyPendingAppointments.slice(0, 4).map((item) => (
+                    physiotherapyPendingAppointments.slice(0, 4).map((item) => {
+                      const nextAppointment = buscarSiguienteCita(item);
+                      return (
                       <div key={item.id} className="rounded-[22px] border border-[#DCEBE1] bg-[#FCFEFC] p-4">
                         <p className="text-sm font-semibold text-slate-900">{item.patient_name}</p>
                         <p className="mt-1 text-sm text-[#607368]">
                           {item.appointment_date} · {formatHora(item.appointment_time)}
                         </p>
+                        {nextAppointment ? (
+                          <div className="mt-3 rounded-2xl border border-[#D7EADF] bg-white/90 p-3 text-sm text-slate-700">
+                            <p>
+                              <span className="font-medium">Siguiente cita:</span>{" "}
+                              {nextAppointment.appointment_date} · {formatHora(nextAppointment.appointment_time)}
+                            </p>
+                            <p className="mt-1">
+                              <span className="font-medium">Servicio:</span>{" "}
+                              {nextAppointment.service_type || "Sin servicio"}
+                            </p>
+                          </div>
+                        ) : null}
                         <div className="mt-3 grid gap-2">
                           <button
                             type="button"
@@ -3602,6 +3654,15 @@ function imprimirRegistroComercial() {
                               ? "Preparando..."
                               : "Imprimir historia e indicaciones"}
                           </button>
+                          {nextAppointment ? (
+                            <button
+                              type="button"
+                              onClick={() => imprimirSiguienteCita(item)}
+                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                            >
+                              Imprimir siguiente cita
+                            </button>
+                          ) : null}
                           <button
                             type="button"
                             onClick={() => void resolverPendienteFisioterapia(item)}
@@ -3614,7 +3675,7 @@ function imprimirRegistroComercial() {
                           </button>
                         </div>
                       </div>
-                    ))
+                    )})
                   )}
                 </div>
               </div>

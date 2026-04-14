@@ -26,6 +26,13 @@ type PlanInstructionsPrintData = {
   nextAppointmentDate?: string | null;
   nextAppointmentTime?: string | null;
   nextNotes?: string | null;
+  nextAppointments?: {
+    serviceName: string;
+    appointmentDate: string;
+    appointmentTime: string;
+    specialistName?: string | null;
+    notes?: string | null;
+  }[];
   installmentPlan?: InstallmentItem[];
 };
 
@@ -60,6 +67,41 @@ export default function printPlanInstructions(data: PlanInstructionsPrintData) {
     data.receptionSummary && data.receptionSummary.length > 0
       ? `<ul>${data.receptionSummary.map((line) => `<li>${escapeHtml(line)}</li>`).join("")}</ul>`
       : `<p class="text-block">Sin resumen visible de recepción.</p>`;
+
+  const followUpDetails =
+    data.nextAppointments && data.nextAppointments.length > 0
+      ? `<table class="table">
+          <thead>
+            <tr>
+              <th>Servicio</th>
+              <th>Fecha</th>
+              <th>Hora</th>
+              <th>Especialista</th>
+              <th>Notas</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${data.nextAppointments
+              .map(
+                (item) => `
+                  <tr>
+                    <td>${escapeHtml(item.serviceName)}</td>
+                    <td>${escapeHtml(item.appointmentDate)}</td>
+                    <td>${escapeHtml(item.appointmentTime)}</td>
+                    <td>${escapeHtml(item.specialistName || "Por definir")}</td>
+                    <td>${escapeHtml(item.notes || "Sin notas")}</td>
+                  </tr>
+                `
+              )
+              .join("")}
+          </tbody>
+        </table>`
+      : `<div class="grid">
+          <div><div class="item-label">Fecha</div><div class="item-value">${escapeHtml(data.nextAppointmentDate || "No definida")}</div></div>
+          <div><div class="item-label">Hora</div><div class="item-value">${escapeHtml(data.nextAppointmentTime || "No definida")}</div></div>
+        </div>
+        <p class="text-block" style="margin-top:14px;"><strong>Notas de continuidad:</strong>
+${escapeHtml(data.nextNotes || "Sin notas de continuidad.")}</p>`;
 
   const html = `
     <head>
@@ -121,12 +163,7 @@ ${escapeHtml(data.proposal || "Sin propuesta registrada.")}</p>
 
         <div class="box">
           <h2>Continuidad o siguiente cita</h2>
-          <div class="grid">
-            <div><div class="item-label">Fecha</div><div class="item-value">${escapeHtml(data.nextAppointmentDate || "No definida")}</div></div>
-            <div><div class="item-label">Hora</div><div class="item-value">${escapeHtml(data.nextAppointmentTime || "No definida")}</div></div>
-          </div>
-          <p class="text-block" style="margin-top:14px;"><strong>Notas de continuidad:</strong>
-${escapeHtml(data.nextNotes || "Sin notas de continuidad.")}</p>
+          ${followUpDetails}
         </div>
 
         <div class="box">
