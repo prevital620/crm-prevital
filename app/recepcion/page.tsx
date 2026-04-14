@@ -240,6 +240,7 @@ type InstallmentPlanItem = {
 const allowedRoles = [
   "super_user",
   "recepcion",
+  "comercial",
   "tmk",
   "confirmador",
   "supervisor_call_center",
@@ -928,6 +929,7 @@ function normalizarHora(value: string) {
 function RecepcionContent() {
   const searchParams = useSearchParams();
   const leadIdFromUrl = searchParams.get("leadId");
+  const receptionView = searchParams.get("view");
 
   const [authorized, setAuthorized] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -1047,6 +1049,8 @@ function RecepcionContent() {
   const isReadOnlyAgendaForCall =
     currentRoleCode === "tmk" || currentRoleCode === "confirmador";
 
+  const isCommercialReceptionOnly = currentRoleCode === "comercial";
+
   const isLimitedReceptionForCall =
     currentRoleCode === "tmk" ||
     currentRoleCode === "confirmador" ||
@@ -1086,6 +1090,12 @@ function RecepcionContent() {
     [sourceUsers, commercialForm.fuente_usuario_id]
   );
   const occupationNeedsDetail = shouldAskOccupationDetail(commercialForm.ocupacion);
+
+  useEffect(() => {
+    if (receptionView === "comercial" || currentRoleCode === "comercial") {
+      setActiveSection("comercial");
+    }
+  }, [receptionView, currentRoleCode]);
 
   useEffect(() => {
     if (activeSection === "nutricion_entregas") return;
@@ -1508,6 +1518,7 @@ function RecepcionContent() {
   }, [form.lead_id, leads]);
 
   function cambiarSeccion(section: ReceptionSection) {
+    if (isCommercialReceptionOnly && section !== "comercial") return;
     if (isLimitedReceptionForCall && section !== "agenda") return;
     setActiveSection(section);
     setEditingAppointmentId(null);
@@ -3403,7 +3414,15 @@ function imprimirRegistroComercial() {
               Inicio
             </a>
 
-            {isLimitedReceptionForCall ? (
+            {isCommercialReceptionOnly ? (
+              <button
+                type="button"
+                onClick={() => cambiarSeccion("comercial")}
+                className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "comercial" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
+              >
+                Ingreso comercial
+              </button>
+            ) : isLimitedReceptionForCall ? (
               <button
                 type="button"
                 onClick={() => cambiarSeccion("agenda")}

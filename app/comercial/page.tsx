@@ -1354,6 +1354,15 @@ const updatePayload: any = {
                 Si llega un cliente que no pasó por recepción o base previa, aquí lo creas y queda asignado a tu bandeja.
               </p>
 
+              <div className="mt-4">
+                <a
+                  href="/recepcion?view=comercial"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105"
+                >
+                  Abrir formulario completo
+                </a>
+              </div>
+
               <div className="mt-4 grid gap-4 md:grid-cols-3">
                 <Field
                   label="Nombre"
