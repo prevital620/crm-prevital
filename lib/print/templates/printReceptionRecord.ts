@@ -10,8 +10,6 @@ type ReceptionRecordPrintData = {
   source?: string | null;
   sourceDetailLabel?: string | null;
   sourceDetail?: string | null;
-  initialClassification?: string | null;
-  classificationReason?: string | null;
   hasEps?: string | null;
   affiliation?: string | null;
   age?: string | null;
@@ -19,16 +17,24 @@ type ReceptionRecordPrintData = {
   smartphone?: string | null;
   occupation?: string | null;
   hasDetoxTime?: string | null;
-  disqualifyingConditions?: string[];
+  hypertension?: string | null;
+  diabetes?: string | null;
+  surgeries?: string | null;
+  surgeriesDetail?: string | null;
+  medications?: string | null;
+  medicationsDetail?: string | null;
+  diseases?: string | null;
+  diseasesDetail?: string | null;
+  companionName?: string | null;
+  companionRelationship?: string | null;
   observations?: string | null;
 };
 
-export default function printReceptionRecord(data: ReceptionRecordPrintData) {
-  const conditions =
-    data.disqualifyingConditions && data.disqualifyingConditions.length > 0
-      ? `<ul>${data.disqualifyingConditions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
-      : `<p class="text-block">Ninguna de las anteriores.</p>`;
+const LEGAL_NOTICE = `
+Autorizo de manera libre y voluntaria a PREVITAL ANTIOQUIA S.A.S. para que la informacion consignada en este registro sea tratada de acuerdo con las disposiciones de la Ley 1581 de 2012 sobre proteccion de datos personales. Es de mi conocimiento que la empresa no tiene convenio con ninguna EPS ni con instituciones publicas del Estado. Hoy me presento de manera voluntaria y particular. Por medio del presente documento se deja constancia de que la evaluacion realizada no constituye una consulta medica y que se actua desde la prevencion y la concientizacion de habitos.
+`.trim();
 
+export default function printReceptionRecord(data: ReceptionRecordPrintData) {
   const html = `
     <head>
       ${sharedPrintStyles}
@@ -38,11 +44,11 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
         <div class="header">
           <div class="brand">
             <span class="pill">Prevital</span>
-            <h1>Registro de recepción</h1>
-            <p>Ingreso comercial y validación inicial del cliente</p>
+            <h1>Registro de recepcion</h1>
+            <p>Soporte de ingreso comercial</p>
           </div>
           <div>
-            <div class="item-label">Fecha de impresión</div>
+            <div class="item-label">Fecha de impresion</div>
             <div class="item-value">${escapeHtml(new Date().toLocaleString("es-CO"))}</div>
           </div>
         </div>
@@ -51,7 +57,7 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
           <h2>Datos del cliente</h2>
           <div class="grid">
             <div><div class="item-label">Nombre</div><div class="item-value">${escapeHtml(data.customerName || "Sin nombre")}</div></div>
-            <div><div class="item-label">Teléfono</div><div class="item-value">${escapeHtml(data.phone || "Sin teléfono")}</div></div>
+            <div><div class="item-label">Telefono</div><div class="item-value">${escapeHtml(data.phone || "Sin telefono")}</div></div>
             <div><div class="item-label">Ciudad</div><div class="item-value">${escapeHtml(data.city || "Sin ciudad")}</div></div>
             <div><div class="item-label">Documento</div><div class="item-value">${escapeHtml(data.document || "Sin documento")}</div></div>
             <div><div class="item-label">Fuente</div><div class="item-value">${escapeHtml(data.source || "Sin fuente")}</div></div>
@@ -60,40 +66,47 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
         </div>
 
         <div class="box">
-          <h2>Clasificación inicial</h2>
-          <div class="grid">
-            <div><div class="item-label">Resultado</div><div class="item-value">${escapeHtml(data.initialClassification || "Sin definir")}</div></div>
-            <div><div class="item-label">Motivo</div><div class="item-value">${escapeHtml(data.classificationReason || "Sin motivo")}</div></div>
-          </div>
-        </div>
-
-        <div class="box">
-          <h2>Información de validación</h2>
+          <h2>Informacion brindada</h2>
           <div class="grid">
             <div><div class="item-label">Tiene EPS</div><div class="item-value">${escapeHtml(data.hasEps || "Sin definir")}</div></div>
-            <div><div class="item-label">Afiliación</div><div class="item-value">${escapeHtml(data.affiliation || "Sin definir")}</div></div>
+            <div><div class="item-label">Afiliacion</div><div class="item-value">${escapeHtml(data.affiliation || "Sin definir")}</div></div>
             <div><div class="item-label">Edad</div><div class="item-value">${escapeHtml(data.age || "Sin dato")}</div></div>
-            <div><div class="item-label">Asiste con cédula</div><div class="item-value">${escapeHtml(data.bringsId || "Sin definir")}</div></div>
+            <div><div class="item-label">Asiste con cedula</div><div class="item-value">${escapeHtml(data.bringsId || "Sin definir")}</div></div>
             <div><div class="item-label">Celular inteligente</div><div class="item-value">${escapeHtml(data.smartphone || "Sin definir")}</div></div>
-            <div><div class="item-label">Tiempo para detox 30 min</div><div class="item-value">${escapeHtml(data.hasDetoxTime || "Sin definir")}</div></div>
-            <div><div class="item-label">Ocupación</div><div class="item-value">${escapeHtml(data.occupation || "Sin definir")}</div></div>
+            <div><div class="item-label">Acepta 30 min para terapia detox</div><div class="item-value">${escapeHtml(data.hasDetoxTime || "Sin definir")}</div></div>
+            <div><div class="item-label">Ocupacion</div><div class="item-value">${escapeHtml(data.occupation || "Sin definir")}</div></div>
+            <div><div class="item-label">Acompanante</div><div class="item-value">${escapeHtml(data.companionName || "No aplica")}</div></div>
+            <div><div class="item-label">Parentesco del acompanante</div><div class="item-value">${escapeHtml(data.companionRelationship || "No aplica")}</div></div>
           </div>
         </div>
 
         <div class="box">
-          <h2>Condiciones descalificantes</h2>
-          ${conditions}
+          <h2>Antecedentes basicos</h2>
+          <div class="grid">
+            <div><div class="item-label">Hipertenso</div><div class="item-value">${escapeHtml(data.hypertension || "Sin definir")}</div></div>
+            <div><div class="item-label">Diabetico</div><div class="item-value">${escapeHtml(data.diabetes || "Sin definir")}</div></div>
+            <div><div class="item-label">Cirugias</div><div class="item-value">${escapeHtml(data.surgeries || "Sin definir")}</div></div>
+            <div><div class="item-label">Cual cirugia</div><div class="item-value">${escapeHtml(data.surgeriesDetail || "No aplica")}</div></div>
+            <div><div class="item-label">Medicamentos</div><div class="item-value">${escapeHtml(data.medications || "Sin definir")}</div></div>
+            <div><div class="item-label">Cuales medicamentos</div><div class="item-value">${escapeHtml(data.medicationsDetail || "No aplica")}</div></div>
+            <div><div class="item-label">Enfermedades</div><div class="item-value">${escapeHtml(data.diseases || "Sin definir")}</div></div>
+            <div><div class="item-label">Cuales enfermedades</div><div class="item-value">${escapeHtml(data.diseasesDetail || "No aplica")}</div></div>
+          </div>
         </div>
 
         <div class="box">
-          <h2>Observaciones de recepción</h2>
+          <h2>Observaciones de recepcion</h2>
           <p class="text-block">${escapeHtml(data.observations || "Sin observaciones registradas.")}</p>
-          <p class="muted" style="margin-top:10px;">Este formato puede usarse como soporte interno o para archivo del proceso de admisión.</p>
+        </div>
+
+        <div class="box">
+          <h2>Autorizacion</h2>
+          <p class="text-block">${escapeHtml(LEGAL_NOTICE)}</p>
         </div>
 
         <div class="signatures">
           <div class="signature-line">Firma del cliente</div>
-          <div class="signature-line">Firma de recepción</div>
+          <div class="signature-line">Firma de recepcion</div>
         </div>
       </div>
       <script>window.onload = function(){ window.print(); };</script>
@@ -101,7 +114,7 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
   `;
 
   openPrintWindow({
-    title: "Registro de recepción",
+    title: "Registro de recepcion",
     html,
   });
 }

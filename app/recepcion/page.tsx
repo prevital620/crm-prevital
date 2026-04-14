@@ -108,6 +108,8 @@ type InventoryMovement = {
   product_name: string;
   type: "entrada" | "salida" | "ajuste";
   quantity: number;
+  movement_date?: string;
+  lot_number?: string;
   notes: string;
   created_at: string;
 };
@@ -593,6 +595,16 @@ const commercialOccupationOtherDisqualifyingTerms = [
   "salud",
 ];
 
+function shouldAskOccupationDetail(ocupacion: string) {
+  return ["empleado", "independiente", "otro"].includes(ocupacion);
+}
+
+function getOccupationDetailLabel(ocupacion: string) {
+  if (ocupacion === "empleado") return "Cual empleo?";
+  if (ocupacion === "independiente") return "Cual actividad independiente?";
+  return "Cual ocupacion?";
+}
+
 function calcularClasificacionInicial(values: {
   edad: string;
   tiene_eps: string;
@@ -615,9 +627,8 @@ function calcularClasificacionInicial(values: {
   const edad = Number(values.edad || "0");
   const ocupacionOtroNormalizada = (values.ocupacion_otro || "").trim().toLowerCase();
   const ocupacionDescalificante =
-    values.ocupacion === "otro" ||
     commercialOccupationDisqualifyingValues.has(values.ocupacion) ||
-    (values.ocupacion === "otro" &&
+    (shouldAskOccupationDetail(values.ocupacion) &&
       commercialOccupationOtherDisqualifyingTerms.some((term) =>
         ocupacionOtroNormalizada.includes(term)
       ));
@@ -742,6 +753,7 @@ function RecepcionContent() {
   const [selectedQuickAppointmentId, setSelectedQuickAppointmentId] = useState<string | null>(null);
   const [selectedCommercialAppointmentId, setSelectedCommercialAppointmentId] = useState<string | null>(null);
   const [activeSection, setActiveSection] = useState<ReceptionSection>("agenda");
+  const [lastSavedAppointmentPrint, setLastSavedAppointmentPrint] = useState<AppointmentRow | null>(null);
   const [deliveryLogs, setDeliveryLogs] = useState<DeliveryLog[]>([]);
   const [printSearch, setPrintSearch] = useState("");
   const [deliveryProduct, setDeliveryProduct] = useState("");
@@ -755,6 +767,8 @@ function RecepcionContent() {
   const [inventoryCategory, setInventoryCategory] = useState("nutraceutico");
   const [inventoryMovementType, setInventoryMovementType] = useState<"entrada" | "salida" | "ajuste">("entrada");
   const [inventoryQuantity, setInventoryQuantity] = useState("1");
+  const [inventoryMovementDate, setInventoryMovementDate] = useState(hoyISO());
+  const [inventoryLotNumber, setInventoryLotNumber] = useState("");
   const [inventoryMinStock, setInventoryMinStock] = useState("5");
   const [inventoryMovementNotes, setInventoryMovementNotes] = useState("");
   const [selectedNutritionDeliveryId, setSelectedNutritionDeliveryId] = useState<string | null>(null);
@@ -763,12 +777,16 @@ function RecepcionContent() {
   const [nutritionDeliveryQuantity, setNutritionDeliveryQuantity] = useState("1");
   const [nutritionDeliveryNotes, setNutritionDeliveryNotes] = useState("");
   const [nutritionSelection, setNutritionSelection] = useState<NutritionDeliverySelection | null>(null);
+  const [lastNutritionPrintSelection, setLastNutritionPrintSelection] =
+    useState<NutritionDeliverySelection | null>(null);
   const [loadingNutritionSelection, setLoadingNutritionSelection] = useState(false);
   const [savingNutritionDelivery, setSavingNutritionDelivery] = useState(false);
   const [commercialCases, setCommercialCases] = useState<CommercialCaseRow[]>([]);
   const [savingCommercialIntake, setSavingCommercialIntake] = useState(false);
   const [commercialSearch, setCommercialSearch] = useState("");
   const [sourceUsers, setSourceUsers] = useState<SourceUserOption[]>([]);
+  const [lastCommercialPrintData, setLastCommercialPrintData] =
+    useState<Parameters<typeof printReceptionRecord>[0] | null>(null);
   const [commercialForm, setCommercialForm] = useState({
     customer_name: "",
     phone: "",
@@ -858,6 +876,7 @@ function RecepcionContent() {
     () => sourceUsers.find((item) => item.id === commercialForm.fuente_usuario_id) || null,
     [sourceUsers, commercialForm.fuente_usuario_id]
   );
+  const occupationNeedsDetail = shouldAskOccupationDetail(commercialForm.ocupacion);
 
   useEffect(() => {
     if (activeSection === "nutricion_entregas") return;
@@ -1238,6 +1257,7 @@ function RecepcionContent() {
     setActiveSection(section);
     setEditingAppointmentId(null);
     setSelectedQuickAppointmentId(null);
+    setLastSavedAppointmentPrint(null);
     setMensaje("");
     setError("");
     setForm((prev) => ({
@@ -1607,6 +1627,11 @@ function RecepcionContent() {
       return;
     }
 
+    if (!inventoryMovementDate) {
+      setError("Debes seleccionar la fecha del movimiento.");
+      return;
+    }
+
     let selectedItem = inventoryItems.find((item) => item.id === inventoryProductId);
 
     if (!selectedItem && !inventoryNewProduct.trim()) {
@@ -1664,6 +1689,8 @@ function RecepcionContent() {
       product_name: productName,
       type: inventoryMovementType,
       quantity,
+      movement_date: inventoryMovementDate,
+      lot_number: inventoryLotNumber.trim() || undefined,
       notes: inventoryMovementNotes.trim(),
       created_at: now,
     };
@@ -1681,6 +1708,8 @@ function RecepcionContent() {
     setInventoryProductId("");
     setInventoryNewProduct("");
     setInventoryQuantity("1");
+    setInventoryMovementDate(hoyISO());
+    setInventoryLotNumber("");
     setInventoryMovementNotes("");
     setInventoryCategory("nutraceutico");
     setInventoryMinStock("5");
@@ -1694,6 +1723,7 @@ function RecepcionContent() {
       setSelectedNutritionDeliveryId(item.id);
       setLoadingNutritionSelection(true);
       setNutritionSelection(null);
+      setLastNutritionPrintSelection(null);
       setNutritionDeliveryProductId("");
       setNutritionDeliveryQuantity("1");
       setNutritionDeliveryNotes("");
@@ -1799,6 +1829,7 @@ function RecepcionContent() {
         product_id: selectedItem.id,
         product_name: selectedItem.name,
         type: "salida",
+        movement_date: hoyISO(),
         quantity,
         notes: `Entrega nutrición · ${nutritionSelection.appointment.patient_name}${nutritionDeliveryNotes.trim() ? ` · ${nutritionDeliveryNotes.trim()}` : ""}`,
         created_at: now,
@@ -1838,12 +1869,13 @@ function RecepcionContent() {
         )
       );
 
-      setMensaje("Entrega de nutrición registrada correctamente. El inventario se actualizó en tiempo real en este dispositivo.");
+      setLastNutritionPrintSelection(nutritionSelection);
+      setMensaje("Entrega de nutrición registrada correctamente. Ya puedes imprimir el documento nutricional.");
       setNutritionDeliveryProductId("");
       setNutritionDeliveryQuantity("1");
       setNutritionDeliveryNotes("");
-      setSelectedNutritionDeliveryId(null);
-      setNutritionSelection(null);
+      setSelectedNutritionDeliveryId(nutritionSelection.appointment.id);
+      setNutritionSelection(nutritionSelection);
     } catch (err: any) {
       setError(err?.message || "No se pudo registrar la entrega de nutrición.");
     } finally {
@@ -1852,8 +1884,11 @@ function RecepcionContent() {
   }
 
 
-  function resetCommercialForm() {
+  function resetCommercialForm(options?: { preserveLastPrintData?: boolean }) {
     setSelectedCommercialAppointmentId(null);
+    if (!options?.preserveLastPrintData) {
+      setLastCommercialPrintData(null);
+    }
     setCommercialForm({
       customer_name: "",
       phone: "",
@@ -1891,24 +1926,24 @@ function RecepcionContent() {
 
   
 function traducirOcupacionComercial(ocupacion: string, ocupacionOtro: string) {
+  const detalle = ocupacionOtro?.trim();
   const map: Record<string, string> = {
-    empleado: "Empleado",
-    independiente: "Independiente",
+    empleado: detalle ? `Empleado - ${detalle}` : "Empleado",
+    independiente: detalle ? `Independiente - ${detalle}` : "Independiente",
     pensionado: "Pensionado",
-    otro: ocupacionOtro?.trim() || "Otro",
+    otro: detalle || "Otro",
   };
 
-  return map[ocupacion] || ocupacionOtro?.trim() || "Sin definir";
+  return map[ocupacion] || detalle || "Sin definir";
 }
 
-
-function imprimirRegistroComercial() {
+function buildCommercialPrintData() {
     const ocupacion = traducirOcupacionComercial(
       commercialForm.ocupacion,
       commercialForm.ocupacion_otro
     );
 
-    printReceptionRecord({
+    return {
       customerName: commercialForm.customer_name || "Sin nombre",
       phone: commercialForm.phone || "Sin teléfono",
       city: commercialForm.city || "Sin ciudad",
@@ -1919,8 +1954,6 @@ function imprimirRegistroComercial() {
         (sourceNeedsUserSelection
           ? selectedSourceUser?.full_name
           : commercialForm.referido_por) || "No aplica",
-      initialClassification: commercialForm.clasificacion_inicial || "Sin definir",
-      classificationReason: commercialForm.clasificacion_motivo || "Sin motivo",
       hasEps: commercialForm.tiene_eps === "si" ? "Sí" : "No",
       affiliation: commercialForm.afiliacion || "Sin definir",
       age: commercialForm.edad || "Sin dato",
@@ -1928,21 +1961,42 @@ function imprimirRegistroComercial() {
       smartphone: commercialForm.celular_inteligente === "si" ? "Sí" : "No",
       hasDetoxTime:
         commercialForm.tiempo_detox_30_min === "si"
-          ? "SÃ­"
+          ? "Si"
           : commercialForm.tiempo_detox_30_min === "no"
           ? "No"
           : "Sin definir",
       occupation: ocupacion || "Sin definir",
-      disqualifyingConditions: getCommercialDisqualifyingConditions({
-        hipertenso: commercialForm.hipertenso,
-        diabetico: commercialForm.diabetico,
-        cirugias: commercialForm.cirugias,
-        medicamentos: commercialForm.medicamentos,
-        enfermedades: commercialForm.enfermedades,
-        clinical_flags: commercialForm.clinical_flags,
-      }),
+      hypertension: commercialForm.hipertenso === "si" ? "Si" : "No",
+      diabetes: commercialForm.diabetico === "si" ? "Si" : "No",
+      surgeries: commercialForm.cirugias === "si" ? "Si" : "No",
+      surgeriesDetail:
+        commercialForm.cirugias === "si"
+          ? commercialForm.cirugias_cual || "No registra"
+          : "No aplica",
+      medications: commercialForm.medicamentos === "si" ? "Si" : "No",
+      medicationsDetail:
+        commercialForm.medicamentos === "si"
+          ? commercialForm.medicamentos_cual || "No registra"
+          : "No aplica",
+      diseases: commercialForm.enfermedades === "si" ? "Si" : "No",
+      diseasesDetail:
+        commercialForm.enfermedades === "si"
+          ? commercialForm.enfermedades_cual || "No registra"
+          : "No aplica",
+      companionName: commercialForm.acompanante_nombre || "No aplica",
+      companionRelationship: commercialForm.acompanante_parentesco || "No aplica",
       observations: commercialForm.observaciones || "Sin observaciones registradas.",
-    });
+    };
+  }
+
+function imprimirRegistroComercial() {
+    if (!lastCommercialPrintData) {
+      setError("Registra primero el ingreso comercial para habilitar la impresion.");
+      return;
+    }
+
+    setError("");
+    printReceptionRecord(lastCommercialPrintData);
   }
 
   function imprimirCitaRecepcion(item: AppointmentRow) {
@@ -1963,8 +2017,8 @@ function imprimirRegistroComercial() {
     });
   }
 
-  function imprimirCitaActualDesdeFormulario() {
-    const citaActual: AppointmentRow = {
+  function buildAppointmentPrintData() {
+    return {
       id: editingAppointmentId || "actual",
       lead_id: form.mode === "lead" ? form.lead_id || null : null,
       patient_name: form.patient_name,
@@ -1985,13 +2039,16 @@ function imprimirRegistroComercial() {
       checked_in_at: null,
       attended_at: null,
     };
+  }
 
-    if (!citaActual.patient_name.trim() || !citaActual.appointment_date || !citaActual.appointment_time) {
-      alert("Completa nombre, fecha y hora antes de imprimir la cita.");
+  function imprimirCitaActualDesdeFormulario() {
+    if (!lastSavedAppointmentPrint) {
+      setError("Guarda primero la cita para habilitar la impresion.");
       return;
     }
 
-    imprimirCitaRecepcion(citaActual);
+    setError("");
+    imprimirCitaRecepcion(lastSavedAppointmentPrint);
   }
 
   async function registrarIngresoComercial(e: React.FormEvent) {
@@ -2025,6 +2082,10 @@ function imprimirRegistroComercial() {
 
       if (!commercialForm.tiempo_detox_30_min) {
         throw new Error("Debes confirmar si cuenta con el tiempo de 30 min para la terapia detox.");
+      }
+
+      if (occupationNeedsDetail && !commercialForm.ocupacion_otro.trim()) {
+        throw new Error(`Debes completar ${getOccupationDetailLabel(commercialForm.ocupacion).toLowerCase()}.`);
       }
 
       const yaExiste = commercialCases.find(
@@ -2197,12 +2258,13 @@ function imprimirRegistroComercial() {
 
       if (insertError) throw insertError;
 
-      resetCommercialForm();
+      setLastCommercialPrintData(buildCommercialPrintData());
+      resetCommercialForm({ preserveLastPrintData: true });
       setActiveSection("comercial");
       setMensaje(
         appointmentContext
-          ? "Cliente registrado en comercial y la cita quedó como asistió. Ya está disponible para asignación del gerente."
-          : "Ingreso comercial registrado correctamente. Ya quedó disponible para asignación del gerente."
+          ? "Cliente registrado en comercial y la cita quedó como asistió. La impresion del registro ya quedó habilitada."
+          : "Ingreso comercial registrado correctamente. La impresion del registro ya quedó habilitada."
       );
       await cargarTodo();
     } catch (err: any) {
@@ -2212,9 +2274,12 @@ function imprimirRegistroComercial() {
     }
   }
 
-  function resetForm() {
+  function resetForm(options?: { preserveLastSavedAppointmentPrint?: boolean }) {
     setEditingAppointmentId(null);
     setSelectedQuickAppointmentId(null);
+    if (!options?.preserveLastSavedAppointmentPrint) {
+      setLastSavedAppointmentPrint(null);
+    }
     setForm({
       mode: leadIdFromUrl ? "lead" : "lead",
       lead_id: leadIdFromUrl || "",
@@ -2237,6 +2302,7 @@ function imprimirRegistroComercial() {
 
     setEditingAppointmentId(item.id);
     setSelectedQuickAppointmentId(item.id);
+    setLastSavedAppointmentPrint(null);
     setActiveSection(getSectionForService(item.service_type));
     setForm({
       mode: item.lead_id ? "lead" : "manual",
@@ -2264,6 +2330,7 @@ function imprimirRegistroComercial() {
   function abrirIngresoComercialDesdeCita(item: AppointmentRow) {
     setSelectedQuickAppointmentId(item.id);
     setSelectedCommercialAppointmentId(item.id);
+    setLastCommercialPrintData(null);
     setFechaFiltro(item.appointment_date);
     setBusquedaAgenda(item.patient_name || item.phone || "");
     setCommercialForm({
@@ -2492,7 +2559,7 @@ function imprimirRegistroComercial() {
           await actualizarEstadoLeadPorCita(payload.lead_id, payload.status);
         }
 
-        setMensaje("Cita actualizada correctamente.");
+        setMensaje("Cita actualizada correctamente. La impresion ya quedo habilitada.");
       } else {
         const { error } = await supabase.from("appointments").insert([
           {
@@ -2507,10 +2574,11 @@ function imprimirRegistroComercial() {
           await actualizarEstadoLeadPorCita(payload.lead_id, payload.status);
         }
 
-        setMensaje("Cita creada correctamente.");
+        setMensaje("Cita creada correctamente. La impresion ya quedo habilitada.");
       }
 
-      resetForm();
+      setLastSavedAppointmentPrint(buildAppointmentPrintData());
+      resetForm({ preserveLastSavedAppointmentPrint: true });
       await cargarTodo();
     } catch (err: any) {
       setError(err?.message || "No se pudo guardar la cita.");
@@ -2599,7 +2667,7 @@ function imprimirRegistroComercial() {
         const creado = await crearCasoVentasSiNoExiste(appointmentActual);
         if (creado) {
           mensajeFinal =
-            "Estado actualizado y se creó automáticamente el caso de ventas.";
+            "Estado actualizado y se creo automaticamente el caso de ventas. Ya puedes pasar a ingreso comercial para guardar e imprimir el registro si aplica.";
         }
       }
     } catch (err: any) {
@@ -2764,13 +2832,6 @@ function imprimirRegistroComercial() {
                   className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "nutricion_entregas" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
                 >
                   Entregas nutrición
-                </button>
-                <button
-                  type="button"
-                  onClick={() => cambiarSeccion("impresiones")}
-                  className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "impresiones" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
-                >
-                  Impresiones / Entregas
                 </button>
                 <button
                   type="button"
@@ -3141,7 +3202,9 @@ function imprimirRegistroComercial() {
                           setCommercialForm((prev) => ({
                             ...prev,
                             ocupacion: e.target.value,
-                            ocupacion_otro: e.target.value === "otro" ? prev.ocupacion_otro : "",
+                            ocupacion_otro: shouldAskOccupationDetail(e.target.value)
+                              ? prev.ocupacion_otro
+                              : "",
                           }))
                         }
                       >
@@ -3154,13 +3217,13 @@ function imprimirRegistroComercial() {
                       </select>
                     }
                   />
-                  {commercialForm.ocupacion === "otro" ? (
+                  {occupationNeedsDetail ? (
                     <Field
-                      label="¿Cuál ocupación?"
+                      label={getOccupationDetailLabel(commercialForm.ocupacion)}
                       input={
                         <input
                           className={inputClass}
-                          placeholder="Escribe la ocupación"
+                          placeholder="Escribe cual"
                           value={commercialForm.ocupacion_otro}
                           onChange={(e) =>
                             setCommercialForm((prev) => ({
@@ -3568,9 +3631,10 @@ function imprimirRegistroComercial() {
                   <button
                     type="button"
                     onClick={imprimirRegistroComercial}
-                    className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                    disabled={!lastCommercialPrintData}
+                    className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Imprimir registro
+                    {lastCommercialPrintData ? "Imprimir registro" : "Imprimir registro (se habilita al guardar)"}
                   </button>
                 </div>
               </form>
@@ -3719,15 +3783,19 @@ function imprimirRegistroComercial() {
                   <button
                     type="button"
                     onClick={() =>
+                      lastNutritionPrintSelection &&
                       imprimirDocumentoNutricional({
-                        appointment: nutritionSelection.appointment,
-                        document: nutritionSelection.document,
-                        profile: nutritionSelection.profile,
+                        appointment: lastNutritionPrintSelection.appointment,
+                        document: lastNutritionPrintSelection.document,
+                        profile: lastNutritionPrintSelection.profile,
                       })
                     }
-                    className="w-full rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                    disabled={!lastNutritionPrintSelection}
+                    className="w-full rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                   >
-                    Imprimir documento nutricional
+                    {lastNutritionPrintSelection
+                      ? "Imprimir documento nutricional"
+                      : "Imprimir documento nutricional (se habilita al guardar)"}
                   </button>
 
                   <Field
@@ -4035,6 +4103,30 @@ function imprimirRegistroComercial() {
                 />
 
                 <Field
+                  label="Fecha de ingreso / movimiento"
+                  input={
+                    <input
+                      className={inputClass}
+                      type="date"
+                      value={inventoryMovementDate}
+                      onChange={(e) => setInventoryMovementDate(e.target.value)}
+                    />
+                  }
+                />
+
+                <Field
+                  label="Número de lote"
+                  input={
+                    <input
+                      className={inputClass}
+                      placeholder="Ej: LOTE-0426"
+                      value={inventoryLotNumber}
+                      onChange={(e) => setInventoryLotNumber(e.target.value)}
+                    />
+                  }
+                />
+
+                <Field
                   label="Tipo de movimiento"
                   input={
                     <select
@@ -4158,6 +4250,16 @@ function imprimirRegistroComercial() {
                             <p className="mt-1 text-sm text-[#496356]">
                               <span className="font-medium">Cantidad:</span> {item.quantity}
                             </p>
+                            {item.movement_date ? (
+                              <p className="mt-1 text-sm text-[#496356]">
+                                <span className="font-medium">Fecha:</span> {item.movement_date}
+                              </p>
+                            ) : null}
+                            {item.lot_number ? (
+                              <p className="mt-1 text-sm text-[#496356]">
+                                <span className="font-medium">Lote:</span> {item.lot_number}
+                              </p>
+                            ) : null}
                             {item.notes ? (
                               <p className="mt-1 text-sm text-[#496356]">
                                 <span className="font-medium">Observaciones:</span> {item.notes}
@@ -4198,7 +4300,7 @@ function imprimirRegistroComercial() {
               {editingAppointmentId ? (
                 <button
                   type="button"
-                  onClick={resetForm}
+                  onClick={() => resetForm()}
                   className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
                 >
                   Cancelar edición
@@ -4460,9 +4562,12 @@ function imprimirRegistroComercial() {
                 <button
                   type="button"
                   onClick={imprimirCitaActualDesdeFormulario}
-                  className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/88 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                  disabled={!lastSavedAppointmentPrint}
+                  className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/88 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7] disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0"
                 >
-                  Imprimir cita actual
+                  {lastSavedAppointmentPrint
+                    ? "Imprimir cita guardada"
+                    : "Imprimir cita (se habilita al guardar)"}
                 </button>
               </div>
             </form>
@@ -4697,3 +4802,4 @@ export default function RecepcionPage() {
 
 const inputClass =
   "w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-4 text-base text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
+
