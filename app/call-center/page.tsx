@@ -217,7 +217,7 @@ export default function CallCenterPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
-  const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
+  const [fechaFiltro, setFechaFiltro] = useState("");
   const [busqueda, setBusqueda] = useState("");
   const [selectedAssignments, setSelectedAssignments] = useState<Record<string, string>>({});
   const [selectedStatuses, setSelectedStatuses] = useState<Record<string, string>>({});
@@ -1001,13 +1001,19 @@ export default function CallCenterPage() {
             />
           </div>
 
+          <p className="mt-3 text-xs text-[#5F7D66]">
+            {fechaFiltro
+              ? `Mostrando leads del ${fechaFiltro}.`
+              : "Mostrando todos los leads disponibles para tu rol."}
+          </p>
+
           {cargando ? (
             <div className="mt-6 rounded-3xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
               Cargando leads...
             </div>
           ) : leadsFiltrados.length === 0 ? (
             <div className="mt-6 rounded-3xl border border-dashed border-[#CFE4D8] bg-[linear-gradient(135deg,_#FAFDFB_0%,_#F3FAF6_100%)] p-6 text-sm text-slate-500">
-              No hay leads para ese día o filtro.
+              No hay leads para el filtro actual.
             </div>
           ) : (
             <div className="mt-6 space-y-4">
@@ -1282,3 +1288,4 @@ function StatCard({
     </button>
   );
 }
+
