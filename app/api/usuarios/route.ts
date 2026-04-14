@@ -130,3 +130,94 @@ export async function POST(request: Request) {
     );
   }
 }
+
+export async function GET() {
+  try {
+    const supabase = await createRouteHandlerSupabaseClient();
+    const authCheck = await requireSuperUser(supabase);
+
+    if (!authCheck.ok) {
+      return NextResponse.json(
+        { error: authCheck.error },
+        { status: authCheck.status }
+      );
+    }
+
+    const { data: profiles, error: profilesError } = await supabaseAdmin
+      .from("profiles")
+      .select(`
+        id,
+        full_name,
+        phone,
+        job_title,
+        is_active,
+        created_at,
+        departments (
+          name
+        ),
+        user_roles!user_roles_user_id_fkey (
+          roles (
+            name,
+            code
+          )
+        )
+      `)
+      .order("created_at", { ascending: false });
+
+    if (profilesError) {
+      return NextResponse.json(
+        { error: profilesError.message || "No se pudieron cargar los usuarios." },
+        { status: 400 }
+      );
+    }
+
+    const authUsers = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1000,
+    });
+
+    if (authUsers.error) {
+      return NextResponse.json(
+        {
+          error:
+            authUsers.error.message ||
+            "No se pudieron cargar los accesos de autenticación.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const authById = new Map(
+      (authUsers.data.users || []).map((user) => [
+        user.id,
+        {
+          email: user.email || null,
+          last_sign_in_at: user.last_sign_in_at || null,
+        },
+      ])
+    );
+
+    const result = ((profiles || []) as Array<Record<string, unknown>>).map(
+      (profile) => {
+        const authUser = authById.get(String(profile.id));
+
+        return {
+          ...profile,
+          email: authUser?.email || null,
+          auth_exists: Boolean(authUser),
+          last_sign_in_at: authUser?.last_sign_in_at || null,
+        };
+      }
+    );
+
+    return NextResponse.json({
+      ok: true,
+      users: result,
+    });
+  } catch (error: unknown) {
+    return NextResponse.json(
+      { error: getErrorMessage(error, "Error interno del servidor.") },
+      { status: 500 }
+    );
+  }
+}

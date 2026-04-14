@@ -3,16 +3,18 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 
 type UserRow = {
   id: string;
   full_name: string;
+  email: string | null;
   phone: string | null;
   job_title: string | null;
   is_active: boolean;
+  auth_exists: boolean;
+  last_sign_in_at: string | null;
   created_at: string;
   departments: { name: string }[] | null;
   user_roles: {
@@ -51,30 +53,14 @@ export default function UsuariosPage() {
 
       setAuthorized(true);
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select(`
-          id,
-          full_name,
-          phone,
-          job_title,
-          is_active,
-          created_at,
-          departments (
-            name
-          ),
-          user_roles!user_roles_user_id_fkey (
-            roles (
-              name,
-              code
-            )
-          )
-        `)
-        .order("created_at", { ascending: false });
+      const response = await fetch("/api/usuarios");
+      const result = await response.json();
 
-      if (error) throw error;
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudieron cargar los usuarios.");
+      }
 
-      setUsers(((data ?? []) as unknown) as UserRow[]);
+      setUsers(((result.users ?? []) as unknown) as UserRow[]);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los usuarios.");
     } finally {
@@ -221,6 +207,7 @@ export default function UsuariosPage() {
 
       return (
         (user.full_name || "").toLowerCase().includes(q) ||
+        (user.email || "").toLowerCase().includes(q) ||
         (user.phone || "").toLowerCase().includes(q) ||
         (user.job_title || "").toLowerCase().includes(q) ||
         department.toLowerCase().includes(q) ||

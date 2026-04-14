@@ -16,6 +16,11 @@ type UserUpdatePayload = {
   role_ids?: string[];
 };
 
+function isForeignKeyConstraintError(error: unknown) {
+  const message = getErrorMessage(error, "").toLowerCase();
+  return message.includes("violates foreign key constraint");
+}
+
 function normalizeOptionalText(value: unknown) {
   const text = String(value ?? "").trim();
   return text || null;
@@ -220,14 +225,16 @@ export async function DELETE(
       .eq("id", id);
 
     if (profileDeleteError) {
-      return NextResponse.json(
-        {
-          error:
-            profileDeleteError.message ||
-            "No se pudo limpiar el perfil del usuario eliminado.",
-        },
-        { status: 400 }
-      );
+      if (!isForeignKeyConstraintError(profileDeleteError)) {
+        return NextResponse.json(
+          {
+            error:
+              profileDeleteError.message ||
+              "No se pudo limpiar el perfil del usuario eliminado.",
+          },
+          { status: 400 }
+        );
+      }
     }
 
     const { error: rolesDeleteError } = await supabaseAdmin
@@ -244,6 +251,35 @@ export async function DELETE(
         },
         { status: 400 }
       );
+    }
+
+    if (profileDeleteError && isForeignKeyConstraintError(profileDeleteError)) {
+      const { error: archiveError } = await supabaseAdmin
+        .from("profiles")
+        .update({
+          is_active: false,
+          must_change_password: false,
+          department_id: null,
+        })
+        .eq("id", id);
+
+      if (archiveError) {
+        return NextResponse.json(
+          {
+            error:
+              archiveError.message ||
+              "No se pudo archivar el usuario con historial.",
+          },
+          { status: 400 }
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        archived: true,
+        message:
+          "El usuario tenía historial relacionado, así que se archivó y se le quitó el acceso en lugar de borrarlo por completo.",
+      });
     }
 
     return NextResponse.json({
