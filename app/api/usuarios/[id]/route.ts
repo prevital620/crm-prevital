@@ -21,6 +21,80 @@ function isForeignKeyConstraintError(error: unknown) {
   return message.includes("violates foreign key constraint");
 }
 
+async function clearUserReferences(userId: string) {
+  const cleanupSteps = [
+    () =>
+      supabaseAdmin
+        .from("leads")
+        .update({ created_by_user_id: null })
+        .eq("created_by_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("leads")
+        .update({ assigned_to_user_id: null })
+        .eq("assigned_to_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("commercial_cases")
+        .update({ created_by_user_id: null })
+        .eq("created_by_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("commercial_cases")
+        .update({ updated_by_user_id: null })
+        .eq("updated_by_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("commercial_cases")
+        .update({ assigned_commercial_user_id: null })
+        .eq("assigned_commercial_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("commercial_cases")
+        .update({ assigned_by_user_id: null })
+        .eq("assigned_by_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("commercial_cases")
+        .update({ closed_by_user_id: null })
+        .eq("closed_by_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("commercial_cases")
+        .update({ call_user_id: null })
+        .eq("call_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("commercial_cases")
+        .update({ opc_user_id: null })
+        .eq("opc_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("appointments")
+        .update({ specialist_user_id: null })
+        .eq("specialist_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("appointments")
+        .update({ created_by_user_id: null })
+        .eq("created_by_user_id", userId),
+    () =>
+      supabaseAdmin
+        .from("appointments")
+        .update({ updated_by_user_id: null })
+        .eq("updated_by_user_id", userId),
+  ];
+
+  for (const step of cleanupSteps) {
+    const { error } = await step();
+    if (error && !isForeignKeyConstraintError(error)) {
+      return error;
+    }
+  }
+
+  return null;
+}
+
 function normalizeOptionalText(value: unknown) {
   const text = String(value ?? "").trim();
   return text || null;
@@ -186,7 +260,7 @@ export async function PATCH(
   }
 }
 
-export async function DELETE(
+  export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -206,6 +280,19 @@ export async function DELETE(
     if (!id) {
       return NextResponse.json(
         { error: "Falta el id del usuario." },
+        { status: 400 }
+      );
+    }
+
+    const cleanupError = await clearUserReferences(id);
+
+    if (cleanupError) {
+      return NextResponse.json(
+        {
+          error:
+            cleanupError.message ||
+            "No se pudieron soltar las referencias del usuario antes de eliminarlo.",
+        },
         { status: 400 }
       );
     }
