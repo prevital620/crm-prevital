@@ -25,14 +25,28 @@ const ROLE_PRIORITY = [
   "fisioterapeuta",
 ];
 
-function normalizeRoleCode(roleCode: string | null | undefined) {
+export function normalizeRoleCode(roleCode: string | null | undefined) {
   if (!roleCode) return null;
 
-  if (["gerente", "gerente_comercial", "gerencia_comercial"].includes(roleCode)) {
+  const normalized = String(roleCode)
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim()
+    .replace(/\s+(am|pm)$/i, "")
+    .replace(/[\s-]+/g, "_");
+
+  if (!normalized) return null;
+
+  if (["gerente", "gerente_comercial", "gerencia_comercial"].includes(normalized)) {
     return "gerencia_comercial";
   }
 
-  return roleCode;
+  if (normalized === "super_usuario") {
+    return "super_user";
+  }
+
+  return normalized;
 }
 
 function pickBestRole(roles: Array<{ code: string | null; name: string | null }>) {
@@ -104,10 +118,14 @@ export async function getCurrentUserRole(): Promise<AuthRoleResult> {
   const rows = (data as any[]) || [];
 
   const roles = rows
-    .map((row) => ({
-      code: row.roles?.code || null,
-      name: row.roles?.name || null,
-    }))
+    .map((row) => {
+      const nestedRole = Array.isArray(row.roles) ? row.roles[0] : row.roles;
+
+      return {
+        code: normalizeRoleCode(nestedRole?.code || nestedRole?.name || null),
+        name: nestedRole?.name || nestedRole?.code || null,
+      };
+    })
     .filter((role) => role.code);
 
   const uniqueByCode = new Map<string, { code: string | null; name: string | null }>();
@@ -124,6 +142,26 @@ export async function getCurrentUserRole(): Promise<AuthRoleResult> {
   });
 
   const uniqueRoles = Array.from(uniqueByCode.values());
+
+  if (uniqueRoles.length === 0) {
+    const { data: profileFallback } = await supabase
+      .from("profiles")
+      .select("job_title")
+      .eq("id", user.id)
+      .maybeSingle();
+
+    const fallbackRoleCode = normalizeRoleCode(profileFallback?.job_title || null);
+    const fallbackRoleName = profileFallback?.job_title || null;
+
+    return {
+      user,
+      roleCode: fallbackRoleCode,
+      roleName: fallbackRoleName,
+      allRoleCodes: fallbackRoleCode ? [fallbackRoleCode] : [],
+      allRoleNames: fallbackRoleName ? [fallbackRoleName] : [],
+    };
+  }
+
   const selectedRole = pickBestRole(uniqueRoles);
 
   return {

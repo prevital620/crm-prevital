@@ -5,7 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/logout-button";
-import { getCurrentUserRole } from "@/lib/auth";
+import { getCurrentUserRole, normalizeRoleCode } from "@/lib/auth";
 import { PrevitalButton } from "@/components/ui/prevital-button";
 import {
   PrevitalCard,
@@ -62,20 +62,6 @@ type QuickAction = {
   href: string;
   roles: string[];
 };
-
-function normalizeRoleCode(roleCode?: string | null) {
-  if (!roleCode) return null;
-
-  if (
-    roleCode === "gerente" ||
-    roleCode === "gerente_comercial" ||
-    roleCode === "gerencia_comercial"
-  ) {
-    return "gerencia_comercial";
-  }
-
-  return roleCode;
-}
 
 const quickActions: QuickAction[] = [
   {

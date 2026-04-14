@@ -3,7 +3,7 @@
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
-import { getCurrentUserRole } from "@/lib/auth";
+import { getCurrentUserRole, normalizeRoleCode } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 
 type AdminCommercialCase = {
@@ -30,20 +30,6 @@ const allowedRoles = [
   "super_user",
   "administrador",
 ];
-
-function normalizeRoleCode(roleCode?: string | null) {
-  if (!roleCode) return null;
-
-  if (
-    roleCode === "gerente" ||
-    roleCode === "gerente_comercial" ||
-    roleCode === "gerencia_comercial"
-  ) {
-    return "gerencia_comercial";
-  }
-
-  return roleCode;
-}
 
 function normalizeText(value: string | null | undefined) {
   return (value || "")
