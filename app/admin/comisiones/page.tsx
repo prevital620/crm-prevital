@@ -18,6 +18,9 @@ type AdminCommercialCase = {
   net_commission_base: number | null;
   payment_method: string | null;
   assigned_commercial_user_id: string | null;
+  commission_source_type: string | null;
+  opc_user_id: string | null;
+  call_user_id: string | null;
 };
 
 type ProfileOption = {
@@ -75,6 +78,19 @@ function paymentMethodLabel(value: string | null | undefined) {
     addi: "Addi",
     welly: "Welly",
     medipay: "Medipay",
+  };
+
+  if (!value) return "Sin definir";
+  return map[value] || value;
+}
+
+function commissionSourceLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    opc: "OPC",
+    tmk: "TMK",
+    redes: "Redes",
+    base: "Base",
+    otro: "Otro",
   };
 
   if (!value) return "Sin definir";
@@ -192,7 +208,10 @@ export default function AdminComisionesPage() {
             portfolio_amount,
             net_commission_base,
             payment_method,
-            assigned_commercial_user_id
+            assigned_commercial_user_id,
+            commission_source_type,
+            opc_user_id,
+            call_user_id
           `)
           .order("created_at", { ascending: false }),
         supabase
@@ -283,6 +302,8 @@ export default function AdminComisionesPage() {
         : null;
       const collaboratorName = profile?.full_name || "";
       const collaboratorArea = normalizeArea(profile?.job_title);
+      const opcName = item.opc_user_id ? profileMap.get(item.opc_user_id)?.full_name || "" : "";
+      const callName = item.call_user_id ? profileMap.get(item.call_user_id)?.full_name || "" : "";
 
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
@@ -294,7 +315,9 @@ export default function AdminComisionesPage() {
         ? normalizeText(item.customer_name).includes(q) ||
           normalizeText(item.phone).includes(q) ||
           normalizeText(item.city).includes(q) ||
-          normalizeText(collaboratorName).includes(q)
+          normalizeText(collaboratorName).includes(q) ||
+          normalizeText(opcName).includes(q) ||
+          normalizeText(callName).includes(q)
         : true;
 
       return matchesDateFrom && matchesDateTo && matchesCollaborator && matchesArea && matchesSearch;
@@ -575,6 +598,8 @@ export default function AdminComisionesPage() {
                     <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Área</th>
                     <th className="px-3 py-3">Ventas</th>
+                    <th className="px-3 py-3">Fuente comisión</th>
+                    <th className="px-3 py-3">Responsable fuente</th>
                     <th className="px-3 py-3">Volumen</th>
                     <th className="px-3 py-3">Caja</th>
                     <th className="px-3 py-3">Cartera</th>
@@ -638,6 +663,19 @@ export default function AdminComisionesPage() {
                     const profile = item.assigned_commercial_user_id
                       ? profileMap.get(item.assigned_commercial_user_id)
                       : null;
+                    const sourceProfile =
+                      item.commission_source_type === "opc" && item.opc_user_id
+                        ? profileMap.get(item.opc_user_id)
+                        : item.commission_source_type === "tmk" && item.call_user_id
+                          ? profileMap.get(item.call_user_id)
+                          : null;
+                    const sourceResponsible =
+                      sourceProfile?.full_name ||
+                      (item.commission_source_type === "base"
+                        ? "Lead base"
+                        : item.commission_source_type === "redes"
+                          ? "Redes"
+                          : "No definido");
 
                     return (
                       <tr key={item.id} className="border-b border-slate-100 align-top">
@@ -650,6 +688,8 @@ export default function AdminComisionesPage() {
                           {profile?.full_name || "Sin asignar"}
                         </td>
                         <td className="px-3 py-3 text-slate-700">{normalizeArea(profile?.job_title)}</td>
+                        <td className="px-3 py-3 text-slate-700">{commissionSourceLabel(item.commission_source_type)}</td>
+                        <td className="px-3 py-3 text-slate-700">{sourceResponsible}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
