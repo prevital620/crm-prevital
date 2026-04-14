@@ -127,6 +127,15 @@ const panelClass =
 const inputClass =
   "w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
 
+const commissionSourceQuickFilters = [
+  { value: "", label: "Todos" },
+  { value: "opc", label: "OPC" },
+  { value: "tmk", label: "TMK" },
+  { value: "base", label: "Base" },
+  { value: "redes", label: "Redes" },
+  { value: "otro", label: "Otro" },
+];
+
 function StatCard({
   title,
   value,
@@ -160,6 +169,7 @@ export default function AdminComisionesPage() {
   const [search, setSearch] = useState("");
   const [collaboratorFilter, setCollaboratorFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
+  const [commissionSourceFilter, setCommissionSourceFilter] = useState("");
 
   async function validarAcceso() {
     try {
@@ -311,6 +321,9 @@ export default function AdminComisionesPage() {
         ? (item.assigned_commercial_user_id || "") === collaboratorFilter
         : true;
       const matchesArea = areaFilter ? collaboratorArea === areaFilter : true;
+      const matchesCommissionSource = commissionSourceFilter
+        ? (item.commission_source_type || "") === commissionSourceFilter
+        : true;
       const matchesSearch = q
         ? normalizeText(item.customer_name).includes(q) ||
           normalizeText(item.phone).includes(q) ||
@@ -320,9 +333,25 @@ export default function AdminComisionesPage() {
           normalizeText(callName).includes(q)
         : true;
 
-      return matchesDateFrom && matchesDateTo && matchesCollaborator && matchesArea && matchesSearch;
+      return (
+        matchesDateFrom &&
+        matchesDateTo &&
+        matchesCollaborator &&
+        matchesArea &&
+        matchesCommissionSource &&
+        matchesSearch
+      );
     });
-  }, [ventasReales, profileMap, dateFrom, dateTo, collaboratorFilter, areaFilter, search]);
+  }, [
+    ventasReales,
+    profileMap,
+    dateFrom,
+    dateTo,
+    collaboratorFilter,
+    areaFilter,
+    commissionSourceFilter,
+    search,
+  ]);
 
   const resumen = useMemo(() => {
     return {
@@ -342,6 +371,10 @@ export default function AdminComisionesPage() {
         collaboratorName: string;
         area: string;
         ventas: number;
+        ventasOpc: number;
+        baseNetaOpc: number;
+        ventasTmk: number;
+        baseNetaTmk: number;
         volumen: number;
         caja: number;
         cartera: number;
@@ -363,6 +396,10 @@ export default function AdminComisionesPage() {
           collaboratorName,
           area,
           ventas: 0,
+          ventasOpc: 0,
+          baseNetaOpc: 0,
+          ventasTmk: 0,
+          baseNetaTmk: 0,
           volumen: 0,
           caja: 0,
           cartera: 0,
@@ -372,6 +409,14 @@ export default function AdminComisionesPage() {
 
       const current = map.get(collaboratorId)!;
       current.ventas += 1;
+      if (item.commission_source_type === "opc") {
+        current.ventasOpc += 1;
+        current.baseNetaOpc += Number(item.net_commission_base || 0);
+      }
+      if (item.commission_source_type === "tmk") {
+        current.ventasTmk += 1;
+        current.baseNetaTmk += Number(item.net_commission_base || 0);
+      }
       current.volumen += Number(item.volume_amount || 0);
       current.caja += Number(item.cash_amount || 0);
       current.cartera += Number(item.portfolio_amount || 0);
@@ -555,12 +600,34 @@ export default function AdminComisionesPage() {
                 setDateTo(hoyISO());
                 setAreaFilter("");
                 setCollaboratorFilter("");
+                setCommissionSourceFilter("");
                 setSearch("");
               }}
               className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Limpiar filtros
             </button>
+          </div>
+
+          <div className="mt-4 flex flex-wrap gap-3">
+            {commissionSourceQuickFilters.map((item) => {
+              const isActive = commissionSourceFilter === item.value;
+
+              return (
+                <button
+                  key={item.value || "all"}
+                  type="button"
+                  onClick={() => setCommissionSourceFilter(item.value)}
+                  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
+                    isActive
+                      ? "bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] text-white shadow-[0_14px_28px_rgba(95,125,102,0.18)]"
+                      : "border border-[#CFE4D8] bg-white/88 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                  }`}
+                >
+                  {item.label}
+                </button>
+              );
+            })}
           </div>
         </section>
 
@@ -598,8 +665,10 @@ export default function AdminComisionesPage() {
                     <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Área</th>
                     <th className="px-3 py-3">Ventas</th>
-                    <th className="px-3 py-3">Fuente comisión</th>
-                    <th className="px-3 py-3">Responsable fuente</th>
+                    <th className="px-3 py-3">Ventas OPC</th>
+                    <th className="px-3 py-3">Base OPC</th>
+                    <th className="px-3 py-3">Ventas TMK</th>
+                    <th className="px-3 py-3">Base TMK</th>
                     <th className="px-3 py-3">Volumen</th>
                     <th className="px-3 py-3">Caja</th>
                     <th className="px-3 py-3">Cartera</th>
@@ -612,6 +681,10 @@ export default function AdminComisionesPage() {
                       <td className="px-3 py-3 font-medium text-slate-900">{item.collaboratorName}</td>
                       <td className="px-3 py-3 text-slate-700">{item.area}</td>
                       <td className="px-3 py-3 text-slate-700">{item.ventas}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.ventasOpc}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNetaOpc)}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.ventasTmk}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNetaTmk)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.volumen)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.caja)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.cartera)}</td>
