@@ -5,6 +5,7 @@ import { createRouteHandlerSupabaseClient } from "@/lib/server/supabase-server";
 import {
   getErrorMessage,
   getTemporaryUserPassword,
+  isAuthUserMissingError,
   requireSuperUser,
 } from "@/lib/server/user-security";
 
@@ -38,6 +39,16 @@ export async function PATCH(
     });
 
     if (error) {
+      if (isAuthUserMissingError(error)) {
+        return NextResponse.json(
+          {
+            error:
+              "Ese usuario ya no existe en autenticación. Debes crearlo de nuevo o eliminar su registro viejo de la lista.",
+          },
+          { status: 404 }
+        );
+      }
+
       return NextResponse.json(
         { error: error.message || "No se pudo restablecer la contraseña." },
         { status: 400 }
@@ -46,7 +57,7 @@ export async function PATCH(
 
     const { error: profileError } = await supabaseAdmin
       .from("profiles")
-      .update({ must_change_password: true })
+      .update({ must_change_password: true, is_active: true })
       .eq("id", id);
 
     if (profileError) {
@@ -65,6 +76,7 @@ export async function PATCH(
       message: "Contraseña restablecida correctamente.",
       tempPassword,
       userId: data.user?.id,
+      reactivated: true,
     });
   } catch (error: unknown) {
     return NextResponse.json(

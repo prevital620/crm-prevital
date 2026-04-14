@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { createRouteHandlerSupabaseClient } from "@/lib/server/supabase-server";
-import { getErrorMessage, requireSuperUser } from "@/lib/server/user-security";
+import {
+  getErrorMessage,
+  isAuthUserMissingError,
+  requireSuperUser,
+} from "@/lib/server/user-security";
 
 type UserUpdatePayload = {
   full_name?: string;
@@ -203,19 +207,50 @@ export async function DELETE(
 
     const { error } = await supabaseAdmin.auth.admin.deleteUser(id, true);
 
-    if (error) {
+    if (error && !isAuthUserMissingError(error)) {
       return NextResponse.json(
         { error: error.message || "No se pudo eliminar el usuario." },
         { status: 400 }
       );
     }
 
-    await supabaseAdmin.from("profiles").delete().eq("id", id);
-    await supabaseAdmin.from("user_roles").delete().eq("user_id", id);
+    const { error: profileDeleteError } = await supabaseAdmin
+      .from("profiles")
+      .delete()
+      .eq("id", id);
+
+    if (profileDeleteError) {
+      return NextResponse.json(
+        {
+          error:
+            profileDeleteError.message ||
+            "No se pudo limpiar el perfil del usuario eliminado.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const { error: rolesDeleteError } = await supabaseAdmin
+      .from("user_roles")
+      .delete()
+      .eq("user_id", id);
+
+    if (rolesDeleteError) {
+      return NextResponse.json(
+        {
+          error:
+            rolesDeleteError.message ||
+            "No se pudieron limpiar los roles del usuario eliminado.",
+        },
+        { status: 400 }
+      );
+    }
 
     return NextResponse.json({
       ok: true,
-      message: "Usuario eliminado correctamente.",
+      message: error
+        ? "Se limpió el registro local de un usuario que ya no existía en autenticación."
+        : "Usuario eliminado correctamente.",
     });
   } catch (error: unknown) {
     return NextResponse.json(

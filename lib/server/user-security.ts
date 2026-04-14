@@ -41,6 +41,11 @@ export function getErrorMessage(error: unknown, fallback: string) {
   return fallback;
 }
 
+export function isAuthUserMissingError(error: unknown) {
+  const message = getErrorMessage(error, "").toLowerCase();
+  return message.includes("not found") || message.includes("user not found");
+}
+
 export function getTemporaryUserPassword() {
   return (
     process.env.DEFAULT_TEMP_PASSWORD ||

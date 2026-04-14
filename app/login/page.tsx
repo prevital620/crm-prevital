@@ -45,9 +45,16 @@ export default function LoginPage() {
 
       const { data: profile } = await supabase
         .from("profiles")
-        .select("must_change_password")
+        .select("must_change_password, is_active")
         .eq("id", session.user.id)
         .single();
+
+      if (profile && profile.is_active === false) {
+        await supabase.auth.signOut();
+        setError("Tu usuario está inactivo. Pide a super usuario que lo reactive.");
+        setCheckingSession(false);
+        return;
+      }
 
       if (profile?.must_change_password) {
         router.push("/cambiar-clave");
@@ -90,11 +97,17 @@ export default function LoginPage() {
 
       const { data: profile, error: profileError } = await supabase
         .from("profiles")
-        .select("must_change_password")
+        .select("must_change_password, is_active")
         .eq("id", user.id)
         .single();
 
       if (profileError) throw profileError;
+
+      if (profile?.is_active === false) {
+        await supabase.auth.signOut();
+        setError("Tu usuario está inactivo. Pide a super usuario que lo reactive.");
+        return;
+      }
 
       if (profile?.must_change_password) {
         router.push("/cambiar-clave");
