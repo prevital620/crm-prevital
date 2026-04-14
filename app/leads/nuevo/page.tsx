@@ -43,6 +43,7 @@ export default function NuevoLeadPage() {
   const [currentRoleCode, setCurrentRoleCode] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
+  const isPromotorOpc = currentRoleCode === "promotor_opc";
 
   const [form, setForm] = useState({
     first_name: "",
@@ -107,6 +108,14 @@ export default function NuevoLeadPage() {
     cargarAcceso();
   }, []);
 
+  useEffect(() => {
+    if (!isPromotorOpc) return;
+
+    setForm((current) =>
+      current.source === "opc" ? current : { ...current, source: "opc" }
+    );
+  }, [isPromotorOpc]);
+
   async function crearLead(e: React.FormEvent) {
     e.preventDefault();
     setMensaje("");
@@ -134,6 +143,7 @@ export default function NuevoLeadPage() {
         currentRoleCode === "tmk" ||
         currentRoleCode === "confirmador" ||
         currentRoleCode === "supervisor_call_center";
+      const sourceValue = isPromotorOpc ? "opc" : normalizeLeadSource(form.source);
 
       const { error } = await supabase.from("leads").insert([
         {
@@ -151,7 +161,7 @@ export default function NuevoLeadPage() {
           affiliation_type: form.affiliation_type || null,
           capture_location: form.capture_location.trim() || null,
           interest_service: form.interest_service.trim() || null,
-          source: normalizeLeadSource(form.source),
+          source: sourceValue,
           observations: form.observations.trim() || null,
           city: form.city.trim() || null,
           status: form.status,
@@ -178,7 +188,7 @@ export default function NuevoLeadPage() {
         affiliation_type: "",
         capture_location: "",
         interest_service: "",
-        source: "",
+        source: isPromotorOpc ? "opc" : "",
         observations: "",
         city: "",
         status: "nuevo",
@@ -293,6 +303,11 @@ export default function NuevoLeadPage() {
                 currentRoleCode === "supervisor_call_center") && (
                 <p className="mt-2 text-sm text-slate-600">
                   Este lead se asignará automáticamente a tu usuario.
+                </p>
+              )}
+              {isPromotorOpc && (
+                <p className="mt-2 text-sm text-slate-600">
+                  El origen de este lead se registrarÃ¡ automÃ¡ticamente como OPC.
                 </p>
               )}
             </div>
@@ -456,20 +471,26 @@ export default function NuevoLeadPage() {
               <Field
                 label="Origen del lead"
                 input={
-                  <select
-                    className={inputClass}
-                    value={form.source}
-                    onChange={(e) =>
-                      setForm({ ...form, source: e.target.value })
-                    }
-                  >
-                    <option value="">Selecciona</option>
-                    {leadSourceOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  isPromotorOpc ? (
+                    <div className="rounded-2xl border border-[#D6E8DA] bg-[#F4FAF6] px-4 py-3 text-sm font-medium text-[#4F6F5B]">
+                      OPC
+                    </div>
+                  ) : (
+                    <select
+                      className={inputClass}
+                      value={form.source}
+                      onChange={(e) =>
+                        setForm({ ...form, source: e.target.value })
+                      }
+                    >
+                      <option value="">Selecciona</option>
+                      {leadSourceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )
                 }
               />
 

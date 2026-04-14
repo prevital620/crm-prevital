@@ -92,10 +92,12 @@ export default function EditarLeadPage() {
 
   const [authorized, setAuthorized] = useState(false);
   const [canEdit, setCanEdit] = useState(false);
+  const [currentRoleCode, setCurrentRoleCode] = useState("");
 
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
   const [createdAt, setCreatedAt] = useState("");
+  const isPromotorOpc = currentRoleCode === "promotor_opc";
 
   const [form, setForm] = useState({
     first_name: "",
@@ -215,6 +217,7 @@ export default function EditarLeadPage() {
 
       setAuthorized(true);
       setCanEdit(allowedEdit);
+      setCurrentRoleCode(auth.roleCode);
       setCreatedAt(lead.created_at);
 
       setForm({
@@ -263,6 +266,8 @@ export default function EditarLeadPage() {
     setMensaje("");
 
     try {
+      const sourceValue = isPromotorOpc ? "opc" : normalizeLeadSource(form.source);
+
       const { error } = await supabase
         .from("leads")
         .update({
@@ -280,7 +285,7 @@ export default function EditarLeadPage() {
           affiliation_type: form.affiliation_type || null,
           capture_location: form.capture_location.trim() || null,
           interest_service: form.interest_service || null,
-          source: normalizeLeadSource(form.source),
+          source: sourceValue,
           observations: form.observations.trim() || null,
           city: form.city.trim() || null,
           status: form.status || "nuevo",
@@ -345,6 +350,12 @@ export default function EditarLeadPage() {
               <p className="mt-2 text-sm leading-6 text-slate-600">
                 Este acceso ya respeta el rol autenticado del usuario.
               </p>
+              {isPromotorOpc ? (
+                <p className="mt-2 text-xs text-slate-500">
+                  Para leads creados por promotor OPC, el origen queda fijo como
+                  OPC.
+                </p>
+              ) : null}
               <p className="mt-2 text-xs text-slate-500">
                 Creado: {createdAt ? formatDate(createdAt) : "Sin fecha"}
               </p>
@@ -544,21 +555,27 @@ export default function EditarLeadPage() {
               <Field
                 label="Origen del lead"
                 input={
-                  <select
-                    className={inputClass}
-                    value={form.source}
-                    onChange={(e) =>
-                      setForm({ ...form, source: e.target.value })
-                    }
-                    disabled={!canEdit}
-                  >
-                    <option value="">Selecciona</option>
-                    {leadSourceOptions.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
+                  isPromotorOpc ? (
+                    <div className="rounded-2xl border border-slate-300 bg-slate-50 px-4 py-3 text-sm font-medium text-slate-700">
+                      OPC
+                    </div>
+                  ) : (
+                    <select
+                      className={inputClass}
+                      value={form.source}
+                      onChange={(e) =>
+                        setForm({ ...form, source: e.target.value })
+                      }
+                      disabled={!canEdit}
+                    >
+                      <option value="">Selecciona</option>
+                      {leadSourceOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  )
                 }
               />
 
