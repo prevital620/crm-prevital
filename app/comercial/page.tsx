@@ -15,6 +15,16 @@ import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import { hoyISO, dateToLocalISO, isSameLocalDay } from "@/lib/datetime/dateHelpers";
 import { formatDate, formatDateOnly } from "@/lib/datetime/dateFormat";
 import { traducirEstadoComercial, commercialStatusClass } from "@/lib/status/commercialStatus";
+import { getSectionForService } from "@/lib/agenda/agendaSections";
+import {
+  ACTIVE_APPOINTMENT_STATUSES,
+  DEFAULT_DAILY_CAPACITY,
+  getDurationOptions,
+} from "@/lib/agenda/agendaDurations";
+import {
+  buildSlotAvailability,
+  formatSlotAvailabilityLabel,
+} from "@/lib/agenda/agendaAvailability";
 import {
   buildCommercialFollowUpMetadata,
   CommercialFollowUpDraft,
@@ -120,6 +130,28 @@ type AppointmentLookupRow = {
   specialist_user_id: string | null;
   notes: string | null;
   instructions_text: string | null;
+};
+
+type AppointmentScheduleRow = {
+  id: string;
+  appointment_date: string;
+  appointment_time: string;
+  status: string;
+  service_type: string | null;
+  notes: string | null;
+};
+
+type AgendaDaySetting = {
+  agenda_date: string;
+  daily_capacity: number | null;
+  is_closed: boolean;
+};
+
+type AgendaSlotSetting = {
+  agenda_date: string;
+  slot_time: string;
+  capacity: number | null;
+  is_blocked: boolean;
 };
 
 const allowedRoles = [
@@ -315,6 +347,10 @@ function buildInstallmentPlan(firstDate: string, count: number, value: number): 
   }));
 }
 
+function buildDurationNote(durationMinutes: number) {
+  return `Duración: ${durationMinutes} min`;
+}
+
 function buildClosingNotes(
   baseText: string,
   portfolio: PortfolioFields,
@@ -422,6 +458,9 @@ export default function ComercialPage() {
 
   const [cases, setCases] = useState<CommercialCase[]>([]);
   const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
+  const [appointments, setAppointments] = useState<AppointmentScheduleRow[]>([]);
+  const [agendaDaySettings, setAgendaDaySettings] = useState<Record<string, AgendaDaySetting>>({});
+  const [agendaSlotSettings, setAgendaSlotSettings] = useState<Record<string, AgendaSlotSetting>>({});
   const [nextAppointments, setNextAppointments] = useState<CommercialFollowUpDraft[]>([]);
 
   const [search, setSearch] = useState("");
@@ -522,6 +561,37 @@ export default function ComercialPage() {
     return !!(currentCase && (form.purchased_service || calculatedVolume > 0));
   }, [currentCase, form.purchased_service, calculatedVolume]);
 
+  const allFollowUpDrafts = useMemo(
+    () => getPrimaryFollowUp(form, nextAppointments),
+    [form, nextAppointments]
+  );
+
+  const primaryFollowUpAvailability = useMemo(
+    () =>
+      getFollowUpSlotAvailability(
+        {
+          service_type: form.next_step_type,
+          appointment_date: form.next_appointment_date,
+          appointment_time: form.next_appointment_time,
+          specialist_user_id: form.next_specialist_user_id,
+          notes: form.next_notes,
+        },
+        0,
+        allFollowUpDrafts
+      ),
+    [
+      agendaDaySettings,
+      agendaSlotSettings,
+      allFollowUpDrafts,
+      appointments,
+      form.next_appointment_date,
+      form.next_appointment_time,
+      form.next_notes,
+      form.next_specialist_user_id,
+      form.next_step_type,
+    ]
+  );
+
   useEffect(() => {
     setForm((prev) => ({
       ...prev,
@@ -535,6 +605,57 @@ export default function ComercialPage() {
       installment_value: automaticInstallmentValue ? String(automaticInstallmentValue) : "",
     }));
   }, [automaticInstallmentValue]);
+
+  useEffect(() => {
+    if (!form.next_step_type) return;
+
+    const availableSlots = primaryFollowUpAvailability.filter((slot) => !slot.disabled);
+    const stillValid = availableSlots.some((slot) => slot.value === form.next_appointment_time);
+
+    if (stillValid) return;
+
+    setForm((prev) => ({
+      ...prev,
+      next_appointment_time: availableSlots[0]?.value || "",
+    }));
+  }, [
+    form.next_appointment_time,
+    form.next_step_type,
+    primaryFollowUpAvailability,
+  ]);
+
+  useEffect(() => {
+    if (nextAppointments.length === 0) return;
+
+    let changed = false;
+    const allDrafts = getPrimaryFollowUp(form, nextAppointments);
+
+    const normalized = nextAppointments.map((item, index) => {
+      if (!item.service_type) return item;
+
+      const availability = getFollowUpSlotAvailability(item, index + 1, allDrafts);
+      const availableSlots = availability.filter((slot) => !slot.disabled);
+      const stillValid = availableSlots.some((slot) => slot.value === item.appointment_time);
+
+      if (stillValid) return item;
+
+      changed = true;
+      return {
+        ...item,
+        appointment_time: availableSlots[0]?.value || "",
+      };
+    });
+
+    if (changed) {
+      setNextAppointments(normalized);
+    }
+  }, [
+    agendaDaySettings,
+    agendaSlotSettings,
+    appointments,
+    form,
+    nextAppointments,
+  ]);
 
   async function validarAcceso() {
     try {
@@ -572,7 +693,8 @@ export default function ComercialPage() {
       setError("");
       setMensaje("");
 
-      const [casesResult, profilesResult] = await Promise.all([
+      const [casesResult, profilesResult, appointmentsResult, daySettingsResult, slotSettingsResult] =
+        await Promise.all([
         supabase
           .from("commercial_cases")
           .select(`
@@ -640,10 +762,22 @@ export default function ComercialPage() {
               )
             )
           `),
+        supabase
+          .from("appointments")
+          .select("id, appointment_date, appointment_time, status, service_type, notes"),
+        supabase
+          .from("agenda_day_settings")
+          .select("agenda_date, daily_capacity, is_closed"),
+        supabase
+          .from("agenda_slot_settings")
+          .select("agenda_date, slot_time, capacity, is_blocked"),
       ]);
 
       if (casesResult.error) throw casesResult.error;
       if (profilesResult.error) throw profilesResult.error;
+      if (appointmentsResult.error) throw appointmentsResult.error;
+      if (daySettingsResult.error) throw daySettingsResult.error;
+      if (slotSettingsResult.error) throw slotSettingsResult.error;
 
       let casesData = (casesResult.data as CommercialCase[]) || [];
       const profileRows = (profilesResult.data as any[]) || [];
@@ -704,8 +838,31 @@ export default function ComercialPage() {
         )
         .sort((a, b) => a.full_name.localeCompare(b.full_name));
 
+      const appointmentRows = ((appointmentsResult.data as AppointmentScheduleRow[]) || []).map(
+        (item) => ({
+          ...item,
+          appointment_time: item.appointment_time.slice(0, 5),
+        })
+      );
+
+      const daySettingsMap: Record<string, AgendaDaySetting> = {};
+      ((daySettingsResult.data as AgendaDaySetting[]) || []).forEach((item) => {
+        daySettingsMap[item.agenda_date] = item;
+      });
+
+      const slotSettingsMap: Record<string, AgendaSlotSetting> = {};
+      ((slotSettingsResult.data as AgendaSlotSetting[]) || []).forEach((item) => {
+        slotSettingsMap[`${item.agenda_date}_${item.slot_time.slice(0, 5)}`] = {
+          ...item,
+          slot_time: item.slot_time.slice(0, 5),
+        };
+      });
+
       setCases(casesData);
       setSpecialists(specialistList);
+      setAppointments(appointmentRows);
+      setAgendaDaySettings(daySettingsMap);
+      setAgendaSlotSettings(slotSettingsMap);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los casos comerciales.");
     } finally {
@@ -811,6 +968,72 @@ export default function ComercialPage() {
 
   function eliminarCitaAdicional(index: number) {
     setNextAppointments((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  }
+
+  function getFollowUpDuration(serviceType: string, appointmentDate: string) {
+    const section = getSectionForService(serviceType);
+    const durationOptions = getDurationOptions(section, serviceType, appointmentDate);
+    const firstDuration = durationOptions[0]?.value;
+    return Number(firstDuration || "30");
+  }
+
+  function getAllFollowUpDraftsSnapshot() {
+    return getPrimaryFollowUp(form, nextAppointments);
+  }
+
+  function buildDraftAppointmentsForAvailability(
+    drafts: CommercialFollowUpDraft[],
+    skipIndex: number
+  ) {
+    return drafts.flatMap((item, index) => {
+      if (index === skipIndex) return [];
+      if (!item.service_type || !item.appointment_date || !item.appointment_time) return [];
+
+      return [
+        {
+          id: `draft-${index}`,
+          appointment_date: item.appointment_date,
+          appointment_time: item.appointment_time,
+          status: "agendada",
+          service_type: item.service_type,
+          notes: buildDurationNote(getFollowUpDuration(item.service_type, item.appointment_date)),
+        } satisfies AppointmentScheduleRow,
+      ];
+    });
+  }
+
+  function getFollowUpSlotAvailability(
+    draft: CommercialFollowUpDraft,
+    draftIndex: number,
+    drafts: CommercialFollowUpDraft[]
+  ) {
+    if (!draft.service_type || !draft.appointment_date) return [];
+
+    const section = getSectionForService(draft.service_type);
+    const durationMinutes = getFollowUpDuration(draft.service_type, draft.appointment_date);
+    const daySetting = agendaDaySettings[draft.appointment_date];
+    const combinedAppointments = [
+      ...appointments.filter((item) => ACTIVE_APPOINTMENT_STATUSES.includes(item.status)),
+      ...buildDraftAppointmentsForAvailability(drafts, draftIndex),
+    ];
+
+    return buildSlotAvailability({
+      appointments: combinedAppointments,
+      section,
+      serviceType: draft.service_type,
+      appointmentDate: draft.appointment_date,
+      durationMinutes,
+      slotSettings: agendaSlotSettings,
+      selectedDateClosed: daySetting?.is_closed ?? false,
+      selectedDateDailyCapacity: daySetting?.daily_capacity ?? DEFAULT_DAILY_CAPACITY,
+      selectedDateActiveTotal: combinedAppointments.filter(
+        (item) =>
+          item.appointment_date === draft.appointment_date &&
+          ACTIVE_APPOINTMENT_STATUSES.includes(item.status)
+      ).length,
+      editingAppointmentId: null,
+      getSectionForService,
+    });
   }
 
   async function iniciarAtencion(item: CommercialCase) {
@@ -1137,6 +1360,18 @@ const hayVenta = volumeNumber > 0 || !!form.purchased_service;
 
       if (incompleteFollowUp) {
         throw new Error("Completa servicio, fecha y hora en cada cita que quieras agendar.");
+      }
+
+      const unavailableFollowUp = plannedFollowUps.find((item, index) => {
+        const availability = getFollowUpSlotAvailability(item, index, plannedFollowUps);
+        const selectedSlot = availability.find((slot) => slot.value === item.appointment_time);
+        return !selectedSlot || selectedSlot.disabled;
+      });
+
+      if (unavailableFollowUp) {
+        throw new Error(
+          `La cita de ${nextStepLabel(unavailableFollowUp.service_type)} en ${unavailableFollowUp.appointment_date} ya no tiene ese horario disponible.`
+        );
       }
 
 const updatePayload: any = {
@@ -1830,9 +2065,8 @@ const updatePayload: any = {
                     <Field
                       label="Hora siguiente cita"
                       input={
-                        <input
+                        <select
                           className={inputClass}
-                          type="time"
                           value={form.next_appointment_time}
                           onChange={(e) =>
                             setForm((prev) => ({
@@ -1840,10 +2074,35 @@ const updatePayload: any = {
                               next_appointment_time: e.target.value,
                             }))
                           }
-                        />
+                          disabled={
+                            !!form.next_step_type &&
+                            primaryFollowUpAvailability.filter((slot) => !slot.disabled).length === 0
+                          }
+                        >
+                          {!form.next_step_type ? (
+                            <option value="">Primero elige el siguiente paso</option>
+                          ) : primaryFollowUpAvailability.filter((slot) => !slot.disabled).length === 0 ? (
+                            <option value="">Sin cupos disponibles</option>
+                          ) : (
+                            primaryFollowUpAvailability
+                              .filter((slot) => !slot.disabled)
+                              .map((slot) => (
+                                <option key={slot.value} value={slot.value}>
+                                  {formatSlotAvailabilityLabel(slot)}
+                                </option>
+                              ))
+                          )}
+                        </select>
                       }
                     />
                   </div>
+
+                  {form.next_step_type &&
+                  primaryFollowUpAvailability.filter((slot) => !slot.disabled).length === 0 ? (
+                    <p className="mt-2 text-sm text-amber-700">
+                      No hay horarios disponibles para ese servicio en la fecha elegida.
+                    </p>
+                  ) : null}
 
                   <div className="mt-4">
                     <Field
@@ -1865,7 +2124,17 @@ const updatePayload: any = {
 
                   {nextAppointments.length > 0 ? (
                     <div className="mt-4 space-y-4">
-                      {nextAppointments.map((item, index) => (
+                      {nextAppointments.map((item, index) => {
+                        const followUpAvailability = getFollowUpSlotAvailability(
+                          item,
+                          index + 1,
+                          allFollowUpDrafts
+                        );
+                        const availableFollowUpSlots = followUpAvailability.filter(
+                          (slot) => !slot.disabled
+                        );
+
+                        return (
                         <div
                           key={`follow-up-${index}`}
                           className="rounded-2xl border border-[#D7EADF] bg-white p-4 shadow-sm"
@@ -1940,17 +2209,35 @@ const updatePayload: any = {
                             <Field
                               label="Hora"
                               input={
-                                <input
+                                <select
                                   className={inputClass}
-                                  type="time"
                                   value={item.appointment_time}
                                   onChange={(e) =>
                                     actualizarCitaAdicional(index, "appointment_time", e.target.value)
                                   }
-                                />
+                                  disabled={!item.service_type || availableFollowUpSlots.length === 0}
+                                >
+                                  {!item.service_type ? (
+                                    <option value="">Primero elige el siguiente paso</option>
+                                  ) : availableFollowUpSlots.length === 0 ? (
+                                    <option value="">Sin cupos disponibles</option>
+                                  ) : (
+                                    availableFollowUpSlots.map((slot) => (
+                                      <option key={slot.value} value={slot.value}>
+                                        {formatSlotAvailabilityLabel(slot)}
+                                      </option>
+                                    ))
+                                  )}
+                                </select>
                               }
                             />
                           </div>
+
+                          {item.service_type && availableFollowUpSlots.length === 0 ? (
+                            <p className="mt-3 text-sm text-amber-700">
+                              No hay horarios disponibles para esta cita adicional en la fecha elegida.
+                            </p>
+                          ) : null}
 
                           <div className="mt-4">
                             <Field
@@ -1967,7 +2254,8 @@ const updatePayload: any = {
                             />
                           </div>
                         </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   ) : null}
 
