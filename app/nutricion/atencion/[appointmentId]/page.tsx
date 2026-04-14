@@ -1,10 +1,14 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  buildPendingDeliveryNotes,
+  parseDeliveryRecommendation,
+} from "@/lib/appointments/receptionDelivery";
 
 type AppointmentRow = {
   id: string;
@@ -55,6 +59,12 @@ type NutritionProfileRow = {
   observaciones_generales: string | null;
 };
 
+type InventoryOption = {
+  id: string;
+  name: string;
+  stock: number;
+};
+
 type FormState = {
   document: string;
   phone: string;
@@ -85,6 +95,10 @@ type FormState = {
   datos_alimentarios: string;
   plan_nutricional: string;
   observaciones_generales: string;
+  reception_product_id: string;
+  reception_product_name: string;
+  reception_product_quantity: string;
+  reception_product_instructions: string;
 };
 
 const initialForm: FormState = {
@@ -117,12 +131,16 @@ const initialForm: FormState = {
   datos_alimentarios: "",
   plan_nutricional: "",
   observaciones_generales: "",
+  reception_product_id: "",
+  reception_product_name: "",
+  reception_product_quantity: "1",
+  reception_product_instructions: "",
 };
 
 const classificationOptions = [
-  "Desnutrición grado 1",
-  "Desnutrición grado 2",
-  "Desnutrición grado 3",
+  "DesnutriciÃ³n grado 1",
+  "DesnutriciÃ³n grado 2",
+  "DesnutriciÃ³n grado 3",
   "Normal",
   "Sobrepeso",
   "Pre obeso",
@@ -139,16 +157,16 @@ const metricFields: Array<{
 }> = [
   { key: "peso", label: "Peso", placeholder: "Ej: 70 kg" },
   { key: "talla", label: "Talla", placeholder: "Ej: 1.65 m" },
-  { key: "perimetro_brazo", label: "Perímetro brazo", placeholder: "Ej: 28 cm" },
-  { key: "indice_masa_corporal", label: "Índice masa corporal", placeholder: "Ej: 25" },
+  { key: "perimetro_brazo", label: "PerÃ­metro brazo", placeholder: "Ej: 28 cm" },
+  { key: "indice_masa_corporal", label: "Ãndice masa corporal", placeholder: "Ej: 25" },
   { key: "porcentaje_masa_corporal", label: "Grasa corporal", placeholder: "Ej: 30%" },
   { key: "masa_muscular", label: "Masa muscular", placeholder: "Ej: 42 kg" },
   { key: "metabolismo_reposo", label: "Metabolismo en reposo", placeholder: "Ej: 1450 kcal" },
   { key: "grasa_visceral", label: "Grasa visceral", placeholder: "Ej: 8" },
   { key: "edad_corporal", label: "Edad corporal", placeholder: "Ej: 40" },
-  { key: "dinamometria", label: "Dinamometría", placeholder: "Ej: 28 kg" },
+  { key: "dinamometria", label: "DinamometrÃ­a", placeholder: "Ej: 28 kg" },
   { key: "circunferencia_cintura", label: "Circunferencia cintura", placeholder: "Ej: 86 cm" },
-  { key: "perimetro_pantorrilla", label: "Perímetro pantorrilla", placeholder: "Ej: 35 cm" },
+  { key: "perimetro_pantorrilla", label: "PerÃ­metro pantorrilla", placeholder: "Ej: 35 cm" },
 ];
 
 function formatHora(hora: string | null | undefined) {
@@ -161,26 +179,26 @@ function traducirEstado(status: string | null | undefined) {
     agendada: "Agendada",
     confirmada: "Confirmada",
     en_espera: "En espera",
-    asistio: "Asistió",
-    no_asistio: "No asistió",
+    asistio: "AsistiÃ³",
+    no_asistio: "No asistiÃ³",
     reagendada: "Reagendada",
     cancelada: "Cancelada",
-    en_atencion: "En atención",
+    en_atencion: "En atenciÃ³n",
     finalizada: "Finalizada",
   };
   return map[status || ""] || status || "";
 }
 
 function buildReceptionDeliveryFlag(currentNotes: string | null | undefined) {
-  const raw = currentNotes || "";
-  const lines = raw
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .filter((line) => !/^Entrega nutrición pendiente:/i.test(line));
+  return buildPendingDeliveryNotes(currentNotes, "nutricion");
+}
 
-  lines.unshift("Entrega nutrición pendiente: Sí");
-  return lines.join("\n");
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
 }
 
 export default function NutricionAtencionPage() {
@@ -195,11 +213,48 @@ export default function NutricionAtencionPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [finalized, setFinalized] = useState(false);
+  const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
 
   useEffect(() => {
     if (!appointmentId) return;
     void loadRealData();
   }, [appointmentId]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    try {
+      const raw = window.localStorage.getItem("recepcion_inventory_items");
+      if (!raw) return;
+      const parsed = JSON.parse(raw) as InventoryOption[];
+      if (Array.isArray(parsed)) {
+        setInventoryOptions(
+          parsed
+            .filter((item) => item && item.id && item.name)
+            .map((item) => ({
+              id: item.id,
+              name: item.name,
+              stock: Number(item.stock || 0),
+            }))
+        );
+      }
+    } catch {}
+  }, []);
+
+  useEffect(() => {
+    if (!form.reception_product_name || form.reception_product_id) return;
+
+    const matched = inventoryOptions.find(
+      (item) => normalizeText(item.name) === normalizeText(form.reception_product_name)
+    );
+
+    if (!matched) return;
+
+    setForm((prev) => ({
+      ...prev,
+      reception_product_id: matched.id,
+    }));
+  }, [form.reception_product_id, form.reception_product_name, inventoryOptions]);
 
   const canPrint = useMemo(() => {
     return (
@@ -228,7 +283,7 @@ export default function NutricionAtencionPage() {
         .single();
 
       if (appointmentError) throw appointmentError;
-      if (!appointmentData) throw new Error("No se encontró la cita.");
+      if (!appointmentData) throw new Error("No se encontrÃ³ la cita.");
 
       setAppointment(appointmentData as AppointmentRow);
 
@@ -261,6 +316,10 @@ export default function NutricionAtencionPage() {
       }
 
       let nutritionProfile: NutritionProfileRow | null = null;
+      const deliveryRecommendation = parseDeliveryRecommendation(
+        appointmentData.notes,
+        "nutricion"
+      );
       if (foundUser?.id) {
         const { data: nutritionData, error: nutritionError } = await supabase
           .from("nutrition_profiles")
@@ -305,11 +364,15 @@ export default function NutricionAtencionPage() {
         datos_alimentarios: nutritionProfile?.datos_alimentarios || "",
         plan_nutricional: nutritionProfile?.plan_nutricional || "",
         observaciones_generales: nutritionProfile?.observaciones_generales || "",
+        reception_product_id: "",
+        reception_product_name: deliveryRecommendation?.productName || "",
+        reception_product_quantity: String(deliveryRecommendation?.quantity || 1),
+        reception_product_instructions: deliveryRecommendation?.instructions || "",
       });
 
       setFinalized((appointmentData.status || "") === "finalizada");
     } catch (err: any) {
-      setError(err?.message || "No se pudo cargar la atención nutricional.");
+      setError(err?.message || "No se pudo cargar la atenciÃ³n nutricional.");
     } finally {
       setLoading(false);
     }
@@ -319,7 +382,7 @@ export default function NutricionAtencionPage() {
     const nextErrors: string[] = [];
 
     if (!form.clasificacion_nutricional.trim()) {
-      nextErrors.push("La clasificación nutricional es obligatoria.");
+      nextErrors.push("La clasificaciÃ³n nutricional es obligatoria.");
     }
     if (!form.objetivo_nutricional.trim()) {
       nextErrors.push("El objetivo nutricional es obligatorio.");
@@ -336,7 +399,7 @@ export default function NutricionAtencionPage() {
     if (!appointment) throw new Error("No hay cita cargada.");
 
     const payload = {
-      nombre: appointment.patient_name?.trim() || "Cliente nutrición",
+      nombre: appointment.patient_name?.trim() || "Cliente nutriciÃ³n",
       documento: form.document.trim() || null,
       telefono: form.phone.trim() || appointment.phone || null,
       ciudad: form.city.trim() || appointment.city || null,
@@ -424,8 +487,16 @@ export default function NutricionAtencionPage() {
       };
 
       if (nextStatus) {
+        const selectedProductName =
+          form.reception_product_name.trim() ||
+          inventoryOptions.find((item) => item.id === form.reception_product_id)?.name ||
+          "";
         appointmentUpdate.status = nextStatus;
-        appointmentUpdate.notes = buildReceptionDeliveryFlag(appointment.notes);
+        appointmentUpdate.notes = buildPendingDeliveryNotes(appointment.notes, "nutricion", {
+          productName: selectedProductName,
+          quantity: Number(form.reception_product_quantity || "1") || 1,
+          instructions: form.reception_product_instructions.trim(),
+        });
       }
 
       const { error: appointmentUpdateError } = await supabase
@@ -442,19 +513,29 @@ export default function NutricionAtencionPage() {
               phone: form.phone.trim() || null,
               city: form.city.trim() || null,
               status: nextStatus || prev.status,
-              notes: nextStatus ? buildReceptionDeliveryFlag(prev.notes) : prev.notes,
+              notes:
+                nextStatus
+                  ? buildPendingDeliveryNotes(prev.notes, "nutricion", {
+                      productName:
+                        form.reception_product_name.trim() ||
+                        inventoryOptions.find((item) => item.id === form.reception_product_id)?.name ||
+                        "",
+                      quantity: Number(form.reception_product_quantity || "1") || 1,
+                      instructions: form.reception_product_instructions.trim(),
+                    })
+                  : prev.notes,
             }
           : prev
       );
 
       if (nextStatus === "finalizada") {
         setFinalized(true);
-        setMessage("Consulta finalizada. El cliente quedó pendiente para Recepción, impresión y entrega de productos.");
+        setMessage("Consulta finalizada. El cliente quedÃ³ pendiente para RecepciÃ³n, impresiÃ³n y entrega de productos.");
       } else {
         setMessage("Cambios guardados correctamente.");
       }
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la atención nutricional.");
+      setError(err?.message || "No se pudo guardar la atenciÃ³n nutricional.");
     } finally {
       setSaving(false);
     }
@@ -484,7 +565,7 @@ export default function NutricionAtencionPage() {
     return (
       <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
         <div className="mx-auto max-w-5xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">Cargando atención nutricional...</p>
+          <p className="text-sm text-slate-500">Cargando atenciÃ³n nutricional...</p>
         </div>
       </main>
     );
@@ -494,7 +575,7 @@ export default function NutricionAtencionPage() {
     return (
       <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
         <div className="mx-auto max-w-5xl rounded-3xl border border-red-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-red-700">{error || "No se encontró la cita."}</p>
+          <p className="text-sm text-red-700">{error || "No se encontrÃ³ la cita."}</p>
           <Link href="/nutricion/agenda" className="mt-4 inline-flex rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B]">
             Volver a agenda
           </Link>
@@ -517,10 +598,10 @@ export default function NutricionAtencionPage() {
 
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">Módulo de Nutrición</p>
+              <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">MÃ³dulo de NutriciÃ³n</p>
               <h1 className="mt-2 text-3xl font-bold text-[#24312A]">{appointment.patient_name || ""}</h1>
               <p className="mt-3 text-sm text-slate-600">
-                Cita {appointment.id || ""} · Lead {appointment.lead_id || ""}
+                Cita {appointment.id || ""} Â· Lead {appointment.lead_id || ""}
               </p>
             </div>
 
@@ -563,7 +644,7 @@ export default function NutricionAtencionPage() {
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <InfoBox label="Documento" value={form.document} />
-            <InfoBox label="Teléfono" value={form.phone} />
+            <InfoBox label="TelÃ©fono" value={form.phone} />
             <InfoBox label="Edad" value={form.age} />
             <InfoBox label="Sexo" value={form.sex} />
             <InfoBox label="Fecha" value={appointment.appointment_date || ""} />
@@ -592,10 +673,10 @@ export default function NutricionAtencionPage() {
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <SmallTextAreaField label="Antecedentes patológicos" value={form.antecedentes_patologicos} onChange={(v) => updateField("antecedentes_patologicos", v)} />
-            <SmallTextAreaField label="Cirugías" value={form.cirugias} onChange={(v) => updateField("cirugias", v)} />
-            <SmallTextAreaField label="Tóxicos" value={form.toxicos} onChange={(v) => updateField("toxicos", v)} />
-            <SmallTextAreaField label="Alérgicos" value={form.alergicos} onChange={(v) => updateField("alergicos", v)} />
+            <SmallTextAreaField label="Antecedentes patolÃ³gicos" value={form.antecedentes_patologicos} onChange={(v) => updateField("antecedentes_patologicos", v)} />
+            <SmallTextAreaField label="CirugÃ­as" value={form.cirugias} onChange={(v) => updateField("cirugias", v)} />
+            <SmallTextAreaField label="TÃ³xicos" value={form.toxicos} onChange={(v) => updateField("toxicos", v)} />
+            <SmallTextAreaField label="AlÃ©rgicos" value={form.alergicos} onChange={(v) => updateField("alergicos", v)} />
             <SmallTextAreaField label="Medicamentos" value={form.medicamentos} onChange={(v) => updateField("medicamentos", v)} />
             <SmallTextAreaField label="Familiares" value={form.familiares} onChange={(v) => updateField("familiares", v)} />
           </div>
@@ -604,7 +685,7 @@ export default function NutricionAtencionPage() {
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-bold text-[#24312A]">Formulario nutricional</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Medidas y composición corporal para la valoración nutricional.
+            Medidas y composiciÃ³n corporal para la valoraciÃ³n nutricional.
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -622,10 +703,10 @@ export default function NutricionAtencionPage() {
 
         <section className="grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-bold text-[#24312A]">Clasificación y objetivos</h2>
+            <h2 className="text-2xl font-bold text-[#24312A]">ClasificaciÃ³n y objetivos</h2>
             <div className="mt-5 space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">Clasificación nutricional</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">ClasificaciÃ³n nutricional</label>
                 <select
                   className={inputClass}
                   value={form.clasificacion_nutricional}
@@ -650,6 +731,78 @@ export default function NutricionAtencionPage() {
               <LargeTextAreaField label="Plan nutricional" value={form.plan_nutricional} onChange={(v) => updateField("plan_nutricional", v)} rows={7} />
               <LargeTextAreaField label="Observaciones generales" value={form.observaciones_generales} onChange={(v) => updateField("observaciones_generales", v)} rows={5} />
             </div>
+          </div>
+        </section>
+
+        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+          <h2 className="text-2xl font-bold text-[#24312A]">Producto para recepción</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Si eliges un producto aquí, recepción lo recibirá fijado al finalizar la consulta.
+          </p>
+
+          <div className="mt-5 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Producto sugerido</label>
+              <select
+                className={inputClass}
+                value={form.reception_product_id || (form.reception_product_name ? "__manual__" : "")}
+                onChange={(e) => {
+                  const nextValue = e.target.value;
+                  if (nextValue === "__manual__") {
+                    setForm((prev) => ({
+                      ...prev,
+                      reception_product_id: "",
+                    }));
+                    return;
+                  }
+
+                  const selected = inventoryOptions.find((item) => item.id === nextValue);
+                  setForm((prev) => ({
+                    ...prev,
+                    reception_product_id: nextValue,
+                    reception_product_name: selected?.name || "",
+                  }));
+                }}
+              >
+                <option value="">Sin producto</option>
+                {inventoryOptions
+                  .slice()
+                  .sort((a, b) => a.name.localeCompare(b.name))
+                  .map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name} · stock {item.stock}
+                    </option>
+                  ))}
+                <option value="__manual__">Otro producto</option>
+              </select>
+            </div>
+
+            <InputField
+              label="Cantidad sugerida"
+              value={form.reception_product_quantity}
+              placeholder="Ej: 1"
+              onChange={(value) => updateField("reception_product_quantity", value)}
+            />
+          </div>
+
+          {!form.reception_product_id ? (
+            <div className="mt-4">
+              <InputField
+                label="Nombre del producto"
+                value={form.reception_product_name}
+                placeholder="Ej: Omega 3"
+                onChange={(value) => updateField("reception_product_name", value)}
+              />
+            </div>
+          ) : null}
+
+          <div className="mt-4">
+            <LargeTextAreaField
+              label="Indicaciones para recepción"
+              value={form.reception_product_instructions}
+              onChange={(v) => updateField("reception_product_instructions", v)}
+              rows={4}
+            />
           </div>
         </section>
       </div>
@@ -744,3 +897,6 @@ function LargeTextAreaField({
 
 const inputClass =
   "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-slate-900 outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
+
+
+

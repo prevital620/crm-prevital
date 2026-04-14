@@ -8,6 +8,11 @@ import SessionBadge from "@/components/session-badge";
 import { useSearchParams } from "next/navigation";
 import StatCard from "@/components/ui/StatCard";
 import Field from "@/components/ui/Field";
+import {
+  hasPendingDelivery,
+  markDeliveryResolved,
+  parseDeliveryRecommendation,
+} from "@/lib/appointments/receptionDelivery";
 import printAppointment from "@/lib/print/templates/printAppointment";
 import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import printNutritionSummary from "@/lib/print/templates/printNutritionSummary";
@@ -194,6 +199,7 @@ type NutritionDeliverySelection = {
   userId: string | null;
   document: string;
   profile: NutritionProfileRow | null;
+  recommendation: ReturnType<typeof parseDeliveryRecommendation>;
 };
 
 type PhysiotherapyProfileRow = {
@@ -315,12 +321,20 @@ function formatHora(hora: string | null | undefined) {
   return hora.slice(0, 5);
 }
 
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
 function isPhysiotherapyService(serviceType: string | null | undefined) {
   return (serviceType || "").toLowerCase().includes("fisio");
 }
 
 function hasPendingPhysiotherapyDelivery(notes: string | null | undefined) {
-  return /Entrega fisioterapia pendiente:\s*S[ií]/i.test(notes || "");
+  return hasPendingDelivery(notes, "fisioterapia");
 }
 
 function limpiarPendienteFisioterapiaDeNotas(notes: string | null | undefined) {
@@ -333,8 +347,7 @@ function limpiarPendienteFisioterapiaDeNotas(notes: string | null | undefined) {
 }
 
 function marcarEntregaFisioterapiaResuelta(notes: string | null | undefined) {
-  const clean = limpiarPendienteFisioterapiaDeNotas(notes);
-  return clean ? `Entrega fisioterapia pendiente: No\n${clean}` : "Entrega fisioterapia pendiente: No";
+  return markDeliveryResolved(notes, "fisioterapia");
 }
 
 function fullLeadName(lead: LeadOption) {
@@ -654,7 +667,7 @@ function isNutritionService(serviceType: string | null | undefined) {
 }
 
 function hasPendingNutritionDelivery(notes: string | null | undefined) {
-  return /Entrega nutrición pendiente:\s*Sí/i.test(notes || "");
+  return hasPendingDelivery(notes, "nutricion");
 }
 
 function limpiarPendienteNutricionDeNotas(notes: string | null | undefined) {
@@ -667,8 +680,7 @@ function limpiarPendienteNutricionDeNotas(notes: string | null | undefined) {
 }
 
 function marcarEntregaNutricionResuelta(notes: string | null | undefined) {
-  const clean = limpiarPendienteNutricionDeNotas(notes);
-  return clean ? `Entrega nutrición pendiente: No\n${clean}` : "Entrega nutrición pendiente: No";
+  return markDeliveryResolved(notes, "nutricion");
 }
 
 function imprimirDocumentoNutricional({
@@ -1794,10 +1806,20 @@ function RecepcionContent() {
     ]
   );
 
-  const selectedNutritionInventoryItem = useMemo(() =>
-    inventoryItems.find((item) => item.id === nutritionDeliveryProductId) || null,
-    [inventoryItems, nutritionDeliveryProductId]
-  );
+  const selectedNutritionInventoryItem = useMemo(() => {
+    if (nutritionDeliveryProductId) {
+      return inventoryItems.find((item) => item.id === nutritionDeliveryProductId) || null;
+    }
+
+    const recommendedName = nutritionSelection?.recommendation?.productName;
+    if (!recommendedName) return null;
+
+    return (
+      inventoryItems.find(
+        (item) => normalizeText(item.name) === normalizeText(recommendedName)
+      ) || null
+    );
+  }, [inventoryItems, nutritionDeliveryProductId, nutritionSelection]);
 
   function imprimirDocumento(tipo: "cita" | "instrucciones") {
     if (typeof window === "undefined") return;
@@ -2293,6 +2315,7 @@ function RecepcionContent() {
       }
 
       let profile: NutritionProfileRow | null = null;
+      const recommendation = parseDeliveryRecommendation(item.notes, "nutricion");
       if (foundUser?.id) {
         const { data: profileData, error: profileError } = await supabase
           .from("nutrition_profiles")
@@ -2304,12 +2327,24 @@ function RecepcionContent() {
         profile = (profileData as NutritionProfileRow | null) || null;
       }
 
+      const matchedInventoryItem = recommendation?.productName
+        ? inventoryItems.find(
+            (inventoryItem) =>
+              normalizeText(inventoryItem.name) === normalizeText(recommendation.productName)
+          ) || null
+        : null;
+
       setNutritionSelection({
         appointment: item,
         userId: foundUser?.id || null,
         document: foundUser?.documento || "",
         profile,
+        recommendation,
       });
+
+      setNutritionDeliveryProductId(matchedInventoryItem?.id || "");
+      setNutritionDeliveryQuantity(String(recommendation?.quantity || 1));
+      setNutritionDeliveryNotes(recommendation?.instructions || "");
     } catch (err: any) {
       setError(err?.message || "No se pudo abrir la entrega de nutrición.");
     } finally {
@@ -2323,8 +2358,14 @@ function RecepcionContent() {
       return;
     }
 
-    if (!nutritionDeliveryProductId) {
-      setError("Debes seleccionar el producto entregado.");
+    const lockedRecommendation = nutritionSelection.recommendation;
+
+    if (!nutritionDeliveryProductId && !selectedNutritionInventoryItem) {
+      setError(
+        lockedRecommendation?.productName
+          ? "El producto recomendado no existe todavía en inventario. Primero créalo en recepción."
+          : "Debes seleccionar el producto entregado."
+      );
       return;
     }
 
@@ -2334,7 +2375,9 @@ function RecepcionContent() {
       return;
     }
 
-    const selectedItem = inventoryItems.find((item) => item.id === nutritionDeliveryProductId);
+    const selectedItem =
+      inventoryItems.find((item) => item.id === nutritionDeliveryProductId) ||
+      selectedNutritionInventoryItem;
     if (!selectedItem) {
       setError("Debes seleccionar un producto válido del inventario.");
       return;
@@ -4500,6 +4543,21 @@ function imprimirRegistroComercial() {
                         <span className="font-medium">Plan nutricional:</span> {nutritionSelection.profile.plan_nutricional}
                       </p>
                     ) : null}
+                    {nutritionSelection.recommendation ? (
+                      <div className="mt-3 rounded-2xl border border-[#CFE4D8] bg-white/90 p-3 text-sm text-slate-700">
+                        <p>
+                          <span className="font-medium">Producto sugerido:</span> {nutritionSelection.recommendation.productName}
+                        </p>
+                        <p className="mt-1">
+                          <span className="font-medium">Cantidad:</span> {nutritionSelection.recommendation.quantity}
+                        </p>
+                        {nutritionSelection.recommendation.instructions ? (
+                          <p className="mt-1">
+                            <span className="font-medium">Indicaciones:</span> {nutritionSelection.recommendation.instructions}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
 
                   <button
@@ -4527,6 +4585,7 @@ function imprimirRegistroComercial() {
                         className={inputClass}
                         value={nutritionDeliveryProductId}
                         onChange={(e) => setNutritionDeliveryProductId(e.target.value)}
+                        disabled={!!nutritionSelection.recommendation}
                       >
                         <option value="">Selecciona</option>
                         {inventoryItems
@@ -4551,6 +4610,7 @@ function imprimirRegistroComercial() {
                           min="1"
                           value={nutritionDeliveryQuantity}
                           onChange={(e) => setNutritionDeliveryQuantity(e.target.value)}
+                          disabled={!!nutritionSelection.recommendation}
                         />
                       }
                     />
@@ -4570,6 +4630,7 @@ function imprimirRegistroComercial() {
                         className={`${inputClass} min-h-[110px] resize-none`}
                         value={nutritionDeliveryNotes}
                         onChange={(e) => setNutritionDeliveryNotes(e.target.value)}
+                        disabled={!!nutritionSelection.recommendation?.instructions}
                       />
                     }
                   />
