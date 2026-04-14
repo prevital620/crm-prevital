@@ -9,6 +9,9 @@ import { useSearchParams } from "next/navigation";
 import StatCard from "@/components/ui/StatCard";
 import Field from "@/components/ui/Field";
 import printAppointment from "@/lib/print/templates/printAppointment";
+import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
+import printNutritionSummary from "@/lib/print/templates/printNutritionSummary";
+import printPhysiotherapySummary from "@/lib/print/templates/printPhysiotherapySummary";
 import printReceptionRecord from "@/lib/print/templates/printReceptionRecord";
 import {
   getSectionForService,
@@ -128,6 +131,18 @@ type CommercialCaseRow = {
   sale_result: string | null;
   purchased_service: string | null;
   sale_value: number | null;
+  sales_assessment: string | null;
+  proposal_text: string | null;
+  payment_method: string | null;
+  cash_amount: number | null;
+  portfolio_amount: number | null;
+  volume_amount: number | null;
+  closing_notes: string | null;
+  next_step_type: string | null;
+  next_appointment_date: string | null;
+  next_appointment_time: string | null;
+  next_notes: string | null;
+  closed_at: string | null;
   created_at: string;
 };
 
@@ -181,6 +196,41 @@ type NutritionDeliverySelection = {
   profile: NutritionProfileRow | null;
 };
 
+type PhysiotherapyProfileRow = {
+  user_id: string;
+  antecedentes_patologicos: string | null;
+  cirugias: string | null;
+  toxicos: string | null;
+  alergicos: string | null;
+  medicamentos: string | null;
+  familiares: string | null;
+  analisis_comercial: string | null;
+  presion_arterial: string | null;
+  frecuencia_cardiaca: string | null;
+  inspeccion_general: string | null;
+  dolor: string | null;
+  inflamacion: string | null;
+  limitacion_movilidad: string | null;
+  prueba_semiologica: string | null;
+  flexibilidad: string | null;
+  fuerza_muscular: string | null;
+  rangos_movimiento_articular: string | null;
+  plan_intervencion: string | null;
+  observaciones_generales: string | null;
+};
+
+type PortfolioFields = {
+  installments_count: string;
+  installment_value: string;
+  first_installment_date: string;
+};
+
+type InstallmentPlanItem = {
+  number: number;
+  date: string;
+  value: number;
+};
+
 const allowedRoles = [
   "super_user",
   "recepcion",
@@ -213,6 +263,38 @@ const manualSourceOptions = [
   { value: "otro", label: "Otro" },
 ];
 
+const commercialServiceOptions = [
+  { value: "", label: "Selecciona" },
+  { value: "valoracion", label: "Valoracion" },
+  { value: "detox", label: "Detox" },
+  { value: "sueroterapia", label: "Sueroterapia" },
+  { value: "nutricion", label: "Nutricion" },
+  { value: "medico", label: "Medico" },
+  { value: "fisioterapia", label: "Fisioterapia" },
+  { value: "tratamiento_integral", label: "Tratamiento integral" },
+];
+
+const commercialPaymentOptions = [
+  { value: "", label: "Selecciona" },
+  { value: "contado", label: "Contado" },
+  { value: "tarjeta", label: "Tarjeta" },
+  { value: "transferencia", label: "Transferencia" },
+  { value: "mixto", label: "Mixto" },
+  { value: "cartera", label: "Cartera" },
+  { value: "addi", label: "Addi" },
+  { value: "welly", label: "Welly" },
+  { value: "medipay", label: "MediPay" },
+];
+
+const commercialNextStepOptions = [
+  { value: "", label: "Sin continuidad todavia" },
+  { value: "nutricion", label: "Nutricion" },
+  { value: "medico", label: "Medico" },
+  { value: "fisioterapia", label: "Fisioterapia" },
+  { value: "detox", label: "Detox" },
+  { value: "sueroterapia", label: "Sueroterapia" },
+];
+
 type CommercialSourceDetailMeta = {
   label: string;
   placeholder: string;
@@ -231,6 +313,28 @@ function hoyISO() {
 function formatHora(hora: string | null | undefined) {
   if (!hora) return "";
   return hora.slice(0, 5);
+}
+
+function isPhysiotherapyService(serviceType: string | null | undefined) {
+  return (serviceType || "").toLowerCase().includes("fisio");
+}
+
+function hasPendingPhysiotherapyDelivery(notes: string | null | undefined) {
+  return /Entrega fisioterapia pendiente:\s*S[ií]/i.test(notes || "");
+}
+
+function limpiarPendienteFisioterapiaDeNotas(notes: string | null | undefined) {
+  if (!notes) return "";
+  return notes
+    .split("\n")
+    .filter((line) => !/^Entrega fisioterapia pendiente:/i.test(line.trim()))
+    .join("\n")
+    .trim();
+}
+
+function marcarEntregaFisioterapiaResuelta(notes: string | null | undefined) {
+  const clean = limpiarPendienteFisioterapiaDeNotas(notes);
+  return clean ? `Entrega fisioterapia pendiente: No\n${clean}` : "Entrega fisioterapia pendiente: No";
 }
 
 function fullLeadName(lead: LeadOption) {
@@ -256,6 +360,98 @@ function traducirFuenteManual(value: string) {
   const normalized = normalizarFuenteManual(value);
   const found = manualSourceOptions.find((item) => item.value === normalized);
   return found?.label || value || "Sin fuente";
+}
+
+function serviceLabelComercial(value: string | null | undefined) {
+  const found = commercialServiceOptions.find((item) => item.value === (value || ""));
+  return found?.label || value || "Sin definir";
+}
+
+function paymentMethodLabelComercial(value: string | null | undefined) {
+  const found = commercialPaymentOptions.find((item) => item.value === (value || ""));
+  return found?.label || value || "Sin definir";
+}
+
+function nextStepLabelComercial(value: string | null | undefined) {
+  const found = commercialNextStepOptions.find((item) => item.value === (value || ""));
+  return found?.label || value || "No definida";
+}
+
+function isCommercialOutcomeCode(value: string | null | undefined) {
+  return ["ganada", "perdida", "pendiente"].includes(value || "");
+}
+
+function getCommercialReceptionSummary(item: CommercialCaseRow) {
+  if (!item.sale_result || isCommercialOutcomeCode(item.sale_result)) return [];
+  return item.sale_result
+    .split("|")
+    .map((part) => part.trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+
+function numberFromMoneyText(value: string | number | null | undefined) {
+  if (typeof value === "number") return value;
+  const raw = String(value || "").replace(/[^\d]/g, "");
+  return raw ? Number(raw) : 0;
+}
+
+function parsePortfolioDetails(text: string | null | undefined): PortfolioFields {
+  const source = text || "";
+  const installments = source.match(/N[úu]mero de cuotas:\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const installmentValue = source.match(/Valor de la cuota:\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const firstDate = source.match(/Fecha primera cuota:\s*([^\n]+)/i)?.[1]?.trim() || "";
+
+  return {
+    installments_count: installments,
+    installment_value: installmentValue,
+    first_installment_date: firstDate,
+  };
+}
+
+function stripPortfolioDetails(text: string | null | undefined) {
+  return (text || "")
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .filter(
+      (line) =>
+        !/^Detalle cartera:/i.test(line) &&
+        !/^N[úu]mero de cuotas:/i.test(line) &&
+        !/^Valor de la cuota:/i.test(line) &&
+        !/^Fecha primera cuota:/i.test(line) &&
+        !/^Plan de cuotas:/i.test(line) &&
+        !/^\d+\.\s*\d{4}-\d{2}-\d{2}\s*[·-]\s*\$/i.test(line)
+    )
+    .join("\n")
+    .trim();
+}
+
+function addMonthsKeepingDay(isoDate: string, monthOffset: number) {
+  const [y, m, d] = isoDate.split("-").map(Number);
+  const base = new Date(y, m - 1 + monthOffset, 1);
+  const lastDay = new Date(base.getFullYear(), base.getMonth() + 1, 0).getDate();
+  const safeDay = Math.min(d, lastDay);
+  const result = new Date(base.getFullYear(), base.getMonth(), safeDay);
+  const yy = result.getFullYear();
+  const mm = String(result.getMonth() + 1).padStart(2, "0");
+  const dd = String(result.getDate()).padStart(2, "0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function buildInstallmentPlan(firstDate: string, count: number, value: number): InstallmentPlanItem[] {
+  if (!firstDate || !count || count < 1 || !value) return [];
+  return Array.from({ length: count }).map((_, index) => ({
+    number: index + 1,
+    date: addMonthsKeepingDay(firstDate, index),
+    value,
+  }));
+}
+
+function hasCommercialSale(item: CommercialCaseRow) {
+  return !!(
+    item.purchased_service ||
+    (item.sale_value && Number(item.sale_value) > 0) ||
+    (item.volume_amount && Number(item.volume_amount) > 0)
+  );
 }
 
 function extraerFuenteManualDesdeNotas(notes: string | null | undefined) {
@@ -727,6 +923,7 @@ function RecepcionContent() {
   const [savingAppointment, setSavingAppointment] = useState(false);
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
+  const [queueActionId, setQueueActionId] = useState<string | null>(null);
 
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
@@ -1057,6 +1254,18 @@ function RecepcionContent() {
             sale_result,
             purchased_service,
             sale_value,
+            sales_assessment,
+            proposal_text,
+            payment_method,
+            cash_amount,
+            portfolio_amount,
+            volume_amount,
+            closing_notes,
+            next_step_type,
+            next_appointment_date,
+            next_appointment_time,
+            next_notes,
+            closed_at,
             created_at
           `)
           .order("created_at", { ascending: false }),
@@ -1186,6 +1395,40 @@ function RecepcionContent() {
     if (authorized) {
       cargarTodo();
     }
+  }, [authorized]);
+
+  useEffect(() => {
+    if (!authorized) return;
+
+    let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+    const scheduleRefresh = () => {
+      if (refreshTimer) return;
+      refreshTimer = setTimeout(() => {
+        refreshTimer = null;
+        void cargarTodo();
+      }, 500);
+    };
+
+    const channel = supabase
+      .channel("recepcion-live-feed")
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "appointments" },
+        scheduleRefresh
+      )
+      .on(
+        "postgres_changes",
+        { event: "*", schema: "public", table: "commercial_cases" },
+        scheduleRefresh
+      )
+      .subscribe();
+
+    return () => {
+      if (refreshTimer) {
+        clearTimeout(refreshTimer);
+      }
+      void supabase.removeChannel(channel);
+    };
   }, [authorized]);
 
   useEffect(() => {
@@ -1502,6 +1745,55 @@ function RecepcionContent() {
     total: nutritionPendingAppointments.length,
   }), [nutritionPendingAppointments]);
 
+  const physiotherapyPendingAppointments = useMemo(() => {
+    return appointments
+      .filter(
+        (item) =>
+          isPhysiotherapyService(item.service_type) &&
+          item.status === "finalizada" &&
+          hasPendingPhysiotherapyDelivery(item.notes)
+      )
+      .sort((a, b) => {
+        if (a.appointment_date !== b.appointment_date) {
+          return b.appointment_date.localeCompare(a.appointment_date);
+        }
+        return b.appointment_time.localeCompare(a.appointment_time);
+      });
+  }, [appointments]);
+
+  const commercialPendingPrintCases = useMemo(() => {
+    const today = hoyISO();
+    return commercialCases
+      .filter(
+        (item) =>
+          item.status === "finalizado" &&
+          hasCommercialSale(item) &&
+          ((item.closed_at || item.created_at || "").slice(0, 10) === today)
+      )
+      .sort((a, b) => {
+        const dateA = new Date(a.closed_at || a.created_at || 0).getTime();
+        const dateB = new Date(b.closed_at || b.created_at || 0).getTime();
+        return dateB - dateA;
+      });
+  }, [commercialCases]);
+
+  const receptionLiveSummary = useMemo(
+    () => ({
+      commercial: commercialPendingPrintCases.length,
+      nutrition: nutritionPendingAppointments.length,
+      physiotherapy: physiotherapyPendingAppointments.length,
+      total:
+        commercialPendingPrintCases.length +
+        nutritionPendingAppointments.length +
+        physiotherapyPendingAppointments.length,
+    }),
+    [
+      commercialPendingPrintCases,
+      nutritionPendingAppointments,
+      physiotherapyPendingAppointments,
+    ]
+  );
+
   const selectedNutritionInventoryItem = useMemo(() =>
     inventoryItems.find((item) => item.id === nutritionDeliveryProductId) || null,
     [inventoryItems, nutritionDeliveryProductId]
@@ -1549,6 +1841,248 @@ function RecepcionContent() {
     nuevaVentana.document.close();
     nuevaVentana.focus();
     nuevaVentana.print();
+  }
+
+  async function buscarUsuarioClinicoPorCita(item: AppointmentRow) {
+    let foundUser: UserRow | null = null;
+
+    if (item.phone) {
+      const { data: usersByPhone, error: phoneError } = await supabase
+        .from("users")
+        .select("id, nombre, documento, telefono, ciudad")
+        .eq("telefono", item.phone)
+        .limit(1);
+
+      if (phoneError) throw phoneError;
+      if (usersByPhone && usersByPhone.length > 0) {
+        foundUser = usersByPhone[0] as UserRow;
+      }
+    }
+
+    if (!foundUser && item.patient_name) {
+      const { data: usersByName, error: nameError } = await supabase
+        .from("users")
+        .select("id, nombre, documento, telefono, ciudad")
+        .eq("nombre", item.patient_name)
+        .limit(1);
+
+      if (nameError) throw nameError;
+      if (usersByName && usersByName.length > 0) {
+        foundUser = usersByName[0] as UserRow;
+      }
+    }
+
+    return foundUser;
+  }
+
+  async function imprimirPlanComercialDesdeRecepcion(item: CommercialCaseRow) {
+    try {
+      setQueueActionId(`commercial-${item.id}`);
+      setError("");
+      setMensaje("");
+
+      const portfolio = parsePortfolioDetails(item.closing_notes);
+      const installmentsCount = Number(portfolio.installments_count || "0");
+      const installmentValue = numberFromMoneyText(portfolio.installment_value);
+      const installmentPlan = buildInstallmentPlan(
+        portfolio.first_installment_date,
+        installmentsCount,
+        installmentValue
+      );
+
+      printPlanInstructions({
+        customerName: item.customer_name,
+        phone: item.phone,
+        city: item.city,
+        commercialDate: item.closed_at || item.created_at,
+        serviceName: serviceLabelComercial(item.purchased_service),
+        paymentMethod: paymentMethodLabelComercial(item.payment_method),
+        volumeAmount: Number(item.volume_amount || item.sale_value || 0),
+        cashAmount: Number(item.cash_amount || 0),
+        portfolioAmount: Number(item.portfolio_amount || 0),
+        nextStep: nextStepLabelComercial(item.next_step_type),
+        receptionSummary: getCommercialReceptionSummary(item),
+        assessment: item.sales_assessment,
+        proposal: item.proposal_text,
+        closingNotes: stripPortfolioDetails(item.closing_notes),
+        nextAppointmentDate: item.next_appointment_date,
+        nextAppointmentTime: item.next_appointment_time
+          ? formatHora(item.next_appointment_time)
+          : null,
+        nextNotes: item.next_notes,
+        installmentPlan,
+      });
+
+      setMensaje("Documento comercial listo para impresion.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo preparar la impresion comercial.");
+    } finally {
+      setQueueActionId(null);
+    }
+  }
+
+  async function imprimirResumenNutricionDesdeRecepcion(item: AppointmentRow) {
+    try {
+      setQueueActionId(`nutrition-print-${item.id}`);
+      setError("");
+      setMensaje("");
+
+      const foundUser = await buscarUsuarioClinicoPorCita(item);
+      let profile: NutritionProfileRow | null = null;
+
+      if (foundUser?.id) {
+        const { data: profileData, error: profileError } = await supabase
+          .from("nutrition_profiles")
+          .select("*")
+          .eq("user_id", foundUser.id)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+        profile = (profileData as NutritionProfileRow | null) || null;
+      }
+
+      printNutritionSummary({
+        customerName: item.patient_name,
+        document: foundUser?.documento,
+        phone: item.phone || foundUser?.telefono,
+        city: item.city || foundUser?.ciudad,
+        appointmentDate: item.appointment_date,
+        appointmentTime: formatHora(item.appointment_time),
+        serviceName: item.service_type,
+        antecedentesPatologicos: profile?.antecedentes_patologicos,
+        cirugias: profile?.cirugias,
+        toxicos: profile?.toxicos,
+        alergicos: profile?.alergicos,
+        medicamentos: profile?.medicamentos,
+        familiares: profile?.familiares,
+        peso: profile?.peso,
+        talla: profile?.talla,
+        indiceMasaCorporal: profile?.indice_masa_corporal,
+        porcentajeMasaCorporal: profile?.porcentaje_masa_corporal,
+        dinamometria: profile?.dinamometria,
+        masaMuscular: profile?.masa_muscular,
+        metabolismoReposo: profile?.metabolismo_reposo,
+        grasaVisceral: profile?.grasa_visceral,
+        circunferenciaCintura: profile?.circunferencia_cintura,
+        clasificacionNutricional: profile?.clasificacion_nutricional,
+        objetivoNutricional: profile?.objetivo_nutricional,
+        recomendacionesNutricionales: profile?.recomendaciones_nutricionales,
+        datosAlimentarios: profile?.datos_alimentarios,
+        planNutricional: profile?.plan_nutricional,
+        observacionesGenerales: profile?.observaciones_generales,
+      });
+
+      setMensaje("Historia e indicaciones de nutricion listas para impresion.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo preparar la impresion de nutricion.");
+    } finally {
+      setQueueActionId(null);
+    }
+  }
+
+  async function imprimirResumenFisioterapiaDesdeRecepcion(item: AppointmentRow) {
+    try {
+      setQueueActionId(`physio-print-${item.id}`);
+      setError("");
+      setMensaje("");
+
+      const foundUser = await buscarUsuarioClinicoPorCita(item);
+      let profile: PhysiotherapyProfileRow | null = null;
+
+      if (foundUser?.id) {
+        const { data: profileData, error: profileError } = await supabase
+          .from("physiotherapy_profiles")
+          .select("*")
+          .eq("user_id", foundUser.id)
+          .maybeSingle();
+
+        if (profileError) throw profileError;
+        profile = (profileData as PhysiotherapyProfileRow | null) || null;
+      }
+
+      printPhysiotherapySummary({
+        customerName: item.patient_name,
+        document: foundUser?.documento,
+        phone: item.phone || foundUser?.telefono,
+        city: item.city || foundUser?.ciudad,
+        appointmentDate: item.appointment_date,
+        appointmentTime: formatHora(item.appointment_time),
+        serviceName: item.service_type,
+        antecedentesPatologicos: profile?.antecedentes_patologicos,
+        cirugias: profile?.cirugias,
+        toxicos: profile?.toxicos,
+        alergicos: profile?.alergicos,
+        medicamentos: profile?.medicamentos,
+        familiares: profile?.familiares,
+        analisisComercial: profile?.analisis_comercial,
+        presionArterial: profile?.presion_arterial,
+        frecuenciaCardiaca: profile?.frecuencia_cardiaca,
+        inspeccionGeneral: profile?.inspeccion_general,
+        dolor: profile?.dolor,
+        inflamacion: profile?.inflamacion,
+        limitacionMovilidad: profile?.limitacion_movilidad,
+        pruebaSemiologica: profile?.prueba_semiologica,
+        flexibilidad: profile?.flexibilidad,
+        fuerzaMuscular: profile?.fuerza_muscular,
+        rangosMovimientoArticular: profile?.rangos_movimiento_articular,
+        planIntervencion: profile?.plan_intervencion,
+        observacionesGenerales: profile?.observaciones_generales,
+      });
+
+      setMensaje("Historia e indicaciones de fisioterapia listas para impresion.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo preparar la impresion de fisioterapia.");
+    } finally {
+      setQueueActionId(null);
+    }
+  }
+
+  async function abrirPendienteNutricion(item: AppointmentRow) {
+    try {
+      setQueueActionId(`nutrition-open-${item.id}`);
+      cambiarSeccion("nutricion_entregas");
+      await abrirEntregaNutricion(item);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    } finally {
+      setQueueActionId(null);
+    }
+  }
+
+  async function resolverPendienteFisioterapia(item: AppointmentRow) {
+    if (!currentUserId) return;
+
+    try {
+      setQueueActionId(`physio-resolve-${item.id}`);
+      setError("");
+      setMensaje("");
+
+      const nextNotes = marcarEntregaFisioterapiaResuelta(item.notes);
+      const { error: updateError } = await supabase
+        .from("appointments")
+        .update({
+          notes: nextNotes,
+          updated_by_user_id: currentUserId,
+        })
+        .eq("id", item.id);
+
+      if (updateError) throw updateError;
+
+      setAppointments((prev) =>
+        prev.map((appointmentItem) =>
+          appointmentItem.id === item.id
+            ? {
+                ...appointmentItem,
+                notes: nextNotes,
+              }
+            : appointmentItem
+        )
+      );
+      setMensaje("Pendiente de fisioterapia marcado como resuelto.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo actualizar el pendiente de fisioterapia.");
+    } finally {
+      setQueueActionId(null);
+    }
   }
 
   function registrarEntregaLocal() {
@@ -2855,6 +3389,194 @@ function imprimirRegistroComercial() {
           <div className="mb-6 rounded-[26px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(245,252,247,0.98)_0%,_rgba(237,248,241,0.98)_100%)] p-4 text-sm text-[#4F6F5B] shadow-[0_16px_32px_rgba(95,125,102,0.08)]">
             {mensaje}
           </div>
+        ) : null}
+
+        {!isLimitedReceptionForCall ? (
+          <section className="mb-6 overflow-hidden rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(243,251,246,0.98)_58%,_rgba(231,244,236,0.96)_100%)] p-6 shadow-[0_24px_58px_rgba(95,125,102,0.14)]">
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="inline-flex rounded-full border border-[#D7EADF] bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5F7D66] shadow-sm">
+                  Recepcion en vivo
+                </p>
+                <h2 className="mt-3 text-2xl font-bold text-[#1F3128]">
+                  Pendientes de impresion y entrega
+                </h2>
+                <p className="mt-2 max-w-3xl text-sm leading-6 text-[#607368]">
+                  Esta bandeja se actualiza automaticamente cuando comercial finaliza una venta o
+                  cuando nutricion y fisioterapia dejan un paciente pendiente para recepcion.
+                </p>
+              </div>
+
+              <div className="grid min-w-[240px] gap-3 rounded-[26px] border border-[#D6E8DA] bg-white/80 p-4 shadow-sm md:grid-cols-2">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6A8376]">
+                    Total
+                  </p>
+                  <p className="mt-2 text-3xl font-bold text-[#1F3128]">
+                    {receptionLiveSummary.total}
+                  </p>
+                </div>
+                <div className="space-y-2 text-sm text-[#4F6F5B]">
+                  <p>Comercial: {receptionLiveSummary.commercial}</p>
+                  <p>Nutricion: {receptionLiveSummary.nutrition}</p>
+                  <p>Fisioterapia: {receptionLiveSummary.physiotherapy}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-6 grid gap-4 xl:grid-cols-3">
+              <div className="rounded-[28px] border border-[#D6E8DA] bg-white/90 p-5 shadow-[0_16px_36px_rgba(95,125,102,0.08)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#1F3128]">Comercial finalizado</h3>
+                    <p className="mt-1 text-sm text-[#607368]">
+                      Ventas del dia listas para imprimir desde recepcion.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#EEF7F1] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+                    {commercialPendingPrintCases.length}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {commercialPendingPrintCases.length === 0 ? (
+                    <div className="rounded-[22px] border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-4 text-sm text-[#607368]">
+                      Sin ventas pendientes de impresion por ahora.
+                    </div>
+                  ) : (
+                    commercialPendingPrintCases.slice(0, 4).map((item) => (
+                      <div key={item.id} className="rounded-[22px] border border-[#DCEBE1] bg-[#FCFEFC] p-4">
+                        <p className="text-sm font-semibold text-slate-900">{item.customer_name}</p>
+                        <p className="mt-1 text-sm text-[#607368]">
+                          {serviceLabelComercial(item.purchased_service)} ·{" "}
+                          {formatHora(item.next_appointment_time) || "Sin hora siguiente"}
+                        </p>
+                        <p className="mt-1 text-xs text-[#6B7F74]">
+                          Cierre: {new Date(item.closed_at || item.created_at).toLocaleString("es-CO")}
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => imprimirPlanComercialDesdeRecepcion(item)}
+                          disabled={queueActionId === `commercial-${item.id}`}
+                          className="mt-3 w-full rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
+                        >
+                          {queueActionId === `commercial-${item.id}`
+                            ? "Preparando..."
+                            : "Imprimir plan y cita"}
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-[#D6E8DA] bg-white/90 p-5 shadow-[0_16px_36px_rgba(95,125,102,0.08)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#1F3128]">Nutricion pendiente</h3>
+                    <p className="mt-1 text-sm text-[#607368]">
+                      Historia, indicaciones y entrega listas para recepcion.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#EEF7F1] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+                    {nutritionPendingAppointments.length}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {nutritionPendingAppointments.length === 0 ? (
+                    <div className="rounded-[22px] border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-4 text-sm text-[#607368]">
+                      Sin entregas de nutricion pendientes.
+                    </div>
+                  ) : (
+                    nutritionPendingAppointments.slice(0, 4).map((item) => (
+                      <div key={item.id} className="rounded-[22px] border border-[#DCEBE1] bg-[#FCFEFC] p-4">
+                        <p className="text-sm font-semibold text-slate-900">{item.patient_name}</p>
+                        <p className="mt-1 text-sm text-[#607368]">
+                          {item.appointment_date} · {formatHora(item.appointment_time)}
+                        </p>
+                        <div className="mt-3 grid gap-2">
+                          <button
+                            type="button"
+                            onClick={() => imprimirResumenNutricionDesdeRecepcion(item)}
+                            disabled={queueActionId === `nutrition-print-${item.id}`}
+                            className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                          >
+                            {queueActionId === `nutrition-print-${item.id}`
+                              ? "Preparando..."
+                              : "Imprimir historia e indicaciones"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void abrirPendienteNutricion(item)}
+                            disabled={queueActionId === `nutrition-open-${item.id}`}
+                            className="w-full rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
+                          >
+                            {queueActionId === `nutrition-open-${item.id}`
+                              ? "Abriendo..."
+                              : "Abrir entrega en recepcion"}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+              <div className="rounded-[28px] border border-[#D6E8DA] bg-white/90 p-5 shadow-[0_16px_36px_rgba(95,125,102,0.08)]">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#1F3128]">Fisioterapia pendiente</h3>
+                    <p className="mt-1 text-sm text-[#607368]">
+                      Impresion clinica y cierre del pendiente desde recepcion.
+                    </p>
+                  </div>
+                  <span className="rounded-full bg-[#EEF7F1] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+                    {physiotherapyPendingAppointments.length}
+                  </span>
+                </div>
+
+                <div className="mt-4 space-y-3">
+                  {physiotherapyPendingAppointments.length === 0 ? (
+                    <div className="rounded-[22px] border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-4 text-sm text-[#607368]">
+                      Sin pendientes de fisioterapia por ahora.
+                    </div>
+                  ) : (
+                    physiotherapyPendingAppointments.slice(0, 4).map((item) => (
+                      <div key={item.id} className="rounded-[22px] border border-[#DCEBE1] bg-[#FCFEFC] p-4">
+                        <p className="text-sm font-semibold text-slate-900">{item.patient_name}</p>
+                        <p className="mt-1 text-sm text-[#607368]">
+                          {item.appointment_date} · {formatHora(item.appointment_time)}
+                        </p>
+                        <div className="mt-3 grid gap-2">
+                          <button
+                            type="button"
+                            onClick={() => imprimirResumenFisioterapiaDesdeRecepcion(item)}
+                            disabled={queueActionId === `physio-print-${item.id}`}
+                            className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                          >
+                            {queueActionId === `physio-print-${item.id}`
+                              ? "Preparando..."
+                              : "Imprimir historia e indicaciones"}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => void resolverPendienteFisioterapia(item)}
+                            disabled={queueActionId === `physio-resolve-${item.id}`}
+                            className="w-full rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
+                          >
+                            {queueActionId === `physio-resolve-${item.id}`
+                              ? "Guardando..."
+                              : "Marcar pendiente resuelto"}
+                          </button>
+                        </div>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
         ) : null}
 
         {!isReadOnlyAgendaForCall && (
