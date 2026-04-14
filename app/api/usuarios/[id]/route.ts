@@ -21,12 +21,15 @@ function isForeignKeyConstraintError(error: unknown) {
   return message.includes("violates foreign key constraint");
 }
 
-async function clearUserReferences(userId: string) {
+async function clearUserReferences(
+  userId: string,
+  replacementUserId: string
+) {
   const cleanupSteps = [
     () =>
       supabaseAdmin
         .from("leads")
-        .update({ created_by_user_id: null })
+        .update({ created_by_user_id: replacementUserId })
         .eq("created_by_user_id", userId),
     () =>
       supabaseAdmin
@@ -36,12 +39,12 @@ async function clearUserReferences(userId: string) {
     () =>
       supabaseAdmin
         .from("commercial_cases")
-        .update({ created_by_user_id: null })
+        .update({ created_by_user_id: replacementUserId })
         .eq("created_by_user_id", userId),
     () =>
       supabaseAdmin
         .from("commercial_cases")
-        .update({ updated_by_user_id: null })
+        .update({ updated_by_user_id: replacementUserId })
         .eq("updated_by_user_id", userId),
     () =>
       supabaseAdmin
@@ -76,12 +79,12 @@ async function clearUserReferences(userId: string) {
     () =>
       supabaseAdmin
         .from("appointments")
-        .update({ created_by_user_id: null })
+        .update({ created_by_user_id: replacementUserId })
         .eq("created_by_user_id", userId),
     () =>
       supabaseAdmin
         .from("appointments")
-        .update({ updated_by_user_id: null })
+        .update({ updated_by_user_id: replacementUserId })
         .eq("updated_by_user_id", userId),
   ];
 
@@ -260,7 +263,7 @@ export async function PATCH(
   }
 }
 
-  export async function DELETE(
+export async function DELETE(
   request: Request,
   context: { params: Promise<{ id: string }> }
 ) {
@@ -284,7 +287,7 @@ export async function PATCH(
       );
     }
 
-    const cleanupError = await clearUserReferences(id);
+    const cleanupError = await clearUserReferences(id, authCheck.user.id);
 
     if (cleanupError) {
       return NextResponse.json(
