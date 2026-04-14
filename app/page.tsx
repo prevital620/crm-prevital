@@ -161,7 +161,7 @@ const quickActions: QuickAction[] = [
     title: "Admin",
     subtitle: "Ver resumen administrativo, ventas, cartera y base comisionable.",
     href: "/admin",
-    roles: ["super_user", "gerente", "gerente_comercial", "gerencia_comercial", "administrador"],
+    roles: ["super_user", "administrador"],
   },
 ];
 

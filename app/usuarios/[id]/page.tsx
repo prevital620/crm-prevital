@@ -31,6 +31,23 @@ type UserData = {
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
+type CommercialTeamValue = "" | "AM" | "PM";
+
+function stripCommercialTeamSuffix(value: string) {
+  return value.replace(/\s+(AM|PM)$/i, "").trim();
+}
+
+function inferCommercialTeam(value: string | null | undefined): CommercialTeamValue {
+  const normalized = String(value || "").trim().toUpperCase();
+  if (normalized.endsWith(" AM")) return "AM";
+  if (normalized.endsWith(" PM")) return "PM";
+  return "";
+}
+
+function isCommercialAccessRole(code: string) {
+  return code === "comercial" || code === "gerente_comercial" || code === "gerencia_comercial";
+}
+
 export default function EditarUsuarioPage() {
   const params = useParams();
   const userId = params?.id as string;
@@ -44,6 +61,7 @@ export default function EditarUsuarioPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  const [selectedCommercialTeam, setSelectedCommercialTeam] = useState<CommercialTeamValue>("");
   const [form, setForm] = useState({
     full_name: "",
     phone: "",
@@ -97,10 +115,11 @@ export default function EditarUsuarioPage() {
       setDepartments((departmentsResult.data as Department[]) || []);
       setRoles((rolesResult.data as Role[]) || []);
       setSelectedRoleIds(currentRoleIds);
+      setSelectedCommercialTeam(inferCommercialTeam(user.job_title));
       setForm({
         full_name: user.full_name || "",
         phone: user.phone || "",
-        job_title: user.job_title || "",
+        job_title: stripCommercialTeamSuffix(user.job_title || ""),
         department_id: user.department_id || "",
         is_active: user.is_active,
       });
@@ -115,6 +134,16 @@ export default function EditarUsuarioPage() {
   useEffect(() => {
     cargarUsuario();
   }, [userId]);
+
+  const hasCommercialAccess = roles
+    .filter((role) => selectedRoleIds.includes(role.id))
+    .some((role) => isCommercialAccessRole(role.code));
+
+  useEffect(() => {
+    if (!hasCommercialAccess && selectedCommercialTeam) {
+      setSelectedCommercialTeam("");
+    }
+  }, [hasCommercialAccess, selectedCommercialTeam]);
 
   async function guardarCambios(e: React.FormEvent) {
     e.preventDefault();
@@ -135,9 +164,12 @@ export default function EditarUsuarioPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          job_title:
+            selectedCommercialTeam && hasCommercialAccess
+              ? `${stripCommercialTeamSuffix(form.job_title.trim())} ${selectedCommercialTeam}`.trim()
+              : stripCommercialTeamSuffix(form.job_title.trim()) || null,
           full_name: form.full_name.trim(),
           phone: form.phone.trim() || null,
-          job_title: form.job_title.trim() || null,
           department_id: form.department_id || null,
           is_active: form.is_active,
           role_ids: selectedRoleIds,
@@ -332,6 +364,26 @@ export default function EditarUsuarioPage() {
               value={form.job_title}
               onChange={(e) => setForm({ ...form, job_title: e.target.value })}
             />
+
+            {hasCommercialAccess ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">Equipo comercial</p>
+                <select
+                  className={inputClass}
+                  value={selectedCommercialTeam}
+                  onChange={(e) =>
+                    setSelectedCommercialTeam((e.target.value as CommercialTeamValue) || "")
+                  }
+                >
+                  <option value="">Sin equipo AM/PM</option>
+                  <option value="AM">Equipo AM</option>
+                  <option value="PM">Equipo PM</option>
+                </select>
+                <p className="mt-2 text-xs text-[#607368]">
+                  Esto te permite separar gerentes y comerciales en los filtros de gerencia comercial.
+                </p>
+              </div>
+            ) : null}
 
             <select
               className={inputClass}

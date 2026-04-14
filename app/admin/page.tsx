@@ -28,9 +28,6 @@ type ProfileOption = {
 
 const allowedRoles = [
   "super_user",
-  "gerente",
-  "gerente_comercial",
-  "gerencia_comercial",
   "administrador",
 ];
 
