@@ -35,6 +35,7 @@ import {
 import {
   extraerDuracionDesdeNotas,
   buildSlotAvailability,
+  formatSlotAvailabilityLabel,
 } from "@/lib/agenda/agendaAvailability";
 
 type LeadOption = {
@@ -5380,14 +5381,7 @@ function imprimirRegistroComercial() {
                           value={slot.value}
                           disabled={slot.disabled}
                         >
-                          {slot.label}{" "}
-                          {slot.isBlocked
-                            ? "· Bloqueado"
-                            : slot.isFullByDay
-                            ? "· Día lleno"
-                            : slot.isFullBySlot
-                            ? `· Completo (${slot.booked} de ${slot.capacity})`
-                            : `· ${slot.booked} de ${slot.capacity} ocupados`}
+                          {formatSlotAvailabilityLabel(slot)}
                         </option>
                       ))}
                     </select>

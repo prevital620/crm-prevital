@@ -1515,28 +1515,6 @@ const updatePayload: any = {
                       )}
                     </div>
 
-                    <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_40px_rgba(95,125,102,0.1)]">
-                      <h3 className="text-lg font-semibold text-[#24312A]">
-                        Trazabilidad para admin
-                      </h3>
-
-                      {currentCaseCommissionSummary ? (
-                        <div className="mt-3 grid gap-3 text-sm text-slate-700">
-                          <InfoItem label="Origen de venta" value={currentCaseCommissionSummary.origenVenta === "lead" ? "Lead" : "Directo"} />
-                          <InfoItem label="Origen real del lead" value={leadSourceLabel(currentCaseCommissionSummary.origenLead)} />
-                          <InfoItem label="Fuente para comisión" value={commissionSourceLabel(currentCaseCommissionSummary.fuenteComision)} />
-                          <InfoItem label="Resultado Call" value={callContactResultLabel(currentCaseCommissionSummary.resultadoCall)} />
-                          <InfoItem label="Proveedor crédito" value={currentCaseCommissionSummary.proveedorCredito || "No aplica"} />
-                          <InfoItem label="Descuento crédito" value={currentCaseCommissionSummary.descuentoCredito > 0 ? `$${currentCaseCommissionSummary.descuentoCredito.toLocaleString("es-CO")}` : "$0"} />
-                          <InfoItem label="Descuento admin" value={`$${currentCaseCommissionSummary.descuentoAdmin.toLocaleString("es-CO")}`} />
-                          <InfoItem label="Base neta comisionable" value={`$${currentCaseCommissionSummary.baseNeta.toLocaleString("es-CO")}`} />
-                        </div>
-                      ) : (
-                        <p className="mt-3 text-sm text-slate-500">
-                          La trazabilidad administrativa se completará cuando guardes avances o finalices el caso.
-                        </p>
-                      )}
-                    </div>
                   </div>
                 ) : null}
 

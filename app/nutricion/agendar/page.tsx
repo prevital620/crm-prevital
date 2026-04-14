@@ -4,6 +4,16 @@ import Image from "next/image";
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import { getSectionForService } from "@/lib/agenda/agendaSections";
+import {
+  ACTIVE_APPOINTMENT_STATUSES,
+  DEFAULT_DAILY_CAPACITY,
+} from "@/lib/agenda/agendaDurations";
+import {
+  buildSlotAvailability,
+  formatSlotAvailabilityLabel,
+  getSlotAvailabilityStatus,
+} from "@/lib/agenda/agendaAvailability";
 
 type UserOption = {
   id: string;
@@ -20,6 +30,20 @@ type AppointmentOption = {
   appointment_time: string;
   service_type: string | null;
   status: string;
+  notes: string | null;
+};
+
+type AgendaDaySetting = {
+  agenda_date: string;
+  daily_capacity: number | null;
+  is_closed: boolean;
+};
+
+type AgendaSlotSetting = {
+  agenda_date: string;
+  slot_time: string;
+  capacity: number | null;
+  is_blocked: boolean;
 };
 
 type FormState = {
@@ -40,26 +64,13 @@ function hoyISO() {
   return `${y}-${m}-${d}`;
 }
 
-function buildTimeOptions() {
-  const times: string[] = [];
-  for (let hour = 7; hour <= 18; hour += 1) {
-    for (const minute of [0, 30]) {
-      if (hour === 18 && minute > 0) continue;
-      times.push(`${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`);
-    }
-  }
-  return times;
-}
-
-const TIME_OPTIONS = buildTimeOptions();
-
 const initialForm: FormState = {
   selectedUserId: "",
   patientName: "",
   phone: "",
   city: "",
   appointmentDate: hoyISO(),
-  appointmentTime: "08:00",
+  appointmentTime: "",
   notes: "",
 };
 
@@ -67,20 +78,33 @@ function formatHour(value: string) {
   return value.slice(0, 5);
 }
 
+function formatStatus(value: string) {
+  const map: Record<string, string> = {
+    agendada: "Agendada",
+    confirmada: "Confirmada",
+    en_espera: "En espera",
+    reagendada: "Reagendada",
+    en_atencion: "En atencion",
+    finalizada: "Finalizada",
+    cancelada: "Cancelada",
+    no_asistio: "No asistio",
+  };
+  return map[value] || value || "Sin estado";
+}
+
 export default function NutricionAgendarPage() {
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
-  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [loadingAgenda, setLoadingAgenda] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [bookedAppointments, setBookedAppointments] = useState<AppointmentOption[]>([]);
+  const [allAppointments, setAllAppointments] = useState<AppointmentOption[]>([]);
+  const [nutritionAppointments, setNutritionAppointments] = useState<AppointmentOption[]>([]);
+  const [daySetting, setDaySetting] = useState<AgendaDaySetting | null>(null);
+  const [slotSettings, setSlotSettings] = useState<Record<string, AgendaSlotSetting>>({});
   const [form, setForm] = useState<FormState>(initialForm);
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
-
-  useEffect(() => {
-    void loadBookedAppointments(initialForm.appointmentDate);
-  }, []);
 
   useEffect(() => {
     if (search.trim().length < 2) {
@@ -89,6 +113,10 @@ export default function NutricionAgendarPage() {
     }
     void searchUsers();
   }, [search]);
+
+  useEffect(() => {
+    void loadAgendaContext(form.appointmentDate);
+  }, [form.appointmentDate]);
 
   async function searchUsers() {
     try {
@@ -114,24 +142,59 @@ export default function NutricionAgendarPage() {
     }
   }
 
-  async function loadBookedAppointments(date: string) {
+  async function loadAgendaContext(date: string) {
     try {
-      setLoadingSlots(true);
+      setLoadingAgenda(true);
+      setError("");
 
-      const { data, error } = await supabase
-        .from("appointments")
-        .select("id, patient_name, appointment_date, appointment_time, service_type, status")
-        .eq("appointment_date", date)
-        .ilike("service_type", "%nutri%")
-        .order("appointment_time", { ascending: true });
+      const [appointmentsResult, daySettingsResult, slotSettingsResult] = await Promise.all([
+        supabase
+          .from("appointments")
+          .select(
+            "id, patient_name, appointment_date, appointment_time, service_type, status, notes"
+          )
+          .eq("appointment_date", date)
+          .order("appointment_time", { ascending: true }),
+        supabase
+          .from("agenda_day_settings")
+          .select("agenda_date, daily_capacity, is_closed")
+          .eq("agenda_date", date)
+          .maybeSingle(),
+        supabase
+          .from("agenda_slot_settings")
+          .select("agenda_date, slot_time, capacity, is_blocked")
+          .eq("agenda_date", date),
+      ]);
 
-      if (error) throw error;
+      if (appointmentsResult.error) throw appointmentsResult.error;
+      if (daySettingsResult.error) throw daySettingsResult.error;
+      if (slotSettingsResult.error) throw slotSettingsResult.error;
 
-      setBookedAppointments((data as AppointmentOption[]) || []);
+      const appointmentRows = ((appointmentsResult.data as AppointmentOption[]) || []).map((item) => ({
+        ...item,
+        appointment_time: formatHour(item.appointment_time),
+      }));
+
+      const nutritionRows = appointmentRows.filter((item) =>
+        (item.service_type || "").toLowerCase().includes("nutri")
+      );
+
+      const slotMap: Record<string, AgendaSlotSetting> = {};
+      ((slotSettingsResult.data as AgendaSlotSetting[]) || []).forEach((item) => {
+        slotMap[`${item.agenda_date}_${formatHour(item.slot_time)}`] = {
+          ...item,
+          slot_time: formatHour(item.slot_time),
+        };
+      });
+
+      setAllAppointments(appointmentRows);
+      setNutritionAppointments(nutritionRows);
+      setDaySetting((daySettingsResult.data as AgendaDaySetting | null) || null);
+      setSlotSettings(slotMap);
     } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar los cupos de nutrición.");
+      setError(err?.message || "No se pudieron cargar los cupos de nutricion.");
     } finally {
-      setLoadingSlots(false);
+      setLoadingAgenda(false);
     }
   }
 
@@ -154,9 +217,55 @@ export default function NutricionAgendarPage() {
     }));
   }
 
-  const bookedTimes = useMemo(() => {
-    return new Set(bookedAppointments.map((item) => formatHour(item.appointment_time)));
-  }, [bookedAppointments]);
+  const selectedDateActiveTotal = useMemo(() => {
+    return allAppointments.filter(
+      (item) =>
+        item.appointment_date === form.appointmentDate &&
+        ACTIVE_APPOINTMENT_STATUSES.includes(item.status)
+    ).length;
+  }, [allAppointments, form.appointmentDate]);
+
+  const slotAvailability = useMemo(() => {
+    return buildSlotAvailability({
+      appointments: allAppointments,
+      section: "especialistas",
+      serviceType: "nutricion",
+      appointmentDate: form.appointmentDate,
+      durationMinutes: 30,
+      slotSettings,
+      selectedDateClosed: daySetting?.is_closed ?? false,
+      selectedDateDailyCapacity: daySetting?.daily_capacity ?? DEFAULT_DAILY_CAPACITY,
+      selectedDateActiveTotal,
+      editingAppointmentId: null,
+      getSectionForService,
+    });
+  }, [
+    allAppointments,
+    daySetting?.daily_capacity,
+    daySetting?.is_closed,
+    form.appointmentDate,
+    selectedDateActiveTotal,
+    slotSettings,
+  ]);
+
+  const availableSlots = useMemo(
+    () => slotAvailability.filter((slot) => !slot.disabled),
+    [slotAvailability]
+  );
+
+  useEffect(() => {
+    if (availableSlots.length === 0) {
+      if (form.appointmentTime) {
+        setForm((prev) => ({ ...prev, appointmentTime: "" }));
+      }
+      return;
+    }
+
+    const stillValid = availableSlots.some((slot) => slot.value === form.appointmentTime);
+    if (!stillValid) {
+      setForm((prev) => ({ ...prev, appointmentTime: availableSlots[0].value }));
+    }
+  }, [availableSlots, form.appointmentTime]);
 
   async function handleSaveAppointment() {
     try {
@@ -169,7 +278,7 @@ export default function NutricionAgendarPage() {
       }
 
       if (!form.patientName.trim()) {
-        throw new Error("No se encontró el nombre del paciente.");
+        throw new Error("No se encontro el nombre del paciente.");
       }
 
       if (!form.appointmentDate) {
@@ -177,11 +286,13 @@ export default function NutricionAgendarPage() {
       }
 
       if (!form.appointmentTime) {
-        throw new Error("Debes seleccionar la hora.");
+        throw new Error("No hay horarios disponibles para esa fecha.");
       }
 
-      if (bookedTimes.has(form.appointmentTime)) {
-        throw new Error("Ese horario ya está ocupado para nutrición.");
+      const selectedSlot = slotAvailability.find((slot) => slot.value === form.appointmentTime);
+
+      if (!selectedSlot || selectedSlot.disabled) {
+        throw new Error("Ese horario ya no esta disponible para nutricion.");
       }
 
       const {
@@ -199,7 +310,7 @@ export default function NutricionAgendarPage() {
         appointment_time: form.appointmentTime,
         status: "agendada",
         service_type: "nutricion",
-        notes: form.notes.trim() || "Agendada desde módulo de nutrición.",
+        notes: form.notes.trim() || "Agendada desde modulo de nutricion.",
         created_by_user_id: currentUserId,
         updated_by_user_id: currentUserId,
       };
@@ -220,13 +331,13 @@ export default function NutricionAgendarPage() {
         .eq("id", form.selectedUserId);
 
       setMessage(`Cita agendada correctamente. ID: ${data?.id || "creada"}`);
-      setForm({
+      setForm((prev) => ({
         ...initialForm,
-        appointmentDate: form.appointmentDate,
-      });
+        appointmentDate: prev.appointmentDate,
+      }));
       setSearch("");
       setUsers([]);
-      await loadBookedAppointments(form.appointmentDate);
+      await loadAgendaContext(form.appointmentDate);
     } catch (err: any) {
       setError(err?.message || "No se pudo agendar la cita.");
     } finally {
@@ -254,13 +365,12 @@ export default function NutricionAgendarPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">
-                Módulo de Nutrición
+                Modulo de Nutricion
               </p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">
-                Agendar cita
-              </h1>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">Agendar cita</h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Busca un cliente real, selecciona fecha y hora, y crea la cita en la tabla appointments.
+                Esta agenda ahora toma la misma disponibilidad base que recepcion para que
+                no compitan entre si los cupos del dia.
               </p>
             </div>
 
@@ -297,7 +407,8 @@ export default function NutricionAgendarPage() {
           <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-bold text-[#24312A]">Seleccionar cliente</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Busca por nombre, documento o teléfono. Solo debes usar clientes reales del sistema.
+              Busca por nombre, documento o telefono. Solo debes usar clientes reales
+              del sistema.
             </p>
 
             <div className="mt-5 space-y-4">
@@ -314,7 +425,7 @@ export default function NutricionAgendarPage() {
                 </div>
               ) : users.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#FBFCFB] p-4 text-sm text-slate-500">
-                  Escribe al menos 2 letras o números para buscar.
+                  Escribe al menos 2 letras o numeros para buscar.
                 </div>
               ) : (
                 <div className="space-y-3">
@@ -325,11 +436,15 @@ export default function NutricionAgendarPage() {
                       onClick={() => selectUser(user)}
                       className="w-full rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4 text-left transition hover:border-[#BCD7C2] hover:bg-white"
                     >
-                      <p className="text-base font-semibold text-[#24312A]">{user.nombre || "Sin nombre"}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {user.documento || "Sin documento"} · {user.telefono || "Sin teléfono"}
+                      <p className="text-base font-semibold text-[#24312A]">
+                        {user.nombre || "Sin nombre"}
                       </p>
-                      <p className="mt-1 text-sm text-slate-600">{user.ciudad || "Sin ciudad"}</p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {user.documento || "Sin documento"} · {user.telefono || "Sin telefono"}
+                      </p>
+                      <p className="mt-1 text-sm text-slate-600">
+                        {user.ciudad || "Sin ciudad"}
+                      </p>
                     </button>
                   ))}
                 </div>
@@ -347,7 +462,8 @@ export default function NutricionAgendarPage() {
           <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
             <h2 className="text-2xl font-bold text-[#24312A]">Datos de la cita</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Horarios ocupados del día seleccionado no estarán disponibles.
+              El selector solo muestra horarios utilizables. Los cupos visibles abajo
+              salen de la misma agenda que usa recepcion.
             </p>
 
             <div className="mt-5 space-y-4">
@@ -359,10 +475,7 @@ export default function NutricionAgendarPage() {
                       className={inputClass}
                       type="date"
                       value={form.appointmentDate}
-                      onChange={async (e) => {
-                        updateField("appointmentDate", e.target.value);
-                        await loadBookedAppointments(e.target.value);
-                      }}
+                      onChange={(e) => updateField("appointmentDate", e.target.value)}
                     />
                   }
                 />
@@ -374,12 +487,17 @@ export default function NutricionAgendarPage() {
                       className={inputClass}
                       value={form.appointmentTime}
                       onChange={(e) => updateField("appointmentTime", e.target.value)}
+                      disabled={availableSlots.length === 0}
                     >
-                      {TIME_OPTIONS.map((time) => (
-                        <option key={time} value={time} disabled={bookedTimes.has(time)}>
-                          {time} {bookedTimes.has(time) ? "· Ocupado" : ""}
-                        </option>
-                      ))}
+                      {availableSlots.length === 0 ? (
+                        <option value="">Sin horarios disponibles</option>
+                      ) : (
+                        availableSlots.map((slot) => (
+                          <option key={slot.value} value={slot.value}>
+                            {formatSlotAvailabilityLabel(slot)}
+                          </option>
+                        ))
+                      )}
                     </select>
                   }
                 />
@@ -398,7 +516,7 @@ export default function NutricionAgendarPage() {
 
               <button
                 type="button"
-                disabled={saving}
+                disabled={saving || availableSlots.length === 0}
                 onClick={handleSaveAppointment}
                 className="w-full rounded-2xl bg-[#0DA56F] px-4 py-4 text-base font-semibold text-white transition hover:bg-[#0B8E5F] disabled:opacity-60"
               >
@@ -408,35 +526,80 @@ export default function NutricionAgendarPage() {
           </div>
         </section>
 
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <h2 className="text-2xl font-bold text-[#24312A]">Horarios ya ocupados</h2>
-              <p className="mt-1 text-sm text-slate-500">
-                Citas reales de nutrición para la fecha seleccionada.
-              </p>
+        <section className="grid gap-6 xl:grid-cols-[0.95fr_1.05fr]">
+          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-bold text-[#24312A]">Horarios disponibles</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Solo se muestran los espacios que de verdad puedes asignar.
+                </p>
+              </div>
+              {loadingAgenda ? <span className="text-sm text-slate-500">Cargando...</span> : null}
             </div>
-            {loadingSlots ? <span className="text-sm text-slate-500">Cargando...</span> : null}
+
+            <div className="mt-5 overflow-hidden rounded-2xl border border-[#DCEADF]">
+              <table className="min-w-full divide-y divide-[#E7F1EA] text-sm">
+                <thead className="bg-[#F5FBF7] text-left text-[#4D6356]">
+                  <tr>
+                    <th className="px-4 py-3 font-semibold">Hora</th>
+                    <th className="px-4 py-3 font-semibold">Estado</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#EEF5F0] bg-white">
+                  {availableSlots.length === 0 ? (
+                    <tr>
+                      <td colSpan={2} className="px-4 py-4 text-slate-500">
+                        No hay cupos libres para esa fecha.
+                      </td>
+                    </tr>
+                  ) : (
+                    availableSlots.map((slot) => (
+                      <tr key={slot.value}>
+                        <td className="px-4 py-3 font-medium text-[#24312A]">{slot.label}</td>
+                        <td className="px-4 py-3 text-[#5B6E63]">
+                          {getSlotAvailabilityStatus(slot)}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <div className="mt-5 space-y-3">
-            {bookedAppointments.length === 0 ? (
-              <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#FBFCFB] p-4 text-sm text-slate-500">
-                No hay citas de nutrición para esa fecha.
+          <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h2 className="text-2xl font-bold text-[#24312A]">Agenda ocupada del dia</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Citas reales de nutricion para la fecha seleccionada.
+                </p>
               </div>
-            ) : (
-              bookedAppointments.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4"
-                >
-                  <p className="text-base font-semibold text-[#24312A]">{item.patient_name || "Sin nombre"}</p>
-                  <p className="mt-1 text-sm text-slate-600">
-                    {formatHour(item.appointment_time)} · {item.status || "Sin estado"}
-                  </p>
+              {loadingAgenda ? <span className="text-sm text-slate-500">Cargando...</span> : null}
+            </div>
+
+            <div className="mt-5 space-y-3">
+              {nutritionAppointments.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#FBFCFB] p-4 text-sm text-slate-500">
+                  No hay citas de nutricion para esa fecha.
                 </div>
-              ))
-            )}
+              ) : (
+                nutritionAppointments.map((item) => (
+                  <div
+                    key={item.id}
+                    className="rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4"
+                  >
+                    <p className="text-base font-semibold text-[#24312A]">
+                      {item.patient_name || "Sin nombre"}
+                    </p>
+                    <p className="mt-1 text-sm text-slate-600">
+                      {formatHour(item.appointment_time)} · {formatStatus(item.status)}
+                    </p>
+                  </div>
+                ))
+              )}
+            </div>
           </div>
         </section>
       </div>

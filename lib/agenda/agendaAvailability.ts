@@ -23,6 +23,17 @@ export type AgendaSlotSettingLike = {
   is_blocked: boolean;
 };
 
+export type SlotAvailabilityLike = {
+  value: string;
+  label: string;
+  capacity: number;
+  booked: number;
+  disabled: boolean;
+  isBlocked: boolean;
+  isFullBySlot: boolean;
+  isFullByDay: boolean;
+};
+
 export function extraerDuracionDesdeNotas(notes: string | null | undefined) {
   if (!notes) return 30;
   const match = notes.match(/Duración:\s*(30|60)\s*min/i);
@@ -61,6 +72,20 @@ export function countBookingsForSlot(
     if (!sameAgendaResource(section, item, serviceType, getSectionForService)) return false;
     return getAppointmentOccupiedSlots(item).includes(slotValue);
   }).length;
+}
+
+export function getSlotAvailabilityStatus(slot: SlotAvailabilityLike) {
+  if (slot.isBlocked) return "Bloqueado";
+  if (slot.isFullByDay) return "Dia sin cupos";
+  if (slot.isFullBySlot) return "Completo";
+
+  const remaining = Math.max(slot.capacity - slot.booked, 0);
+  if (remaining <= 1) return "Disponible";
+  return `${remaining} disponibles`;
+}
+
+export function formatSlotAvailabilityLabel(slot: SlotAvailabilityLike) {
+  return `${slot.label} · ${getSlotAvailabilityStatus(slot)}`;
 }
 
 export function buildSlotAvailability({
