@@ -23,6 +23,7 @@ import {
   buildStoredCommercialNotes,
   parseStoredCommercialNotes,
 } from "@/lib/commercial/notes";
+import { digitsOnly } from "@/lib/users/userLookup";
 import {
   getSectionForService,
   getSectionLabel,
@@ -943,6 +944,11 @@ function RecepcionContent() {
   const searchParams = useSearchParams();
   const leadIdFromUrl = searchParams.get("leadId");
   const receptionView = searchParams.get("view");
+  const lookupFromUrl =
+    searchParams.get("documento") ||
+    searchParams.get("cedula") ||
+    searchParams.get("buscar") ||
+    "";
 
   const [authorized, setAuthorized] = useState(false);
   const [loadingAuth, setLoadingAuth] = useState(true);
@@ -961,6 +967,9 @@ function RecepcionContent() {
   const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
   const [busquedaAgenda, setBusquedaAgenda] = useState("");
   const [busquedaLead, setBusquedaLead] = useState("");
+  const [manualClientLookup, setManualClientLookup] = useState("");
+  const [loadingManualClientLookup, setLoadingManualClientLookup] = useState(false);
+  const [loadingCommercialClientLookup, setLoadingCommercialClientLookup] = useState(false);
 
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [leads, setLeads] = useState<LeadOption[]>([]);
@@ -1105,6 +1114,69 @@ function RecepcionContent() {
   );
   const occupationNeedsDetail = shouldAskOccupationDetail(commercialForm.ocupacion);
 
+  async function findExistingUserByLookup(rawLookup: string) {
+    const normalizedLookup = rawLookup.trim();
+    const lookupDigits = digitsOnly(rawLookup);
+
+    if (!normalizedLookup && !lookupDigits) return null;
+
+    if (lookupDigits) {
+      const { data: byDocument, error: documentError } = await supabase
+        .from("users")
+        .select("id, nombre, documento, telefono, ciudad")
+        .eq("documento", lookupDigits)
+        .limit(1);
+
+      if (documentError) throw documentError;
+      if (byDocument && byDocument.length > 0) {
+        return byDocument[0] as UserRow;
+      }
+
+      const { data: byPhone, error: phoneError } = await supabase
+        .from("users")
+        .select("id, nombre, documento, telefono, ciudad")
+        .eq("telefono", lookupDigits)
+        .limit(1);
+
+      if (phoneError) throw phoneError;
+      if (byPhone && byPhone.length > 0) {
+        return byPhone[0] as UserRow;
+      }
+    }
+
+    const { data: byName, error: nameError } = await supabase
+      .from("users")
+      .select("id, nombre, documento, telefono, ciudad")
+      .ilike("nombre", normalizedLookup)
+      .limit(1);
+
+    if (nameError) throw nameError;
+    if (byName && byName.length > 0) {
+      return byName[0] as UserRow;
+    }
+
+    return null;
+  }
+
+  function applyExistingUserToAppointment(user: UserRow) {
+    setForm((prev) => ({
+      ...prev,
+      patient_name: user.nombre || prev.patient_name,
+      phone: user.telefono || prev.phone,
+      city: user.ciudad || prev.city,
+    }));
+  }
+
+  function applyExistingUserToCommercial(user: UserRow) {
+    setCommercialForm((prev) => ({
+      ...prev,
+      customer_name: user.nombre || prev.customer_name,
+      phone: user.telefono || prev.phone,
+      city: user.ciudad || prev.city,
+      documento: user.documento || prev.documento,
+    }));
+  }
+
   useEffect(() => {
     if (
       receptionView === "comercial" ||
@@ -1114,6 +1186,65 @@ function RecepcionContent() {
       setActiveSection("comercial");
     }
   }, [receptionView, currentRoleCode]);
+
+  useEffect(() => {
+    if (!lookupFromUrl.trim()) return;
+
+    if (receptionView === "comercial") {
+      setCommercialForm((prev) => ({
+        ...prev,
+        documento: lookupFromUrl.trim(),
+      }));
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      mode: "manual",
+    }));
+    setManualClientLookup(lookupFromUrl.trim());
+  }, [lookupFromUrl, receptionView]);
+
+  useEffect(() => {
+    if (form.mode !== "manual") return;
+    const lookup = manualClientLookup.trim();
+    if (lookup.length < 5) return;
+
+    const timeout = setTimeout(async () => {
+      try {
+        setLoadingManualClientLookup(true);
+        const foundUser = await findExistingUserByLookup(lookup);
+        if (!foundUser) return;
+        applyExistingUserToAppointment(foundUser);
+      } catch (err) {
+        console.error("No se pudo autocompletar el cliente en recepcion:", err);
+      } finally {
+        setLoadingManualClientLookup(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [form.mode, manualClientLookup]);
+
+  useEffect(() => {
+    const lookup = commercialForm.documento.trim();
+    if (lookup.length < 5) return;
+
+    const timeout = setTimeout(async () => {
+      try {
+        setLoadingCommercialClientLookup(true);
+        const foundUser = await findExistingUserByLookup(lookup);
+        if (!foundUser) return;
+        applyExistingUserToCommercial(foundUser);
+      } catch (err) {
+        console.error("No se pudo autocompletar el ingreso comercial:", err);
+      } finally {
+        setLoadingCommercialClientLookup(false);
+      }
+    }, 350);
+
+    return () => clearTimeout(timeout);
+  }, [commercialForm.documento]);
 
   useEffect(() => {
     if (activeSection === "nutricion_entregas") return;
@@ -2924,11 +3055,12 @@ function imprimirRegistroComercial() {
   function resetForm(options?: { preserveLastSavedAppointmentPrint?: boolean }) {
     setEditingAppointmentId(null);
     setSelectedQuickAppointmentId(null);
+    setManualClientLookup(lookupFromUrl.trim());
     if (!options?.preserveLastSavedAppointmentPrint) {
       setLastSavedAppointmentPrint(null);
     }
     setForm({
-      mode: leadIdFromUrl ? "lead" : "lead",
+      mode: leadIdFromUrl ? "lead" : lookupFromUrl.trim() ? "manual" : "lead",
       lead_id: leadIdFromUrl || "",
       patient_name: "",
       phone: "",
@@ -3925,11 +4057,18 @@ function imprimirRegistroComercial() {
                   <Field
                     label="Documento"
                     input={
-                      <input
-                        className={inputClass}
-                        value={commercialForm.documento}
-                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, documento: e.target.value }))}
-                      />
+                      <div className="space-y-2">
+                        <input
+                          className={inputClass}
+                          value={commercialForm.documento}
+                          onChange={(e) => setCommercialForm((prev) => ({ ...prev, documento: e.target.value }))}
+                        />
+                        <p className="text-xs text-slate-500">
+                          {loadingCommercialClientLookup
+                            ? "Buscando cliente existente..."
+                            : "Si la cédula ya existe, se completarán nombre, teléfono y ciudad."}
+                        </p>
+                      </div>
                     }
                   />
                   <Field
@@ -5202,15 +5341,18 @@ function imprimirRegistroComercial() {
                       className="w-full outline-none"
                       value={form.mode}
                       onChange={(e) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          mode: e.target.value,
-                          lead_id: "",
-                          patient_name: "",
-                          phone: "",
-                          city: "",
-                          manual_source: "",
-                        }))
+                        {
+                          setManualClientLookup("");
+                          setForm((prev) => ({
+                            ...prev,
+                            mode: e.target.value,
+                            lead_id: "",
+                            patient_name: "",
+                            phone: "",
+                            city: "",
+                            manual_source: "",
+                          }));
+                        }
                       }
                     >
                       <option value="lead">Desde lead</option>
@@ -5229,23 +5371,42 @@ function imprimirRegistroComercial() {
                       />
                     </label>
                   ) : (
-                    <label className="rounded-2xl border border-slate-300 p-4 text-sm">
-                      <div className="mb-2 font-medium text-slate-700">Fuente</div>
-                      <select
-                        className="w-full outline-none"
-                        value={form.manual_source}
-                        onChange={(e) =>
-                          setForm((prev) => ({ ...prev, manual_source: e.target.value }))
-                        }
-                      >
-                        <option value="">Selecciona</option>
-                        {manualSourceOptions.map((item) => (
-                          <option key={item.value} value={item.value}>
-                            {item.label}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    <>
+                      <label className="rounded-2xl border border-slate-300 p-4 text-sm">
+                        <div className="mb-2 font-medium text-slate-700">Fuente</div>
+                        <select
+                          className="w-full outline-none"
+                          value={form.manual_source}
+                          onChange={(e) =>
+                            setForm((prev) => ({ ...prev, manual_source: e.target.value }))
+                          }
+                        >
+                          <option value="">Selecciona</option>
+                          {manualSourceOptions.map((item) => (
+                            <option key={item.value} value={item.value}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+
+                      <label className="rounded-2xl border border-slate-300 p-4 text-sm">
+                        <div className="mb-2 font-medium text-slate-700">
+                          Buscar cliente por cédula o teléfono
+                        </div>
+                        <input
+                          className="w-full outline-none"
+                          placeholder="Escribe cédula o teléfono"
+                          value={manualClientLookup}
+                          onChange={(e) => setManualClientLookup(e.target.value)}
+                        />
+                        <p className="mt-2 text-xs text-slate-500">
+                          {loadingManualClientLookup
+                            ? "Buscando cliente existente..."
+                            : "Si ya existe en el sistema, se cargará automáticamente."}
+                        </p>
+                      </label>
+                    </>
                   )}
                 </div>
               ) : null}

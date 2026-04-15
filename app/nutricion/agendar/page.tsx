@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getSectionForService } from "@/lib/agenda/agendaSections";
@@ -14,6 +15,7 @@ import {
   formatSlotAvailabilityLabel,
   getSlotAvailabilityStatus,
 } from "@/lib/agenda/agendaAvailability";
+import { isExactUserLookupMatch } from "@/lib/users/userLookup";
 
 type UserOption = {
   id: string;
@@ -93,6 +95,12 @@ function formatStatus(value: string) {
 }
 
 export default function NutricionAgendarPage() {
+  const searchParams = useSearchParams();
+  const lookupFromUrl =
+    searchParams.get("documento") ||
+    searchParams.get("cedula") ||
+    searchParams.get("buscar") ||
+    "";
   const [search, setSearch] = useState("");
   const [users, setUsers] = useState<UserOption[]>([]);
   const [loadingUsers, setLoadingUsers] = useState(false);
@@ -115,8 +123,23 @@ export default function NutricionAgendarPage() {
   }, [search]);
 
   useEffect(() => {
+    if (!lookupFromUrl.trim()) return;
+    setSearch(lookupFromUrl.trim());
+  }, [lookupFromUrl]);
+
+  useEffect(() => {
     void loadAgendaContext(form.appointmentDate);
   }, [form.appointmentDate]);
+
+  useEffect(() => {
+    if (!search.trim() || users.length === 0) return;
+    if (form.selectedUserId) return;
+
+    const exactUser = users.find((user) => isExactUserLookupMatch(user, search));
+    if (!exactUser) return;
+
+    selectUser(exactUser);
+  }, [form.selectedUserId, search, users]);
 
   async function searchUsers() {
     try {
@@ -414,7 +437,7 @@ export default function NutricionAgendarPage() {
             <div className="mt-5 space-y-4">
               <input
                 className={inputClass}
-                placeholder="Buscar cliente"
+                placeholder="Buscar cliente por nombre, cédula o teléfono"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
@@ -453,6 +476,9 @@ export default function NutricionAgendarPage() {
               <div className="rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4">
                 <p className="text-sm font-semibold text-[#24312A]">Cliente seleccionado</p>
                 <p className="mt-2 text-sm text-slate-700">{form.patientName || "Ninguno"}</p>
+                <p className="mt-1 text-sm text-slate-600">
+                  {users.find((user) => user.id === form.selectedUserId)?.documento || "Sin documento"}
+                </p>
                 <p className="mt-1 text-sm text-slate-600">{form.phone || ""}</p>
                 <p className="mt-1 text-sm text-slate-600">{form.city || ""}</p>
               </div>
