@@ -290,8 +290,13 @@ function isOutcomeCode(value: string | null | undefined) {
 }
 
 function getReceptionSummary(item: CommercialCase) {
-  if (!item.sale_result || isOutcomeCode(item.sale_result)) return [];
-  return item.sale_result
+  const source =
+    item.sale_result && !isOutcomeCode(item.sale_result)
+      ? item.sale_result
+      : item.commercial_notes;
+
+  if (!source) return [];
+  return source
     .split("|")
     .map((part) => part.trim())
     .map((part) => part.replace(/\s+/g, " "))

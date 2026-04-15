@@ -135,6 +135,7 @@ type CommercialCaseRow = {
   assigned_by_user_id: string | null;
   assigned_at: string | null;
   status: string;
+  commercial_notes: string | null;
   sale_result: string | null;
   purchased_service: string | null;
   sale_value: number | null;
@@ -398,8 +399,13 @@ function isCommercialOutcomeCode(value: string | null | undefined) {
 }
 
 function getCommercialReceptionSummary(item: CommercialCaseRow) {
-  if (!item.sale_result || isCommercialOutcomeCode(item.sale_result)) return [];
-  return item.sale_result
+  const source =
+    item.sale_result && !isCommercialOutcomeCode(item.sale_result)
+      ? item.sale_result
+      : item.commercial_notes;
+
+  if (!source) return [];
+  return source
     .split("|")
     .map((part) => part.trim().replace(/\s+/g, " "))
     .filter(Boolean);
@@ -2880,9 +2886,10 @@ function imprimirRegistroComercial() {
             normalizedCommercialSource === "tmk"
               ? commercialForm.fuente_usuario_id || null
               : null,
+          commercial_notes: notesParts || null,
           created_by_user_id: currentUserId,
           updated_by_user_id: currentUserId,
-          sale_result: notesParts || null,
+          sale_result: null,
         },
       ]);
 
@@ -4528,10 +4535,11 @@ function imprimirRegistroComercial() {
                           <p className="mt-1 text-sm text-slate-600">
                             Ingreso: {new Date(item.created_at).toLocaleString()}
                           </p>
-                          {item.sale_result ? (
-                            <p className="mt-2 text-sm text-slate-700">
-                              <span className="font-medium text-slate-800">Resumen:</span> {item.sale_result}
-                            </p>
+                          {getCommercialReceptionSummary(item).length > 0 ? (
+                            <div className="mt-2 text-sm text-slate-700">
+                              <span className="font-medium text-slate-800">Resumen:</span>{" "}
+                              {getCommercialReceptionSummary(item).join(" | ")}
+                            </div>
                           ) : null}
                         </div>
                       </div>
