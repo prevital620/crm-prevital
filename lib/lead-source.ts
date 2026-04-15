@@ -9,6 +9,13 @@ export const leadSourceOptions = [
 ] as const;
 
 const allowedLeadSources = new Set<string>(leadSourceOptions.map((item) => item.value));
+const allowedCommercialCaseLeadSources = new Set<string>([
+  "opc",
+  "tmk",
+  "redes",
+  "base",
+  "otro",
+]);
 
 export function normalizeLeadSource(value: string | null | undefined) {
   if (!value) return null;
@@ -23,14 +30,16 @@ export function normalizeCommercialCaseLeadSource(value: string | null | undefin
 
   const aliasMap: Record<string, string> = {
     lead_existente: "base",
-    tmk: "base",
-    lugar: "punto_fisico",
+    referido: "otro",
+    lugar: "otro",
+    punto_fisico: "otro",
+    evento: "otro",
     cliente_directo: "otro",
   };
 
   const mapped = aliasMap[normalized] || normalized;
 
-  if (allowedLeadSources.has(mapped)) {
+  if (allowedCommercialCaseLeadSources.has(mapped)) {
     return mapped;
   }
 
