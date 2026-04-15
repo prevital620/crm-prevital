@@ -8,10 +8,33 @@ export const leadSourceOptions = [
   { value: "otro", label: "Otro" },
 ] as const;
 
+const allowedLeadSources = new Set<string>(leadSourceOptions.map((item) => item.value));
+
 export function normalizeLeadSource(value: string | null | undefined) {
   if (!value) return null;
   if (value === "redes_sociales") return "redes";
   return value;
+}
+
+export function normalizeCommercialCaseLeadSource(value: string | null | undefined) {
+  const normalized = normalizeLeadSource(value);
+
+  if (!normalized) return null;
+
+  const aliasMap: Record<string, string> = {
+    lead_existente: "base",
+    tmk: "base",
+    lugar: "punto_fisico",
+    cliente_directo: "otro",
+  };
+
+  const mapped = aliasMap[normalized] || normalized;
+
+  if (allowedLeadSources.has(mapped)) {
+    return mapped;
+  }
+
+  return "otro";
 }
 
 export function getLeadSourceLabel(

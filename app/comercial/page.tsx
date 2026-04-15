@@ -10,7 +10,10 @@ import StatCard from "@/components/ui/StatCard";
 import Field from "@/components/ui/Field";
 import InfoItem from "@/components/ui/InfoItem";
 import StatusBadge from "@/components/ui/StatusBadge";
-import { getLeadSourceLabel } from "@/lib/lead-source";
+import {
+  getLeadSourceLabel,
+  normalizeCommercialCaseLeadSource,
+} from "@/lib/lead-source";
 import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import { hoyISO, dateToLocalISO, isSameLocalDay } from "@/lib/datetime/dateHelpers";
 import { formatDate, formatDateOnly } from "@/lib/datetime/dateFormat";
@@ -1388,7 +1391,9 @@ const updatePayload: any = {
         volume_amount: volumeNumber || null,
         closing_notes: closingNotes,
         sale_origin_type: leadInheritance ? "lead" : "directo",
-        lead_source_type: leadInheritance?.source || currentCaseFound?.lead_source_type || null,
+        lead_source_type: normalizeCommercialCaseLeadSource(
+          leadInheritance?.source || currentCaseFound?.lead_source_type || null
+        ),
         commission_source_type:
           leadInheritance?.commission_source_type ||
           currentCaseFound?.commission_source_type ||

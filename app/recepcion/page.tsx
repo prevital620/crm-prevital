@@ -18,6 +18,7 @@ import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import printNutritionSummary from "@/lib/print/templates/printNutritionSummary";
 import printPhysiotherapySummary from "@/lib/print/templates/printPhysiotherapySummary";
 import printReceptionRecord from "@/lib/print/templates/printReceptionRecord";
+import { normalizeCommercialCaseLeadSource } from "@/lib/lead-source";
 import {
   getSectionForService,
   getSectionLabel,
@@ -2867,7 +2868,9 @@ function imprimirRegistroComercial() {
           phone: commercialForm.phone.trim(),
           city: commercialForm.city.trim() || null,
           status: "pendiente_asignacion_comercial",
-          lead_source_type: normalizedCommercialSource || null,
+          lead_source_type: normalizeCommercialCaseLeadSource(
+            normalizedCommercialSource
+          ),
           commission_source_type: commissionSourceType,
           opc_user_id:
             normalizedCommercialSource === "opc"
