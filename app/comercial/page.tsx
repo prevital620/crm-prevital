@@ -1603,18 +1603,20 @@ const updatePayload: any = {
           </div>
         ) : null}
 
-        <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
-          <StatCard title="Asignados hoy" value={String(resumen.asignadosHoy)} />
-          <StatCard title="Activos hoy" value={String(resumen.activosHoy)} />
-          <StatCard title="Asistieron hoy" value={String(resumen.asistieronHoy)} />
-          <StatCard title="Vendidos hoy" value={String(resumen.vendidosHoy)} />
-          <StatCard title="Seguimiento hoy" value={String(resumen.seguimientoHoy)} />
-          <StatCard title="No vendidos hoy" value={String(resumen.noVendidosHoy)} />
-          <StatCard title="Citas hoy" value={String(resumen.citasHoy)} />
-        </section>
+        {!editingCaseId ? (
+          <>
+            <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+              <StatCard title="Asignados hoy" value={String(resumen.asignadosHoy)} />
+              <StatCard title="Activos hoy" value={String(resumen.activosHoy)} />
+              <StatCard title="Asistieron hoy" value={String(resumen.asistieronHoy)} />
+              <StatCard title="Vendidos hoy" value={String(resumen.vendidosHoy)} />
+              <StatCard title="Seguimiento hoy" value={String(resumen.seguimientoHoy)} />
+              <StatCard title="No vendidos hoy" value={String(resumen.noVendidosHoy)} />
+              <StatCard title="Citas hoy" value={String(resumen.citasHoy)} />
+            </section>
 
-        <section className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
-          <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+            <section className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
+              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
             <div>
               <h2 className="text-2xl font-bold text-[#24312A]">Cliente nuevo directo</h2>
               <p className="mt-1 text-sm leading-6 text-[#51695C]">
@@ -1703,10 +1705,12 @@ const updatePayload: any = {
                 La bandeja comercial sigue mostrando los casos del día. Cuando entra gerencia, solo se cargan los comerciales de su mismo equipo.
               </p>
             </div>
-          </div>
-        </section>
+              </div>
+            </section>
+          </>
+        ) : null}
 
-        <section className="mb-6 grid gap-6 xl:grid-cols-2">
+        <section className={`mb-6 grid gap-6 ${editingCaseId ? "" : "xl:grid-cols-2"}`}>
           <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
             <div className="flex items-start justify-between gap-4">
               <div>
@@ -1773,14 +1777,20 @@ const updatePayload: any = {
                           </div>
                         </div>
 
-                        {currentCaseCommissionSummary ? (
-                          <div className="grid gap-2 rounded-[24px] border border-[#D6E8DA] bg-[#F7FBF8] p-4 text-sm text-slate-700 sm:grid-cols-2 xl:min-w-[320px]">
-                            <InfoItem label="Origen del lead" value={leadSourceLabel(currentCaseCommissionSummary.origenLead)} />
-                            <InfoItem label="Fuente comision" value={commissionSourceLabel(currentCaseCommissionSummary.fuenteComision)} />
-                            <InfoItem label="Resultado call" value={callContactResultLabel(currentCaseCommissionSummary.resultadoCall)} />
-                            <InfoItem label="Origen venta" value={saleOriginLabel(currentCaseCommissionSummary.origenVenta)} />
+                        <div className="grid gap-3 sm:grid-cols-2 xl:min-w-[320px]">
+                          <div className="rounded-2xl border border-[#E3ECE5] bg-white/85 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Estado</p>
+                            <p className="mt-1 text-sm font-semibold text-[#24312A]">
+                              {traducirEstadoComercial(currentCase.status)}
+                            </p>
                           </div>
-                        ) : null}
+                          <div className="rounded-2xl border border-[#E3ECE5] bg-white/85 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Asignado</p>
+                            <p className="mt-1 text-sm font-semibold text-[#24312A]">
+                              {currentCase.assigned_at ? formatDate(currentCase.assigned_at) : "Sin fecha"}
+                            </p>
+                          </div>
+                        </div>
                       </div>
                     </div>
 
@@ -2375,6 +2385,7 @@ const updatePayload: any = {
             )}
           </div>
 
+          {!editingCaseId ? (
           <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
@@ -2491,6 +2502,8 @@ const updatePayload: any = {
               </div>
             )}
           </div>
+          ) : null}
+
         </section>
       </div>
     </main>
