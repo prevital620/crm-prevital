@@ -20,6 +20,10 @@ import printPhysiotherapySummary from "@/lib/print/templates/printPhysiotherapyS
 import printReceptionRecord from "@/lib/print/templates/printReceptionRecord";
 import { normalizeCommercialCaseLeadSource } from "@/lib/lead-source";
 import {
+  buildStoredCommercialNotes,
+  parseStoredCommercialNotes,
+} from "@/lib/commercial/notes";
+import {
   getSectionForService,
   getSectionLabel,
   getServiceFieldLabel,
@@ -402,7 +406,7 @@ function getCommercialReceptionSummary(item: CommercialCaseRow) {
   const source =
     item.sale_result && !isCommercialOutcomeCode(item.sale_result)
       ? item.sale_result
-      : item.commercial_notes;
+      : parseStoredCommercialNotes(item.commercial_notes).receptionSummary;
 
   if (!source) return [];
   return source
@@ -2886,7 +2890,7 @@ function imprimirRegistroComercial() {
             normalizedCommercialSource === "tmk"
               ? commercialForm.fuente_usuario_id || null
               : null,
-          commercial_notes: notesParts || null,
+          commercial_notes: buildStoredCommercialNotes(notesParts, null),
           created_by_user_id: currentUserId,
           updated_by_user_id: currentUserId,
           sale_result: null,

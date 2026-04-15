@@ -39,6 +39,10 @@ import {
   inferCommercialTeam,
   inferCommercialTeamFromDate,
 } from "@/lib/commercial/team";
+import {
+  buildStoredCommercialNotes,
+  parseStoredCommercialNotes,
+} from "@/lib/commercial/notes";
 
 type CommercialCase = {
   id: string;
@@ -237,9 +241,19 @@ function leadSourceLabel(value: string | null | undefined) {
 function commissionSourceLabel(value: string | null | undefined) {
   const map: Record<string, string> = {
     opc: "OPC",
+    tmk: "TMK",
     redes: "Redes",
     base: "Base",
     otro: "Otro",
+  };
+  if (!value) return "Sin definir";
+  return map[value] || value;
+}
+
+function saleOriginLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    lead: "Lead",
+    directo: "Directo",
   };
   if (!value) return "Sin definir";
   return map[value] || value;
@@ -293,7 +307,7 @@ function getReceptionSummary(item: CommercialCase) {
   const source =
     item.sale_result && !isOutcomeCode(item.sale_result)
       ? item.sale_result
-      : item.commercial_notes;
+      : parseStoredCommercialNotes(item.commercial_notes).receptionSummary;
 
   if (!source) return [];
   return source
@@ -1093,11 +1107,12 @@ export default function ComercialPage() {
       }
 
       const primaryFollowUp = loadedFollowUps[0] || null;
+      const storedCommercialNotes = parseStoredCommercialNotes(item.commercial_notes);
 
       setEditingCaseId(item.id);
       setForm({
         status: item.status === "finalizado" ? "finalizado" : "en_atencion_comercial",
-        commercial_notes: item.commercial_notes || "",
+        commercial_notes: storedCommercialNotes.commercialNotes,
         sales_assessment: item.sales_assessment || "",
         proposal_text: item.proposal_text || "",
         purchased_service: item.purchased_service || "",
@@ -1382,9 +1397,16 @@ const hayVenta = volumeNumber > 0 || !!form.purchased_service;
         );
       }
 
+      const receptionSummaryText = currentCaseFound
+        ? getReceptionSummary(currentCaseFound).join(" | ")
+        : "";
+
 const updatePayload: any = {
         status: statusFinal,
-        commercial_notes: form.commercial_notes.trim() || null,
+        commercial_notes: buildStoredCommercialNotes(
+          receptionSummaryText,
+          form.commercial_notes
+        ),
         sales_assessment: form.sales_assessment.trim() || null,
         proposal_text: form.proposal_text.trim() || null,
         sale_result: preservedReceptionSummary,
@@ -1717,7 +1739,7 @@ const updatePayload: any = {
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="text-sm font-semibold text-[#2F5E46]">Estado del caso:</span>
                     <StatusBadge
-                      label="En atención"
+                      label="En atencion"
                       className="bg-emerald-100 text-emerald-700"
                     />
                     {currentCase?.assigned_at ? (
@@ -1729,37 +1751,71 @@ const updatePayload: any = {
                 </div>
 
                 {currentCase ? (
-                  <div className="grid gap-4 xl:grid-cols-3">
+                  <div className="space-y-4">
                     <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_40px_rgba(95,125,102,0.1)]">
-                      <h3 className="text-lg font-semibold text-[#24312A]">
-                        Información básica
-                      </h3>
-                      <div className="mt-3 grid gap-3 text-sm text-slate-700">
-                        <InfoItem label="Cliente" value={currentCase.customer_name} />
-                        <InfoItem label="Teléfono" value={currentCase.phone || "Sin teléfono"} />
-                        <InfoItem label="Ciudad" value={currentCase.city || "Sin ciudad"} />
-                        <InfoItem label="Ingreso comercial" value={formatDate(currentCase.created_at)} />
+                      <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
+                        <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                          <div className="rounded-2xl border border-[#E3ECE5] bg-white/85 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Cliente</p>
+                            <p className="mt-1 text-sm font-semibold text-[#24312A]">{currentCase.customer_name}</p>
+                          </div>
+                          <div className="rounded-2xl border border-[#E3ECE5] bg-white/85 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Telefono</p>
+                            <p className="mt-1 text-sm font-semibold text-[#24312A]">{currentCase.phone || "Sin telefono"}</p>
+                          </div>
+                          <div className="rounded-2xl border border-[#E3ECE5] bg-white/85 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Ciudad</p>
+                            <p className="mt-1 text-sm font-semibold text-[#24312A]">{currentCase.city || "Sin ciudad"}</p>
+                          </div>
+                          <div className="rounded-2xl border border-[#E3ECE5] bg-white/85 px-4 py-3">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Ingreso</p>
+                            <p className="mt-1 text-sm font-semibold text-[#24312A]">{formatDate(currentCase.created_at)}</p>
+                          </div>
+                        </div>
+
+                        {currentCaseCommissionSummary ? (
+                          <div className="grid gap-2 rounded-[24px] border border-[#D6E8DA] bg-[#F7FBF8] p-4 text-sm text-slate-700 sm:grid-cols-2 xl:min-w-[320px]">
+                            <InfoItem label="Origen del lead" value={leadSourceLabel(currentCaseCommissionSummary.origenLead)} />
+                            <InfoItem label="Fuente comision" value={commissionSourceLabel(currentCaseCommissionSummary.fuenteComision)} />
+                            <InfoItem label="Resultado call" value={callContactResultLabel(currentCaseCommissionSummary.resultadoCall)} />
+                            <InfoItem label="Origen venta" value={saleOriginLabel(currentCaseCommissionSummary.origenVenta)} />
+                          </div>
+                        ) : null}
                       </div>
                     </div>
 
                     <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_40px_rgba(95,125,102,0.1)]">
-                      <h3 className="text-lg font-semibold text-[#24312A]">
-                        Información registrada en recepción
-                      </h3>
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <h3 className="text-lg font-semibold text-[#24312A]">
+                            Informacion registrada en recepcion
+                          </h3>
+                          <p className="mt-1 text-sm text-slate-500">
+                            Este resumen viene desde recepcion y queda separado de tus notas comerciales.
+                          </p>
+                        </div>
+                        <span className="rounded-full border border-[#DCEADF] bg-[#F5FBF7] px-3 py-1 text-xs font-semibold text-[#5B7967]">
+                          {currentReceptionSummary.length} datos visibles
+                        </span>
+                      </div>
 
                       {currentReceptionSummary.length > 0 ? (
-                        <ul className="mt-3 space-y-2 text-sm text-slate-700">
+                        <div className="mt-4 grid gap-x-6 gap-y-2 md:grid-cols-2">
                           {currentReceptionSummary.map((line, index) => (
-                            <li key={index}>• {line}</li>
+                            <div
+                              key={index}
+                              className="rounded-2xl border border-[#E8F1EA] bg-white/85 px-4 py-3 text-sm text-slate-700"
+                            >
+                              {line}
+                            </div>
                           ))}
-                        </ul>
+                        </div>
                       ) : (
                         <p className="mt-3 text-sm text-slate-500">
-                          Aquí aparecerá todo lo que recepción haya guardado dentro del ingreso comercial.
+                          Aqui aparecera todo lo que recepcion haya guardado dentro del ingreso comercial.
                         </p>
                       )}
                     </div>
-
                   </div>
                 ) : null}
 
