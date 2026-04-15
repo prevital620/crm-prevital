@@ -248,6 +248,7 @@ const allowedRoles = [
   "super_user",
   "recepcion",
   "comercial",
+  "gerencia_comercial",
   "tmk",
   "confirmador",
   "supervisor_call_center",
@@ -1061,7 +1062,8 @@ function RecepcionContent() {
   const isReadOnlyAgendaForCall =
     currentRoleCode === "tmk" || currentRoleCode === "confirmador";
 
-  const isCommercialReceptionOnly = currentRoleCode === "comercial";
+  const isCommercialReceptionOnly =
+    currentRoleCode === "comercial" || currentRoleCode === "gerencia_comercial";
 
   const isLimitedReceptionForCall =
     currentRoleCode === "tmk" ||
@@ -1104,7 +1106,11 @@ function RecepcionContent() {
   const occupationNeedsDetail = shouldAskOccupationDetail(commercialForm.ocupacion);
 
   useEffect(() => {
-    if (receptionView === "comercial" || currentRoleCode === "comercial") {
+    if (
+      receptionView === "comercial" ||
+      currentRoleCode === "comercial" ||
+      currentRoleCode === "gerencia_comercial"
+    ) {
       setActiveSection("comercial");
     }
   }, [receptionView, currentRoleCode]);
