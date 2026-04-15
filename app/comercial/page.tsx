@@ -1560,14 +1560,7 @@ const updatePayload: any = {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Comercial</p>
-              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">Gestión comercial</h1>
-              <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
-                Atiende solo los casos asignados hoy y registra el cierre comercial del día.
-              </p>
-              <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
-                <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">Cierre comercial</span>
-                <span className="rounded-full bg-[#E8F6EE] px-3 py-1 ring-1 ring-[#CFE4D8]">Prevital menta + hoja</span>
-              </div>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">Gestion comercial</h1>
             </div>
 
             <SessionBadge />
@@ -1605,106 +1598,29 @@ const updatePayload: any = {
 
         {!editingCaseId ? (
           <>
-            <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+            <section className="mb-6 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
               <StatCard title="Asignados hoy" value={String(resumen.asignadosHoy)} />
               <StatCard title="Activos hoy" value={String(resumen.activosHoy)} />
-              <StatCard title="Asistieron hoy" value={String(resumen.asistieronHoy)} />
+              <StatCard title="Atendidos hoy" value={String(resumen.asistieronHoy)} />
               <StatCard title="Vendidos hoy" value={String(resumen.vendidosHoy)} />
-              <StatCard title="Seguimiento hoy" value={String(resumen.seguimientoHoy)} />
               <StatCard title="No vendidos hoy" value={String(resumen.noVendidosHoy)} />
-              <StatCard title="Citas hoy" value={String(resumen.citasHoy)} />
             </section>
 
             <section className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
-              <div className="grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
-            <div>
-              <h2 className="text-2xl font-bold text-[#24312A]">Cliente nuevo directo</h2>
-              <p className="mt-1 text-sm leading-6 text-[#51695C]">
-                Si llega un cliente que no pasó por recepción o base previa, aquí lo creas y queda asignado a tu bandeja.
-              </p>
+              <div>
+                <h2 className="text-2xl font-bold text-[#24312A]">Crear cliente</h2>
+                <p className="mt-1 text-sm leading-6 text-[#51695C]">
+                  Usa el formulario completo para registrar un cliente nuevo y dejarlo listo para comercial.
+                </p>
 
-              <div className="mt-4">
-                <a
-                  href="/recepcion?view=comercial"
-                  className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105"
-                >
-                  Abrir formulario completo
-                </a>
-              </div>
-
-              <div className="mt-4 grid gap-4 md:grid-cols-3">
-                <Field
-                  label="Nombre"
-                  input={
-                    <input
-                      className={inputClass}
-                      value={newClientForm.customer_name}
-                      onChange={(e) =>
-                        setNewClientForm((prev) => ({
-                          ...prev,
-                          customer_name: e.target.value,
-                        }))
-                      }
-                    />
-                  }
-                />
-
-                <Field
-                  label="Teléfono"
-                  input={
-                    <input
-                      className={inputClass}
-                      value={newClientForm.phone}
-                      onChange={(e) =>
-                        setNewClientForm((prev) => ({
-                          ...prev,
-                          phone: e.target.value,
-                        }))
-                      }
-                    />
-                  }
-                />
-
-                <Field
-                  label="Ciudad"
-                  input={
-                    <input
-                      className={inputClass}
-                      value={newClientForm.city}
-                      onChange={(e) =>
-                        setNewClientForm((prev) => ({
-                          ...prev,
-                          city: e.target.value,
-                        }))
-                      }
-                    />
-                  }
-                />
-              </div>
-
-              <div className="mt-4 flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => void crearClienteNuevo()}
-                  disabled={creatingClient}
-                  className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
-                >
-                  {creatingClient ? "Creando..." : "Crear cliente"}
-                </button>
-              </div>
-            </div>
-
-            <div className="rounded-[28px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-5 shadow-inner">
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#5F7D66]">
-                Alcance visible
-              </p>
-              <h3 className="mt-3 text-2xl font-bold text-[#24312A]">
-                {currentTeamKey ? `Equipo ${currentTeamKey.toUpperCase()}` : "Mis casos comerciales"}
-              </h3>
-              <p className="mt-3 text-sm leading-6 text-[#51695C]">
-                La bandeja comercial sigue mostrando los casos del día. Cuando entra gerencia, solo se cargan los comerciales de su mismo equipo.
-              </p>
-            </div>
+                <div className="mt-4">
+                  <a
+                    href="/recepcion?view=comercial"
+                    className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105"
+                  >
+                    Crear cliente
+                  </a>
+                </div>
               </div>
             </section>
           </>
@@ -1718,7 +1634,7 @@ const updatePayload: any = {
                   {editingCaseId ? "Atender caso" : "Selecciona un caso"}
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-[#51695C]">
-                  Aquí ves lo registrado en recepción y completas el cierre comercial.
+                  Aqui ves lo registrado en recepcion y completas el cierre comercial.
                 </p>
               </div>
 
