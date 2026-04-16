@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getSectionForService } from "@/lib/agenda/agendaSections";
 import {
@@ -94,7 +94,7 @@ function formatStatus(value: string) {
   return map[value] || value || "Sin estado";
 }
 
-export default function NutricionAgendarPage() {
+function NutricionAgendarContent() {
   const searchParams = useSearchParams();
   const lookupFromUrl =
     searchParams.get("documento") ||
@@ -630,6 +630,26 @@ export default function NutricionAgendarPage() {
         </section>
       </div>
     </main>
+  );
+}
+
+function NutricionAgendarFallback() {
+  return (
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,#ECF8F2_0%,#F7FBF8_50%,#EEF6F1_100%)] px-4 py-8 md:px-8">
+      <div className="mx-auto max-w-7xl">
+        <div className="rounded-3xl border border-[#D6E8DA] bg-white p-8 shadow-sm">
+          <p className="text-sm text-slate-500">Cargando agenda de nutricion...</p>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+export default function NutricionAgendarPage() {
+  return (
+    <Suspense fallback={<NutricionAgendarFallback />}>
+      <NutricionAgendarContent />
+    </Suspense>
   );
 }
 
