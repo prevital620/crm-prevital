@@ -96,6 +96,14 @@ type SlotOption = {
   label: string;
 };
 
+type ReceptionFollowUpDraft = {
+  service_type: string;
+  appointment_date: string;
+  appointment_time: string;
+  duration_minutes: string;
+  notes: string;
+};
+
 type ReceptionSection = "agenda" | "especialistas" | "tratamientos" | "impresiones" | "inventario" | "comercial" | "nutricion_entregas";
 
 type DeliveryLog = {
@@ -940,6 +948,16 @@ function normalizarHora(value: string) {
   return value.slice(0, 5);
 }
 
+function createEmptyReceptionFollowUp(defaultDate: string, defaultTime: string): ReceptionFollowUpDraft {
+  return {
+    service_type: "",
+    appointment_date: defaultDate,
+    appointment_time: defaultTime,
+    duration_minutes: "30",
+    notes: "",
+  };
+}
+
 function RecepcionContent() {
   const searchParams = useSearchParams();
   const leadIdFromUrl = searchParams.get("leadId");
@@ -985,6 +1003,7 @@ function RecepcionContent() {
   const [editingAppointmentId, setEditingAppointmentId] = useState<string | null>(null);
   const [selectedQuickAppointmentId, setSelectedQuickAppointmentId] = useState<string | null>(null);
   const [selectedCommercialAppointmentId, setSelectedCommercialAppointmentId] = useState<string | null>(null);
+  const [extraAppointments, setExtraAppointments] = useState<ReceptionFollowUpDraft[]>([]);
   const [activeSection, setActiveSection] = useState<ReceptionSection>("agenda");
   const [lastSavedAppointmentPrint, setLastSavedAppointmentPrint] = useState<AppointmentRow | null>(null);
   const [deliveryLogs, setDeliveryLogs] = useState<DeliveryLog[]>([]);
@@ -1672,6 +1691,7 @@ function RecepcionContent() {
     setActiveSection(section);
     setEditingAppointmentId(null);
     setSelectedQuickAppointmentId(null);
+    setExtraAppointments([]);
     setLastSavedAppointmentPrint(null);
     setMensaje("");
     setError("");
@@ -1816,6 +1836,152 @@ function RecepcionContent() {
     selectedDateActiveTotal,
     editingAppointmentId,
   ]);
+
+  const canAddExtraAppointments =
+    !editingAppointmentId &&
+    !isReadOnlyAgendaForCall &&
+    (activeSection === "especialistas" || activeSection === "tratamientos");
+
+  function buildDraftAppointmentsForAvailability(
+    drafts: ReceptionFollowUpDraft[],
+    skipIndex: number
+  ) {
+    return drafts.flatMap((item, index) => {
+      if (index === skipIndex) return [];
+      if (!item.service_type || !item.appointment_date || !item.appointment_time) return [];
+
+      return [
+        {
+          id: `draft-${index}`,
+          lead_id: form.mode === "lead" ? form.lead_id || null : null,
+          patient_name: form.patient_name.trim(),
+          phone: form.phone.trim() || null,
+          city: form.city.trim() || null,
+          appointment_date: item.appointment_date,
+          appointment_time: item.appointment_time,
+          status: "agendada",
+          service_type: item.service_type,
+          notes: construirNotasAgenda({
+            notes: item.notes,
+            manualSource: form.mode === "manual" ? form.manual_source : "",
+            durationMinutes: Number(item.duration_minutes || "30"),
+          }),
+          checked_in_at: null,
+          attended_at: null,
+        } satisfies AppointmentRow,
+      ];
+    });
+  }
+
+  function getExtraAppointmentAvailability(
+    draft: ReceptionFollowUpDraft,
+    draftIndex: number,
+    drafts: ReceptionFollowUpDraft[]
+  ) {
+    if (!draft.service_type || !draft.appointment_date) return [];
+
+    const daySetting = daySettings[draft.appointment_date];
+    const selectedDateDailyCapacity = daySetting?.daily_capacity ?? DEFAULT_DAILY_CAPACITY;
+    const selectedDateClosed = daySetting?.is_closed ?? false;
+    const activeTotalForDate =
+      appointments.filter(
+        (item) =>
+          item.appointment_date === draft.appointment_date &&
+          ACTIVE_APPOINTMENT_STATUSES.includes(item.status)
+      ).length +
+      buildDraftAppointmentsForAvailability(drafts, draftIndex).filter(
+        (item) =>
+          item.appointment_date === draft.appointment_date &&
+          ACTIVE_APPOINTMENT_STATUSES.includes(item.status)
+      ).length;
+
+    return buildSlotAvailability({
+      appointments: [
+        ...appointments,
+        ...buildDraftAppointmentsForAvailability(drafts, draftIndex),
+      ],
+      section: activeSection,
+      serviceType: draft.service_type,
+      appointmentDate: draft.appointment_date,
+      durationMinutes: Number(draft.duration_minutes || "30"),
+      slotSettings,
+      selectedDateClosed,
+      selectedDateDailyCapacity,
+      selectedDateActiveTotal: activeTotalForDate,
+      editingAppointmentId: null,
+      getSectionForService,
+    });
+  }
+
+  useEffect(() => {
+    if (extraAppointments.length === 0) return;
+
+    let changed = false;
+    const normalized = extraAppointments.map((item, index) => {
+      if (!item.service_type) return item;
+
+      const durationOptionsForDraft = getDurationOptions(
+        activeSection,
+        item.service_type,
+        item.appointment_date
+      );
+
+      const nextDuration = durationOptionsForDraft.some(
+        (option) => option.value === item.duration_minutes
+      )
+        ? item.duration_minutes
+        : durationOptionsForDraft[0]?.value || "30";
+
+      const nextDraft =
+        nextDuration === item.duration_minutes ? item : { ...item, duration_minutes: nextDuration };
+
+      const availability = getExtraAppointmentAvailability(nextDraft, index, extraAppointments);
+      const availableSlots = availability.filter((slot) => !slot.disabled);
+      const stillValid = availableSlots.some((slot) => slot.value === nextDraft.appointment_time);
+
+      if (nextDuration !== item.duration_minutes || !stillValid) {
+        changed = true;
+        return {
+          ...nextDraft,
+          appointment_time: availableSlots[0]?.value || "",
+        };
+      }
+
+      return nextDraft;
+    });
+
+    if (changed) {
+      setExtraAppointments(normalized);
+    }
+  }, [activeSection, appointments, daySettings, extraAppointments, form.manual_source, form.mode, slotSettings]);
+
+  function actualizarCitaAdicional(
+    index: number,
+    field: keyof ReceptionFollowUpDraft,
+    value: string
+  ) {
+    setExtraAppointments((prev) =>
+      prev.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
+      )
+    );
+  }
+
+  function agregarCitaAdicional() {
+    setExtraAppointments((prev) => [
+      ...prev,
+      createEmptyReceptionFollowUp(form.appointment_date, form.appointment_time),
+    ]);
+  }
+
+  function eliminarCitaAdicional(index: number) {
+    setExtraAppointments((prev) => prev.filter((_, itemIndex) => itemIndex !== index));
+  }
 
 
   const printCandidates = useMemo(() => {
@@ -3055,6 +3221,7 @@ function imprimirRegistroComercial() {
   function resetForm(options?: { preserveLastSavedAppointmentPrint?: boolean }) {
     setEditingAppointmentId(null);
     setSelectedQuickAppointmentId(null);
+    setExtraAppointments([]);
     setManualClientLookup(lookupFromUrl.trim());
     if (!options?.preserveLastSavedAppointmentPrint) {
       setLastSavedAppointmentPrint(null);
