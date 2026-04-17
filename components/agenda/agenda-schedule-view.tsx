@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import type { ReactNode } from "react";
 
@@ -171,10 +171,10 @@ function AppointmentCard<T extends BaseAppointment>({
           </div>
           <p className="mt-2 text-sm text-[#32453A]">{appointment.usuario_nombre || "Sin usuario"}</p>
           <p className="mt-1 text-sm text-[#607368]">
-            {appointment.documento || "Sin documento"} · {appointment.telefono || "Sin telefono"}
+            {appointment.documento || "Sin documento"} Â· {appointment.telefono || "Sin telefono"}
           </p>
           <p className="mt-1 text-sm text-[#607368]">
-            Profesional: {appointment.profesional || "No registrado"} · Sede:{" "}
+            Profesional: {appointment.profesional || "No registrado"} Â· Sede:{" "}
             {appointment.sede || "No registrada"}
           </p>
         </div>
@@ -184,10 +184,10 @@ function AppointmentCard<T extends BaseAppointment>({
               <button onClick={() => onConfirmAppointment(appointment.id)} className={smallActionButtonClass}>Confirmar</button>
             ) : null}
             {onAttendAppointment ? (
-              <button onClick={() => onAttendAppointment(appointment.id)} className={smallActionButtonClass}>Asistio</button>
+              <button onClick={() => onAttendAppointment(appointment.id)} className={smallActionButtonClass}>Asistió</button>
             ) : null}
             {onMissAppointment ? (
-              <button onClick={() => onMissAppointment(appointment.id)} className={smallActionButtonClass}>No asistio</button>
+              <button onClick={() => onMissAppointment(appointment.id)} className={smallActionButtonClass}>No asistió</button>
             ) : null}
             {onRescheduleAppointment ? (
               <button onClick={() => onRescheduleAppointment(appointment)} className={smallActionButtonClass}>Reagendar</button>
@@ -215,7 +215,7 @@ export function AgendaScheduleView<T extends BaseAppointment>({
   onRescheduleAppointment,
   onCancelAppointment,
   renderDetailExtra,
-  emptyDetailLabel = "No hay citas para este dia.",
+  emptyDetailLabel = "No hay citas para este dÃ­a.",
 }: AgendaScheduleViewProps<T>) {
   const weekDates = Array.from({ length: 7 }, (_, index) => addDaysToISO(startOfWeekISO(selectedDate), index));
   const monthDates = buildMonthDates(selectedDate);
@@ -255,7 +255,7 @@ export function AgendaScheduleView<T extends BaseAppointment>({
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <h3 className="text-lg font-semibold text-[#24312A]">
-            {viewMode === "dia" ? "Agenda del dia" : viewMode === "semana" ? "Agenda semanal" : "Agenda mensual"}
+            {viewMode === "dia" ? "Agenda del dÃ­a" : viewMode === "semana" ? "Agenda semanal" : "Agenda mensual"}
           </h3>
           <p className="mt-1 text-sm text-[#607368]">Periodo visible: {periodLabel}</p>
         </div>
@@ -267,7 +267,7 @@ export function AgendaScheduleView<T extends BaseAppointment>({
               onClick={() => onChangeViewMode(mode as ViewMode)}
               className={viewMode === mode ? "rounded-2xl bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] px-4 py-2.5 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(63,105,82,0.22)]" : secondaryButtonClass}
             >
-              {mode === "dia" ? "Dia" : mode === "semana" ? "Semana" : "Mes"}
+              {mode === "dia" ? "DÃ­a" : mode === "semana" ? "Semana" : "Mes"}
             </button>
           ))}
         </div>
@@ -335,7 +335,7 @@ export function AgendaScheduleView<T extends BaseAppointment>({
           <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-5 shadow-[0_16px_34px_rgba(95,125,102,0.08)]">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h4 className="text-lg font-semibold text-[#24312A]">Detalle del dia seleccionado</h4>
+                <h4 className="text-lg font-semibold text-[#24312A]">Detalle del dÃ­a seleccionado</h4>
                 <p className="mt-1 text-sm text-[#607368]">{formatWeekdayShort(selectedDate)}</p>
               </div>
               <button type="button" onClick={() => onChangeViewMode("dia")} className={secondaryButtonClass}>Abrir vista diaria</button>
@@ -402,7 +402,7 @@ export function AgendaScheduleView<T extends BaseAppointment>({
           <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-5 shadow-[0_16px_34px_rgba(95,125,102,0.08)]">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
-                <h4 className="text-lg font-semibold text-[#24312A]">Detalle del dia seleccionado</h4>
+                <h4 className="text-lg font-semibold text-[#24312A]">Detalle del dÃ­a seleccionado</h4>
                 <p className="mt-1 text-sm text-[#607368]">{formatWeekdayShort(selectedDate)}</p>
               </div>
               <button type="button" onClick={() => onChangeViewMode("dia")} className={secondaryButtonClass}>Abrir vista diaria</button>
@@ -431,3 +431,4 @@ export function AgendaScheduleView<T extends BaseAppointment>({
     </div>
   );
 }
+
