@@ -1026,6 +1026,7 @@ function RecepcionContent() {
 
   const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
   const [busquedaAgenda, setBusquedaAgenda] = useState("");
+  const [showWeeklyAgenda, setShowWeeklyAgenda] = useState(false);
   const [busquedaLead, setBusquedaLead] = useState("");
   const [manualClientLookup, setManualClientLookup] = useState("");
   const [loadingManualClientLookup, setLoadingManualClientLookup] = useState(false);
@@ -1151,6 +1152,29 @@ function RecepcionContent() {
   const serviceOptions = useMemo(() => activeSection === "nutricion_entregas" ? [] : getServiceOptionsBySection(activeSection), [activeSection]);
   const serviceFieldLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Servicio" : getServiceFieldLabel(activeSection), [activeSection]);
   const sectionLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Entregas nutrición" : getSectionLabel(activeSection), [activeSection]);
+  const canShowWeeklyAgenda =
+    activeSection === "especialistas" || activeSection === "tratamientos";
+  const agendaVisibleTitle = useMemo(() => {
+    if (activeSection === "especialistas") return "Agenda visible de especialistas";
+    if (activeSection === "tratamientos") return "Agenda visible de tratamientos";
+    return "Agenda visible del dÃ­a";
+  }, [activeSection]);
+  const agendaVisibleDescription = useMemo(() => {
+    if (activeSection === "especialistas") {
+      return "Vista diaria de especialistas por nombre, telÃ©fono y fecha.";
+    }
+
+    if (activeSection === "tratamientos") {
+      return "Vista diaria de tratamientos por nombre, telÃ©fono y fecha.";
+    }
+
+    return `Vista diaria de ${sectionLabel.toLowerCase()} por nombre, telÃ©fono y fecha.`;
+  }, [activeSection, sectionLabel]);
+  const weeklyAgendaTitle = useMemo(() => {
+    if (activeSection === "especialistas") return "Calendario semanal de especialistas";
+    if (activeSection === "tratamientos") return "Calendario semanal de tratamientos";
+    return "Agenda semanal";
+  }, [activeSection]);
   const durationOptions = useMemo(
     () => activeSection === "nutricion_entregas" ? [] : getDurationOptions(activeSection, form.service_type, form.appointment_date),
     [activeSection, form.service_type, form.appointment_date]
@@ -1950,6 +1974,12 @@ function RecepcionContent() {
 
     return grouped;
   }, [appointments, weeklyAgendaDates, activeSection, busquedaAgenda, specialistNameById]);
+
+  useEffect(() => {
+    if (!canShowWeeklyAgenda && showWeeklyAgenda) {
+      setShowWeeklyAgenda(false);
+    }
+  }, [canShowWeeklyAgenda, showWeeklyAgenda]);
 
   const selectedDaySetting = daySettings[form.appointment_date];
   const selectedDateDailyCapacity =
@@ -6017,25 +6047,40 @@ function imprimirRegistroComercial() {
             </form>
           </div>
 
-          {!isReadOnlyAgendaForCall && (
-            <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
+          {!isReadOnlyAgendaForCall && !isEmbeddedCommercialCreationView && (
+            <div
+              className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]"
+              title={agendaVisibleDescription}
+            >
               <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-[#1F3128]">Agenda visible</h2>
+                  <h2 className="text-2xl font-bold text-[#1F3128]">{agendaVisibleTitle}</h2>
                   <p className="mt-1 text-sm text-[#607368]">
                     {`Vista de ${sectionLabel.toLowerCase()} por nombre, teléfono y fecha.`}
                   </p>
                 </div>
 
-                <button
-                  onClick={cargarTodo}
-                  className="rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2.5 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
-                >
-                  Actualizar
-                </button>
+                <div className="flex flex-wrap gap-3">
+                  {canShowWeeklyAgenda ? (
+                    <button
+                      type="button"
+                      onClick={() => setShowWeeklyAgenda((prev) => !prev)}
+                      className="rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2.5 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                    >
+                      {showWeeklyAgenda ? "Ocultar calendario semanal" : "Ver calendario semanal"}
+                    </button>
+                  ) : null}
+
+                  <button
+                    onClick={cargarTodo}
+                    className="rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2.5 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                  >
+                    Actualizar
+                  </button>
+                </div>
               </div>
 
-              <div className="mb-6 grid gap-3 md:grid-cols-[1fr_auto_auto_1fr]">
+              <div className="mb-6 grid gap-3 md:grid-cols-[1fr_auto_1fr]">
                 <input
                   className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/92 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="date"
@@ -6049,14 +6094,6 @@ function imprimirRegistroComercial() {
                 >
                   Hoy
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setFechaFiltro("")}
-                  className="rounded-[22px] border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
-                >
-                  Todas
-                </button>
-
                 <input
                   className="rounded-[22px] border border-[#CFE4D8] bg-white/92 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
@@ -6066,10 +6103,11 @@ function imprimirRegistroComercial() {
                 />
               </div>
 
+              {canShowWeeklyAgenda && showWeeklyAgenda ? (
               <div className="mb-6 rounded-[24px] border border-[#D7EADF] bg-[linear-gradient(180deg,_rgba(248,252,249,0.98)_0%,_rgba(240,248,242,0.98)_100%)] p-4 shadow-inner">
                 <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
-                    <h3 className="text-lg font-semibold text-[#24312A]">Agenda semanal</h3>
+                    <h3 className="text-lg font-semibold text-[#24312A]">{weeklyAgendaTitle}</h3>
                     <p className="mt-1 text-sm text-[#607368]">
                       Semana organizada desde {formatWeekdayShort(weeklyAgendaDates[0])} hasta{" "}
                       {formatWeekdayShort(weeklyAgendaDates[weeklyAgendaDates.length - 1])}.
@@ -6158,6 +6196,7 @@ function imprimirRegistroComercial() {
                   })}
                 </div>
               </div>
+              ) : null}
 
               {loading ? (
                 <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
