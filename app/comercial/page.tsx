@@ -44,6 +44,7 @@ import {
   buildStoredCommercialNotes,
   parseStoredCommercialNotes,
 } from "@/lib/commercial/notes";
+import { repairMojibake } from "@/lib/text/repairMojibake";
 
 type CommercialCase = {
   id: string;
@@ -313,7 +314,7 @@ function getReceptionSummary(item: CommercialCase) {
   if (!source) return [];
   return source
     .split("|")
-    .map((part) => part.trim())
+    .map((part) => repairMojibake(part).trim())
     .map((part) => part.replace(/\s+/g, " "))
     .filter(Boolean);
 }
@@ -1677,7 +1678,7 @@ const updatePayload: any = {
                   {editingCaseId ? "Atender caso" : "Selecciona un caso"}
                 </h2>
                 <p className="mt-1 text-sm leading-6 text-[#51695C]">
-                  Aqui ves lo registrado en recepcion y completas el cierre comercial.
+                  Aquí ves lo registrado en recepción y completas el cierre comercial.
                 </p>
               </div>
 
@@ -1757,10 +1758,10 @@ const updatePayload: any = {
                       <div className="flex items-center justify-between gap-3">
                         <div>
                           <h3 className="text-lg font-semibold text-[#24312A]">
-                            Informacion registrada en recepcion
+                            Información registrada en recepción
                           </h3>
                           <p className="mt-1 text-sm text-slate-500">
-                            Este resumen viene desde recepcion y queda separado de tus notas comerciales.
+                            Este resumen viene desde recepción y queda separado de tus notas comerciales.
                           </p>
                         </div>
                         <span className="rounded-full border border-[#DCEADF] bg-[#F5FBF7] px-3 py-1 text-xs font-semibold text-[#5B7967]">
@@ -1781,7 +1782,7 @@ const updatePayload: any = {
                         </div>
                       ) : (
                         <p className="mt-3 text-sm text-slate-500">
-                          Aqui aparecera todo lo que recepcion haya guardado dentro del ingreso comercial.
+                          Aquí aparecerá todo lo que recepción haya guardado dentro del ingreso comercial.
                         </p>
                       )}
                     </div>
