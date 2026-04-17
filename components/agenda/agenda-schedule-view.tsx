@@ -2,7 +2,7 @@
 
 import type { ReactNode } from "react";
 
-type Appointment = {
+type BaseAppointment = {
   id: string;
   usuario_nombre: string | null;
   documento: string | null;
@@ -18,8 +18,8 @@ type Appointment = {
 
 export type ViewMode = "dia" | "semana" | "mes";
 
-type AgendaScheduleViewProps = {
-  appointments: Appointment[];
+type AgendaScheduleViewProps<T extends BaseAppointment> = {
+  appointments: T[];
   selectedDate: string;
   viewMode: ViewMode;
   onChangeDate: (date: string) => void;
@@ -27,9 +27,9 @@ type AgendaScheduleViewProps = {
   onConfirmAppointment?: (id: string) => void;
   onAttendAppointment?: (id: string) => void;
   onMissAppointment?: (id: string) => void;
-  onRescheduleAppointment?: (appointment: Appointment) => void;
+  onRescheduleAppointment?: (appointment: T) => void;
   onCancelAppointment?: (id: string) => void;
-  renderDetailExtra?: (appointment: Appointment) => ReactNode;
+  renderDetailExtra?: (appointment: T) => ReactNode;
   emptyDetailLabel?: string;
 };
 
@@ -132,7 +132,7 @@ function badgeEstado(status: string | null) {
   }
 }
 
-function AppointmentCard({
+function AppointmentCard<T extends BaseAppointment>({
   appointment,
   onConfirmAppointment,
   onAttendAppointment,
@@ -141,13 +141,13 @@ function AppointmentCard({
   onCancelAppointment,
   renderDetailExtra,
 }: {
-  appointment: Appointment;
+  appointment: T;
   onConfirmAppointment?: (id: string) => void;
   onAttendAppointment?: (id: string) => void;
   onMissAppointment?: (id: string) => void;
-  onRescheduleAppointment?: (appointment: Appointment) => void;
+  onRescheduleAppointment?: (appointment: T) => void;
   onCancelAppointment?: (id: string) => void;
-  renderDetailExtra?: (appointment: Appointment) => ReactNode;
+  renderDetailExtra?: (appointment: T) => ReactNode;
 }) {
   const showActions =
     !!onConfirmAppointment ||
@@ -203,7 +203,7 @@ function AppointmentCard({
   );
 }
 
-export function AgendaScheduleView({
+export function AgendaScheduleView<T extends BaseAppointment>({
   appointments,
   selectedDate,
   viewMode,
@@ -216,7 +216,7 @@ export function AgendaScheduleView({
   onCancelAppointment,
   renderDetailExtra,
   emptyDetailLabel = "No hay citas para este dia.",
-}: AgendaScheduleViewProps) {
+}: AgendaScheduleViewProps<T>) {
   const weekDates = Array.from({ length: 7 }, (_, index) => addDaysToISO(startOfWeekISO(selectedDate), index));
   const monthDates = buildMonthDates(selectedDate);
   const visibleAppointments =
@@ -228,10 +228,10 @@ export function AgendaScheduleView({
   const selectedDayAppointments = appointments.filter((appointment) => appointment.fecha === selectedDate);
 
   const groupedDates = (dates: string[]) =>
-    dates.reduce<Map<string, Appointment[]>>((acc, date) => {
+    dates.reduce<Map<string, T[]>>((acc, date) => {
       acc.set(date, appointments.filter((appointment) => appointment.fecha === date));
       return acc;
-    }, new Map<string, Appointment[]>());
+    }, new Map<string, T[]>());
 
   const weekMap = groupedDates(weekDates);
   const monthMap = groupedDates(monthDates);
