@@ -19,6 +19,7 @@ import { hoyISO, dateToLocalISO, isSameLocalDay } from "@/lib/datetime/dateHelpe
 import { formatDate, formatDateOnly } from "@/lib/datetime/dateFormat";
 import { traducirEstadoComercial, commercialStatusClass } from "@/lib/status/commercialStatus";
 import { getSectionForService } from "@/lib/agenda/agendaSections";
+import { specialistMatchesService } from "@/lib/agenda/specialists";
 import {
   ACTIVE_APPOINTMENT_STATUSES,
   DEFAULT_DAILY_CAPACITY,
@@ -614,6 +615,20 @@ export default function ComercialPage() {
     ]
   );
 
+  const primaryFollowUpSpecialists = useMemo(() => {
+    if (!form.next_step_type) return [];
+    return specialists.filter((item) =>
+      specialistMatchesService(form.next_step_type, item.role_code)
+    );
+  }, [form.next_step_type, specialists]);
+
+  function getSpecialistsForService(serviceType: string) {
+    if (!serviceType) return [];
+    return specialists.filter((item) =>
+      specialistMatchesService(serviceType, item.role_code)
+    );
+  }
+
   useEffect(() => {
     setForm((prev) => ({
       ...prev,
@@ -645,6 +660,33 @@ export default function ComercialPage() {
     form.next_step_type,
     primaryFollowUpAvailability,
   ]);
+
+  useEffect(() => {
+    if (!form.next_specialist_user_id) return;
+    if (primaryFollowUpSpecialists.some((item) => item.id === form.next_specialist_user_id)) {
+      return;
+    }
+
+    setForm((prev) => ({
+      ...prev,
+      next_specialist_user_id: "",
+    }));
+  }, [form.next_specialist_user_id, primaryFollowUpSpecialists]);
+
+  useEffect(() => {
+    setNextAppointments((prev) =>
+      prev.map((item) =>
+        item.specialist_user_id &&
+        !specialists.some(
+          (specialist) =>
+            specialist.id === item.specialist_user_id &&
+            specialistMatchesService(item.service_type, specialist.role_code)
+        )
+          ? { ...item, specialist_user_id: "" }
+          : item
+      )
+    );
+  }, [specialists]);
 
   useEffect(() => {
     if (nextAppointments.length === 0) return;
@@ -974,6 +1016,7 @@ export default function ComercialPage() {
         itemIndex === index
           ? {
               ...item,
+              ...(field === "service_type" ? { specialist_user_id: "" } : {}),
               [field]: value,
             }
           : item
@@ -2002,6 +2045,7 @@ const updatePayload: any = {
                             setForm((prev) => ({
                               ...prev,
                               next_step_type: e.target.value,
+                              next_specialist_user_id: "",
                             }))
                           }
                         >
@@ -2028,7 +2072,7 @@ const updatePayload: any = {
                           }
                         >
                           <option value="">Selecciona</option>
-                          {specialists.map((item) => (
+                          {primaryFollowUpSpecialists.map((item) => (
                             <option key={item.id} value={item.id}>
                               {item.full_name} · {item.role_name}
                             </option>
@@ -2175,7 +2219,7 @@ const updatePayload: any = {
                                   }
                                 >
                                   <option value="">Selecciona</option>
-                                  {specialists.map((option) => (
+                                  {getSpecialistsForService(item.service_type).map((option) => (
                                     <option key={option.id} value={option.id}>
                                       {option.full_name} Â· {option.role_name}
                                     </option>

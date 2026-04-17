@@ -30,6 +30,7 @@ import {
   getServiceFieldLabel,
   getServiceOptionsBySection,
 } from "@/lib/agenda/agendaSections";
+import { specialistMatchesService } from "@/lib/agenda/specialists";
 import {
   SLOT_OPTIONS,
   ACTIVE_APPOINTMENT_STATUSES,
@@ -64,6 +65,7 @@ type AppointmentRow = {
   appointment_time: string;
   status: string;
   service_type: string | null;
+  specialist_user_id: string | null;
   notes: string | null;
   checked_in_at: string | null;
   attended_at: string | null;
@@ -75,6 +77,13 @@ type UserRow = {
   documento: string | null;
   telefono: string | null;
   ciudad: string | null;
+};
+
+type SpecialistOption = {
+  id: string;
+  full_name: string;
+  role_name: string;
+  role_code: string;
 };
 
 
@@ -98,6 +107,7 @@ type SlotOption = {
 
 type ReceptionFollowUpDraft = {
   service_type: string;
+  specialist_user_id: string;
   appointment_date: string;
   appointment_time: string;
   duration_minutes: string;
@@ -948,9 +958,41 @@ function normalizarHora(value: string) {
   return value.slice(0, 5);
 }
 
+function startOfWeekISO(isoDate: string) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  const dayOfWeek = date.getDay();
+  const offset = dayOfWeek === 0 ? -6 : 1 - dayOfWeek;
+  date.setDate(date.getDate() + offset);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function addDaysToISO(isoDate: string, days: number) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day);
+  date.setDate(date.getDate() + days);
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, "0");
+  const d = String(date.getDate()).padStart(2, "0");
+  return `${y}-${m}-${d}`;
+}
+
+function formatWeekdayShort(isoDate: string) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("es-CO", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
 function createEmptyReceptionFollowUp(defaultDate: string, defaultTime: string): ReceptionFollowUpDraft {
   return {
     service_type: "",
+    specialist_user_id: "",
     appointment_date: defaultDate,
     appointment_time: defaultTime,
     duration_minutes: "30",
@@ -1037,6 +1079,7 @@ function RecepcionContent() {
   const [savingCommercialIntake, setSavingCommercialIntake] = useState(false);
   const [commercialSearch, setCommercialSearch] = useState("");
   const [sourceUsers, setSourceUsers] = useState<SourceUserOption[]>([]);
+  const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
   const [lastCommercialPrintData, setLastCommercialPrintData] =
     useState<Parameters<typeof printReceptionRecord>[0] | null>(null);
   const [commercialForm, setCommercialForm] = useState({
@@ -1084,6 +1127,7 @@ function RecepcionContent() {
     duration_minutes: "30",
     status: "agendada",
     service_type: "",
+    specialist_user_id: "",
     notes: "",
   });
 
@@ -1093,10 +1137,16 @@ function RecepcionContent() {
   const isCommercialReceptionOnly =
     currentRoleCode === "comercial" || currentRoleCode === "gerencia_comercial";
 
+  const isEmbeddedCommercialCreationView =
+    receptionView === "comercial" && isCommercialReceptionOnly;
+
   const isLimitedReceptionForCall =
     currentRoleCode === "tmk" ||
     currentRoleCode === "confirmador" ||
     currentRoleCode === "supervisor_call_center";
+
+  const commercialBackHref =
+    currentRoleCode === "gerencia_comercial" ? "/gerencia/comercial" : "/comercial";
 
   const serviceOptions = useMemo(() => activeSection === "nutricion_entregas" ? [] : getServiceOptionsBySection(activeSection), [activeSection]);
   const serviceFieldLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Servicio" : getServiceFieldLabel(activeSection), [activeSection]);
@@ -1104,6 +1154,25 @@ function RecepcionContent() {
   const durationOptions = useMemo(
     () => activeSection === "nutricion_entregas" ? [] : getDurationOptions(activeSection, form.service_type, form.appointment_date),
     [activeSection, form.service_type, form.appointment_date]
+  );
+
+  const filteredSpecialists = useMemo(() => {
+    if (activeSection !== "especialistas" && activeSection !== "tratamientos") {
+      return [];
+    }
+
+    return specialists.filter((item) => specialistMatchesService(form.service_type, item.role_code));
+  }, [activeSection, form.service_type, specialists]);
+
+  const specialistNameById = useMemo(
+    () =>
+      new Map(
+        specialists.map((item) => [
+          item.id,
+          `${item.full_name}${item.role_name ? ` · ${item.role_name}` : ""}`,
+        ])
+      ),
+    [specialists]
   );
 
   const canManageAgendaConfig =
@@ -1132,6 +1201,31 @@ function RecepcionContent() {
     [sourceUsers, commercialForm.fuente_usuario_id]
   );
   const occupationNeedsDetail = shouldAskOccupationDetail(commercialForm.ocupacion);
+
+  useEffect(() => {
+    if (!form.specialist_user_id) return;
+    if (filteredSpecialists.some((item) => item.id === form.specialist_user_id)) return;
+
+    setForm((prev) => ({
+      ...prev,
+      specialist_user_id: "",
+    }));
+  }, [filteredSpecialists, form.specialist_user_id]);
+
+  useEffect(() => {
+    setExtraAppointments((prev) =>
+      prev.map((item) =>
+        item.specialist_user_id &&
+        !specialists.some(
+          (specialist) =>
+            specialist.id === item.specialist_user_id &&
+            specialistMatchesService(item.service_type, specialist.role_code)
+        )
+          ? { ...item, specialist_user_id: "" }
+          : item
+      )
+    );
+  }, [specialists]);
 
   async function findExistingUserByLookup(rawLookup: string) {
     const normalizedLookup = rawLookup.trim();
@@ -1399,6 +1493,7 @@ function RecepcionContent() {
             appointment_time,
             status,
             service_type,
+            specialist_user_id,
             notes,
             checked_in_at,
             attended_at
@@ -1488,21 +1583,31 @@ function RecepcionContent() {
       const commercialCasesData = (commercialCasesResult.data as CommercialCaseRow[]) || [];
       const sourceUserRows = (sourceUsersResult.data as any[]) || [];
       const sourceUserMap = new Map<string, SourceUserOption>();
+      const specialistMap = new Map<string, SpecialistOption>();
       sourceUserRows.forEach((row) => {
         const roleCode = row.roles?.code || "";
-        if (!["promotor_opc", "supervisor_opc", "tmk", "confirmador", "supervisor_call_center"].includes(roleCode)) {
-          return;
-        }
-
         const id = row.profiles?.id || row.user_id;
-        if (!id || sourceUserMap.has(id)) return;
-
-        sourceUserMap.set(id, {
+        if (!id) return;
+        const normalizedRow = {
           id,
           full_name: row.profiles?.full_name || "Sin nombre",
           role_name: row.roles?.name || "",
           role_code: roleCode,
-        });
+        };
+
+        if (
+          ["promotor_opc", "supervisor_opc", "tmk", "confirmador", "supervisor_call_center"].includes(roleCode) &&
+          !sourceUserMap.has(id)
+        ) {
+          sourceUserMap.set(id, normalizedRow);
+        }
+
+        if (
+          ["nutricionista", "medico_general", "medico", "fisioterapeuta"].includes(roleCode) &&
+          !specialistMap.has(id)
+        ) {
+          specialistMap.set(id, normalizedRow);
+        }
       });
 
       const hoy = hoyISO();
@@ -1567,6 +1672,11 @@ function RecepcionContent() {
       setCommercialCases(commercialCasesData);
       setSourceUsers(
         Array.from(sourceUserMap.values()).sort((a, b) =>
+          a.full_name.localeCompare(b.full_name, "es")
+        )
+      );
+      setSpecialists(
+        Array.from(specialistMap.values()).sort((a, b) =>
           a.full_name.localeCompare(b.full_name, "es")
         )
       );
@@ -1802,6 +1912,45 @@ function RecepcionContent() {
     };
   }, [appointments, fechaFiltro, activeSection]);
 
+  const weeklyAnchorDate = fechaFiltro || hoyISO();
+  const weeklyAgendaDates = useMemo(() => {
+    const start = startOfWeekISO(weeklyAnchorDate);
+    return Array.from({ length: 7 }, (_, index) => addDaysToISO(start, index));
+  }, [weeklyAnchorDate]);
+
+  const weeklyAgendaByDate = useMemo(() => {
+    const q = busquedaAgenda.trim().toLowerCase();
+    const grouped = new Map<string, AppointmentRow[]>();
+
+    weeklyAgendaDates.forEach((date) => grouped.set(date, []));
+
+    appointments
+      .filter((item) => weeklyAgendaDates.includes(item.appointment_date))
+      .filter((item) => appointmentMatchesActiveSection(item))
+      .filter((item) => {
+        if (!q) return true;
+        const specialistName = specialistNameById.get(item.specialist_user_id || "") || "";
+        return (
+          (item.patient_name || "").toLowerCase().includes(q) ||
+          (item.phone || "").toLowerCase().includes(q) ||
+          specialistName.toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => {
+        if (a.appointment_date !== b.appointment_date) {
+          return a.appointment_date.localeCompare(b.appointment_date);
+        }
+        return normalizarHora(a.appointment_time).localeCompare(normalizarHora(b.appointment_time));
+      })
+      .forEach((item) => {
+        const bucket = grouped.get(item.appointment_date) || [];
+        bucket.push(item);
+        grouped.set(item.appointment_date, bucket);
+      });
+
+    return grouped;
+  }, [appointments, weeklyAgendaDates, activeSection, busquedaAgenda, specialistNameById]);
+
   const selectedDaySetting = daySettings[form.appointment_date];
   const selectedDateDailyCapacity =
     selectedDaySetting?.daily_capacity ?? DEFAULT_DAILY_CAPACITY;
@@ -1861,6 +2010,7 @@ function RecepcionContent() {
           appointment_time: item.appointment_time,
           status: "agendada",
           service_type: item.service_type,
+          specialist_user_id: item.specialist_user_id || null,
           notes: construirNotasAgenda({
             notes: item.notes,
             manualSource: form.mode === "manual" ? form.manual_source : "",
@@ -2972,6 +3122,10 @@ function imprimirRegistroComercial() {
         activeSection === "agenda"
           ? "valoracion"
           : form.service_type || null,
+      specialist_user_id:
+        activeSection === "especialistas" || activeSection === "tratamientos"
+          ? form.specialist_user_id || null
+          : null,
       notes: construirNotasAgenda({
         notes: form.notes,
         manualSource: form.mode === "manual" ? form.manual_source : "",
@@ -3238,6 +3392,7 @@ function imprimirRegistroComercial() {
       duration_minutes: activeSection === "tratamientos" ? "30" : "30",
       status: "agendada",
       service_type: "",
+      specialist_user_id: "",
       notes: "",
     });
     setBusquedaLead("");
@@ -3262,6 +3417,7 @@ function imprimirRegistroComercial() {
       duration_minutes: String(extraerDuracionDesdeNotas(item.notes)),
       status: item.status || "agendada",
       service_type: item.service_type || "",
+      specialist_user_id: item.specialist_user_id || "",
       notes: limpiarMetadatosAgenda(item.notes),
     });
     window.scrollTo({ top: 0, behavior: "smooth" });
@@ -3419,6 +3575,14 @@ function imprimirRegistroComercial() {
       return;
     }
 
+    if (
+      (activeSection === "especialistas" || activeSection === "tratamientos") &&
+      !form.specialist_user_id.trim()
+    ) {
+      setError("Debes seleccionar el profesional asignado para esta cita.");
+      return;
+    }
+
     const durationMinutes = Number(form.duration_minutes || "30");
     const durationOptionsForCurrentForm = getDurationOptions(
       activeSection,
@@ -3484,6 +3648,10 @@ function imprimirRegistroComercial() {
           activeSection === "agenda"
             ? "valoracion"
             : form.service_type || null,
+        specialist_user_id:
+          activeSection === "especialistas" || activeSection === "tratamientos"
+            ? form.specialist_user_id || null
+            : null,
         notes:
           construirNotasAgenda({
             notes: form.notes,
@@ -3704,6 +3872,35 @@ function imprimirRegistroComercial() {
           </div>
         </div>
 
+        {isEmbeddedCommercialCreationView ? (
+          <section className="relative mb-6 overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.96)_58%,_rgba(233,246,238,0.94)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.14)]">
+            <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
+            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
+              <div>
+                <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">
+                  Comercial
+                </p>
+                <h1 className="mt-3 text-3xl font-bold tracking-tight text-[#1F3128] md:text-[2.7rem]">
+                  Crear cliente
+                </h1>
+                <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
+                  Usa este formulario para registrar el cliente sin abrir el mÃ³dulo completo de recepciÃ³n.
+                </p>
+              </div>
+
+              <SessionBadge />
+            </div>
+
+            <div className="mt-4 flex flex-wrap gap-3">
+              <a
+                href={commercialBackHref}
+                className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+              >
+                Volver
+              </a>
+            </div>
+          </section>
+        ) : (
         <section className="relative mb-6 overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(242,251,246,0.95)_52%,_rgba(231,245,236,0.92)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.16)]">
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
@@ -3798,6 +3995,7 @@ function imprimirRegistroComercial() {
             )}
           </div>
         </section>
+        )}
 
         {error ? (
           <div className="mb-6 rounded-[26px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-4 text-sm text-[#9A4E43] shadow-[0_16px_32px_rgba(150,102,95,0.08)]">
@@ -3811,7 +4009,7 @@ function imprimirRegistroComercial() {
           </div>
         ) : null}
 
-        {!isLimitedReceptionForCall ? (
+        {!isLimitedReceptionForCall && !isEmbeddedCommercialCreationView ? (
           <section className="mb-6 overflow-hidden rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(243,251,246,0.98)_58%,_rgba(231,244,236,0.96)_100%)] p-6 shadow-[0_24px_58px_rgba(95,125,102,0.14)]">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>
@@ -4022,7 +4220,7 @@ function imprimirRegistroComercial() {
           </section>
         ) : null}
 
-        {!isReadOnlyAgendaForCall && (
+        {!isReadOnlyAgendaForCall && !isEmbeddedCommercialCreationView && (
           activeSection === "comercial" ? (
             <section className="mb-6 grid gap-4 md:grid-cols-5">
               <StatCard title="Ingresos comerciales" value={String(commercialSummary.total)} />
@@ -4168,7 +4366,7 @@ function imprimirRegistroComercial() {
         ) : null}
 
         {activeSection === "comercial" && !isReadOnlyAgendaForCall ? (
-          <section className="mb-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
+          <section className={`mb-6 grid gap-6 ${isEmbeddedCommercialCreationView ? "" : "xl:grid-cols-[1.05fr_0.95fr]"}`}>
             <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
               <div className="flex items-start justify-between gap-4">
                 <div>
@@ -4812,6 +5010,7 @@ function imprimirRegistroComercial() {
               </form>
             </div>
 
+            {!isEmbeddedCommercialCreationView ? (
             <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
@@ -4864,6 +5063,7 @@ function imprimirRegistroComercial() {
                 )}
               </div>
             </div>
+            ) : null}
           </section>
         ) : activeSection === "nutricion_entregas" && !isReadOnlyAgendaForCall ? (
           <section className="mb-6 grid gap-6 xl:grid-cols-[1.05fr_0.95fr]">
@@ -5661,7 +5861,11 @@ function imprimirRegistroComercial() {
                           className={inputClass}
                           value={form.service_type}
                           onChange={(e) =>
-                            setForm((prev) => ({ ...prev, service_type: e.target.value }))
+                            setForm((prev) => ({
+                              ...prev,
+                              service_type: e.target.value,
+                              specialist_user_id: "",
+                            }))
                           }
                         >
                           <option value="">Selecciona</option>
@@ -5698,6 +5902,40 @@ function imprimirRegistroComercial() {
                       }
                     />
                   </>
+                ) : null}
+
+                {activeSection === "especialistas" || activeSection === "tratamientos" ? (
+                  <Field
+                    label="Especialista"
+                    input={
+                      <select
+                        className={inputClass}
+                        value={form.specialist_user_id}
+                        onChange={(e) =>
+                          setForm((prev) => ({
+                            ...prev,
+                            specialist_user_id: e.target.value,
+                          }))
+                        }
+                        disabled={!form.service_type || filteredSpecialists.length === 0}
+                      >
+                        {!form.service_type ? (
+                          <option value="">Primero elige el servicio</option>
+                        ) : filteredSpecialists.length === 0 ? (
+                          <option value="">Sin especialistas disponibles</option>
+                        ) : (
+                          <>
+                            <option value="">Selecciona</option>
+                            {filteredSpecialists.map((item) => (
+                              <option key={item.id} value={item.id}>
+                                {item.full_name} · {item.role_name}
+                              </option>
+                            ))}
+                          </>
+                        )}
+                      </select>
+                    }
+                  />
                 ) : null}
 
                 <Field
@@ -5828,6 +6066,99 @@ function imprimirRegistroComercial() {
                 />
               </div>
 
+              <div className="mb-6 rounded-[24px] border border-[#D7EADF] bg-[linear-gradient(180deg,_rgba(248,252,249,0.98)_0%,_rgba(240,248,242,0.98)_100%)] p-4 shadow-inner">
+                <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-semibold text-[#24312A]">Agenda semanal</h3>
+                    <p className="mt-1 text-sm text-[#607368]">
+                      Semana organizada desde {formatWeekdayShort(weeklyAgendaDates[0])} hasta{" "}
+                      {formatWeekdayShort(weeklyAgendaDates[weeklyAgendaDates.length - 1])}.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setFechaFiltro(addDaysToISO(weeklyAnchorDate, -7))}
+                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
+                    >
+                      Semana anterior
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFechaFiltro(hoyISO())}
+                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
+                    >
+                      Semana actual
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFechaFiltro(addDaysToISO(weeklyAnchorDate, 7))}
+                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
+                    >
+                      Semana siguiente
+                    </button>
+                  </div>
+                </div>
+
+                <div className="grid gap-3 xl:grid-cols-7">
+                  {weeklyAgendaDates.map((date) => {
+                    const items = weeklyAgendaByDate.get(date) || [];
+                    return (
+                      <div
+                        key={date}
+                        className={`rounded-[22px] border p-4 ${
+                          date === hoyISO()
+                            ? "border-[#9BC4AF] bg-white shadow-sm"
+                            : "border-[#E1ECE4] bg-white/82"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-semibold text-[#24312A]">
+                            {formatWeekdayShort(date)}
+                          </p>
+                          <span className="rounded-full bg-[#EEF7F1] px-2.5 py-1 text-xs font-semibold text-[#4F6F5B]">
+                            {items.length}
+                          </span>
+                        </div>
+
+                        <div className="mt-3 space-y-2">
+                          {items.length === 0 ? (
+                            <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-3 text-xs text-[#607368]">
+                              Sin citas
+                            </div>
+                          ) : (
+                            items.map((item) => (
+                              <button
+                                key={item.id}
+                                type="button"
+                                onClick={() => seleccionarCitaRapida(item)}
+                                className="w-full rounded-2xl border border-[#DCEBE1] bg-[#FCFEFC] p-3 text-left transition hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                              >
+                                <p className="text-xs font-semibold text-[#4F6F5B]">
+                                  {formatHora(item.appointment_time)}
+                                </p>
+                                <p className="mt-1 text-sm font-semibold text-[#24312A]">
+                                  {item.patient_name}
+                                </p>
+                                <p className="mt-1 text-xs text-[#607368]">
+                                  {item.service_type || "Sin servicio"}
+                                </p>
+                                {item.specialist_user_id ? (
+                                  <p className="mt-1 text-xs text-[#607368]">
+                                    {specialistNameById.get(item.specialist_user_id) || "Sin asignar"}
+                                  </p>
+                                ) : null}
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
               {loading ? (
                 <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                   Cargando citas...
@@ -5895,6 +6226,13 @@ function imprimirRegistroComercial() {
                             <p className="mt-1 text-sm text-[#5F7468]">
                               {getServiceFieldLabel(getSectionForService(item.service_type))}: {item.service_type || "Sin dato"}
                             </p>
+
+                            {item.specialist_user_id ? (
+                              <p className="mt-1 text-sm text-[#5F7468]">
+                                Profesional:{" "}
+                                {specialistNameById.get(item.specialist_user_id) || "Sin asignar"}
+                              </p>
+                            ) : null}
 
                             {item.notes ? (
                               <p className="mt-2 text-sm text-[#5F7468]">
