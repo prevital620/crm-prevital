@@ -82,7 +82,6 @@ const allowedRoles = [
   "super_user",
   "supervisor_call_center",
   "confirmador",
-  "tmk",
 ];
 
 const ACTIVE_APPOINTMENT_STATUSES = [

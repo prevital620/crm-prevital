@@ -709,7 +709,7 @@ export default function LeadsPage() {
                     Leads visibles para tu rol
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-[#51695C]">
-                    Busca por nombre, telÃ©fono o nombre del OPC y filtra por fecha.
+                    {"Busca por nombre, teléfono o nombre del OPC y filtra por fecha."}
                   </p>
                 </div>
 
@@ -757,7 +757,7 @@ export default function LeadsPage() {
                 <input
                   className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
-                  placeholder="Buscar por nombre, telÃ©fono u OPC"
+                  placeholder={"Buscar por nombre, teléfono u OPC"}
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -799,7 +799,9 @@ export default function LeadsPage() {
                           </div>
 
                           <p className="text-sm text-slate-700">
-                            {lead.phone} Â· {lead.city || "Sin ciudad"}
+                            {lead.phone}
+                            {" · "}
+                            {lead.city || "Sin ciudad"}
                           </p>
 
                           <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
@@ -861,7 +863,7 @@ export default function LeadsPage() {
                 <input
                   className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
-                  placeholder="Buscar por nombre o telÃ©fono"
+                  placeholder={"Buscar por nombre o teléfono"}
                   value={appointmentsSearch}
                   onChange={(e) => setAppointmentsSearch(e.target.value)}
                 />
@@ -901,13 +903,18 @@ export default function LeadsPage() {
                           </div>
 
                           <p className="text-sm text-slate-700">
-                            {appointment.phone || "Sin telÃ©fono"} Â· {appointment.city || "Sin ciudad"}
+                            {appointment.phone || "Sin teléfono"}
+                            {" · "}
+                            {appointment.city || "Sin ciudad"}
                           </p>
 
                           <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
                             <p>Servicio: {translateService(appointment.service_type)}</p>
                             <p>
-                              Fecha: {appointment.appointment_date} Â· Hora: {appointment.appointment_time?.slice(0, 5)}
+                              {"Fecha: "}
+                              {appointment.appointment_date}
+                              {" · Hora: "}
+                              {appointment.appointment_time?.slice(0, 5)}
                             </p>
                             <p className="md:col-span-2">
                               OPC:{" "}
@@ -944,8 +951,8 @@ export default function LeadsPage() {
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {showCreatorColumn
-                    ? "Busca por nombre, telÃ©fono o nombre del OPC y filtra por fecha."
-                    : "Busca por nombre o telÃ©fono y filtra por fecha."}
+                    ? "Busca por nombre, teléfono o nombre del OPC y filtra por fecha."
+                    : "Busca por nombre o teléfono y filtra por fecha."}
                 </p>
               </div>
 
@@ -970,8 +977,8 @@ export default function LeadsPage() {
                 type="text"
                 placeholder={
                   showCreatorColumn
-                    ? "Buscar por nombre, telÃ©fono u OPC"
-                    : "Buscar por nombre o telÃ©fono"
+                    ? "Buscar por nombre, teléfono u OPC"
+                    : "Buscar por nombre o teléfono"
                 }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}

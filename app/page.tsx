@@ -99,7 +99,7 @@ const quickActions: QuickAction[] = [
     title: "Call Center",
     subtitle: "Asignar y gestionar leads del call center.",
     href: "/call-center",
-    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
+    roles: ["super_user", "supervisor_call_center", "confirmador"],
   },
   {
     title: "Ver agenda",
