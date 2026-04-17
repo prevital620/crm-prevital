@@ -368,7 +368,7 @@ export default function CallCenterPage() {
       setSelectedStatuses(statuses);
       setSelectedCommissionSources(commissionSources);
     } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar los datos del mÃƒÂ³dulo.");
+      setError(err?.message || "No se pudieron cargar los datos del mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³dulo.");
     } finally {
       setCargando(false);
     }
@@ -383,7 +383,7 @@ export default function CallCenterPage() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesiÃƒÂ³n para usar este mÃƒÂ³dulo.");
+        setError("Debes iniciar sesiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n para usar este mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³dulo.");
         return;
       }
 
@@ -430,8 +430,8 @@ export default function CallCenterPage() {
         .eq("id", leadId);
 
       if (error) {
-        console.error("Error guardando asignaciÃƒÂ³n:", error);
-        throw new Error(error.message || "No se pudo guardar la asignaciÃƒÂ³n.");
+        console.error("Error guardando asignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n:", error);
+        throw new Error(error.message || "No se pudo guardar la asignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.");
       }
 
       setLeads((prev) =>
@@ -444,11 +444,11 @@ export default function CallCenterPage() {
 
       setMensaje(
         assignedUserId
-          ? "AsignaciÃƒÂ³n guardada correctamente."
-          : "Se quitÃƒÂ³ la asignaciÃƒÂ³n correctamente."
+          ? "AsignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n guardada correctamente."
+          : "Se quitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ la asignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n correctamente."
       );
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la asignaciÃƒÂ³n.");
+      setError(err?.message || "No se pudo guardar la asignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.");
     } finally {
       setSavingLeadId(null);
     }
@@ -504,8 +504,8 @@ export default function CallCenterPage() {
         .eq("id", leadId);
 
       if (error) {
-        console.error("Error guardando fuente de comisiÃƒÂ³n:", error);
-        throw new Error(error.message || "No se pudo guardar la fuente de comisiÃƒÂ³n.");
+        console.error("Error guardando fuente de comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n:", error);
+        throw new Error(error.message || "No se pudo guardar la fuente de comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.");
       }
 
       setLeads((prev) =>
@@ -518,11 +518,11 @@ export default function CallCenterPage() {
 
       setMensaje(
         commissionSource
-          ? "Fuente para comisiÃƒÂ³n guardada correctamente."
-          : "Se limpiÃƒÂ³ la fuente para comisiÃƒÂ³n."
+          ? "Fuente para comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n guardada correctamente."
+          : "Se limpiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ la fuente para comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n."
       );
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la fuente para comisiÃƒÂ³n.");
+      setError(err?.message || "No se pudo guardar la fuente para comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.");
     } finally {
       setSavingCommissionLeadId(null);
     }
@@ -569,7 +569,7 @@ export default function CallCenterPage() {
         [lead.id]: "contactado",
       }));
 
-      setMensaje("Cita cancelada correctamente. El cupo quedÃƒÂ³ liberado.");
+      setMensaje("Cita cancelada correctamente. El cupo quedÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ liberado.");
     } catch (err: any) {
       setError(err?.message || "No se pudo cancelar la cita.");
     } finally {
@@ -800,7 +800,7 @@ export default function CallCenterPage() {
     { key: "todos", title: "Todos", value: resumen.total, highlight: false },
     {
       key: "sin_asignar_pendientes_no_contestan",
-      title: "Sin asignar nuevos / pendientes / no contestan (30 dÃƒÂ­as)",
+      title: "Sin asignar nuevos / pendientes / no contestan (30 d\u00EDas)",
       value: resumen.sinAsignarPendientesNoContestan,
       highlight: resumen.sinAsignarPendientesNoContestan > 0,
     },
@@ -1228,7 +1228,7 @@ export default function CallCenterPage() {
                       {canAssign ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
                           <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
-                            AsignaciÃƒÂ³n Call Center
+                            Asignaci\u00F3n Call Center
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
@@ -1245,7 +1245,7 @@ export default function CallCenterPage() {
                               <option value="">Sin asignar</option>
                               {callCenterUsers.map((user) => (
                                 <option key={user.id} value={user.id}>
-                                  {user.full_name} Ã‚Â· {user.role_name}
+                                  {user.full_name} {" \u00B7 "} {user.role_name}
                                 </option>
                               ))}
                             </select>
@@ -1258,7 +1258,7 @@ export default function CallCenterPage() {
                             >
                               {savingLeadId === lead.id
                                 ? "Guardando..."
-                                : "Guardar asignaciÃƒÂ³n"}
+                                : "Guardar asignaci\u00F3n"}
                             </button>
                           </div>
                         </div>
@@ -1267,7 +1267,7 @@ export default function CallCenterPage() {
                       {canManageCommissionSource ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
                           <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
-                            Fuente para comisiÃƒÂ³n
+                            Fuente para comisi\u00F3n
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
