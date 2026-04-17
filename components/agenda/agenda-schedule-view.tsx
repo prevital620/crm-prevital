@@ -1,5 +1,7 @@
 "use client";
 
+import type { ReactNode } from "react";
+
 type Appointment = {
   id: string;
   usuario_nombre: string | null;
@@ -22,11 +24,13 @@ type AgendaScheduleViewProps = {
   viewMode: ViewMode;
   onChangeDate: (date: string) => void;
   onChangeViewMode: (mode: ViewMode) => void;
-  onConfirmAppointment: (id: string) => void;
-  onAttendAppointment: (id: string) => void;
-  onMissAppointment: (id: string) => void;
-  onRescheduleAppointment: (appointment: Appointment) => void;
-  onCancelAppointment: (id: string) => void;
+  onConfirmAppointment?: (id: string) => void;
+  onAttendAppointment?: (id: string) => void;
+  onMissAppointment?: (id: string) => void;
+  onRescheduleAppointment?: (appointment: Appointment) => void;
+  onCancelAppointment?: (id: string) => void;
+  renderDetailExtra?: (appointment: Appointment) => ReactNode;
+  emptyDetailLabel?: string;
 };
 
 const secondaryButtonClass =
@@ -81,6 +85,10 @@ function buildMonthDates(isoDate: string) {
   return Array.from({ length: 42 }, (_, index) => addDaysToISO(calendarStart, index));
 }
 
+function isSameMonthISO(dateA: string, dateB: string) {
+  return dateA.slice(0, 7) === dateB.slice(0, 7);
+}
+
 function formatWeekdayShort(isoDate: string) {
   const [year, month, day] = isoDate.split("-").map(Number);
   return new Date(year, month - 1, day).toLocaleDateString("es-CO", {
@@ -131,14 +139,23 @@ function AppointmentCard({
   onMissAppointment,
   onRescheduleAppointment,
   onCancelAppointment,
+  renderDetailExtra,
 }: {
   appointment: Appointment;
-  onConfirmAppointment: (id: string) => void;
-  onAttendAppointment: (id: string) => void;
-  onMissAppointment: (id: string) => void;
-  onRescheduleAppointment: (appointment: Appointment) => void;
-  onCancelAppointment: (id: string) => void;
+  onConfirmAppointment?: (id: string) => void;
+  onAttendAppointment?: (id: string) => void;
+  onMissAppointment?: (id: string) => void;
+  onRescheduleAppointment?: (appointment: Appointment) => void;
+  onCancelAppointment?: (id: string) => void;
+  renderDetailExtra?: (appointment: Appointment) => ReactNode;
 }) {
+  const showActions =
+    !!onConfirmAppointment ||
+    !!onAttendAppointment ||
+    !!onMissAppointment ||
+    !!onRescheduleAppointment ||
+    !!onCancelAppointment;
+
   return (
     <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_16px_34px_rgba(95,125,102,0.08)]">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -161,14 +178,27 @@ function AppointmentCard({
             {appointment.sede || "No registrada"}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <button onClick={() => onConfirmAppointment(appointment.id)} className={smallActionButtonClass}>Confirmar</button>
-          <button onClick={() => onAttendAppointment(appointment.id)} className={smallActionButtonClass}>Asistio</button>
-          <button onClick={() => onMissAppointment(appointment.id)} className={smallActionButtonClass}>No asistio</button>
-          <button onClick={() => onRescheduleAppointment(appointment)} className={smallActionButtonClass}>Reagendar</button>
-          <button onClick={() => onCancelAppointment(appointment.id)} className={smallActionButtonClass}>Cancelar</button>
-        </div>
+        {showActions ? (
+          <div className="flex flex-wrap gap-2">
+            {onConfirmAppointment ? (
+              <button onClick={() => onConfirmAppointment(appointment.id)} className={smallActionButtonClass}>Confirmar</button>
+            ) : null}
+            {onAttendAppointment ? (
+              <button onClick={() => onAttendAppointment(appointment.id)} className={smallActionButtonClass}>Asistio</button>
+            ) : null}
+            {onMissAppointment ? (
+              <button onClick={() => onMissAppointment(appointment.id)} className={smallActionButtonClass}>No asistio</button>
+            ) : null}
+            {onRescheduleAppointment ? (
+              <button onClick={() => onRescheduleAppointment(appointment)} className={smallActionButtonClass}>Reagendar</button>
+            ) : null}
+            {onCancelAppointment ? (
+              <button onClick={() => onCancelAppointment(appointment.id)} className={smallActionButtonClass}>Cancelar</button>
+            ) : null}
+          </div>
+        ) : null}
       </div>
+      {renderDetailExtra ? <div className="mt-4">{renderDetailExtra(appointment)}</div> : null}
     </div>
   );
 }
@@ -184,6 +214,8 @@ export function AgendaScheduleView({
   onMissAppointment,
   onRescheduleAppointment,
   onCancelAppointment,
+  renderDetailExtra,
+  emptyDetailLabel = "No hay citas para este dia.",
 }: AgendaScheduleViewProps) {
   const weekDates = Array.from({ length: 7 }, (_, index) => addDaysToISO(startOfWeekISO(selectedDate), index));
   const monthDates = buildMonthDates(selectedDate);
@@ -263,6 +295,7 @@ export function AgendaScheduleView({
               onMissAppointment={onMissAppointment}
               onRescheduleAppointment={onRescheduleAppointment}
               onCancelAppointment={onCancelAppointment}
+              renderDetailExtra={renderDetailExtra}
             />
           ))}
         </div>
@@ -309,7 +342,7 @@ export function AgendaScheduleView({
             </div>
             <div className="mt-4 space-y-4">
               {selectedDayAppointments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-4 text-sm text-[#607368]">No hay citas para este dia.</div>
+                <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-4 text-sm text-[#607368]">{emptyDetailLabel}</div>
               ) : (
                 selectedDayAppointments.map((appointment) => (
                   <AppointmentCard
@@ -320,6 +353,7 @@ export function AgendaScheduleView({
                     onMissAppointment={onMissAppointment}
                     onRescheduleAppointment={onRescheduleAppointment}
                     onCancelAppointment={onCancelAppointment}
+                    renderDetailExtra={renderDetailExtra}
                   />
                 ))
               )}
@@ -375,7 +409,7 @@ export function AgendaScheduleView({
             </div>
             <div className="mt-4 space-y-4">
               {selectedDayAppointments.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-4 text-sm text-[#607368]">No hay citas para este dia.</div>
+                <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-4 text-sm text-[#607368]">{emptyDetailLabel}</div>
               ) : (
                 selectedDayAppointments.map((appointment) => (
                   <AppointmentCard
@@ -386,6 +420,7 @@ export function AgendaScheduleView({
                     onMissAppointment={onMissAppointment}
                     onRescheduleAppointment={onRescheduleAppointment}
                     onCancelAppointment={onCancelAppointment}
+                    renderDetailExtra={renderDetailExtra}
                   />
                 ))
               )}

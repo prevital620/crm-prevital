@@ -4,6 +4,10 @@ import Link from "next/link";
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
+import {
+  AgendaScheduleView,
+  type ViewMode,
+} from "@/components/agenda/agenda-schedule-view";
 
 type AppointmentRow = {
   id: string;
@@ -35,46 +39,71 @@ export default function NutricionAgendaPage() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState(hoyISO());
+  const [viewMode, setViewMode] = useState<ViewMode>("dia");
 
   useEffect(() => {
+    let active = true;
+
+    async function loadAppointments() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const { data, error } = await supabase
+          .from("appointments")
+          .select(
+            "id, patient_name, phone, city, appointment_date, appointment_time, status, service_type"
+          )
+          .order("appointment_date", { ascending: true })
+          .order("appointment_time", { ascending: true });
+
+        if (error) throw error;
+        if (!active) return;
+
+        const filtered = ((data as AppointmentRow[]) || []).filter((item) => {
+          const service = (item.service_type || "").toLowerCase();
+          return service.includes("nutri");
+        });
+
+        setAppointments(filtered);
+      } catch (err: unknown) {
+        if (!active) return;
+        setError(err instanceof Error ? err.message : "No se pudieron cargar las citas de nutricion.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
     void loadAppointments();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  async function loadAppointments() {
-    try {
-      setLoading(true);
-      setError("");
-
-      const { data, error } = await supabase
-        .from("appointments")
-        .select("id, patient_name, phone, city, appointment_date, appointment_time, status, service_type")
-        .order("appointment_date", { ascending: true })
-        .order("appointment_time", { ascending: true });
-
-      if (error) throw error;
-
-      const filtered = ((data as AppointmentRow[]) || []).filter((item) => {
-        const service = (item.service_type || "").toLowerCase();
-        return service.includes("nutri");
-      });
-
-      setAppointments(filtered);
-    } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar las citas de nutrición.");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  const visibleAppointments = useMemo(() => {
+  const filteredAppointments = useMemo(() => {
     const q = search.trim().toLowerCase();
     return appointments.filter((item) => {
-      const byDate = dateFilter ? item.appointment_date === dateFilter : true;
       const text = `${item.patient_name || ""} ${item.phone || ""} ${item.city || ""}`.toLowerCase();
-      const bySearch = q ? text.includes(q) : true;
-      return byDate && bySearch;
+      return q ? text.includes(q) : true;
     });
-  }, [appointments, search, dateFilter]);
+  }, [appointments, search]);
+
+  const calendarAppointments = useMemo(() => {
+    return filteredAppointments.map((item) => ({
+      id: item.id,
+      usuario_nombre: item.patient_name || "Sin nombre",
+      documento: item.city || "Sin ciudad",
+      telefono: item.phone || "Sin telefono",
+      tipo_cita: item.service_type || "Nutricion",
+      profesional: null,
+      sede: item.city || null,
+      fecha: item.appointment_date,
+      hora: formatHora(item.appointment_time) || item.appointment_time,
+      estado: item.status || null,
+      observaciones: null,
+    }));
+  }, [filteredAppointments]);
 
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
@@ -96,13 +125,13 @@ export default function NutricionAgendaPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">
-                Módulo de Nutrición
+                Modulo de Nutricion
               </p>
               <h1 className="mt-2 text-3xl font-bold text-[#24312A]">
-                Agenda de nutrición
+                Agenda de nutricion
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-                Aquí solo deben aparecer citas reales de nutrición, no pacientes de ejemplo.
+                Consulta las citas reales de nutricion en vista diaria, semanal o mensual.
               </p>
             </div>
 
@@ -132,25 +161,22 @@ export default function NutricionAgendaPage() {
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
-              <h2 className="text-2xl font-bold text-[#24312A]">Citas visibles</h2>
+              <h2 className="text-2xl font-bold text-[#24312A]">Agenda visible</h2>
               <p className="mt-1 text-sm text-slate-500">
-                Abre una cita real para entrar a la atención nutricional.
+                Ahora puedes consultar la agenda en formato calendario completo.
               </p>
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
               <input
                 className="rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
-                placeholder="Buscar por nombre, teléfono o ciudad"
+                placeholder="Buscar por nombre, telefono o ciudad"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
               />
-              <input
-                className="rounded-2xl border border-[#D6E8DA] p-4 outline-none transition focus:border-[#7FA287]"
-                type="date"
-                value={dateFilter}
-                onChange={(e) => setDateFilter(e.target.value)}
-              />
+              <div className="rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4 text-sm text-slate-500">
+                Usa los botones de dia, semana o mes para ordenar mejor la agenda.
+              </div>
             </div>
           </div>
 
@@ -158,42 +184,29 @@ export default function NutricionAgendaPage() {
             <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#FBFCFB] p-6 text-sm text-slate-500">
               Cargando citas...
             </div>
-          ) : visibleAppointments.length === 0 ? (
+          ) : calendarAppointments.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#FBFCFB] p-6 text-sm text-slate-500">
-              No hay citas reales de nutrición con esos filtros.
+              No hay citas reales de nutricion con esos filtros.
             </div>
           ) : (
-            <div className="space-y-4">
-              {visibleAppointments.map((item) => (
-                <div
-                  key={item.id}
-                  className="rounded-3xl border border-[#D6E8DA] bg-[#FBFCFB] p-5 shadow-sm"
-                >
-                  <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                    <div>
-                      <h3 className="text-lg font-semibold text-[#24312A]">{item.patient_name || "Sin nombre"}</h3>
-                      <p className="mt-2 text-sm text-slate-600">{item.phone || "Sin teléfono"}</p>
-                      <p className="mt-1 text-sm text-slate-600">{item.city || "Sin ciudad"}</p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        {item.appointment_date} · {formatHora(item.appointment_time)}
-                      </p>
-                      <p className="mt-1 text-sm text-slate-600">
-                        Estado: {item.status || "Sin estado"}
-                      </p>
-                    </div>
-
-                    <div className="flex flex-wrap gap-3">
-                      <Link
-                        href={`/nutricion/atencion/${item.id}`}
-                        className="inline-flex items-center justify-center rounded-2xl bg-[#0DA56F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0B8E5F]"
-                      >
-                        Abrir atención
-                      </Link>
-                    </div>
-                  </div>
+            <AgendaScheduleView
+              appointments={calendarAppointments}
+              selectedDate={dateFilter}
+              viewMode={viewMode}
+              onChangeDate={setDateFilter}
+              onChangeViewMode={setViewMode}
+              emptyDetailLabel="No hay citas de nutricion para este dia."
+              renderDetailExtra={(appointment) => (
+                <div className="flex flex-wrap gap-3">
+                  <Link
+                    href={`/nutricion/atencion/${appointment.id}`}
+                    className="inline-flex items-center justify-center rounded-2xl bg-[#0DA56F] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#0B8E5F]"
+                  >
+                    Abrir atencion
+                  </Link>
                 </div>
-              ))}
-            </div>
+              )}
+            />
           )}
         </section>
       </div>

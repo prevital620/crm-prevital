@@ -989,6 +989,17 @@ function formatWeekdayShort(isoDate: string) {
   });
 }
 
+function buildMonthCalendarDates(isoDate: string) {
+  const [year, month] = isoDate.split("-").map(Number);
+  const firstDate = `${year}-${String(month).padStart(2, "0")}-01`;
+  const start = startOfWeekISO(firstDate);
+  return Array.from({ length: 42 }, (_, index) => addDaysToISO(start, index));
+}
+
+function isSameMonthISO(firstDate: string, secondDate: string) {
+  return firstDate.slice(0, 7) === secondDate.slice(0, 7);
+}
+
 function createEmptyReceptionFollowUp(defaultDate: string, defaultTime: string): ReceptionFollowUpDraft {
   return {
     service_type: "",
@@ -1026,7 +1037,7 @@ function RecepcionContent() {
 
   const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
   const [busquedaAgenda, setBusquedaAgenda] = useState("");
-  const [showWeeklyAgenda, setShowWeeklyAgenda] = useState(false);
+  const [agendaViewMode, setAgendaViewMode] = useState<"dia" | "semana" | "mes">("dia");
   const [busquedaLead, setBusquedaLead] = useState("");
   const [manualClientLookup, setManualClientLookup] = useState("");
   const [loadingManualClientLookup, setLoadingManualClientLookup] = useState(false);
@@ -1905,16 +1916,15 @@ function RecepcionContent() {
       .slice(0, 20);
   }, [leads, busquedaLead, leadsConCitaActiva, editingAppointmentId, form.lead_id]);
 
-  const agendaFiltrada = useMemo(() => {
+  const agendaBaseFiltrada = useMemo(() => {
     const q = busquedaAgenda.trim().toLowerCase();
 
     return appointments
       .filter((item) => {
-        const fechaOk = fechaFiltro ? item.appointment_date === fechaFiltro : true;
         const nombre = (item.patient_name || "").toLowerCase();
         const telefono = (item.phone || "").toLowerCase();
         const busquedaOk = q ? nombre.includes(q) || telefono.includes(q) : true;
-        return fechaOk && busquedaOk && appointmentMatchesActiveSection(item);
+        return busquedaOk && appointmentMatchesActiveSection(item);
       })
       .sort((a, b) => {
         if (a.appointment_date !== b.appointment_date) {
@@ -1922,7 +1932,13 @@ function RecepcionContent() {
         }
         return normalizarHora(a.appointment_time).localeCompare(normalizarHora(b.appointment_time));
       });
-  }, [appointments, fechaFiltro, busquedaAgenda, activeSection]);
+  }, [appointments, busquedaAgenda, activeSection]);
+
+  const agendaFiltrada = useMemo(() => {
+    return agendaBaseFiltrada.filter((item) =>
+      fechaFiltro ? item.appointment_date === fechaFiltro : true
+    );
+  }, [agendaBaseFiltrada, fechaFiltro]);
 
   const resumen = useMemo(() => {
     const delDia = appointments.filter((item) => (fechaFiltro ? item.appointment_date === fechaFiltro : true) && appointmentMatchesActiveSection(item));
@@ -1943,23 +1959,12 @@ function RecepcionContent() {
   }, [weeklyAnchorDate]);
 
   const weeklyAgendaByDate = useMemo(() => {
-    const q = busquedaAgenda.trim().toLowerCase();
     const grouped = new Map<string, AppointmentRow[]>();
 
     weeklyAgendaDates.forEach((date) => grouped.set(date, []));
 
-    appointments
+    agendaBaseFiltrada
       .filter((item) => weeklyAgendaDates.includes(item.appointment_date))
-      .filter((item) => appointmentMatchesActiveSection(item))
-      .filter((item) => {
-        if (!q) return true;
-        const specialistName = specialistNameById.get(item.specialist_user_id || "") || "";
-        return (
-          (item.patient_name || "").toLowerCase().includes(q) ||
-          (item.phone || "").toLowerCase().includes(q) ||
-          specialistName.toLowerCase().includes(q)
-        );
-      })
       .sort((a, b) => {
         if (a.appointment_date !== b.appointment_date) {
           return a.appointment_date.localeCompare(b.appointment_date);
@@ -1973,13 +1978,53 @@ function RecepcionContent() {
       });
 
     return grouped;
-  }, [appointments, weeklyAgendaDates, activeSection, busquedaAgenda, specialistNameById]);
+  }, [agendaBaseFiltrada, weeklyAgendaDates]);
 
-  useEffect(() => {
-    if (!canShowWeeklyAgenda && showWeeklyAgenda) {
-      setShowWeeklyAgenda(false);
+  const monthlyAgendaDates = useMemo(() => {
+    return buildMonthCalendarDates(fechaFiltro || hoyISO());
+  }, [fechaFiltro]);
+
+  const monthlyAgendaByDate = useMemo(() => {
+    const grouped = new Map<string, AppointmentRow[]>();
+    monthlyAgendaDates.forEach((date) => grouped.set(date, []));
+
+    agendaBaseFiltrada
+      .filter((item) => monthlyAgendaDates.includes(item.appointment_date))
+      .forEach((item) => {
+        const bucket = grouped.get(item.appointment_date) || [];
+        bucket.push(item);
+        grouped.set(item.appointment_date, bucket);
+      });
+
+    return grouped;
+  }, [agendaBaseFiltrada, monthlyAgendaDates]);
+
+  const agendaPeriodLabel = useMemo(() => {
+    if (agendaViewMode === "semana") {
+      return `${formatWeekdayShort(weeklyAgendaDates[0])} al ${formatWeekdayShort(
+        weeklyAgendaDates[weeklyAgendaDates.length - 1]
+      )}`;
     }
-  }, [canShowWeeklyAgenda, showWeeklyAgenda]);
+
+    if (agendaViewMode === "mes") {
+      const [year, month, day] = fechaFiltro.split("-").map(Number);
+      return new Date(year, month - 1, day).toLocaleDateString("es-CO", {
+        month: "long",
+        year: "numeric",
+      });
+    }
+
+    return formatWeekdayShort(fechaFiltro);
+  }, [agendaViewMode, fechaFiltro, weeklyAgendaDates]);
+
+  function moveAgendaPeriod(step: number) {
+    if (agendaViewMode === "mes") {
+      setFechaFiltro(addMonthsKeepingDay(fechaFiltro, step));
+      return;
+    }
+
+    setFechaFiltro(addDaysToISO(fechaFiltro, agendaViewMode === "semana" ? step * 7 : step));
+  }
 
   const selectedDaySetting = daySettings[form.appointment_date];
   const selectedDateDailyCapacity =
@@ -6061,16 +6106,45 @@ function imprimirRegistroComercial() {
                 </div>
 
                 <div className="flex flex-wrap gap-3">
-                  {canShowWeeklyAgenda ? (
+                  <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => setShowWeeklyAgenda((prev) => !prev)}
-                      className="rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2.5 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                      onClick={() => setAgendaViewMode("dia")}
+                      className={`rounded-2xl px-4 py-2.5 text-sm font-medium shadow-sm transition ${
+                        agendaViewMode === "dia"
+                          ? "bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] text-white"
+                          : "border border-[#CFE4D8] bg-white/85 text-[#4F6F5B] hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                      }`}
                     >
-                      {showWeeklyAgenda ? "Ocultar calendario semanal" : "Ver calendario semanal"}
+                      Dia
                     </button>
-                  ) : null}
-
+                    {canShowWeeklyAgenda ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => setAgendaViewMode("semana")}
+                          className={`rounded-2xl px-4 py-2.5 text-sm font-medium shadow-sm transition ${
+                            agendaViewMode === "semana"
+                              ? "bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] text-white"
+                              : "border border-[#CFE4D8] bg-white/85 text-[#4F6F5B] hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                          }`}
+                        >
+                          Semana
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAgendaViewMode("mes")}
+                          className={`rounded-2xl px-4 py-2.5 text-sm font-medium shadow-sm transition ${
+                            agendaViewMode === "mes"
+                              ? "bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] text-white"
+                              : "border border-[#CFE4D8] bg-white/85 text-[#4F6F5B] hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                          }`}
+                        >
+                          Mes
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                   <button
                     onClick={cargarTodo}
                     className="rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2.5 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
@@ -6080,7 +6154,7 @@ function imprimirRegistroComercial() {
                 </div>
               </div>
 
-              <div className="mb-6 grid gap-3 md:grid-cols-[1fr_auto_1fr]">
+              <div className="mb-4 grid gap-3 md:grid-cols-[1fr_auto_1fr]">
                 <input
                   className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/92 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="date"
@@ -6103,7 +6177,39 @@ function imprimirRegistroComercial() {
                 />
               </div>
 
-              {canShowWeeklyAgenda && showWeeklyAgenda ? (
+              <div className="mb-6 flex flex-wrap items-center gap-2">
+                {agendaViewMode !== "dia" ? (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => moveAgendaPeriod(-1)}
+                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
+                    >
+                      {agendaViewMode === "mes" ? "Mes anterior" : "Semana anterior"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setFechaFiltro(hoyISO())}
+                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
+                    >
+                      {agendaViewMode === "mes" ? "Mes actual" : "Semana actual"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveAgendaPeriod(1)}
+                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
+                    >
+                      {agendaViewMode === "mes" ? "Mes siguiente" : "Semana siguiente"}
+                    </button>
+                  </>
+                ) : (
+                  <div className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm">
+                    Dia seleccionado: {agendaPeriodLabel}
+                  </div>
+                )}
+              </div>
+
+              {agendaViewMode === "semana" && canShowWeeklyAgenda ? (
               <div className="mb-6 rounded-[24px] border border-[#D7EADF] bg-[linear-gradient(180deg,_rgba(248,252,249,0.98)_0%,_rgba(240,248,242,0.98)_100%)] p-4 shadow-inner">
                 <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                   <div>
@@ -6112,30 +6218,6 @@ function imprimirRegistroComercial() {
                       Semana organizada desde {formatWeekdayShort(weeklyAgendaDates[0])} hasta{" "}
                       {formatWeekdayShort(weeklyAgendaDates[weeklyAgendaDates.length - 1])}.
                     </p>
-                  </div>
-
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setFechaFiltro(addDaysToISO(weeklyAnchorDate, -7))}
-                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
-                    >
-                      Semana anterior
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFechaFiltro(hoyISO())}
-                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
-                    >
-                      Semana actual
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setFechaFiltro(addDaysToISO(weeklyAnchorDate, 7))}
-                      className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F5FCF7]"
-                    >
-                      Semana siguiente
-                    </button>
                   </div>
                 </div>
 
@@ -6194,6 +6276,94 @@ function imprimirRegistroComercial() {
                       </div>
                     );
                   })}
+                </div>
+              </div>
+              ) : agendaViewMode === "mes" && canShowWeeklyAgenda ? (
+              <div className="mb-6 rounded-[24px] border border-[#D7EADF] bg-[linear-gradient(180deg,_rgba(248,252,249,0.98)_0%,_rgba(240,248,242,0.98)_100%)] p-4 shadow-inner">
+                <div className="mb-4">
+                  <h3 className="text-lg font-semibold text-[#24312A]">Calendario mensual</h3>
+                  <p className="mt-1 text-sm text-[#607368]">
+                    Vista completa del mes para ubicar carga operativa y espacios disponibles.
+                  </p>
+                </div>
+
+                <div className="overflow-x-auto pb-2">
+                  <div className="min-w-[980px]">
+                    <div className="mb-3 grid grid-cols-7 gap-3">
+                      {["Lun", "Mar", "Mie", "Jue", "Vie", "Sab", "Dom"].map((day) => (
+                        <div
+                          key={day}
+                          className="rounded-2xl bg-[#EEF7F1] px-3 py-2 text-center text-xs font-semibold uppercase tracking-[0.18em] text-[#4F6F5B]"
+                        >
+                          {day}
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="grid grid-cols-7 gap-3">
+                      {monthlyAgendaDates.map((date) => {
+                        const items = monthlyAgendaByDate.get(date) || [];
+                        return (
+                          <div
+                            key={date}
+                            className={`min-h-[190px] rounded-[24px] border p-3 ${
+                              date === fechaFiltro
+                                ? "border-[#7FA287] bg-white shadow-[0_18px_36px_rgba(95,125,102,0.14)]"
+                                : isSameMonthISO(date, fechaFiltro)
+                                ? "border-[#DCEBE1] bg-white/90"
+                                : "border-[#E7EFE9] bg-[#F7FAF8]"
+                            }`}
+                          >
+                            <button
+                              type="button"
+                              onClick={() => setFechaFiltro(date)}
+                              className="flex w-full items-center justify-between gap-2 text-left"
+                            >
+                              <p
+                                className={`text-sm font-semibold ${
+                                  isSameMonthISO(date, fechaFiltro)
+                                    ? "text-[#24312A]"
+                                    : "text-[#8A998F]"
+                                }`}
+                              >
+                                {date.slice(8, 10)}
+                              </p>
+                              <span className="rounded-full bg-[#EEF7F1] px-2.5 py-1 text-xs font-semibold text-[#4F6F5B]">
+                                {items.length}
+                              </span>
+                            </button>
+
+                            <div className="mt-3 space-y-2">
+                              {items.length === 0 ? (
+                                <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-3 text-xs text-[#607368]">
+                                  Libre
+                                </div>
+                              ) : (
+                                items.slice(0, 3).map((item) => (
+                                  <button
+                                    key={item.id}
+                                    type="button"
+                                    onClick={() => seleccionarCitaRapida(item)}
+                                    className="w-full rounded-2xl border border-[#DCEBE1] bg-[#FCFEFC] p-3 text-left transition hover:border-[#A9CCB5] hover:bg-[#F5FCF7]"
+                                  >
+                                    <p className="text-xs font-semibold text-[#4F6F5B]">
+                                      {formatHora(item.appointment_time)}
+                                    </p>
+                                    <p className="mt-1 text-sm font-semibold text-[#24312A]">
+                                      {item.patient_name}
+                                    </p>
+                                    <p className="mt-1 text-xs text-[#607368]">
+                                      {item.service_type || "Sin servicio"}
+                                    </p>
+                                  </button>
+                                ))
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
                 </div>
               </div>
               ) : null}
