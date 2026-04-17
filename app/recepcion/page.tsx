@@ -1,6 +1,7 @@
-﻿"use client";
+"use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -277,11 +278,11 @@ const appointmentStatusOptions = [
   { value: "agendada", label: "Agendada" },
   { value: "confirmada", label: "Confirmada" },
   { value: "en_espera", label: "En espera" },
-  { value: "asistio", label: "AsistiÃ³" },
-  { value: "no_asistio", label: "No asistiÃ³" },
+  { value: "asistio", label: "AsistiÃƒÂ³" },
+  { value: "no_asistio", label: "No asistiÃƒÂ³" },
   { value: "reagendada", label: "Reagendada" },
   { value: "cancelada", label: "Cancelada" },
-  { value: "en_atencion", label: "En atenciÃ³n" },
+  { value: "en_atencion", label: "En atenciÃƒÂ³n" },
   { value: "finalizada", label: "Finalizada" },
 ];
 
@@ -443,7 +444,7 @@ function numberFromMoneyText(value: string | number | null | undefined) {
 
 function parsePortfolioDetails(text: string | null | undefined): PortfolioFields {
   const source = text || "";
-  const installments = source.match(/N[Ãºu]mero de cuotas:\s*([^\n]+)/i)?.[1]?.trim() || "";
+  const installments = source.match(/N[ÃƒÂºu]mero de cuotas:\s*([^\n]+)/i)?.[1]?.trim() || "";
   const installmentValue = source.match(/Valor de la cuota:\s*([^\n]+)/i)?.[1]?.trim() || "";
   const firstDate = source.match(/Fecha primera cuota:\s*([^\n]+)/i)?.[1]?.trim() || "";
 
@@ -461,11 +462,11 @@ function stripPortfolioDetails(text: string | null | undefined) {
     .filter(
       (line) =>
         !/^Detalle cartera:/i.test(line) &&
-        !/^N[Ãºu]mero de cuotas:/i.test(line) &&
+        !/^N[ÃƒÂºu]mero de cuotas:/i.test(line) &&
         !/^Valor de la cuota:/i.test(line) &&
         !/^Fecha primera cuota:/i.test(line) &&
         !/^Plan de cuotas:/i.test(line) &&
-        !/^\d+\.\s*\d{4}-\d{2}-\d{2}\s*[Â·-]\s*\$/i.test(line)
+        !/^\d+\.\s*\d{4}-\d{2}-\d{2}\s*[Ã‚Â·-]\s*\$/i.test(line)
     )
     .join("\n")
     .trim();
@@ -511,42 +512,42 @@ function getCommercialSourceDetailMeta(value: string): CommercialSourceDetailMet
   switch (normalizarFuenteManual(value)) {
     case "opc":
       return {
-        label: "Â¿QuÃ© OPC fue?",
+        label: "Ã‚Â¿QuÃƒÂ© OPC fue?",
         placeholder: "Ej: OPC Centro",
         noteLabel: "Detalle OPC",
         required: true,
       };
     case "tmk":
       return {
-        label: "Â¿QuÃ© TMK fue?",
-        placeholder: "Ej: TMK campaÃ±a abril",
+        label: "Ã‚Â¿QuÃƒÂ© TMK fue?",
+        placeholder: "Ej: TMK campaÃƒÂ±a abril",
         noteLabel: "Detalle TMK",
         required: true,
       };
     case "redes":
       return {
-        label: "Â¿QuÃ© red fue?",
+        label: "Ã‚Â¿QuÃƒÂ© red fue?",
         placeholder: "Ej: Facebook, Instagram",
         noteLabel: "Detalle red",
         required: true,
       };
     case "referido":
       return {
-        label: "Â¿QuiÃ©n lo refiriÃ³?",
-        placeholder: "Escribe quiÃ©n refiriÃ³",
+        label: "Ã‚Â¿QuiÃƒÂ©n lo refiriÃƒÂ³?",
+        placeholder: "Escribe quiÃƒÂ©n refiriÃƒÂ³",
         noteLabel: "Referido por",
         required: true,
       };
     case "lugar":
       return {
-        label: "Â¿QuÃ© lugar fue?",
-        placeholder: "Ej: Centro comercial, clÃ­nica",
+        label: "Ã‚Â¿QuÃƒÂ© lugar fue?",
+        placeholder: "Ej: Centro comercial, clÃƒÂ­nica",
         noteLabel: "Detalle lugar",
         required: true,
       };
     case "evento":
       return {
-        label: "Â¿QuÃ© evento fue?",
+        label: "Ã‚Â¿QuÃƒÂ© evento fue?",
         placeholder: "Ej: Feria de salud",
         noteLabel: "Detalle evento",
         required: true,
@@ -559,7 +560,7 @@ function getCommercialSourceDetailMeta(value: string): CommercialSourceDetailMet
       };
     case "otro":
       return {
-        label: "Â¿CuÃ¡l fue la fuente?",
+        label: "Ã‚Â¿CuÃƒÂ¡l fue la fuente?",
         placeholder: "Describe la fuente",
         noteLabel: "Detalle fuente",
         required: true,
@@ -595,7 +596,7 @@ function limpiarMetadatosAgenda(notes: string | null | undefined) {
     .split("\n")
     .filter((line) => {
       const trimmed = line.trim();
-      return !/^Fuente:\s*/i.test(trimmed) && !/^DuraciÃ³n:\s*/i.test(trimmed);
+      return !/^Fuente:\s*/i.test(trimmed) && !/^DuraciÃƒÂ³n:\s*/i.test(trimmed);
     })
     .join("\n")
     .trim();
@@ -616,7 +617,7 @@ function construirNotasAgenda({
     lines.push(`Fuente: ${traducirFuenteManual(manualSource)}`);
   }
 
-  lines.push(`DuraciÃ³n: ${durationMinutes} min`);
+  lines.push(`DuraciÃƒÂ³n: ${durationMinutes} min`);
 
   const cleanNotes = limpiarMetadatosAgenda(notes);
   if (cleanNotes) {
@@ -656,11 +657,11 @@ function traducirEstado(status: string) {
     agendada: "Agendada",
     confirmada: "Confirmada",
     en_espera: "En espera",
-    asistio: "AsistiÃ³",
-    no_asistio: "No asistiÃ³",
+    asistio: "AsistiÃƒÂ³",
+    no_asistio: "No asistiÃƒÂ³",
     reagendada: "Reagendada",
     cancelada: "Cancelada",
-    en_atencion: "En atenciÃ³n",
+    en_atencion: "En atenciÃƒÂ³n",
     finalizada: "Finalizada",
   };
   return map[status] || status;
@@ -668,9 +669,9 @@ function traducirEstado(status: string) {
 
 function traducirEstadoComercial(status: string | null | undefined) {
   const map: Record<string, string> = {
-    pendiente_asignacion_comercial: "Pendiente de asignaciÃ³n",
+    pendiente_asignacion_comercial: "Pendiente de asignaciÃƒÂ³n",
     asignado_comercial: "Asignado",
-    en_atencion_comercial: "En atenciÃ³n",
+    en_atencion_comercial: "En atenciÃƒÂ³n",
     seguimiento: "Seguimiento",
     finalizado: "Finalizado",
   };
@@ -707,7 +708,7 @@ function limpiarPendienteNutricionDeNotas(notes: string | null | undefined) {
   if (!notes) return "";
   return notes
     .split("\n")
-    .filter((line) => !/^Entrega nutriciÃ³n pendiente:/i.test(line.trim()))
+    .filter((line) => !/^Entrega nutriciÃƒÂ³n pendiente:/i.test(line.trim()))
     .join("\n")
     .trim();
 }
@@ -748,11 +749,11 @@ function imprimirDocumentoNutricional({
       </head>
       <body>
         <h1>Documento nutricional</h1>
-        <p class="muted">CRM Prevital Â· RecepciÃ³n</p>
+        <p class="muted">CRM Prevital Ã‚Â· RecepciÃƒÂ³n</p>
         <div class="box">
           <p><strong>Cliente:</strong> ${texto(appointment.patient_name)}</p>
           <p><strong>Documento:</strong> ${texto(document)}</p>
-          <p><strong>TelÃ©fono:</strong> ${texto(appointment.phone)}</p>
+          <p><strong>TelÃƒÂ©fono:</strong> ${texto(appointment.phone)}</p>
           <p><strong>Ciudad:</strong> ${texto(appointment.city)}</p>
           <p><strong>Fecha:</strong> ${texto(appointment.appointment_date)}</p>
           <p><strong>Hora:</strong> ${texto(formatHora(appointment.appointment_time))}</p>
@@ -760,29 +761,29 @@ function imprimirDocumentoNutricional({
 
         <h2>Antecedentes</h2>
         <div class="grid">
-          <div class="item"><strong>PatolÃ³gicos</strong><br/>${texto(profile?.antecedentes_patologicos)}</div>
-          <div class="item"><strong>CirugÃ­as</strong><br/>${texto(profile?.cirugias)}</div>
-          <div class="item"><strong>TÃ³xicos</strong><br/>${texto(profile?.toxicos)}</div>
-          <div class="item"><strong>AlÃ©rgicos</strong><br/>${texto(profile?.alergicos)}</div>
+          <div class="item"><strong>PatolÃƒÂ³gicos</strong><br/>${texto(profile?.antecedentes_patologicos)}</div>
+          <div class="item"><strong>CirugÃƒÂ­as</strong><br/>${texto(profile?.cirugias)}</div>
+          <div class="item"><strong>TÃƒÂ³xicos</strong><br/>${texto(profile?.toxicos)}</div>
+          <div class="item"><strong>AlÃƒÂ©rgicos</strong><br/>${texto(profile?.alergicos)}</div>
           <div class="item"><strong>Medicamentos</strong><br/>${texto(profile?.medicamentos)}</div>
           <div class="item"><strong>Familiares</strong><br/>${texto(profile?.familiares)}</div>
         </div>
 
-        <h2>ValoraciÃ³n nutricional</h2>
+        <h2>ValoraciÃƒÂ³n nutricional</h2>
         <div class="grid">
           <div class="item"><strong>Peso</strong><br/>${texto(profile?.peso)}</div>
           <div class="item"><strong>Talla</strong><br/>${texto(profile?.talla)}</div>
-          <div class="item"><strong>PerÃ­metro brazo</strong><br/>${texto(profile?.perimetro_brazo)}</div>
+          <div class="item"><strong>PerÃƒÂ­metro brazo</strong><br/>${texto(profile?.perimetro_brazo)}</div>
           <div class="item"><strong>IMC</strong><br/>${texto(profile?.indice_masa_corporal)}</div>
           <div class="item"><strong>Grasa corporal</strong><br/>${texto(profile?.porcentaje_masa_corporal)}</div>
-          <div class="item"><strong>DinamometrÃ­a</strong><br/>${texto(profile?.dinamometria)}</div>
+          <div class="item"><strong>DinamometrÃƒÂ­a</strong><br/>${texto(profile?.dinamometria)}</div>
           <div class="item"><strong>Masa muscular</strong><br/>${texto(profile?.masa_muscular)}</div>
           <div class="item"><strong>Metabolismo en reposo</strong><br/>${texto(profile?.metabolismo_reposo)}</div>
           <div class="item"><strong>Grasa visceral</strong><br/>${texto(profile?.grasa_visceral)}</div>
           <div class="item"><strong>Edad corporal</strong><br/>${texto(profile?.edad_corporal)}</div>
           <div class="item"><strong>Circunferencia cintura</strong><br/>${texto(profile?.circunferencia_cintura)}</div>
-          <div class="item"><strong>PerÃ­metro pantorrilla</strong><br/>${texto(profile?.perimetro_pantorrilla)}</div>
-          <div class="item"><strong>ClasificaciÃ³n</strong><br/>${texto(profile?.clasificacion_nutricional)}</div>
+          <div class="item"><strong>PerÃƒÂ­metro pantorrilla</strong><br/>${texto(profile?.perimetro_pantorrilla)}</div>
+          <div class="item"><strong>ClasificaciÃƒÂ³n</strong><br/>${texto(profile?.clasificacion_nutricional)}</div>
         </div>
 
         <h2>Plan</h2>
@@ -875,7 +876,7 @@ function calcularClasificacionInicial(values: {
       ));
 
   if (!edad || Number.isNaN(edad) || edad < 40 || edad > 69) {
-    motivos.push("edad fuera del rango de 40 a 69 aÃ±os");
+    motivos.push("edad fuera del rango de 40 a 69 aÃƒÂ±os");
   }
 
   if (values.tiene_eps !== "si") {
@@ -887,7 +888,7 @@ function calcularClasificacionInicial(values: {
   }
 
   if (values.trae_cedula !== "si") {
-    motivos.push("no asiste con cÃ©dula");
+    motivos.push("no asiste con cÃƒÂ©dula");
   }
 
   if (values.celular_inteligente !== "si") {
@@ -895,11 +896,11 @@ function calcularClasificacionInicial(values: {
   }
 
   if (ocupacionDescalificante) {
-    motivos.push("ocupaciÃ³n descalificante");
+    motivos.push("ocupaciÃƒÂ³n descalificante");
   }
 
   if (values.hipertenso === "si" && values.clinical_flags.hipertenso_descalifica) {
-    motivos.push("hipertensiÃ³n descalificante");
+    motivos.push("hipertensiÃƒÂ³n descalificante");
   }
 
   if (values.diabetico === "si" && values.clinical_flags.diabetico_descalifica) {
@@ -907,7 +908,7 @@ function calcularClasificacionInicial(values: {
   }
 
   if (values.cirugias === "si" && values.clinical_flags.cirugias_descalifica) {
-    motivos.push("cirugÃ­a descalificante");
+    motivos.push("cirugÃƒÂ­a descalificante");
   }
 
   if (values.medicamentos === "si" && values.clinical_flags.medicamentos_descalifica) {
@@ -937,13 +938,13 @@ function getCommercialDisqualifyingConditions(values: {
 }) {
   return [
     values.hipertenso === "si" && values.clinical_flags.hipertenso_descalifica
-      ? "HipertensiÃ³n descalificante"
+      ? "HipertensiÃƒÂ³n descalificante"
       : "",
     values.diabetico === "si" && values.clinical_flags.diabetico_descalifica
       ? "Diabetes descalificante"
       : "",
     values.cirugias === "si" && values.clinical_flags.cirugias_descalifica
-      ? "CirugÃ­a descalificante"
+      ? "CirugÃƒÂ­a descalificante"
       : "",
     values.medicamentos === "si" && values.clinical_flags.medicamentos_descalifica
       ? "Medicamento descalificante"
@@ -1162,37 +1163,37 @@ function RecepcionContent() {
 
   const serviceOptions = useMemo(() => activeSection === "nutricion_entregas" ? [] : getServiceOptionsBySection(activeSection), [activeSection]);
   const serviceFieldLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Servicio" : getServiceFieldLabel(activeSection), [activeSection]);
-  const sectionLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Entregas nutriciÃ³n" : getSectionLabel(activeSection), [activeSection]);
+  const sectionLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Entregas nutriciÃƒÂ³n" : getSectionLabel(activeSection), [activeSection]);
   const canShowWeeklyAgenda =
     activeSection === "especialistas" || activeSection === "tratamientos";
   const agendaVisibleTitle = useMemo(() => {
     if (activeSection === "especialistas") return "Agenda visible de especialistas";
     if (activeSection === "tratamientos") return "Agenda visible de tratamientos";
-    return "Agenda visible del día";
+    return "Agenda visible del dÃ­a";
   }, [activeSection]);
   const agendaVisibleDescription = useMemo(() => {
     if (activeSection === "especialistas") {
-      return "Vista diaria de especialistas por nombre, teléfono y fecha.";
+      return "Vista diaria de especialistas por nombre, telÃ©fono y fecha.";
     }
 
     if (activeSection === "tratamientos") {
-      return "Vista diaria de tratamientos por nombre, teléfono y fecha.";
+      return "Vista diaria de tratamientos por nombre, telÃ©fono y fecha.";
     }
 
-    return `Vista diaria de ${sectionLabel.toLowerCase()} por nombre, teléfono y fecha.`;
+    return `Vista diaria de ${sectionLabel.toLowerCase()} por nombre, telÃ©fono y fecha.`;
   }, [activeSection, sectionLabel]);
   const normalizedAgendaVisibleTitle = useMemo(
     () =>
       agendaVisibleTitle
-        .replaceAll("dÃƒÆ’Ã‚Â­a", "d\u00EDa")
-        .replaceAll("día", "d\u00EDa"),
+        .replaceAll("dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­a", "d\u00EDa")
+        .replaceAll("dÃ­a", "d\u00EDa"),
     [agendaVisibleTitle]
   );
   const normalizedAgendaVisibleDescription = useMemo(
     () =>
       agendaVisibleDescription
-        .replaceAll("telÃƒÆ’Ã‚Â©fono", "tel\u00E9fono")
-        .replaceAll("teléfono", "tel\u00E9fono"),
+        .replaceAll("telÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©fono", "tel\u00E9fono")
+        .replaceAll("telÃ©fono", "tel\u00E9fono"),
     [agendaVisibleDescription]
   );
   const weeklyAgendaTitle = useMemo(() => {
@@ -1218,7 +1219,7 @@ function RecepcionContent() {
       new Map(
         specialists.map((item) => [
           item.id,
-          `${item.full_name}${item.role_name ? ` Â· ${item.role_name}` : ""}`,
+          `${item.full_name}${item.role_name ? ` Ã‚Â· ${item.role_name}` : ""}`,
         ])
       ),
     [specialists]
@@ -1495,13 +1496,13 @@ function RecepcionContent() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesiÃ³n para usar este mÃ³dulo.");
+        setError("Debes iniciar sesiÃƒÂ³n para usar este mÃƒÂ³dulo.");
         return;
       }
 
       if (!allowedRoles.includes(auth.roleCode)) {
         setAuthorized(false);
-        setError("No tienes permiso para entrar a RecepciÃ³n.");
+        setError("No tienes permiso para entrar a RecepciÃƒÂ³n.");
         return;
       }
 
@@ -1730,7 +1731,7 @@ function RecepcionContent() {
         )
       );
     } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar los datos de recepciÃ³n.");
+      setError(err?.message || "No se pudieron cargar los datos de recepciÃƒÂ³n.");
     } finally {
       setLoading(false);
     }
@@ -2233,7 +2234,7 @@ function RecepcionContent() {
         source: item.lead_id ? "Lead existente" : traducirFuenteManual(extraerFuenteManualDesdeNotas(item.notes)),
         detail:
           item.appointment_date && item.appointment_time
-            ? `${item.appointment_date} Â· ${formatHora(item.appointment_time)}`
+            ? `${item.appointment_date} Ã‚Â· ${formatHora(item.appointment_time)}`
             : "Sin cita",
         service_type: item.service_type || "",
         notes: limpiarMetadatosAgenda(item.notes),
@@ -2244,7 +2245,7 @@ function RecepcionContent() {
         phone: lead.phone || "",
         city: lead.city || "",
         source: "Lead existente",
-        detail: lead.status ? `Lead Â· ${lead.status}` : "Lead",
+        detail: lead.status ? `Lead Ã‚Â· ${lead.status}` : "Lead",
         service_type: "",
         notes: "",
       })),
@@ -2390,7 +2391,7 @@ function RecepcionContent() {
     if (typeof window === "undefined") return;
 
     const nombre = selectedPrintPatient?.patient_name || "Paciente";
-    const telefono = selectedPrintPatient?.phone || "Sin teléfono";
+    const telefono = selectedPrintPatient?.phone || "Sin telÃ©fono";
     const ciudad = selectedPrintPatient?.city || "Sin ciudad";
     const detalle = selectedPrintPatient?.detail || "Sin detalle";
     const servicio = selectedPrintPatient?.service_type || "Sin servicio";
@@ -2413,10 +2414,10 @@ function RecepcionContent() {
         </head>
         <body>
           <h1>${titulo}</h1>
-          <p class="muted">CRM Prevital Â· RecepciÃ³n</p>
+          <p class="muted">CRM Prevital Ã‚Â· RecepciÃƒÂ³n</p>
           <div class="box">
             <p><strong>Cliente:</strong> ${nombre}</p>
-            <p><strong>TelÃ©fono:</strong> ${telefono}</p>
+            <p><strong>TelÃƒÂ©fono:</strong> ${telefono}</p>
             <p><strong>Ciudad:</strong> ${ciudad}</p>
             <p><strong>Detalle:</strong> ${detalle}</p>
             <p><strong>Servicio:</strong> ${servicio}</p>
@@ -2679,7 +2680,7 @@ function RecepcionContent() {
     }
 
     if (!deliveryProduct.trim()) {
-      setError("Debes escribir el nutracÃ©utico o producto entregado.");
+      setError("Debes escribir el nutracÃƒÂ©utico o producto entregado.");
       return;
     }
 
@@ -2911,7 +2912,7 @@ function RecepcionContent() {
       setNutritionDeliveryQuantity(String(recommendation?.quantity || 1));
       setNutritionDeliveryNotes(recommendation?.instructions || "");
     } catch (err: any) {
-      setError(err?.message || "No se pudo abrir la entrega de nutriciÃ³n.");
+      setError(err?.message || "No se pudo abrir la entrega de nutriciÃƒÂ³n.");
     } finally {
       setLoadingNutritionSelection(false);
     }
@@ -2919,7 +2920,7 @@ function RecepcionContent() {
 
   async function registrarEntregaNutricion() {
     if (!nutritionSelection) {
-      setError("Debes seleccionar primero un cliente pendiente de nutriciÃ³n.");
+      setError("Debes seleccionar primero un cliente pendiente de nutriciÃƒÂ³n.");
       return;
     }
 
@@ -2928,7 +2929,7 @@ function RecepcionContent() {
     if (!nutritionDeliveryProductId && !selectedNutritionInventoryItem) {
       setError(
         lockedRecommendation?.productName
-          ? "El producto recomendado no existe todavÃ­a en inventario. Primero crÃ©alo en recepciÃ³n."
+          ? "El producto recomendado no existe todavÃƒÂ­a en inventario. Primero crÃƒÂ©alo en recepciÃƒÂ³n."
           : "Debes seleccionar el producto entregado."
       );
       return;
@@ -2944,7 +2945,7 @@ function RecepcionContent() {
       inventoryItems.find((item) => item.id === nutritionDeliveryProductId) ||
       selectedNutritionInventoryItem;
     if (!selectedItem) {
-      setError("Debes seleccionar un producto vÃ¡lido del inventario.");
+      setError("Debes seleccionar un producto vÃƒÂ¡lido del inventario.");
       return;
     }
 
@@ -2973,7 +2974,7 @@ function RecepcionContent() {
         type: "salida",
         movement_date: hoyISO(),
         quantity,
-        notes: `Entrega nutriciÃ³n Â· ${nutritionSelection.appointment.patient_name}${nutritionDeliveryNotes.trim() ? ` Â· ${nutritionDeliveryNotes.trim()}` : ""}`,
+        notes: `Entrega nutriciÃƒÂ³n Ã‚Â· ${nutritionSelection.appointment.patient_name}${nutritionDeliveryNotes.trim() ? ` Ã‚Â· ${nutritionDeliveryNotes.trim()}` : ""}`,
         created_at: now,
       };
 
@@ -3012,14 +3013,14 @@ function RecepcionContent() {
       );
 
       setLastNutritionPrintSelection(nutritionSelection);
-      setMensaje("Entrega de nutriciÃ³n registrada correctamente. Ya puedes imprimir el documento nutricional.");
+      setMensaje("Entrega de nutriciÃƒÂ³n registrada correctamente. Ya puedes imprimir el documento nutricional.");
       setNutritionDeliveryProductId("");
       setNutritionDeliveryQuantity("1");
       setNutritionDeliveryNotes("");
       setSelectedNutritionDeliveryId(nutritionSelection.appointment.id);
       setNutritionSelection(nutritionSelection);
     } catch (err: any) {
-      setError(err?.message || "No se pudo registrar la entrega de nutriciÃ³n.");
+      setError(err?.message || "No se pudo registrar la entrega de nutriciÃƒÂ³n.");
     } finally {
       setSavingNutritionDelivery(false);
     }
@@ -3087,7 +3088,7 @@ function buildCommercialPrintData() {
 
     return {
       customerName: commercialForm.customer_name || "Sin nombre",
-      phone: commercialForm.phone || "Sin teléfono",
+      phone: commercialForm.phone || "Sin telÃ©fono",
       city: commercialForm.city || "Sin ciudad",
       document: commercialForm.documento || "Sin documento",
       source: traducirFuenteManual(commercialForm.fuente) || "Sin fuente",
@@ -3096,11 +3097,11 @@ function buildCommercialPrintData() {
         (sourceNeedsUserSelection
           ? selectedSourceUser?.full_name
           : commercialForm.referido_por) || "No aplica",
-      hasEps: commercialForm.tiene_eps === "si" ? "SÃ­" : "No",
+      hasEps: commercialForm.tiene_eps === "si" ? "SÃƒÂ­" : "No",
       affiliation: commercialForm.afiliacion || "Sin definir",
       age: commercialForm.edad || "Sin dato",
-      bringsId: commercialForm.trae_cedula === "si" ? "SÃ­" : "No",
-      smartphone: commercialForm.celular_inteligente === "si" ? "SÃ­" : "No",
+      bringsId: commercialForm.trae_cedula === "si" ? "SÃƒÂ­" : "No",
+      smartphone: commercialForm.celular_inteligente === "si" ? "SÃƒÂ­" : "No",
       hasDetoxTime:
         commercialForm.tiempo_detox_30_min === "si"
           ? "Si"
@@ -3148,13 +3149,13 @@ function imprimirRegistroComercial() {
 
     printAppointment({
       patientName: item.patient_name || "Sin nombre",
-      phone: item.phone || "Sin teléfono",
+      phone: item.phone || "Sin telÃ©fono",
       city: item.city || "Sin ciudad",
       source: source || "Sin fuente",
       appointmentDate: item.appointment_date,
       appointmentTime: formatHora(item.appointment_time),
       statusLabel: traducirEstado(item.status),
-      serviceType: item.service_type || "ValoraciÃ³n",
+      serviceType: item.service_type || "ValoraciÃƒÂ³n",
       notes: limpiarMetadatosAgenda(item.notes) || "Sin notas registradas.",
     });
   }
@@ -3189,12 +3190,12 @@ function imprimirRegistroComercial() {
   function imprimirSiguienteCita(item: AppointmentRow) {
     const nextAppointment = buscarSiguienteCita(item);
     if (!nextAppointment) {
-      setError("Este paciente no tiene una siguiente cita agendada todavÃ­a.");
+      setError("Este paciente no tiene una siguiente cita agendada todavÃƒÂ­a.");
       return;
     }
 
     imprimirCitaRecepcion(nextAppointment);
-    setMensaje("Siguiente cita lista para impresiÃ³n.");
+    setMensaje("Siguiente cita lista para impresiÃƒÂ³n.");
   }
 
   function buildAppointmentPrintData() {
@@ -3249,7 +3250,7 @@ function imprimirRegistroComercial() {
       }
 
       if (!commercialForm.phone.trim()) {
-        throw new Error("Debes escribir el teléfono del cliente.");
+        throw new Error("Debes escribir el telÃ©fono del cliente.");
       }
 
       if (!commercialForm.fuente) {
@@ -3343,13 +3344,13 @@ function imprimirRegistroComercial() {
 
       const condicionesInternas = [
         commercialForm.hipertenso === "si" && commercialForm.clinical_flags.hipertenso_descalifica
-          ? "HipertensiÃ³n descalificante"
+          ? "HipertensiÃƒÂ³n descalificante"
           : "",
         commercialForm.diabetico === "si" && commercialForm.clinical_flags.diabetico_descalifica
           ? "Diabetes descalificante"
           : "",
         commercialForm.cirugias === "si" && commercialForm.clinical_flags.cirugias_descalifica
-          ? "CirugÃ­a descalificante"
+          ? "CirugÃƒÂ­a descalificante"
           : "",
         commercialForm.medicamentos === "si" && commercialForm.clinical_flags.medicamentos_descalifica
           ? "Medicamento descalificante"
@@ -3363,34 +3364,34 @@ function imprimirRegistroComercial() {
 
       const notesParts = [
         fuenteLabel ? `Fuente: ${fuenteLabel}` : "",
-        `ClasificaciÃ³n inicial: ${clasificacion}`,
-        commercialForm.clasificacion_motivo ? `Motivo clasificaciÃ³n: ${commercialForm.clasificacion_motivo}` : "",
-        `Tiene EPS: ${commercialForm.tiene_eps === "si" ? "SÃ­" : "No"}`,
-        commercialForm.afiliacion ? `AfiliaciÃ³n: ${commercialForm.afiliacion}` : "",
-        `Trae cÃ©dula: ${commercialForm.trae_cedula === "si" ? "SÃ­" : "No"}`,
-        `Celular inteligente: ${commercialForm.celular_inteligente === "si" ? "SÃ­" : "No"}`,
-        ocupacionLabel ? `OcupaciÃ³n: ${ocupacionLabel}` : "",
+        `ClasificaciÃƒÂ³n inicial: ${clasificacion}`,
+        commercialForm.clasificacion_motivo ? `Motivo clasificaciÃƒÂ³n: ${commercialForm.clasificacion_motivo}` : "",
+        `Tiene EPS: ${commercialForm.tiene_eps === "si" ? "SÃƒÂ­" : "No"}`,
+        commercialForm.afiliacion ? `AfiliaciÃƒÂ³n: ${commercialForm.afiliacion}` : "",
+        `Trae cÃƒÂ©dula: ${commercialForm.trae_cedula === "si" ? "SÃƒÂ­" : "No"}`,
+        `Celular inteligente: ${commercialForm.celular_inteligente === "si" ? "SÃƒÂ­" : "No"}`,
+        ocupacionLabel ? `OcupaciÃƒÂ³n: ${ocupacionLabel}` : "",
         commercialForm.edad ? `Edad: ${commercialForm.edad}` : "",
-        `Hipertenso: ${commercialForm.hipertenso === "si" ? "SÃ­" : "No"}`,
-        `DiabÃ©tico: ${commercialForm.diabetico === "si" ? "SÃ­" : "No"}`,
-        `CirugÃ­as: ${commercialForm.cirugias === "si" ? "SÃ­" : "No"}`,
+        `Hipertenso: ${commercialForm.hipertenso === "si" ? "SÃƒÂ­" : "No"}`,
+        `DiabÃƒÂ©tico: ${commercialForm.diabetico === "si" ? "SÃƒÂ­" : "No"}`,
+        `CirugÃƒÂ­as: ${commercialForm.cirugias === "si" ? "SÃƒÂ­" : "No"}`,
         commercialForm.cirugias === "si" && commercialForm.cirugias_cual
-          ? `CirugÃ­as cuÃ¡l: ${commercialForm.cirugias_cual}`
+          ? `CirugÃƒÂ­as cuÃƒÂ¡l: ${commercialForm.cirugias_cual}`
           : "",
-        `Medicamentos: ${commercialForm.medicamentos === "si" ? "SÃ­" : "No"}`,
+        `Medicamentos: ${commercialForm.medicamentos === "si" ? "SÃƒÂ­" : "No"}`,
         commercialForm.medicamentos === "si" && commercialForm.medicamentos_cual
-          ? `Medicamentos cuÃ¡l: ${commercialForm.medicamentos_cual}`
+          ? `Medicamentos cuÃƒÂ¡l: ${commercialForm.medicamentos_cual}`
           : "",
-        condicionesInternas ? `MarcaciÃ³n interna recepciÃ³n: ${condicionesInternas}` : "",
-        commercialForm.acompanante_nombre ? `AcompaÃ±ante: ${commercialForm.acompanante_nombre}` : "",
-        commercialForm.acompanante_parentesco ? `Parentesco acompaÃ±ante: ${commercialForm.acompanante_parentesco}` : "",
+        condicionesInternas ? `MarcaciÃƒÂ³n interna recepciÃƒÂ³n: ${condicionesInternas}` : "",
+        commercialForm.acompanante_nombre ? `AcompaÃƒÂ±ante: ${commercialForm.acompanante_nombre}` : "",
+        commercialForm.acompanante_parentesco ? `Parentesco acompaÃƒÂ±ante: ${commercialForm.acompanante_parentesco}` : "",
         `Enfermedades: ${commercialForm.enfermedades === "si" ? "Si" : "No"}`,
         commercialForm.enfermedades === "si" && commercialForm.enfermedades_cual
           ? `Enfermedades cuales: ${commercialForm.enfermedades_cual}`
           : "",
         `Tiempo disponible para terapia detox 30 min: ${commercialForm.tiempo_detox_30_min === "si" ? "Si" : "No"}`,
         fuenteDetalleValor ? `${fuenteDetalleLabel}: ${fuenteDetalleValor}` : "",
-        commercialForm.observaciones ? `Observaciones recepciÃ³n: ${commercialForm.observaciones}` : "",
+        commercialForm.observaciones ? `Observaciones recepciÃƒÂ³n: ${commercialForm.observaciones}` : "",
       ].filter(Boolean).join(" | ");
 
       const appointmentContext = selectedCommercialAppointmentId
@@ -3450,8 +3451,8 @@ function imprimirRegistroComercial() {
       setActiveSection("comercial");
       setMensaje(
         appointmentContext
-          ? "Cliente registrado en comercial y la cita quedÃ³ como asistiÃ³. La impresion del registro ya quedÃ³ habilitada."
-          : "Ingreso comercial registrado correctamente. La impresion del registro ya quedÃ³ habilitada."
+          ? "Cliente registrado en comercial y la cita quedÃƒÂ³ como asistiÃƒÂ³. La impresion del registro ya quedÃƒÂ³ habilitada."
+          : "Ingreso comercial registrado correctamente. La impresion del registro ya quedÃƒÂ³ habilitada."
       );
       await cargarTodo();
     } catch (err: any) {
@@ -3620,10 +3621,10 @@ function imprimirRegistroComercial() {
 
       if (slotError) throw slotError;
 
-      setMensaje("ConfiguraciÃ³n de agenda guardada correctamente.");
+      setMensaje("ConfiguraciÃƒÂ³n de agenda guardada correctamente.");
       await cargarTodo();
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la configuraciÃ³n de agenda.");
+      setError(err?.message || "No se pudo guardar la configuraciÃƒÂ³n de agenda.");
     } finally {
       setSavingConfig(false);
     }
@@ -3655,7 +3656,7 @@ function imprimirRegistroComercial() {
     }
 
     if (!currentUserId) {
-      setError("No se encontrÃ³ el usuario actual.");
+      setError("No se encontrÃƒÂ³ el usuario actual.");
       return;
     }
 
@@ -3685,12 +3686,12 @@ function imprimirRegistroComercial() {
     }
 
     if (!durationOptionsForCurrentForm.some((item) => item.value === String(durationMinutes))) {
-      setError("La duraciÃ³n elegida no es vÃ¡lida para ese servicio.");
+      setError("La duraciÃƒÂ³n elegida no es vÃƒÂ¡lida para ese servicio.");
       return;
     }
 
     if (selectedDateClosed) {
-      setError("Ese dÃ­a estÃ¡ cerrado para agenda.");
+      setError("Ese dÃƒÂ­a estÃƒÂ¡ cerrado para agenda.");
       return;
     }
 
@@ -3699,12 +3700,12 @@ function imprimirRegistroComercial() {
     );
 
     if (!selectedSlot) {
-      setError("Debes seleccionar una hora vÃ¡lida.");
+      setError("Debes seleccionar una hora vÃƒÂ¡lida.");
       return;
     }
 
     if (selectedSlot.disabled) {
-      setError("Ese horario no estÃ¡ disponible.");
+      setError("Ese horario no estÃƒÂ¡ disponible.");
       return;
     }
 
@@ -3833,7 +3834,7 @@ function imprimirRegistroComercial() {
     );
 
     if (nuevoEstado === "no_asistio" && tieneIngresoComercial) {
-      setError("Esta cita ya fue registrada en ingreso comercial, asÃ­ que no puede pasar a No asistiÃ³.");
+      setError("Esta cita ya fue registrada en ingreso comercial, asÃƒÂ­ que no puede pasar a No asistiÃƒÂ³.");
       setSavingStatusId(null);
       return;
     }
@@ -3876,7 +3877,7 @@ function imprimirRegistroComercial() {
     } catch (err: any) {
       setError(
         err?.message ||
-          "La cita se actualizÃ³, pero no se pudo terminar el proceso posterior."
+          "La cita se actualizÃƒÂ³, pero no se pudo terminar el proceso posterior."
       );
       setSavingStatusId(null);
       await cargarTodo();
@@ -3925,7 +3926,7 @@ function imprimirRegistroComercial() {
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-8">
         <div className="mx-auto max-w-7xl rounded-[32px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(150,102,95,0.12)] backdrop-blur">
           <p className="text-sm font-medium text-[#9A4E43]">
-            {error || "No tienes permiso para entrar a este mÃ³dulo."}
+            {error || "No tienes permiso para entrar a este mÃƒÂ³dulo."}
           </p>
         </div>
       </main>
@@ -3973,7 +3974,7 @@ function imprimirRegistroComercial() {
                   Crear cliente
                 </h1>
                 <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
-                  Usa este formulario para registrar el cliente sin abrir el mÃƒÂ³dulo completo de recepciÃƒÂ³n.
+                  Usa este formulario para registrar el cliente sin abrir el mÃƒÆ’Ã‚Â³dulo completo de recepciÃƒÆ’Ã‚Â³n.
                 </p>
               </div>
 
@@ -3995,16 +3996,16 @@ function imprimirRegistroComercial() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">
-                {isLimitedReceptionForCall ? "Agenda" : "RecepciÃ³n"}
+                {isLimitedReceptionForCall ? "Agenda" : "Recepci\u00F3n"}
               </p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">
-                {isLimitedReceptionForCall ? "Agenda visible" : "Agenda y admisiÃ³n"}
+                {isLimitedReceptionForCall ? "Agenda visible" : "Agenda y admisi\u00F3n"}
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 {isLimitedReceptionForCall
                   ? currentRoleCode === "supervisor_call_center"
-                    ? "Desde aquÃ­ puedes ver la agenda, crear citas y organizar los cupos sin entrar a los demÃ¡s mÃ³dulos de recepciÃ³n."
-                    : "Desde aquÃ­ puedes crear una cita para tu lead sin entrar al mÃ³dulo completo de recepciÃ³n."
+                    ? "Desde aqu\u00ED puedes ver la agenda, crear citas y organizar los cupos sin entrar a los dem\u00E1s m\u00F3dulos de recepci\u00F3n."
+                    : "Desde aqu\u00ED puedes crear una cita para tu lead sin entrar al m\u00F3dulo completo de recepci\u00F3n."
                   : "Crear citas, ubicar clientes, registrar llegada y actualizar estado."}
               </p>
             </div>
@@ -4013,12 +4014,12 @@ function imprimirRegistroComercial() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a
+            <Link
               href="/"
               className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Inicio
-            </a>
+            </Link>
 
             {isCommercialReceptionOnly ? (
               <button
@@ -4071,7 +4072,7 @@ function imprimirRegistroComercial() {
                   onClick={() => cambiarSeccion("nutricion_entregas")}
                   className={`rounded-2xl px-4 py-2 text-sm font-medium transition ${activeSection === "nutricion_entregas" ? "bg-[#5F7D66] text-white shadow-sm" : "border border-[#D6E8DA] bg-white text-[#4F6F5B] hover:bg-[#F4FAF6]"}`}
                 >
-                  Entregas nutriciÃ³n
+                  Entregas nutriciÃƒÂ³n
                 </button>
                 <button
                   type="button"
@@ -4155,7 +4156,7 @@ function imprimirRegistroComercial() {
                       <div key={item.id} className="rounded-[22px] border border-[#DCEBE1] bg-[#FCFEFC] p-4">
                         <p className="text-sm font-semibold text-slate-900">{item.customer_name}</p>
                         <p className="mt-1 text-sm text-[#607368]">
-                          {serviceLabelComercial(item.purchased_service)} Â·{" "}
+                          {serviceLabelComercial(item.purchased_service)} Ã‚Â·{" "}
                           {formatHora(item.next_appointment_time) || "Sin hora siguiente"}
                         </p>
                         <p className="mt-1 text-xs text-[#6B7F74]">
@@ -4200,7 +4201,7 @@ function imprimirRegistroComercial() {
                       <div key={item.id} className="rounded-[22px] border border-[#DCEBE1] bg-[#FCFEFC] p-4">
                         <p className="text-sm font-semibold text-slate-900">{item.patient_name}</p>
                         <p className="mt-1 text-sm text-[#607368]">
-                          {item.appointment_date} Â· {formatHora(item.appointment_time)}
+                          {item.appointment_date} Ã‚Â· {formatHora(item.appointment_time)}
                         </p>
                         <div className="mt-3 grid gap-2">
                           <button
@@ -4255,13 +4256,13 @@ function imprimirRegistroComercial() {
                       <div key={item.id} className="rounded-[22px] border border-[#DCEBE1] bg-[#FCFEFC] p-4">
                         <p className="text-sm font-semibold text-slate-900">{item.patient_name}</p>
                         <p className="mt-1 text-sm text-[#607368]">
-                          {item.appointment_date} Â· {formatHora(item.appointment_time)}
+                          {item.appointment_date} Ã‚Â· {formatHora(item.appointment_time)}
                         </p>
                         {nextAppointment ? (
                           <div className="mt-3 rounded-2xl border border-[#D7EADF] bg-white/90 p-3 text-sm text-slate-700">
                             <p>
                               <span className="font-medium">Siguiente cita:</span>{" "}
-                              {nextAppointment.appointment_date} Â· {formatHora(nextAppointment.appointment_time)}
+                              {nextAppointment.appointment_date} Ã‚Â· {formatHora(nextAppointment.appointment_time)}
                             </p>
                             <p className="mt-1">
                               <span className="font-medium">Servicio:</span>{" "}
@@ -4315,22 +4316,22 @@ function imprimirRegistroComercial() {
               <StatCard title="Ingresos comerciales" value={String(commercialSummary.total)} />
               <StatCard title="Pendientes" value={String(commercialSummary.pendientes)} />
               <StatCard title="Asignados" value={String(commercialSummary.asignados)} />
-              <StatCard title="En atenciÃ³n" value={String(commercialSummary.atencion)} />
+              <StatCard title="En atenciÃƒÂ³n" value={String(commercialSummary.atencion)} />
               <StatCard title="Finalizados" value={String(commercialSummary.finalizados)} />
             </section>
           ) : activeSection === "nutricion_entregas" ? (
             <section className="mb-6 grid gap-4 md:grid-cols-3">
-              <StatCard title="Pendientes nutriciÃ³n" value={String(nutritionPendingSummary.total)} />
+              <StatCard title="Pendientes nutriciÃƒÂ³n" value={String(nutritionPendingSummary.total)} />
               <StatCard title="Con producto seleccionado" value={nutritionDeliveryProductId ? "1" : "0"} />
               <StatCard title="Cliente abierto" value={nutritionSelection ? "1" : "0"} />
             </section>
           ) : (
             <section className="mb-6 grid gap-4 md:grid-cols-5">
-              <StatCard title={`${sectionLabel} del dÃ­a`} value={String(resumen.total)} />
+              <StatCard title={`${sectionLabel} del dÃƒÂ­a`} value={String(resumen.total)} />
               <StatCard title="Agendadas" value={String(resumen.agendadas)} />
               <StatCard title="En espera" value={String(resumen.espera)} />
-              <StatCard title="AsistiÃ³" value={String(resumen.asistio)} />
-              <StatCard title="No asistiÃ³" value={String(resumen.noAsistio)} />
+              <StatCard title="AsistiÃƒÂ³" value={String(resumen.asistio)} />
+              <StatCard title="No asistiÃƒÂ³" value={String(resumen.noAsistio)} />
             </section>
           )
         )}
@@ -4343,7 +4344,7 @@ function imprimirRegistroComercial() {
                   Configuraci&oacute;n
                 </p>
                 <h2 className="mt-3 text-2xl font-bold text-[#24312A]">
-                  ConfiguraciÃ³n de cupos
+                  ConfiguraciÃƒÂ³n de cupos
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-[#607368]">
                   Define cupos diarios y bloquea horarios por fecha.
@@ -4356,7 +4357,7 @@ function imprimirRegistroComercial() {
                 disabled={savingConfig}
                 className="rounded-2xl bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_16px_30px_rgba(63,105,82,0.22)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
               >
-                {savingConfig ? "Guardando..." : "Guardar configuraciÃ³n"}
+                {savingConfig ? "Guardando..." : "Guardar configuraciÃƒÂ³n"}
               </button>
             </div>
 
@@ -4379,7 +4380,7 @@ function imprimirRegistroComercial() {
               />
 
               <Field
-                label="Cupo total del dÃ­a"
+                label="Cupo total del dÃƒÂ­a"
                 input={
                   <input
                     className={inputClass}
@@ -4398,7 +4399,7 @@ function imprimirRegistroComercial() {
                   onChange={(e) => setDailyClosedInput(e.target.checked)}
                 />
                 <span className="text-sm font-medium text-slate-700">
-                  Cerrar este dÃ­a completo
+                  Cerrar este dÃƒÂ­a completo
                 </span>
               </label>
             </div>
@@ -4461,7 +4462,7 @@ function imprimirRegistroComercial() {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Ingreso comercial</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Registra la llegada del cliente al Ã¡rea comercial y dÃ©jalo disponible para asignaciÃ³n del gerente.
+                    Registra la llegada del cliente al ÃƒÂ¡rea comercial y dÃƒÂ©jalo disponible para asignaciÃƒÂ³n del gerente.
                   </p>
                 </div>
               </div>
@@ -4470,8 +4471,8 @@ function imprimirRegistroComercial() {
                 <div className="mt-5 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
                   <p className="font-semibold">Cita seleccionada para ingreso comercial</p>
                   <p className="mt-1">
-                    Al guardar este registro, la cita quedarÃ¡ automÃ¡ticamente como <strong>AsistiÃ³</strong>.
-                    DespuÃ©s de este paso ya no deberÃ­a marcarse como <strong>No asistiÃ³</strong>, porque el cliente ya quedÃ³ recibido en Comercial.
+                    Al guardar este registro, la cita quedarÃƒÂ¡ automÃƒÂ¡ticamente como <strong>AsistiÃƒÂ³</strong>.
+                    DespuÃƒÂ©s de este paso ya no deberÃƒÂ­a marcarse como <strong>No asistiÃƒÂ³</strong>, porque el cliente ya quedÃƒÂ³ recibido en Comercial.
                   </p>
                 </div>
               ) : null}
@@ -4489,7 +4490,7 @@ function imprimirRegistroComercial() {
                     }
                   />
                   <Field
-                    label="TelÃ©fono"
+                    label="TelÃƒÂ©fono"
                     input={
                       <input
                         className={inputClass}
@@ -4520,7 +4521,7 @@ function imprimirRegistroComercial() {
                         <p className="text-xs text-slate-500">
                           {loadingCommercialClientLookup
                             ? "Buscando cliente existente..."
-                            : "Si la cÃ©dula ya existe, se completarÃ¡n nombre, teléfono y ciudad."}
+                            : "Si la cÃƒÂ©dula ya existe, se completarÃƒÂ¡n nombre, telÃ©fono y ciudad."}
                         </p>
                       </div>
                     }
@@ -4567,7 +4568,7 @@ function imprimirRegistroComercial() {
                             <option value="">Selecciona usuario</option>
                             {availableSourceUsers.map((item) => (
                               <option key={item.id} value={item.id}>
-                                {item.full_name} Â· {item.role_name || item.role_code}
+                                {item.full_name} Ã‚Â· {item.role_name || item.role_code}
                               </option>
                             ))}
                           </select>
@@ -4585,20 +4586,20 @@ function imprimirRegistroComercial() {
                     <div />
                   )}
                   <Field
-                    label="Â¿Tiene EPS?"
+                    label="Ã‚Â¿Tiene EPS?"
                     input={
                       <select
                         className={inputClass}
                         value={commercialForm.tiene_eps}
                         onChange={(e) => setCommercialForm((prev) => ({ ...prev, tiene_eps: e.target.value }))}
                       >
-                        <option value="si">SÃ­</option>
+                        <option value="si">SÃƒÂ­</option>
                         <option value="no">No</option>
                       </select>
                     }
                   />
                   <Field
-                    label="AfiliaciÃ³n"
+                    label="AfiliaciÃƒÂ³n"
                     input={
                       <select
                         className={inputClass}
@@ -4626,33 +4627,33 @@ function imprimirRegistroComercial() {
                     }
                   />
                   <Field
-                    label="Â¿Asiste con cÃ©dula?"
+                    label="Ã‚Â¿Asiste con cÃƒÂ©dula?"
                     input={
                       <select
                         className={inputClass}
                         value={commercialForm.trae_cedula}
                         onChange={(e) => setCommercialForm((prev) => ({ ...prev, trae_cedula: e.target.value }))}
                       >
-                        <option value="si">SÃ­</option>
+                        <option value="si">SÃƒÂ­</option>
                         <option value="no">No</option>
                       </select>
                     }
                   />
                   <Field
-                    label="Â¿Tiene celular inteligente?"
+                    label="Ã‚Â¿Tiene celular inteligente?"
                     input={
                       <select
                         className={inputClass}
                         value={commercialForm.celular_inteligente}
                         onChange={(e) => setCommercialForm((prev) => ({ ...prev, celular_inteligente: e.target.value }))}
                       >
-                        <option value="si">SÃ­</option>
+                        <option value="si">SÃƒÂ­</option>
                         <option value="no">No</option>
                       </select>
                     }
                   />
                   <Field
-                    label="OcupaciÃ³n"
+                    label="OcupaciÃƒÂ³n"
                     input={
                       <select
                         className={inputClass}
@@ -4717,23 +4718,23 @@ function imprimirRegistroComercial() {
 
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4">
                   <div className="flex flex-wrap items-center gap-3">
-                    <p className="text-sm font-medium text-slate-700">ClasificaciÃ³n inicial</p>
+                    <p className="text-sm font-medium text-slate-700">ClasificaciÃƒÂ³n inicial</p>
                     <span className={`rounded-full px-3 py-1 text-xs ${commercialForm.clasificacion_inicial === "Q" ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
                       {commercialForm.clasificacion_inicial}
                     </span>
                     <p className="text-xs text-slate-500">
-                      Si entra No Q y compra en Comercial, luego podrÃ¡ pasar automÃ¡ticamente a Q como clasificaciÃ³n final.
+                      Si entra No Q y compra en Comercial, luego podrÃƒÂ¡ pasar automÃƒÂ¡ticamente a Q como clasificaciÃƒÂ³n final.
                     </p>
                   </div>
                   <p className="mt-3 text-sm text-slate-700">
-                    {commercialForm.clasificacion_motivo || "Completa los datos para calcular la clasificaciÃ³n."}
+                    {commercialForm.clasificacion_motivo || "Completa los datos para calcular la clasificaciÃƒÂ³n."}
                   </p>
                 </div>
 
                 <div className="rounded-2xl border border-slate-200 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <div>
-                      <h3 className="text-base font-semibold text-slate-900">Antecedentes bÃ¡sicos</h3>
+                      <h3 className="text-base font-semibold text-slate-900">Antecedentes bÃƒÂ¡sicos</h3>
                       <p className="mt-1 text-sm text-slate-500">
                         Registra lo que el cliente refiere y marca internamente si alguno descalifica.
                       </p>
@@ -4763,7 +4764,7 @@ function imprimirRegistroComercial() {
                   <div className="mt-4 space-y-4">
                     <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
                       <Field
-                        label="Â¿Hipertenso?"
+                        label="Ã‚Â¿Hipertenso?"
                         input={
                           <select
                             className={inputClass}
@@ -4781,7 +4782,7 @@ function imprimirRegistroComercial() {
                             }
                           >
                             <option value="no">No</option>
-                            <option value="si">SÃ­</option>
+                            <option value="si">SÃƒÂ­</option>
                           </select>
                         }
                       />
@@ -4807,7 +4808,7 @@ function imprimirRegistroComercial() {
 
                     <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
                       <Field
-                        label="Â¿DiabÃ©tico?"
+                        label="Ã‚Â¿DiabÃƒÂ©tico?"
                         input={
                           <select
                             className={inputClass}
@@ -4825,7 +4826,7 @@ function imprimirRegistroComercial() {
                             }
                           >
                             <option value="no">No</option>
-                            <option value="si">SÃ­</option>
+                            <option value="si">SÃƒÂ­</option>
                           </select>
                         }
                       />
@@ -4851,7 +4852,7 @@ function imprimirRegistroComercial() {
 
                     <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
                       <Field
-                        label="Â¿CirugÃ­as?"
+                        label="Ã‚Â¿CirugÃƒÂ­as?"
                         input={
                           <select
                             className={inputClass}
@@ -4870,16 +4871,16 @@ function imprimirRegistroComercial() {
                             }
                           >
                             <option value="no">No</option>
-                            <option value="si">SÃ­</option>
+                            <option value="si">SÃƒÂ­</option>
                           </select>
                         }
                       />
                       <Field
-                        label="Â¿CuÃ¡l cirugÃ­a?"
+                        label="Ã‚Â¿CuÃƒÂ¡l cirugÃƒÂ­a?"
                         input={
                           <input
                             className={inputClass}
-                            placeholder="Escribe cuÃ¡l"
+                            placeholder="Escribe cuÃƒÂ¡l"
                             value={commercialForm.cirugias_cual}
                             disabled={commercialForm.cirugias !== "si"}
                             onChange={(e) =>
@@ -4912,7 +4913,7 @@ function imprimirRegistroComercial() {
 
                     <div className="grid gap-3 lg:grid-cols-[1fr_1.2fr_auto]">
                       <Field
-                        label="Â¿Toma medicamentos?"
+                        label="Ã‚Â¿Toma medicamentos?"
                         input={
                           <select
                             className={inputClass}
@@ -4931,16 +4932,16 @@ function imprimirRegistroComercial() {
                             }
                           >
                             <option value="no">No</option>
-                            <option value="si">SÃ­</option>
+                            <option value="si">SÃƒÂ­</option>
                           </select>
                         }
                       />
                       <Field
-                        label="Â¿CuÃ¡les medicamentos?"
+                        label="Ã‚Â¿CuÃƒÂ¡les medicamentos?"
                         input={
                           <input
                             className={inputClass}
-                            placeholder="Escribe cuÃ¡les"
+                            placeholder="Escribe cuÃƒÂ¡les"
                             value={commercialForm.medicamentos_cual}
                             disabled={commercialForm.medicamentos !== "si"}
                             onChange={(e) =>
@@ -5035,7 +5036,7 @@ function imprimirRegistroComercial() {
 
                 <div className="grid gap-4 md:grid-cols-2">
                   <Field
-                    label="Nombre del acompaÃ±ante"
+                    label="Nombre del acompaÃƒÂ±ante"
                     input={
                       <input
                         className={inputClass}
@@ -5068,7 +5069,7 @@ function imprimirRegistroComercial() {
                 </div>
 
                 <Field
-                  label="Observaciones de recepciÃ³n"
+                  label="Observaciones de recepciÃƒÂ³n"
                   input={
                     <textarea
                       className={`${inputClass} min-h-[110px] resize-none`}
@@ -5103,15 +5104,15 @@ function imprimirRegistroComercial() {
             <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Ingresos comerciales del dÃ­a</h2>
+                  <h2 className="text-2xl font-bold text-slate-900">Ingresos comerciales del dÃƒÂ­a</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    AquÃ­ solo aparecen los ingresos comerciales creados el dÃ­a de hoy.
+                    AquÃƒÂ­ solo aparecen los ingresos comerciales creados el dÃƒÂ­a de hoy.
                   </p>
                 </div>
 
                 <input
                   className="w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] md:max-w-xs"
-                  placeholder="Buscar por nombre o teléfono"
+                  placeholder="Buscar por nombre o telÃ©fono"
                   value={commercialSearch}
                   onChange={(e) => setCommercialSearch(e.target.value)}
                 />
@@ -5120,7 +5121,7 @@ function imprimirRegistroComercial() {
               <div className="mt-5 space-y-3">
                 {commercialCasesFiltered.length === 0 ? (
                   <div className="rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
-                    AÃºn no hay ingresos comerciales registrados.
+                    AÃƒÂºn no hay ingresos comerciales registrados.
                   </div>
                 ) : (
                   commercialCasesFiltered.map((item) => (
@@ -5134,7 +5135,7 @@ function imprimirRegistroComercial() {
                             </span>
                           </div>
                           <p className="mt-1 text-sm text-slate-600">
-                            {item.phone || "Sin teléfono"} Â· {item.city || "Sin ciudad"}
+                            {item.phone || "Sin telÃ©fono"} Ã‚Â· {item.city || "Sin ciudad"}
                           </p>
                           <p className="mt-1 text-sm text-slate-600">
                             Ingreso: {new Date(item.created_at).toLocaleString()}
@@ -5159,15 +5160,15 @@ function imprimirRegistroComercial() {
             <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
               <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900">Pendientes nutriciÃ³n</h2>
+                  <h2 className="text-2xl font-bold text-slate-900">Pendientes nutriciÃƒÂ³n</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Clientes cuya cita ya fue finalizada por nutriciÃ³n y estÃ¡n pendientes de impresiÃ³n y entrega.
+                    Clientes cuya cita ya fue finalizada por nutriciÃƒÂ³n y estÃƒÂ¡n pendientes de impresiÃƒÂ³n y entrega.
                   </p>
                 </div>
 
                 <input
                   className="w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] md:max-w-xs"
-                  placeholder="Buscar por nombre o teléfono"
+                  placeholder="Buscar por nombre o telÃ©fono"
                   value={nutritionDeliverySearch}
                   onChange={(e) => setNutritionDeliverySearch(e.target.value)}
                 />
@@ -5188,10 +5189,10 @@ function imprimirRegistroComercial() {
                         <div>
                           <p className="text-base font-semibold text-slate-900">{item.patient_name}</p>
                           <p className="mt-1 text-sm text-slate-600">
-                            {item.phone || "Sin teléfono"} Â· {item.city || "Sin ciudad"}
+                            {item.phone || "Sin telÃ©fono"} Ã‚Â· {item.city || "Sin ciudad"}
                           </p>
                           <p className="mt-1 text-sm text-slate-600">
-                            {item.appointment_date} Â· {formatHora(item.appointment_time)}
+                            {item.appointment_date} Ã‚Â· {formatHora(item.appointment_time)}
                           </p>
                         </div>
 
@@ -5212,14 +5213,14 @@ function imprimirRegistroComercial() {
             </div>
 
             <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
-              <h2 className="text-2xl font-bold text-slate-900">Entrega e impresiÃ³n</h2>
+              <h2 className="text-2xl font-bold text-slate-900">Entrega e impresiÃƒÂ³n</h2>
               <p className="mt-1 text-sm text-slate-500">
                 Selecciona un cliente pendiente, imprime el documento y descuenta los productos entregados.
               </p>
 
               {loadingNutritionSelection ? (
                 <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
-                  Cargando informaciÃ³n nutricional...
+                  Cargando informaciÃƒÂ³n nutricional...
                 </div>
               ) : !nutritionSelection ? (
                 <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
@@ -5230,10 +5231,10 @@ function imprimirRegistroComercial() {
                   <div className="rounded-[26px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
                     <p className="text-lg font-semibold text-slate-900">{nutritionSelection.appointment.patient_name}</p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {nutritionSelection.document || "Sin documento"} Â· {nutritionSelection.appointment.phone || "Sin teléfono"}
+                      {nutritionSelection.document || "Sin documento"} Ã‚Â· {nutritionSelection.appointment.phone || "Sin telÃ©fono"}
                     </p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {nutritionSelection.appointment.appointment_date} Â· {formatHora(nutritionSelection.appointment.appointment_time)}
+                      {nutritionSelection.appointment.appointment_date} Ã‚Â· {formatHora(nutritionSelection.appointment.appointment_time)}
                     </p>
                     {nutritionSelection.profile?.plan_nutricional ? (
                       <p className="mt-3 text-sm text-slate-700">
@@ -5290,7 +5291,7 @@ function imprimirRegistroComercial() {
                           .sort((a, b) => a.name.localeCompare(b.name))
                           .map((item) => (
                             <option key={item.id} value={item.id}>
-                              {item.name} Â· stock {item.stock}
+                              {item.name} Ã‚Â· stock {item.stock}
                             </option>
                           ))}
                       </select>
@@ -5351,7 +5352,7 @@ function imprimirRegistroComercial() {
                 <div>
                   <h2 className="text-2xl font-bold text-slate-900">Impresiones y entregas</h2>
                   <p className="mt-1 text-sm text-slate-500">
-                    Busca un cliente para imprimir su cita, sus instrucciones o registrar la entrega de nutracÃ©uticos.
+                    Busca un cliente para imprimir su cita, sus instrucciones o registrar la entrega de nutracÃƒÂ©uticos.
                   </p>
                 </div>
               </div>
@@ -5362,7 +5363,7 @@ function imprimirRegistroComercial() {
                   input={
                     <input
                       className={inputClass}
-                      placeholder="Nombre o teléfono"
+                      placeholder="Nombre o telÃ©fono"
                       value={printSearch}
                       onChange={(e) => setPrintSearch(e.target.value)}
                     />
@@ -5378,7 +5379,7 @@ function imprimirRegistroComercial() {
                       {selectedPrintPatient.patient_name}
                     </p>
                     <p className="mt-1 text-sm text-slate-600">
-                      {selectedPrintPatient.phone || "Sin teléfono"} Â· {selectedPrintPatient.city || "Sin ciudad"}
+                      {selectedPrintPatient.phone || "Sin telÃ©fono"} Ã‚Â· {selectedPrintPatient.city || "Sin ciudad"}
                     </p>
                     <p className="mt-1 text-sm text-slate-600">
                       {selectedPrintPatient.detail}
@@ -5389,7 +5390,7 @@ function imprimirRegistroComercial() {
                   </div>
                 ) : (
                   <div className="rounded-2xl border border-dashed border-slate-200 p-6 text-sm text-slate-500">
-                    Escribe un nombre o teléfono para buscar el cliente.
+                    Escribe un nombre o telÃ©fono para buscar el cliente.
                   </div>
                 )}
 
@@ -5413,7 +5414,7 @@ function imprimirRegistroComercial() {
 
                 <div className="rounded-2xl border border-slate-200 p-4">
                   <h3 className="text-lg font-semibold text-slate-900">
-                    Registrar entrega de nutracÃ©uticos
+                    Registrar entrega de nutracÃƒÂ©uticos
                   </h3>
                   <p className="mt-1 text-sm text-slate-500">
                     Este registro queda guardado en este equipo mientras conectamos el inventario completo.
@@ -5473,13 +5474,13 @@ function imprimirRegistroComercial() {
             <div className="rounded-3xl bg-white p-6 shadow-sm">
               <h2 className="text-2xl font-bold text-[#1F3128]">Entregas recientes</h2>
               <p className="mt-1 text-sm text-[#607368]">
-                Vista rÃ¡pida de lo entregado desde este dispositivo.
+                Vista rÃƒÂ¡pida de lo entregado desde este dispositivo.
               </p>
 
               <div className="mt-5 space-y-3">
                 {deliveryLogs.length === 0 ? (
                   <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
-                    AÃºn no hay entregas registradas.
+                    AÃƒÂºn no hay entregas registradas.
                   </div>
                 ) : (
                   deliveryLogs.map((item) => (
@@ -5488,7 +5489,7 @@ function imprimirRegistroComercial() {
                         <div>
                           <p className="text-base font-semibold text-slate-900">{item.patient_name}</p>
                           <p className="mt-1 text-sm text-[#5F7468]">
-                            {item.phone || "Sin teléfono"}
+                            {item.phone || "Sin telÃ©fono"}
                           </p>
                           <p className="mt-2 text-sm text-[#496356]">
                             <span className="font-medium">Producto:</span> {item.product}
@@ -5519,7 +5520,7 @@ function imprimirRegistroComercial() {
                 <div>
                   <h2 className="text-2xl font-bold text-[#1F3128]">Inventario</h2>
                   <p className="mt-1 text-sm text-[#607368]">
-                    Control bÃ¡sico de nutracÃ©uticos, entradas, salidas y alertas de stock.
+                    Control bÃƒÂ¡sico de nutracÃƒÂ©uticos, entradas, salidas y alertas de stock.
                   </p>
                 </div>
               </div>
@@ -5539,7 +5540,7 @@ function imprimirRegistroComercial() {
                         .sort((a, b) => a.name.localeCompare(b.name))
                         .map((item) => (
                           <option key={item.id} value={item.id}>
-                            {item.name} Â· stock {item.stock}
+                            {item.name} Ã‚Â· stock {item.stock}
                           </option>
                         ))}
                     </select>
@@ -5559,7 +5560,7 @@ function imprimirRegistroComercial() {
                 />
 
                 <Field
-                  label="CategorÃ­a"
+                  label="CategorÃƒÂ­a"
                   input={
                     <input
                       className={inputClass}
@@ -5570,7 +5571,7 @@ function imprimirRegistroComercial() {
                 />
 
                 <Field
-                  label="Stock mÃ­nimo"
+                  label="Stock mÃƒÂ­nimo"
                   input={
                     <input
                       className={inputClass}
@@ -5595,7 +5596,7 @@ function imprimirRegistroComercial() {
                 />
 
                 <Field
-                  label="NÃºmero de lote"
+                  label="NÃƒÂºmero de lote"
                   input={
                     <input
                       className={inputClass}
@@ -5663,13 +5664,13 @@ function imprimirRegistroComercial() {
                   <div>
                     <h2 className="text-2xl font-bold text-[#1F3128]">Stock actual</h2>
                     <p className="mt-1 text-sm text-[#607368]">
-                      Vista rÃ¡pida del inventario disponible en este dispositivo.
+                      Vista rÃƒÂ¡pida del inventario disponible en este dispositivo.
                     </p>
                   </div>
 
                   <input
                     className="w-full rounded-[22px] border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] md:max-w-xs"
-                    placeholder="Buscar producto o categorÃ­a"
+                    placeholder="Buscar producto o categorÃƒÂ­a"
                     value={inventorySearch}
                     onChange={(e) => setInventorySearch(e.target.value)}
                   />
@@ -5678,7 +5679,7 @@ function imprimirRegistroComercial() {
                 <div className="mt-5 space-y-3">
                   {inventoryFilteredItems.length === 0 ? (
                     <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
-                      AÃºn no hay productos registrados en el inventario.
+                      AÃƒÂºn no hay productos registrados en el inventario.
                     </div>
                   ) : (
                     inventoryFilteredItems.map((item) => {
@@ -5693,7 +5694,7 @@ function imprimirRegistroComercial() {
                                 <span className="font-medium">Stock:</span> {item.stock}
                               </p>
                               <p className="mt-1 text-sm text-[#496356]">
-                                <span className="font-medium">MÃ­nimo:</span> {item.min_stock}
+                                <span className="font-medium">MÃƒÂ­nimo:</span> {item.min_stock}
                               </p>
                             </div>
                             <span className={`rounded-full px-3 py-1 text-xs ${inventoryStatus.className}`}>
@@ -5710,13 +5711,13 @@ function imprimirRegistroComercial() {
               <div className="rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(244,251,246,0.96)_100%)] p-6 shadow-[0_24px_52px_rgba(95,125,102,0.14)]">
                 <h2 className="text-2xl font-bold text-[#1F3128]">Movimientos recientes</h2>
                 <p className="mt-1 text-sm text-[#607368]">
-                  Ãšltimos registros de entrada, salida o ajuste.
+                  ÃƒÅ¡ltimos registros de entrada, salida o ajuste.
                 </p>
 
                 <div className="mt-5 space-y-3">
                   {inventoryRecentMovements.length === 0 ? (
                     <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
-                      AÃºn no hay movimientos registrados.
+                      AÃƒÂºn no hay movimientos registrados.
                     </div>
                   ) : (
                     inventoryRecentMovements.map((item) => (
@@ -5767,12 +5768,12 @@ function imprimirRegistroComercial() {
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {leadIdFromUrl
-                    ? "Esta cita se estÃ¡ creando desde un lead especÃ­fico."
+                    ? "Esta cita se estÃƒÂ¡ creando desde un lead especÃƒÂ­fico."
                     : "Puedes elegir un lead existente o ingresar el cliente manualmente."}
                 </p>
                 {!isReadOnlyAgendaForCall ? (
                   <p className="mt-2 inline-flex rounded-full border border-[#E3ECE5] bg-[#F8F7F4] px-3 py-1 text-xs font-medium text-[#4F6F5B]">
-                    MÃ³dulo activo: {sectionLabel}
+                    MÃƒÂ³dulo activo: {sectionLabel}
                   </p>
                 ) : null}
               </div>
@@ -5783,7 +5784,7 @@ function imprimirRegistroComercial() {
                   onClick={() => resetForm()}
                   className="rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
                 >
-                  Cancelar ediciÃ³n
+                  Cancelar ediciÃƒÂ³n
                 </button>
               ) : null}
             </div>
@@ -5792,7 +5793,7 @@ function imprimirRegistroComercial() {
               {!leadIdFromUrl ? (
                 <div className="grid gap-3 md:grid-cols-2">
                   <label className="rounded-2xl border border-slate-300 p-4 text-sm">
-                    <div className="mb-2 font-medium text-slate-700">Modo de creaciÃ³n</div>
+                    <div className="mb-2 font-medium text-slate-700">Modo de creaciÃƒÂ³n</div>
                     <select
                       className="w-full outline-none"
                       value={form.mode}
@@ -5821,7 +5822,7 @@ function imprimirRegistroComercial() {
                       <div className="mb-2 font-medium text-slate-700">Buscar lead</div>
                       <input
                         className="w-full outline-none"
-                        placeholder="Nombre o teléfono"
+                        placeholder="Nombre o telÃ©fono"
                         value={busquedaLead}
                         onChange={(e) => setBusquedaLead(e.target.value)}
                       />
@@ -5848,18 +5849,18 @@ function imprimirRegistroComercial() {
 
                       <label className="rounded-2xl border border-slate-300 p-4 text-sm">
                         <div className="mb-2 font-medium text-slate-700">
-                          Buscar cliente por cÃ©dula o teléfono
+                          Buscar cliente por cÃƒÂ©dula o telÃ©fono
                         </div>
                         <input
                           className="w-full outline-none"
-                          placeholder="Escribe cÃ©dula o teléfono"
+                          placeholder="Escribe cÃƒÂ©dula o telÃ©fono"
                           value={manualClientLookup}
                           onChange={(e) => setManualClientLookup(e.target.value)}
                         />
                         <p className="mt-2 text-xs text-slate-500">
                           {loadingManualClientLookup
                             ? "Buscando cliente existente..."
-                            : "Si ya existe en el sistema, se cargarÃ¡ automÃ¡ticamente."}
+                            : "Si ya existe en el sistema, se cargarÃƒÂ¡ automÃƒÂ¡ticamente."}
                         </p>
                       </label>
                     </>
@@ -5880,7 +5881,7 @@ function imprimirRegistroComercial() {
                     <option value="">Selecciona</option>
                     {leadsFiltrados.map((lead) => (
                       <option key={lead.id} value={lead.id}>
-                        {fullLeadName(lead)} Â· {lead.phone}
+                        {fullLeadName(lead)} Ã‚Â· {lead.phone}
                       </option>
                     ))}
                   </select>
@@ -5896,7 +5897,7 @@ function imprimirRegistroComercial() {
                     {form.patient_name || "Cliente"}
                   </p>
                   <p className="mt-1 text-sm text-slate-600">
-                    {form.phone || "Sin teléfono"} Â· {form.city || "Sin ciudad"}
+                    {form.phone || "Sin telÃ©fono"} Ã‚Â· {form.city || "Sin ciudad"}
                   </p>
                 </div>
               ) : null}
@@ -5916,7 +5917,7 @@ function imprimirRegistroComercial() {
                 />
 
                 <Field
-                  label="TelÃ©fono"
+                  label="TelÃƒÂ©fono"
                   input={
                     <input
                       className={inputClass}
@@ -5968,7 +5969,7 @@ function imprimirRegistroComercial() {
                     />
 
                     <Field
-                      label="DuraciÃ³n"
+                      label="DuraciÃƒÂ³n"
                       input={
                         <select
                           className={inputClass}
@@ -6017,7 +6018,7 @@ function imprimirRegistroComercial() {
                             <option value="">Selecciona</option>
                             {filteredSpecialists.map((item) => (
                               <option key={item.id} value={item.id}>
-                                {item.full_name} Â· {item.role_name}
+                                {item.full_name} Ã‚Â· {item.role_name}
                               </option>
                             ))}
                           </>
@@ -6114,12 +6115,12 @@ function imprimirRegistroComercial() {
               <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
                 <div>
                   <h2 className="hidden text-2xl font-bold text-[#1F3128]">
-                    {agendaVisibleTitle.replace("dÃƒÆ’Ã‚Â­a", "dÃ­a")}
+                    {agendaVisibleTitle.replace("dÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­a", "dÃƒÂ­a")}
                   </h2>
                   <h2 className="text-2xl font-bold text-[#1F3128]">{normalizedAgendaVisibleTitle}</h2>
                   <p className="mt-1 text-sm text-[#607368]">{normalizedAgendaVisibleDescription}</p>
                   <p className="hidden mt-1 text-sm text-[#607368]">
-                    {`Vista de ${sectionLabel.toLowerCase()} por nombre, teléfono y fecha.`}
+                    {`Vista de ${sectionLabel.toLowerCase()} por nombre, telÃ©fono y fecha.`}
                   </p>
                 </div>
 
@@ -6137,7 +6138,7 @@ function imprimirRegistroComercial() {
                       <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-sm">
                         {"D\u00EDa"}
                       </span>
-                      Día
+                      DÃ­a
                     </button>
                     {canShowWeeklyAgenda ? (
                       <>
@@ -6192,7 +6193,7 @@ function imprimirRegistroComercial() {
                 <input
                   className="rounded-[22px] border border-[#CFE4D8] bg-white/92 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
-                  placeholder="Buscar por nombre o teléfono"
+                  placeholder="Buscar por nombre o telÃ©fono"
                   value={busquedaAgenda}
                   onChange={(e) => setBusquedaAgenda(e.target.value)}
                 />
@@ -6225,7 +6226,7 @@ function imprimirRegistroComercial() {
                   </>
                 ) : (
                   <div className="rounded-[18px] border border-[#CFE4D8] bg-white/88 px-3 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm">
-                    Día seleccionado: {agendaPeriodLabel}
+                    DÃ­a seleccionado: {agendaPeriodLabel}
                   </div>
                 )}
               </div>
@@ -6446,7 +6447,7 @@ function imprimirRegistroComercial() {
                             </div>
 
                             <p className="mt-2 text-sm text-[#5F7468]">
-                              {item.phone || "Sin teléfono"} Â· {item.city || "Sin ciudad"}
+                              {item.phone || "Sin telÃ©fono"} Ã‚Â· {item.city || "Sin ciudad"}
                             </p>
 
                             <p className="mt-1 text-sm text-[#5F7468]">
@@ -6488,7 +6489,7 @@ function imprimirRegistroComercial() {
                                 disabled={savingStatusId === item.id}
                                 className="rounded-2xl border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
                               >
-                                No asistiÃ³
+                                No asistiÃƒÂ³
                               </button>
                             ) : (
                               <span className="rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-medium text-emerald-700">
@@ -6563,7 +6564,7 @@ export default function RecepcionPage() {
       fallback={
         <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-8">
           <div className="mx-auto max-w-7xl rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
-            <p className="text-sm font-medium text-[#607368]">Cargando recepciÃ³n...</p>
+            <p className="text-sm font-medium text-[#607368]">Cargando recepciÃƒÂ³n...</p>
           </div>
         </main>
       }

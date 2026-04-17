@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -151,7 +152,7 @@ function traducirEstado(estado: string | null) {
     no_responde: "No responde",
     contactado: "Contactado",
     agendado: "Agendado",
-    no_asistio: "No asistió",
+    no_asistio: "No asisti\u00F3",
     dato_falso: "Dato falso",
     no_interesa: "No interesa",
   };
@@ -164,8 +165,8 @@ function traducirServicio(servicio: string | null) {
   const map: Record<string, string> = {
     detox: "Detox",
     sueroterapia: "Sueroterapia",
-    valoracion: "Valoración",
-    nutricion: "Nutrición",
+    valoracion: "Valoraci\u00F3n",
+    nutricion: "Nutrici\u00F3n",
     fisioterapia: "Fisioterapia",
     medicina_general: "Medicina general",
     otro: "Otro",
@@ -201,7 +202,7 @@ const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "asignados", label: "Asignados" },
   { key: "pendientes_cita", label: "Pendientes de cita" },
   { key: "agendados", label: "Agendados" },
-  { key: "no_asistio", label: "No asistió" },
+  { key: "no_asistio", label: "No asisti\u00F3" },
   { key: "cerrados", label: "Descartados" },
 ];
 
@@ -227,6 +228,10 @@ export default function CallCenterPage() {
   const [savingCommissionLeadId, setSavingCommissionLeadId] = useState<string | null>(null);
   const [cancelingAppointmentId, setCancelingAppointmentId] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
+  const isSupervisorCallCenterView =
+    currentRoleCode === "super_user" ||
+    currentRoleCode === "supervisor_call_center";
+  const canSeeAssignmentMeta = currentRoleCode !== "tmk";
 
   async function cargarLeads() {
     const { data, error } = await supabase
@@ -364,7 +369,7 @@ export default function CallCenterPage() {
       setSelectedStatuses(statuses);
       setSelectedCommissionSources(commissionSources);
     } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar los datos del módulo.");
+      setError(err?.message || "No se pudieron cargar los datos del mÃƒÂ³dulo.");
     } finally {
       setCargando(false);
     }
@@ -379,7 +384,7 @@ export default function CallCenterPage() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesión para usar este módulo.");
+        setError("Debes iniciar sesiÃƒÂ³n para usar este mÃƒÂ³dulo.");
         return;
       }
 
@@ -426,8 +431,8 @@ export default function CallCenterPage() {
         .eq("id", leadId);
 
       if (error) {
-        console.error("Error guardando asignación:", error);
-        throw new Error(error.message || "No se pudo guardar la asignación.");
+        console.error("Error guardando asignaciÃƒÂ³n:", error);
+        throw new Error(error.message || "No se pudo guardar la asignaciÃƒÂ³n.");
       }
 
       setLeads((prev) =>
@@ -440,11 +445,11 @@ export default function CallCenterPage() {
 
       setMensaje(
         assignedUserId
-          ? "Asignación guardada correctamente."
-          : "Se quitó la asignación correctamente."
+          ? "AsignaciÃƒÂ³n guardada correctamente."
+          : "Se quitÃƒÂ³ la asignaciÃƒÂ³n correctamente."
       );
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la asignación.");
+      setError(err?.message || "No se pudo guardar la asignaciÃƒÂ³n.");
     } finally {
       setSavingLeadId(null);
     }
@@ -500,8 +505,8 @@ export default function CallCenterPage() {
         .eq("id", leadId);
 
       if (error) {
-        console.error("Error guardando fuente de comisión:", error);
-        throw new Error(error.message || "No se pudo guardar la fuente de comisión.");
+        console.error("Error guardando fuente de comisiÃƒÂ³n:", error);
+        throw new Error(error.message || "No se pudo guardar la fuente de comisiÃƒÂ³n.");
       }
 
       setLeads((prev) =>
@@ -514,11 +519,11 @@ export default function CallCenterPage() {
 
       setMensaje(
         commissionSource
-          ? "Fuente para comisión guardada correctamente."
-          : "Se limpió la fuente para comisión."
+          ? "Fuente para comisiÃƒÂ³n guardada correctamente."
+          : "Se limpiÃƒÂ³ la fuente para comisiÃƒÂ³n."
       );
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la fuente para comisión.");
+      setError(err?.message || "No se pudo guardar la fuente para comisiÃƒÂ³n.");
     } finally {
       setSavingCommissionLeadId(null);
     }
@@ -565,13 +570,24 @@ export default function CallCenterPage() {
         [lead.id]: "contactado",
       }));
 
-      setMensaje("Cita cancelada correctamente. El cupo quedó liberado.");
+      setMensaje("Cita cancelada correctamente. El cupo quedÃƒÂ³ liberado.");
     } catch (err: any) {
       setError(err?.message || "No se pudo cancelar la cita.");
     } finally {
       setCancelingAppointmentId(null);
     }
   }
+
+  useEffect(() => {
+    if (
+      !isSupervisorCallCenterView &&
+      (quickFilter === "sin_asignar" ||
+        quickFilter === "sin_asignar_pendientes_no_contestan" ||
+        quickFilter === "asignados")
+    ) {
+      setQuickFilter("todos");
+    }
+  }, [isSupervisorCallCenterView, quickFilter]);
 
   const activeAppointmentByLeadId = useMemo(() => {
     const map: Record<string, AppointmentRow> = {};
@@ -772,11 +788,93 @@ export default function CallCenterPage() {
     activeAppointmentByLeadId,
   ]);
 
+  const visibleQuickFilterButtons = isSupervisorCallCenterView
+    ? quickFilterButtons
+    : quickFilterButtons.filter(
+        (item) =>
+          item.key !== "sin_asignar" &&
+          item.key !== "sin_asignar_pendientes_no_contestan" &&
+          item.key !== "asignados"
+      );
+
+  const statCards = [
+    { key: "todos", title: "Todos", value: resumen.total, highlight: false },
+    {
+      key: "sin_asignar_pendientes_no_contestan",
+      title: "Sin asignar nuevos / pendientes / no contestan (30 dÃƒÂ­as)",
+      value: resumen.sinAsignarPendientesNoContestan,
+      highlight: resumen.sinAsignarPendientesNoContestan > 0,
+    },
+    {
+      key: "sin_asignar",
+      title: "Sin asignar",
+      value: resumen.sinAsignar,
+      highlight: resumen.sinAsignar > 0,
+    },
+    {
+      key: "pendientes",
+      title: "Pendientes",
+      value: resumen.pendientes,
+      highlight: resumen.pendientes > 0,
+    },
+    {
+      key: "no_contestan",
+      title: "No contestan",
+      value: resumen.noContestan,
+      highlight: resumen.noContestan > 0,
+    },
+    {
+      key: "interesados",
+      title: "Interesados",
+      value: resumen.interesados,
+      highlight: false,
+    },
+    { key: "nuevos", title: "Nuevos", value: resumen.nuevos, highlight: false },
+    {
+      key: "asignados",
+      title: "Asignados",
+      value: resumen.asignados,
+      highlight: false,
+    },
+    {
+      key: "pendientes_cita",
+      title: "Pendientes de cita",
+      value: resumen.pendientesCita,
+      highlight: false,
+    },
+    {
+      key: "agendados",
+      title: "Agendados",
+      value: resumen.agendados,
+      highlight: false,
+    },
+    {
+      key: "no_asistio",
+      title: "No asisti\u00F3",
+      value: resumen.noAsistio,
+      highlight: false,
+    },
+    {
+      key: "cerrados",
+      title: "Descartados",
+      value: resumen.cerrados,
+      highlight: false,
+    },
+  ] as const;
+
+  const visibleStatCards = statCards.filter(
+    (card) =>
+      isSupervisorCallCenterView ||
+      (card.key !== "sin_asignar" &&
+        card.key !== "sin_asignar_pendientes_no_contestan" &&
+        card.key !== "asignados")
+  );
+
   function obtenerNombreAsignado(lead: Lead) {
     if (!lead.assigned_to_user_id) return "Sin asignar";
 
     const user = callCenterUsers.find((u) => u.id === lead.assigned_to_user_id);
-    return user ? `${user.full_name} · ${user.role_name}` : "Asignado";
+    return user ? `${user.full_name} - ${user.role_name}` : "Asignado";
   }
 
   if (loadingAuth) {
@@ -794,7 +892,7 @@ export default function CallCenterPage() {
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-10">
         <div className="mx-auto max-w-7xl rounded-[32px] border border-[#CFE4D8] bg-white/90 p-6 shadow-[0_18px_50px_rgba(95,125,102,0.12)] backdrop-blur">
           <p className="text-sm font-medium text-red-700">
-            {error || "No tienes permiso para entrar a este módulo."}
+            {error || "No tienes permiso para entrar a este m\u00F3dulo."}
           </p>
         </div>
       </main>
@@ -840,9 +938,9 @@ export default function CallCenterPage() {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Call Center</p>
-              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.2rem]">Gestión de leads</h1>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.2rem]">{"Gesti\u00F3n de leads"}</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
-                {currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user"
+                {isSupervisorCallCenterView
                   ? "Puedes consultar, asignar, organizar por bloques, cancelar citas y actualizar el estado de los leads."
                   : currentRoleCode === "confirmador"
                   ? "Puedes consultar todos los leads, cancelar citas y actualizar su estado."
@@ -862,21 +960,21 @@ export default function CallCenterPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a
+            <Link
               href="/"
               className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Inicio
-            </a>
+            </Link>
 
-            {(currentRoleCode === "supervisor_call_center" || currentRoleCode === "super_user") && (
+            {isSupervisorCallCenterView && (
               <>
-                <a
+                <Link
                   href="/leads/nuevo"
                   className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-medium text-white shadow-[0_14px_28px_rgba(95,125,102,0.26)] transition hover:-translate-y-0.5 hover:brightness-105"
                 >
                   Nuevo lead
-                </a>
+                </Link>
 
                 <a
                   href="/recepcion"
@@ -901,7 +999,7 @@ export default function CallCenterPage() {
                       : "border border-[#CFE4D8] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#ECF8F1_100%)] text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-white"
                   }`}
                 >
-                  Sin asignar 30 días ({resumen.sinAsignarPendientesNoContestan})
+                  {`Sin asignar 30 d\u00EDas (${resumen.sinAsignarPendientesNoContestan})`}
                 </button>
               </>
             )}
@@ -921,39 +1019,34 @@ export default function CallCenterPage() {
         ) : null}
 
         <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-4">
-          <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
-          <StatCard
-            title="Sin asignar nuevos / pendientes / no contestan (30 días)"
-            value={resumen.sinAsignarPendientesNoContestan}
-            active={quickFilter === "sin_asignar_pendientes_no_contestan"}
-            onClick={() => setQuickFilter("sin_asignar_pendientes_no_contestan")}
-            highlight={resumen.sinAsignarPendientesNoContestan > 0}
-          />
-          <StatCard title="Sin asignar" value={resumen.sinAsignar} active={quickFilter === "sin_asignar"} onClick={() => setQuickFilter("sin_asignar")} highlight={resumen.sinAsignar > 0} />
-          <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} highlight={resumen.pendientes > 0} />
-          <StatCard title="No contestan" value={resumen.noContestan} active={quickFilter === "no_contestan"} onClick={() => setQuickFilter("no_contestan")} highlight={resumen.noContestan > 0} />
-          <StatCard title="Interesados" value={resumen.interesados} active={quickFilter === "interesados"} onClick={() => setQuickFilter("interesados")} />
-          <StatCard title="Nuevos" value={resumen.nuevos} active={quickFilter === "nuevos"} onClick={() => setQuickFilter("nuevos")} />
-          <StatCard title="Asignados" value={resumen.asignados} active={quickFilter === "asignados"} onClick={() => setQuickFilter("asignados")} />
-          <StatCard title="Pendientes de cita" value={resumen.pendientesCita} active={quickFilter === "pendientes_cita"} onClick={() => setQuickFilter("pendientes_cita")} />
-          <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
-          <StatCard title="No asistió" value={resumen.noAsistio} active={quickFilter === "no_asistio"} onClick={() => setQuickFilter("no_asistio")} />
-          <StatCard title="Descartados" value={resumen.cerrados} active={quickFilter === "cerrados"} onClick={() => setQuickFilter("cerrados")} />
+          {visibleStatCards.map((card) => (
+            <StatCard
+              key={card.key}
+              title={card.title}
+              value={card.value}
+              active={quickFilter === card.key}
+              onClick={() => setQuickFilter(card.key)}
+              highlight={card.highlight}
+            />
+          ))}
         </section>
 
         <section className="rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
-          <div className="mb-5 rounded-[28px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-5 shadow-inner">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F6F5B]">Control rápido del supervisor</p>
-            <p className="mt-2 text-sm leading-7 text-[#51695C]">
-              Prioriza primero <span className="font-medium text-[#4F6F5B]">Sin asignar</span>,{" "}
-              <span className="font-medium text-[#4F6F5B]">Pendientes</span> y{" "}
-              <span className="font-medium text-[#4F6F5B]">No contestan</span> para que no se pierdan leads. El acceso
-              directo superior revisa siempre los Ãºltimos 30 dÃ­as.
-            </p>
-          </div>
+          {isSupervisorCallCenterView ? (
+            <div className="mb-5 rounded-[28px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-5 shadow-inner">
+              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#4F6F5B]">{"Control r\u00E1pido del supervisor"}</p>
+              <p className="mt-2 text-sm leading-7 text-[#51695C]">
+                Prioriza primero <span className="font-medium text-[#4F6F5B]">Sin asignar</span>,{" "}
+                <span className="font-medium text-[#4F6F5B]">Pendientes</span> y{" "}
+                <span className="font-medium text-[#4F6F5B]">No contestan</span> para que no se pierdan leads. El acceso
+                directo superior revisa siempre los {"\u00FAltimos 30 d\u00EDas"}.
+              </p>
+            </div>
+          ) : null}
+
 
           <div className="mb-4 flex flex-wrap gap-2">
-            {quickFilterButtons.map((item) => (
+            {visibleQuickFilterButtons.map((item) => (
               <button
                 key={item.key}
                 type="button"
@@ -995,7 +1088,7 @@ export default function CallCenterPage() {
 
             <input
               className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-slate-800 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
-              placeholder="Buscar por teléfono, nombre, creador o asignado"
+              placeholder={canSeeAssignmentMeta ? "Buscar por tel\u00E9fono, nombre, creador o asignado" : "Buscar por tel\u00E9fono o nombre"}
               value={busqueda}
               onChange={(e) => setBusqueda(e.target.value)}
             />
@@ -1036,8 +1129,7 @@ export default function CallCenterPage() {
                 const canManageCommissionSource =
                   currentRoleCode === "super_user" ||
                   currentRoleCode === "supervisor_call_center" ||
-                  currentRoleCode === "confirmador" ||
-                  currentRoleCode === "tmk";
+                  currentRoleCode === "confirmador";
 
                 const activeAppointment = activeAppointmentByLeadId[lead.id];
                 const hasActiveAppointment = !!activeAppointment;
@@ -1070,24 +1162,28 @@ export default function CallCenterPage() {
                           </div>
 
                           <div className="mt-3 grid gap-1 text-sm text-slate-600">
-                            <p>{lead.phone || "Sin teléfono"} · {lead.city || "Sin ciudad"}</p>
+                            <p>{lead.phone || "Sin tel\u00E9fono"} - {lead.city || "Sin ciudad"}</p>
                             <p>Servicio: {traducirServicio(lead.interest_service)}</p>
                             <p>Origen: {traducirOrigen(lead.source)}</p>
-                            <p>Captación: {lead.capture_location || "No registrado"}</p>
-                            <p>Creado por: {creatorNames[lead.created_by_user_id || ""] || "Sin nombre"}</p>
-                            <p className="text-[#4F6F5B]">
-                              <span className="font-medium">Asignado a:</span>{" "}
-                              {obtenerNombreAsignado(lead)}
-                            </p>
-                            <p className="text-[#4F6F5B]">
-                              <span className="font-medium">Fuente para comisión:</span>{" "}
-                              {traducirFuenteComision(lead.commission_source_type)}
-                            </p>
+                            <p>{"Captaci\u00F3n"}: {lead.capture_location || "No registrado"}</p>
+                            {canSeeAssignmentMeta ? (
+                              <>
+                                <p>Creado por: {creatorNames[lead.created_by_user_id || ""] || "Sin nombre"}</p>
+                                <p className="text-[#4F6F5B]">
+                                  <span className="font-medium">Asignado a:</span>{" "}
+                                  {obtenerNombreAsignado(lead)}
+                                </p>
+                                <p className="text-[#4F6F5B]">
+                                  <span className="font-medium">{"Fuente para comisi\u00F3n"}:</span>{" "}
+                                  {traducirFuenteComision(lead.commission_source_type)}
+                                </p>
+                              </>
+                            ) : null}
 
                             {activeAppointment ? (
                               <p className="text-[#4F6F5B]">
                                 <span className="font-medium">Cita activa:</span>{" "}
-                                {activeAppointment.appointment_date} · {activeAppointment.appointment_time}
+                                {activeAppointment.appointment_date} - {activeAppointment.appointment_time}
                               </p>
                             ) : null}
                           </div>
@@ -1133,7 +1229,7 @@ export default function CallCenterPage() {
                       {canAssign ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
                           <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
-                            Asignación Call Center
+                            AsignaciÃƒÂ³n Call Center
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
@@ -1150,7 +1246,7 @@ export default function CallCenterPage() {
                               <option value="">Sin asignar</option>
                               {callCenterUsers.map((user) => (
                                 <option key={user.id} value={user.id}>
-                                  {user.full_name} · {user.role_name}
+                                  {user.full_name} Ã‚Â· {user.role_name}
                                 </option>
                               ))}
                             </select>
@@ -1163,7 +1259,7 @@ export default function CallCenterPage() {
                             >
                               {savingLeadId === lead.id
                                 ? "Guardando..."
-                                : "Guardar asignación"}
+                                : "Guardar asignaciÃƒÂ³n"}
                             </button>
                           </div>
                         </div>
@@ -1172,7 +1268,7 @@ export default function CallCenterPage() {
                       {canManageCommissionSource ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
                           <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
-                            Fuente para comisión
+                            Fuente para comisiÃƒÂ³n
                           </p>
 
                           <div className="flex flex-col gap-3 md:flex-row">
