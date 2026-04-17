@@ -1130,6 +1130,10 @@ export default function CallCenterPage() {
                   currentRoleCode === "super_user" ||
                   currentRoleCode === "supervisor_call_center" ||
                   currentRoleCode === "confirmador";
+                const isProtectedOpcLead =
+                  lead.source === "opc" || lead.commission_source_type === "opc";
+                const canEditCommissionSource =
+                  canManageCommissionSource && !isProtectedOpcLead;
 
                 const activeAppointment = activeAppointmentByLeadId[lead.id];
                 const hasActiveAppointment = !!activeAppointment;
@@ -1276,6 +1280,7 @@ export default function CallCenterPage() {
                             <select
                               className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-3.5 text-slate-800 outline-none transition focus:border-[#7FA287]"
                               value={selectedCommissionSources[lead.id] || ""}
+                              disabled={!canEditCommissionSource}
                               onChange={(e) =>
                                 setSelectedCommissionSources((prev) => ({
                                   ...prev,
@@ -1294,13 +1299,18 @@ export default function CallCenterPage() {
                             <button
                               type="button"
                               onClick={() => guardarFuenteComision(lead.id)}
-                              disabled={savingCommissionLeadId === lead.id}
+                              disabled={savingCommissionLeadId === lead.id || !canEditCommissionSource}
                               className="rounded-2xl border border-[#5F7D66] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
                             >
                               {savingCommissionLeadId === lead.id
                                 ? "Guardando..."
                                 : "Guardar fuente"}
                             </button>
+                            {isProtectedOpcLead ? (
+                              <p className="text-xs leading-5 text-[#5F7D66]">
+                                Lead protegido por origen OPC. La fuente de comisión no se puede cambiar desde supervisor.
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       ) : null}
