@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -167,6 +168,7 @@ export default function LeadsPage() {
     roleCode === "supervisor_opc" || roleCode === "super_user";
 
   const isSuperUser = roleCode === "super_user";
+  const hideLeadHeroMeta = roleCode === "supervisor_opc";
 
   async function validarAcceso() {
     try {
@@ -177,13 +179,13 @@ export default function LeadsPage() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesión para usar este módulo.");
+        setError("Debes iniciar sesiÃ³n para usar este mÃ³dulo.");
         return;
       }
 
       if (!allowedRoles.includes(auth.roleCode)) {
         setAuthorized(false);
-        setError("No tienes permiso para entrar a este módulo.");
+        setError("No tienes permiso para entrar a este mÃ³dulo.");
         return;
       }
 
@@ -292,7 +294,7 @@ export default function LeadsPage() {
       "este lead";
 
     const confirmado = window.confirm(
-      `¿Seguro que deseas borrar a ${nombre}? Esta acción eliminará también sus citas relacionadas y no se puede deshacer.`
+      `Â¿Seguro que deseas borrar a ${nombre}? Esta acciÃ³n eliminarÃ¡ tambiÃ©n sus citas relacionadas y no se puede deshacer.`
     );
 
     if (!confirmado) return;
@@ -535,7 +537,7 @@ export default function LeadsPage() {
       contactado: "Contactado",
       reagendar: "Reagendar",
       agendado: "Agendado",
-      asistio: "Asistió",
+      asistio: "AsistiÃ³",
       no_asistio: "No asistió",
       vendido: "Vendido",
       cerrado: "Cerrado",
@@ -544,7 +546,7 @@ export default function LeadsPage() {
       confirmada: "Confirmada",
       en_espera: "En espera",
       reagendada: "Reagendada",
-      en_atencion: "En atención",
+      en_atencion: "En atenciÃ³n",
       cancelada: "Cancelada",
       finalizada: "Finalizada",
     };
@@ -558,8 +560,8 @@ export default function LeadsPage() {
     const map: Record<string, string> = {
       detox: "Detox",
       sueroterapia: "Sueroterapia",
-      valoracion: "Valoración",
-      nutricion: "Nutrición",
+      valoracion: "ValoraciÃ³n",
+      nutricion: "NutriciÃ³n",
       fisioterapia: "Fisioterapia",
       medicina_general: "Medicina general",
       otro: "Otro",
@@ -591,7 +593,7 @@ export default function LeadsPage() {
       <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
         <div className="mx-auto max-w-7xl rounded-3xl border border-[#F3D3D6] bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-red-700">
-            {error || "No tienes permiso para entrar a este módulo."}
+            {error || "No tienes permiso para entrar a este mÃ³dulo."}
           </p>
         </div>
       </main>
@@ -635,6 +637,8 @@ export default function LeadsPage() {
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">
                 Gestión de leads
               </h1>
+              {!hideLeadHeroMeta ? (
+                <>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 Consulta, filtra y administra los leads visibles según el rol autenticado.
               </p>
@@ -642,18 +646,20 @@ export default function LeadsPage() {
                 <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">Vista de prospección</span>
                 <span className="rounded-full bg-[#E8F6EE] px-3 py-1 ring-1 ring-[#CFE4D8]">Prevital menta + hoja</span>
               </div>
+                </>
+              ) : null}
             </div>
 
             <SessionBadge />
           </div>
 
           <div className="mt-5 flex flex-wrap gap-3">
-            <a
+            <Link
               href="/"
               className="inline-flex items-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-5 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Inicio
-            </a>
+            </Link>
 
             {(roleCode === "super_user" ||
               roleCode === "promotor_opc" ||
@@ -661,12 +667,12 @@ export default function LeadsPage() {
               roleCode === "supervisor_call_center" ||
               roleCode === "confirmador" ||
               roleCode === "tmk") && (
-              <a
+              <Link
                 href="/leads/nuevo"
                 className="inline-flex items-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-medium text-white shadow-[0_14px_28px_rgba(95,125,102,0.26)] transition hover:-translate-y-0.5 hover:brightness-105"
               >
                 Nuevo lead
-              </a>
+              </Link>
             )}
           </div>
         </section>
@@ -703,7 +709,7 @@ export default function LeadsPage() {
                     Leads visibles para tu rol
                   </h2>
                   <p className="mt-1 text-sm leading-6 text-[#51695C]">
-                    Busca por nombre, teléfono o nombre del OPC y filtra por fecha.
+                    Busca por nombre, telÃ©fono o nombre del OPC y filtra por fecha.
                   </p>
                 </div>
 
@@ -751,7 +757,7 @@ export default function LeadsPage() {
                 <input
                   className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
-                  placeholder="Buscar por nombre, teléfono u OPC"
+                  placeholder="Buscar por nombre, telÃ©fono u OPC"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
@@ -793,7 +799,7 @@ export default function LeadsPage() {
                           </div>
 
                           <p className="text-sm text-slate-700">
-                            {lead.phone} · {lead.city || "Sin ciudad"}
+                            {lead.phone} Â· {lead.city || "Sin ciudad"}
                           </p>
 
                           <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
@@ -855,7 +861,7 @@ export default function LeadsPage() {
                 <input
                   className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="text"
-                  placeholder="Buscar por nombre o teléfono"
+                  placeholder="Buscar por nombre o telÃ©fono"
                   value={appointmentsSearch}
                   onChange={(e) => setAppointmentsSearch(e.target.value)}
                 />
@@ -895,13 +901,13 @@ export default function LeadsPage() {
                           </div>
 
                           <p className="text-sm text-slate-700">
-                            {appointment.phone || "Sin teléfono"} · {appointment.city || "Sin ciudad"}
+                            {appointment.phone || "Sin telÃ©fono"} Â· {appointment.city || "Sin ciudad"}
                           </p>
 
                           <div className="grid gap-2 text-sm text-slate-700 md:grid-cols-2">
                             <p>Servicio: {translateService(appointment.service_type)}</p>
                             <p>
-                              Fecha: {appointment.appointment_date} · Hora: {appointment.appointment_time?.slice(0, 5)}
+                              Fecha: {appointment.appointment_date} Â· Hora: {appointment.appointment_time?.slice(0, 5)}
                             </p>
                             <p className="md:col-span-2">
                               OPC:{" "}
@@ -938,8 +944,8 @@ export default function LeadsPage() {
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {showCreatorColumn
-                    ? "Busca por nombre, teléfono o nombre del OPC y filtra por fecha."
-                    : "Busca por nombre o teléfono y filtra por fecha."}
+                    ? "Busca por nombre, telÃ©fono o nombre del OPC y filtra por fecha."
+                    : "Busca por nombre o telÃ©fono y filtra por fecha."}
                 </p>
               </div>
 
@@ -964,8 +970,8 @@ export default function LeadsPage() {
                 type="text"
                 placeholder={
                   showCreatorColumn
-                    ? "Buscar por nombre, teléfono u OPC"
-                    : "Buscar por nombre o teléfono"
+                    ? "Buscar por nombre, telÃ©fono u OPC"
+                    : "Buscar por nombre o telÃ©fono"
                 }
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
@@ -1116,3 +1122,5 @@ function StatCard({
     </button>
   );
 }
+
+

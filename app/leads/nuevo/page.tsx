@@ -1,16 +1,18 @@
-
+﻿
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import { leadSourceOptions, normalizeLeadSource } from "@/lib/lead-source";
+import SessionBadge from "@/components/session-badge";
 
 const maritalStatusOptions = [
   { value: "soltero", label: "Soltero(a)" },
   { value: "casado", label: "Casado(a)" },
-  { value: "union_libre", label: "Unión libre" },
+  { value: "union_libre", label: "UniÃ³n libre" },
   { value: "separado", label: "Separado(a)" },
   { value: "viudo", label: "Viudo(a)" },
 ];
@@ -18,8 +20,8 @@ const maritalStatusOptions = [
 const interestServiceOptions = [
   { value: "detox", label: "Detox" },
   { value: "sueroterapia", label: "Sueroterapia" },
-  { value: "valoracion", label: "Valoración" },
-  { value: "nutricion", label: "Nutrición" },
+  { value: "valoracion", label: "ValoraciÃ³n" },
+  { value: "nutricion", label: "NutriciÃ³n" },
   { value: "fisioterapia", label: "Fisioterapia" },
   { value: "medicina_general", label: "Medicina general" },
   { value: "otro", label: "Otro" },
@@ -44,6 +46,11 @@ export default function NuevoLeadPage() {
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
   const isPromotorOpc = currentRoleCode === "promotor_opc";
+  const isSupervisorOpc = currentRoleCode === "supervisor_opc";
+  const autoAssignsLead =
+    currentRoleCode === "tmk" ||
+    currentRoleCode === "confirmador" ||
+    currentRoleCode === "supervisor_call_center";
 
   const [form, setForm] = useState({
     first_name: "",
@@ -70,7 +77,7 @@ export default function NuevoLeadPage() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesión para usar este módulo.");
+        setError("Debes iniciar sesiÃ³n para usar este mÃ³dulo.");
         return;
       }
 
@@ -127,22 +134,18 @@ export default function NuevoLeadPage() {
     }
 
     if (!form.phone.trim()) {
-      setError("El teléfono es obligatorio.");
+      setError("El telÃ©fono es obligatorio.");
       return;
     }
 
     if (!currentUserId) {
-      setError("No se encontró el usuario actual.");
+      setError("No se encontrÃ³ el usuario actual.");
       return;
     }
 
     setLoading(true);
 
     try {
-      const debeAutoAsignarse =
-        currentRoleCode === "tmk" ||
-        currentRoleCode === "confirmador" ||
-        currentRoleCode === "supervisor_call_center";
       const sourceValue = isPromotorOpc ? "opc" : normalizeLeadSource(form.source);
 
       const { error } = await supabase.from("leads").insert([
@@ -166,14 +169,14 @@ export default function NuevoLeadPage() {
           city: form.city.trim() || null,
           status: form.status,
           created_by_user_id: currentUserId,
-          assigned_to_user_id: debeAutoAsignarse ? currentUserId : null,
+          assigned_to_user_id: autoAssignsLead ? currentUserId : null,
         },
       ]);
 
       if (error) throw error;
 
       setMensaje(
-        debeAutoAsignarse
+        autoAssignsLead
           ? "Lead creado y autoasignado correctamente."
           : "Lead creado correctamente."
       );
@@ -218,7 +221,7 @@ export default function NuevoLeadPage() {
         <div className="mx-auto w-full max-w-4xl px-4 pt-4 sm:px-6 sm:pt-6">
           <section className="rounded-[28px] border border-[#F2C9C9] bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-red-700">
-              {error || "No tienes permiso para entrar a este módulo."}
+              {error || "No tienes permiso para entrar a este mÃ³dulo."}
             </p>
           </section>
         </div>
@@ -240,7 +243,7 @@ export default function NuevoLeadPage() {
         </div>
       </div>
 
-      <div className="mx-auto w-full max-w-4xl px-4 pt-4 sm:px-6 sm:pt-6">
+      <div className="mx-auto w-full max-w-5xl px-4 pt-4 sm:px-6 sm:pt-6">
         <div className="mb-4 flex items-center gap-3">
           <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
             <Image
@@ -253,71 +256,96 @@ export default function NuevoLeadPage() {
           </div>
         </div>
 
-        <section className="relative mb-4 overflow-hidden rounded-[28px] border border-[#D6E8DA] bg-white p-5 shadow-sm sm:mb-6 sm:p-6">
-          <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
+        <section className="relative mb-6 overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(242,251,246,0.95)_52%,_rgba(231,245,236,0.92)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.16)]">
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
 
-          <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-5 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7FA287]">
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">
                 Leads
               </p>
-              <h1 className="mt-2 text-2xl font-bold text-[#24312A] sm:text-3xl">
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.05rem]">
                 Nuevo lead
               </h1>
-              <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">
+              <p className="hidden mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 Formulario rápido para captación en punto, calle, evento o visita.
               </p>
+              <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
+                Registra captaciones rápidas del equipo OPC y deja el lead listo para seguimiento sin salir del ecosistema Prevital.
+              </p>
+              <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
+                <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">
+                  Captación en punto, calle o evento
+                </span>
+                {isPromotorOpc ? (
+                  <span className="rounded-full bg-[#E8F6EE] px-3 py-1 ring-1 ring-[#CFE4D8]">
+                    Origen OPC fijo
+                  </span>
+                ) : null}
+                {autoAssignsLead ? (
+                  <span className="rounded-full bg-[#F3F8F5] px-3 py-1 ring-1 ring-[#D8ECE1]">
+                    Se autoasigna al crear
+                  </span>
+                ) : null}
+                {isSupervisorOpc ? (
+                  <span className="rounded-full bg-[#EDF7F1] px-3 py-1 ring-1 ring-[#D8ECE1]">
+                    Vista operativa para supervisor OPC
+                  </span>
+                ) : null}
+              </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <a
+            <div className="flex flex-col items-stretch gap-3 md:items-end">
+              <SessionBadge />
+              <div className="flex flex-wrap gap-3">
+              <Link
                 href="/"
-                className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-5 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
               >
                 Inicio
-              </a>
+              </Link>
 
-              <a
+              <Link
                 href="/leads"
-                className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B]"
+                className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-medium text-white shadow-[0_14px_28px_rgba(95,125,102,0.26)] transition hover:-translate-y-0.5 hover:brightness-105"
               >
                 Consultar leads
-              </a>
+              </Link>
+              </div>
             </div>
           </div>
         </section>
 
-        <section className="relative rounded-[28px] border border-[#D6E8DA] bg-white p-5 shadow-sm sm:p-6">
+        <section className="relative rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-5 shadow-[0_24px_60px_rgba(95,125,102,0.12)] sm:p-6">
           <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-[#A8CDBD] via-[#7FA287] to-[#5F7D66]" />
 
           <form onSubmit={crearLead} className="space-y-6">
-            <div className="rounded-3xl border border-[#D6E8DA] bg-[#F8F7F4] p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#7FA287]">
+            <div className="rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-5 shadow-inner">
+              <p className="text-xs font-semibold uppercase tracking-[0.28em] text-[#6B8B77]">
                 Captado por
               </p>
-              <p className="mt-1 text-base font-semibold text-[#24312A]">
+              <p className="mt-2 text-xl font-semibold text-[#24312A]">
                 {currentUserName}
               </p>
-              {(currentRoleCode === "tmk" ||
-                currentRoleCode === "confirmador" ||
-                currentRoleCode === "supervisor_call_center") && (
+              {autoAssignsLead && (
                 <p className="mt-2 text-sm text-slate-600">
                   Este lead se asignará automáticamente a tu usuario.
                 </p>
               )}
               {isPromotorOpc && (
                 <p className="mt-2 text-sm text-slate-600">
-                  El origen de este lead se registrarÃ¡ automÃ¡ticamente como OPC.
+                  El origen de este lead se registrará automáticamente como OPC.
                 </p>
               )}
             </div>
 
+            <div className="rounded-[28px] border border-[#DCEBE1] bg-white/88 p-5 shadow-sm">
             <SectionTitle
               title="Datos principales"
               description="Registra la información básica del lead."
             />
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field
                 label="Nombre"
                 required
@@ -412,13 +440,15 @@ export default function NuevoLeadPage() {
                 }
               />
             </div>
+            </div>
 
+            <div className="rounded-[28px] border border-[#DCEBE1] bg-white/88 p-5 shadow-sm">
             <SectionTitle
               title="Información de afiliación y origen"
               description="Completa los datos para clasificación y seguimiento."
             />
 
-            <div className="grid gap-4 sm:grid-cols-2">
+            <div className="mt-5 grid gap-4 sm:grid-cols-2">
               <Field
                 label="¿Tiene EPS?"
                 input={
@@ -514,12 +544,15 @@ export default function NuevoLeadPage() {
                 }
               />
             </div>
+            </div>
 
+            <div className="rounded-[28px] border border-[#DCEBE1] bg-white/88 p-5 shadow-sm">
             <SectionTitle
               title="Observaciones"
               description="Agrega notas útiles para el seguimiento posterior."
             />
 
+            <div className="mt-5">
             <Field
               label="Observaciones"
               input={
@@ -533,22 +566,24 @@ export default function NuevoLeadPage() {
                 />
               }
             />
+            </div>
+            </div>
 
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">
               <button
                 type="submit"
                 disabled={loading}
-                className="inline-flex w-full items-center justify-center rounded-2xl bg-[#5F7D66] px-5 py-4 text-base font-semibold text-white transition hover:bg-[#4F6F5B] disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[220px]"
+                className="inline-flex w-full items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-4 text-base font-semibold text-white shadow-[0_16px_30px_rgba(95,125,102,0.22)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto sm:min-w-[220px]"
               >
                 {loading ? "Guardando lead..." : "Guardar lead"}
               </button>
 
-              <a
+              <Link
                 href="/leads"
-                className="inline-flex w-full items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-5 py-4 text-base font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] sm:w-auto"
+                className="inline-flex w-full items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white/90 px-5 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F4FAF6] sm:w-auto"
               >
                 Cancelar / volver
-              </a>
+              </Link>
             </div>
 
             {mensaje ? (
@@ -604,4 +639,6 @@ function Field({
 }
 
 const inputClass =
-  "w-full rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 text-base text-[#24312A] outline-none transition placeholder:text-slate-400 focus:border-[#7FA287] focus:ring-4 focus:ring-[#7FA287]/10";
+  "w-full rounded-2xl border border-[#D6E8DA] bg-white/92 px-4 py-4 text-base text-[#24312A] shadow-sm outline-none transition placeholder:text-slate-400 focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
+
+
