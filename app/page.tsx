@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
 import LogoutButton from "@/components/logout-button";
 import { getCurrentUserRole, normalizeRoleCode } from "@/lib/auth";
+import { repairMojibake } from "@/lib/text/repairMojibake";
 import { PrevitalButton } from "@/components/ui/prevital-button";
 import {
   PrevitalCard,
@@ -96,7 +97,7 @@ const quickActions: QuickAction[] = [
     roles: ["super_user"],
   },
   {
-    title: "Call Center",
+    title: "Gestión de leads",
     subtitle: "Asignar y gestionar leads del call center.",
     href: "/call-center",
     roles: ["super_user", "supervisor_call_center", "confirmador"],
@@ -104,13 +105,13 @@ const quickActions: QuickAction[] = [
   {
     title: "Ver agenda",
     subtitle: "Consultar agenda visible y gestionar citas.",
-    href: "/recepcion",
+    href: "/recepcion?view=agenda",
     roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
     title: "Configurar cupos",
     subtitle: "Abrir agenda y organizar cupos del día.",
-    href: "/recepcion",
+    href: "/recepcion?view=config",
     roles: ["super_user", "supervisor_call_center"],
   },
   {
@@ -528,8 +529,8 @@ export default function HomePage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <h3 className="text-lg font-semibold text-slate-800">{action.title}</h3>
-                          <p className="mt-2 text-sm text-slate-500">{action.subtitle}</p>
+                          <h3 className="text-lg font-semibold text-slate-800">{repairMojibake(action.title)}</h3>
+                          <p className="mt-2 text-sm text-slate-500">{repairMojibake(action.subtitle)}</p>
                         </div>
                         <span className="rounded-full border border-[#D6E8DA] bg-white px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
                           Abrir
@@ -620,10 +621,10 @@ export default function HomePage() {
                       <div className="flex items-start justify-between gap-4">
                         <div className="pr-2">
                           <h3 className="text-lg font-semibold text-[#24312A] transition group-hover:text-[#4F6F5B]">
-                            {action.title}
+                            {repairMojibake(action.title)}
                           </h3>
                           <p className="mt-2 text-sm leading-6 text-slate-500">
-                            {action.subtitle}
+                            {repairMojibake(action.subtitle)}
                           </p>
                         </div>
 

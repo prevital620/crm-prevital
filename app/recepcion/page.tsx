@@ -1232,8 +1232,17 @@ function RecepcionContent() {
 
   const canManageAgendaConfig =
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
-  const hideLowerAgendaPanelsForSupervisor =
-    currentRoleCode === "supervisor_call_center" && canManageAgendaConfig;
+  const isSupervisorCallCenter = currentRoleCode === "supervisor_call_center";
+  const isAgendaConfigOnlyView =
+    isSupervisorCallCenter && receptionView === "config";
+  const hideLowerAgendaPanelsForSupervisor = isAgendaConfigOnlyView;
+  const showAgendaConfigPanel =
+    canManageAgendaConfig &&
+    activeSection !== "impresiones" &&
+    activeSection !== "inventario" &&
+    activeSection !== "comercial" &&
+    activeSection !== "nutricion_entregas" &&
+    (!isSupervisorCallCenter || isAgendaConfigOnlyView);
   const commercialSourceDetailMeta = getCommercialSourceDetailMeta(commercialForm.fuente);
   const normalizedCommercialSource = normalizarFuenteManual(commercialForm.fuente);
   const sourceNeedsUserSelection =
@@ -4343,7 +4352,7 @@ function imprimirRegistroComercial() {
           )
         )}
 
-        {canManageAgendaConfig && activeSection !== "impresiones" && activeSection !== "inventario" && activeSection !== "comercial" && activeSection !== "nutricion_entregas" ? (
+        {showAgendaConfigPanel ? (
           <section className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
             <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
               <div>

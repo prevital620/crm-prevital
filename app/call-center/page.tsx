@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 import { getLeadSourceLabel } from "@/lib/lead-source";
+import { repairMojibake } from "@/lib/text/repairMojibake";
 
 type Lead = {
   id: string;
@@ -151,7 +152,7 @@ function traducirEstado(estado: string | null) {
     no_responde: "No responde",
     contactado: "Contactado",
     agendado: "Agendado",
-    no_asistio: "No asisti\u00F3",
+    no_asistio: "No asistió",
     dato_falso: "Dato falso",
     no_interesa: "No interesa",
   };
@@ -164,8 +165,8 @@ function traducirServicio(servicio: string | null) {
   const map: Record<string, string> = {
     detox: "Detox",
     sueroterapia: "Sueroterapia",
-    valoracion: "Valoraci\u00F3n",
-    nutricion: "Nutrici\u00F3n",
+    valoracion: "Valoración",
+    nutricion: "Nutrición",
     fisioterapia: "Fisioterapia",
     medicina_general: "Medicina general",
     otro: "Otro",
@@ -201,7 +202,7 @@ const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "asignados", label: "Asignados" },
   { key: "pendientes_cita", label: "Pendientes de cita" },
   { key: "agendados", label: "Agendados" },
-  { key: "no_asistio", label: "No asisti\u00F3" },
+  { key: "no_asistio", label: "No asistió" },
   { key: "cerrados", label: "Descartados" },
 ];
 
@@ -368,7 +369,7 @@ export default function CallCenterPage() {
       setSelectedStatuses(statuses);
       setSelectedCommissionSources(commissionSources);
     } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar los datos del mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³dulo.");
+      setError(err?.message || "No se pudieron cargar los datos del módulo.");
     } finally {
       setCargando(false);
     }
@@ -383,13 +384,13 @@ export default function CallCenterPage() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n para usar este mÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³dulo.");
+        setError("Debes iniciar sesión para usar este módulo.");
         return;
       }
 
       if (!allowedRoles.includes(auth.roleCode)) {
         setAuthorized(false);
-        setError("No tienes permiso para entrar a Call Center.");
+        setError("No tienes permiso para entrar a Gestión de leads.");
         return;
       }
 
@@ -430,8 +431,8 @@ export default function CallCenterPage() {
         .eq("id", leadId);
 
       if (error) {
-        console.error("Error guardando asignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n:", error);
-        throw new Error(error.message || "No se pudo guardar la asignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.");
+        console.error("Error guardando asignación:", error);
+        throw new Error(error.message || "No se pudo guardar la asignación.");
       }
 
       setLeads((prev) =>
@@ -444,11 +445,11 @@ export default function CallCenterPage() {
 
       setMensaje(
         assignedUserId
-          ? "AsignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n guardada correctamente."
-          : "Se quitÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ la asignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n correctamente."
+          ? "Asignación guardada correctamente."
+          : "Se quitó la asignación correctamente."
       );
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la asignaciÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.");
+      setError(err?.message || "No se pudo guardar la asignación.");
     } finally {
       setSavingLeadId(null);
     }
@@ -504,8 +505,8 @@ export default function CallCenterPage() {
         .eq("id", leadId);
 
       if (error) {
-        console.error("Error guardando fuente de comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n:", error);
-        throw new Error(error.message || "No se pudo guardar la fuente de comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.");
+        console.error("Error guardando fuente de comisión:", error);
+        throw new Error(error.message || "No se pudo guardar la fuente de comisión.");
       }
 
       setLeads((prev) =>
@@ -518,11 +519,11 @@ export default function CallCenterPage() {
 
       setMensaje(
         commissionSource
-          ? "Fuente para comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n guardada correctamente."
-          : "Se limpiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ la fuente para comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n."
+          ? "Fuente para comisión guardada correctamente."
+          : "Se limpió la fuente para comisión."
       );
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la fuente para comisiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³n.");
+      setError(err?.message || "No se pudo guardar la fuente para comisión.");
     } finally {
       setSavingCommissionLeadId(null);
     }
@@ -569,7 +570,7 @@ export default function CallCenterPage() {
         [lead.id]: "contactado",
       }));
 
-      setMensaje("Cita cancelada correctamente. El cupo quedÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ liberado.");
+      setMensaje("Cita cancelada correctamente. El cupo quedó liberado.");
     } catch (err: any) {
       setError(err?.message || "No se pudo cancelar la cita.");
     } finally {
@@ -849,7 +850,7 @@ export default function CallCenterPage() {
     },
     {
       key: "no_asistio",
-      title: "No asisti\u00F3",
+      title: "No asistió",
       value: resumen.noAsistio,
       highlight: false,
     },
@@ -936,7 +937,7 @@ export default function CallCenterPage() {
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Call Center</p>
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Gestión de leads</p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.2rem]">{"Gesti\u00F3n de leads"}</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 {isSupervisorCallCenterView
@@ -976,14 +977,14 @@ export default function CallCenterPage() {
                 </Link>
 
                 <a
-                  href="/recepcion"
+                  href="/recepcion?view=agenda"
                   className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
                 >
                   Agenda visible
                 </a>
 
                 <a
-                  href="/recepcion"
+                  href="/recepcion?view=config"
                   className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#A8CDBD_0%,_#7FA287_55%,_#5F7D66_100%)] px-4 py-2 text-sm font-medium text-[#1F3128] shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
                 >
                   Configurar cupos
@@ -1007,13 +1008,13 @@ export default function CallCenterPage() {
 
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-[linear-gradient(135deg,_#FFF5F5_0%,_#FFF0F0_100%)] p-4 text-sm text-red-700 shadow-sm">
-            {error}
+            {repairMojibake(error)}
           </div>
         ) : null}
 
         {mensaje ? (
           <div className="rounded-2xl border border-[#BFE0CD] bg-[linear-gradient(135deg,_#F1FBF5_0%,_#E8F7EF_100%)] p-4 text-sm text-[#2D6B4A] shadow-sm">
-            {mensaje}
+            {repairMojibake(mensaje)}
           </div>
         ) : null}
 
@@ -1108,7 +1109,7 @@ export default function CallCenterPage() {
               No hay leads para el filtro actual.
             </div>
           ) : (
-            <div className="mt-6 space-y-4">
+            <div className="mt-6 grid gap-4 2xl:grid-cols-2">
               {leadsFiltrados.map((lead) => {
                 const nombre =
                   lead.full_name?.trim() ||
@@ -1137,14 +1138,14 @@ export default function CallCenterPage() {
                 return (
                   <div
                     key={lead.id}
-                    className="group rounded-[30px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.1)] transition duration-200 hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:shadow-[0_22px_48px_rgba(95,125,102,0.16)]"
+                    className="group rounded-[28px] border border-[#D6E8DA] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(246,252,248,0.94)_100%)] p-4 shadow-[0_18px_36px_rgba(95,125,102,0.1)] transition duration-200 hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:shadow-[0_22px_44px_rgba(95,125,102,0.16)]"
                   >
-                    <div className="flex flex-col gap-4">
-                      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="flex flex-col gap-3">
+                      <div className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_auto] xl:items-start">
                         <div className="min-w-0">
                           <div className="flex flex-wrap items-center gap-2">
                             <h3 className="text-lg font-semibold text-[#24312A]">
-                              {nombre}
+                              {repairMojibake(nombre)}
                             </h3>
 
                             <span
@@ -1161,19 +1162,19 @@ export default function CallCenterPage() {
                           </div>
 
                           <div className="mt-3 grid gap-1 text-sm text-slate-600">
-                            <p>{lead.phone || "Sin tel\u00E9fono"} - {lead.city || "Sin ciudad"}</p>
+                            <p>{repairMojibake(lead.phone || "Sin teléfono")} - {repairMojibake(lead.city || "Sin ciudad")}</p>
                             <p>Servicio: {traducirServicio(lead.interest_service)}</p>
                             <p>Origen: {traducirOrigen(lead.source)}</p>
-                            <p>{"Captaci\u00F3n"}: {lead.capture_location || "No registrado"}</p>
+                            <p>Captación: {repairMojibake(lead.capture_location || "No registrado")}</p>
                             {canSeeAssignmentMeta ? (
                               <>
-                                <p>Creado por: {creatorNames[lead.created_by_user_id || ""] || "Sin nombre"}</p>
+                                <p>Creado por: {repairMojibake(creatorNames[lead.created_by_user_id || ""] || "Sin nombre")}</p>
                                 <p className="text-[#4F6F5B]">
                                   <span className="font-medium">Asignado a:</span>{" "}
-                                  {obtenerNombreAsignado(lead)}
+                                  {repairMojibake(obtenerNombreAsignado(lead))}
                                 </p>
                                 <p className="text-[#4F6F5B]">
-                                  <span className="font-medium">{"Fuente para comisi\u00F3n"}:</span>{" "}
+                                  <span className="font-medium">Fuente para comisión:</span>{" "}
                                   {traducirFuenteComision(lead.commission_source_type)}
                                 </p>
                               </>
@@ -1190,12 +1191,12 @@ export default function CallCenterPage() {
                           {lead.observations ? (
                             <div className="mt-3 rounded-2xl border border-[#E3ECE5] bg-[#F8F7F4] p-3 text-sm text-slate-600">
                               <span className="font-medium text-[#24312A]">Observaciones:</span>{" "}
-                              {lead.observations}
+                              {repairMojibake(lead.observations)}
                             </div>
                           ) : null}
                         </div>
 
-                        <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-wrap gap-2 xl:max-w-[18rem] xl:justify-end">
                           <a
                             href={`/leads/${lead.id}`}
                             className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
@@ -1204,7 +1205,7 @@ export default function CallCenterPage() {
                           </a>
 
                           <a
-                            href={`/recepcion?leadId=${lead.id}`}
+                            href={`/recepcion?view=agenda&leadId=${lead.id}`}
                             className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
                           >
                             {hasActiveAppointment ? "Reagendar cita" : "Agendar cita"}
@@ -1225,15 +1226,16 @@ export default function CallCenterPage() {
                         </div>
                       </div>
 
+                      <div className={`grid gap-3 ${canChangeStatus ? "xl:grid-cols-3" : canManageCommissionSource ? "xl:grid-cols-2" : ""}`}>
                       {canAssign ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
                           <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
-                            Asignaci\u00F3n Call Center
+                            Asignación
                           </p>
 
-                          <div className="flex flex-col gap-3 md:flex-row">
+                          <div className="flex flex-col gap-3">
                             <select
-                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
+                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-3.5 text-slate-800 outline-none transition focus:border-[#7FA287]"
                               value={selectedAssignments[lead.id] || ""}
                               onChange={(e) =>
                                 setSelectedAssignments((prev) => ({
@@ -1254,11 +1256,11 @@ export default function CallCenterPage() {
                               type="button"
                               onClick={() => guardarAsignacion(lead.id)}
                               disabled={savingLeadId === lead.id}
-                              className="rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                              className="rounded-2xl bg-[#5F7D66] px-4 py-3 text-sm font-medium text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
                             >
                               {savingLeadId === lead.id
                                 ? "Guardando..."
-                                : "Guardar asignaci\u00F3n"}
+                                : "Guardar asignación"}
                             </button>
                           </div>
                         </div>
@@ -1267,12 +1269,12 @@ export default function CallCenterPage() {
                       {canManageCommissionSource ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
                           <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
-                            Fuente para comisi\u00F3n
+                            Fuente para comisión
                           </p>
 
-                          <div className="flex flex-col gap-3 md:flex-row">
+                          <div className="flex flex-col gap-3">
                             <select
-                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
+                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-3.5 text-slate-800 outline-none transition focus:border-[#7FA287]"
                               value={selectedCommissionSources[lead.id] || ""}
                               onChange={(e) =>
                                 setSelectedCommissionSources((prev) => ({
@@ -1293,7 +1295,7 @@ export default function CallCenterPage() {
                               type="button"
                               onClick={() => guardarFuenteComision(lead.id)}
                               disabled={savingCommissionLeadId === lead.id}
-                              className="rounded-2xl border border-[#5F7D66] bg-white px-5 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                              className="rounded-2xl border border-[#5F7D66] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
                             >
                               {savingCommissionLeadId === lead.id
                                 ? "Guardando..."
@@ -1305,13 +1307,11 @@ export default function CallCenterPage() {
 
                       {canChangeStatus ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
-                          <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
-                            Estado del lead en Call Center
-                          </p>
+                          <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">Estado del lead</p>
 
-                          <div className="flex flex-col gap-3 md:flex-row">
+                          <div className="flex flex-col gap-3">
                             <select
-                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-4 text-slate-800 outline-none transition focus:border-[#7FA287]"
+                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-3.5 text-slate-800 outline-none transition focus:border-[#7FA287]"
                               value={selectedStatuses[lead.id] || lead.status || "nuevo"}
                               onChange={(e) =>
                                 setSelectedStatuses((prev) => ({
@@ -1331,7 +1331,7 @@ export default function CallCenterPage() {
                               type="button"
                               onClick={() => guardarEstado(lead.id)}
                               disabled={savingStatusLeadId === lead.id}
-                              className="rounded-2xl border border-[#5F7D66] bg-white px-5 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                              className="rounded-2xl border border-[#5F7D66] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
                             >
                               {savingStatusLeadId === lead.id
                                 ? "Guardando..."
@@ -1340,6 +1340,7 @@ export default function CallCenterPage() {
                           </div>
                         </div>
                       ) : null}
+                      </div>
                     </div>
                   </div>
                 );
@@ -1365,6 +1366,8 @@ function StatCard({
   onClick: () => void;
   highlight?: boolean;
 }) {
+  const safeTitle = repairMojibake(title);
+
   return (
     <button
       type="button"
@@ -1378,7 +1381,7 @@ function StatCard({
       }`}
     >
       <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
-      <p className="text-sm font-medium text-[#5B6E63]">{title}</p>
+      <p className="text-sm font-medium text-[#5B6E63]">{safeTitle}</p>
       <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
     </button>
   );
