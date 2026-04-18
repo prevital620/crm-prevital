@@ -146,8 +146,26 @@ export default function UsuariosPage() {
   }
 
   async function restablecerContrasena(user: UserRow) {
+    if (!user.auth_exists) {
+      setError(
+        `El usuario ${user.full_name} no existe en autenticación. Debes recrearlo o revisar su correo antes de restablecer la contraseña.`
+      );
+      setMensaje("");
+      return;
+    }
+
+    if (!user.email) {
+      setError(
+        `No hay un correo de acceso visible para ${user.full_name}. Revisa el correo del usuario antes de restablecer la contraseña.`
+      );
+      setMensaje("");
+      return;
+    }
+
     const confirmado = window.confirm(
-      `¿Restablecer la contraseña de ${user.full_name} a Prevital2026*?`
+      `¿Restablecer la contraseña de ${user.full_name} a Prevital2026*?
+
+Correo de acceso: ${user.email}`
     );
 
     if (!confirmado) return;
@@ -167,8 +185,10 @@ export default function UsuariosPage() {
         throw new Error(result.error || "No se pudo restablecer la contraseña.");
       }
 
+      const loginEmail = result.email || user.email;
+
       setMensaje(
-        "Contraseña restablecida correctamente a Prevital2026*. El usuario deberá cambiarla en el próximo ingreso."
+        `Contraseña restablecida correctamente a Prevital2026*. ${user.full_name} debe ingresar con ${loginEmail} y cambiarla en el próximo ingreso.`
       );
     } catch (err: any) {
       setError(err?.message || "No se pudo restablecer la contraseña.");
@@ -384,6 +404,8 @@ export default function UsuariosPage() {
                           </div>
 
                           <div className="mt-3 grid gap-2 text-sm text-slate-600 md:grid-cols-2 xl:grid-cols-3">
+                            <InfoItem label="Correo" value={user.email || "Sin correo de acceso"} />
+                            <InfoItem label="Acceso auth" value={user.auth_exists ? "Activo en autenticación" : "No existe en autenticación"} />
                             <InfoItem label="Teléfono" value={user.phone || "Sin teléfono"} />
                             <InfoItem label="Cargo" value={user.job_title || "Sin cargo"} />
                             <InfoItem
@@ -393,6 +415,7 @@ export default function UsuariosPage() {
                             <InfoItem label="Rol" value={roleNames.length > 0 ? roleNames.join(" · ") : "Sin rol"} />
                             <InfoItem label="Código rol" value={roleCodes.length > 0 ? roleCodes.join(" · ") : "Sin código"} />
                             <InfoItem label="Creado" value={formatDate(user.created_at)} />
+                            <InfoItem label="Último ingreso" value={user.last_sign_in_at ? formatDate(user.last_sign_in_at) : "Sin registro"} />
                           </div>
                         </div>
 

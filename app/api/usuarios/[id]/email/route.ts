@@ -46,6 +46,7 @@ export async function PATCH(
 
     const { data, error } = await supabaseAdmin.auth.admin.updateUserById(id, {
       email,
+      email_confirm: true,
     });
 
     if (error) {

@@ -76,6 +76,7 @@ export async function PATCH(
       message: "Contraseña restablecida correctamente.",
       tempPassword,
       userId: data.user?.id,
+      email: data.user?.email || null,
       reactivated: true,
     });
   } catch (error: unknown) {
