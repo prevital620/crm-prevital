@@ -1,6 +1,7 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
+import Link from "next/link";
 
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
@@ -270,7 +271,7 @@ function callContactResultLabel(value: string | null | undefined) {
     agendado: "Agendado",
     dato_falso: "Dato falso",
     no_interesa: "No interesa",
-    no_asistio: "No asistió",
+    no_asistio: "No asistio",
   };
   if (!value) return "Sin definir";
   return map[value] || value;
@@ -372,7 +373,7 @@ function buildInstallmentPlan(firstDate: string, count: number, value: number): 
 }
 
 function buildDurationNote(durationMinutes: number) {
-  return `Duración: ${durationMinutes} min`;
+  return `Duracion: ${durationMinutes} min`;
 }
 
 function buildClosingNotes(
@@ -731,13 +732,13 @@ export default function ComercialPage() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesión para usar este módulo.");
+        setError("Debes iniciar sesion para usar este modulo.");
         return;
       }
 
       if (!allowedRoles.includes(auth.roleCode)) {
         setAuthorized(false);
-        setError("No tienes permiso para entrar a este módulo.");
+        setError("No tienes permiso para entrar a este modulo.");
         return;
       }
 
@@ -1261,7 +1262,7 @@ export default function ComercialPage() {
 
   async function crearClienteNuevo() {
     if (!currentUserId) {
-      setError("No se encontró el usuario actual.");
+      setError("No se encontro el usuario actual.");
       return;
     }
 
@@ -1352,7 +1353,7 @@ export default function ComercialPage() {
         city: "",
       });
       setCases((prev) => [createdCase, ...prev]);
-      setMensaje("Cliente creado y asignado para atención comercial.");
+      setMensaje("Cliente creado y asignado para atencion comercial.");
       await iniciarAtencion(createdCase);
     } catch (err: any) {
       setError(err?.message || "No se pudo crear el cliente nuevo.");
@@ -1376,7 +1377,7 @@ export default function ComercialPage() {
 
   async function guardarCaso(finalizar: boolean) {
     if (!editingCaseId || !currentUserId) {
-      setError("No se encontró el caso o el usuario actual.");
+      setError("No se encontro el caso o el usuario actual.");
       return;
     }
 
@@ -1565,7 +1566,7 @@ const updatePayload: any = {
       <main className="min-h-screen bg-slate-100 p-6 md:p-8">
         <div className="mx-auto max-w-7xl rounded-3xl bg-white p-6 shadow-sm">
           <p className="text-sm font-medium text-red-700">
-            {error || "No tienes permiso para entrar a este módulo."}
+            {error || "No tienes permiso para entrar a este modulo."}
           </p>
         </div>
       </main>
@@ -1604,19 +1605,19 @@ const updatePayload: any = {
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
               <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Comercial</p>
-              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">Gestion comercial</h1>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">Gestión comercial</h1>
             </div>
 
             <SessionBadge />
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a
+            <Link
               href="/"
               className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Inicio
-            </a>
+            </Link>
 
             <button
               type="button"
@@ -1703,7 +1704,7 @@ const updatePayload: any = {
                   <div className="flex flex-wrap items-center gap-3">
                     <span className="text-sm font-semibold text-[#2F5E46]">Estado del caso:</span>
                     <StatusBadge
-                      label="En atencion"
+                      label="En atención"
                       className="bg-emerald-100 text-emerald-700"
                     />
                     {currentCase?.assigned_at ? (
@@ -1724,8 +1725,8 @@ const updatePayload: any = {
                             <p className="mt-1 text-sm font-semibold text-[#24312A]">{currentCase.customer_name}</p>
                           </div>
                           <div className="rounded-2xl border border-[#E3ECE5] bg-white/85 px-4 py-3">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Telefono</p>
-                            <p className="mt-1 text-sm font-semibold text-[#24312A]">{currentCase.phone || "Sin telefono"}</p>
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Teléfono</p>
+                            <p className="mt-1 text-sm font-semibold text-[#24312A]">{currentCase.phone || "Sin teléfono"}</p>
                           </div>
                           <div className="rounded-2xl border border-[#E3ECE5] bg-white/85 px-4 py-3">
                             <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6C8A78]">Ciudad</p>
@@ -1933,7 +1934,7 @@ const updatePayload: any = {
                     <h3 className="text-lg font-semibold text-amber-900">Detalle de cartera</h3>
                     <div className="mt-4 grid gap-4 md:grid-cols-3">
                       <Field
-                        label="Número de cuotas"
+                        label="Numero de cuotas"
                         input={
                           <input
                             className={inputClass}
@@ -1981,10 +1982,10 @@ const updatePayload: any = {
                     {installmentPlan.length > 0 ? (
                       <div className="mt-4 rounded-2xl border border-amber-100 bg-white p-4">
                         <p className="text-sm font-semibold text-amber-900">
-                          Plan automático de cuotas
+                          Plan automatico de cuotas
                         </p>
                         <p className="mt-1 text-sm text-slate-600">
-                          Se generará una cuota mensual con la misma fecha base.
+                          Se generara una cuota mensual con la misma fecha base.
                         </p>
                         <div className="mt-3 max-h-48 overflow-auto rounded-2xl border border-amber-100">
                           <div className="divide-y divide-amber-100">
@@ -2222,7 +2223,7 @@ const updatePayload: any = {
                                   <option value="">Selecciona</option>
                                   {getSpecialistsForService(item.service_type).map((option) => (
                                     <option key={option.id} value={option.id}>
-                                      {option.full_name} Â· {option.role_name}
+                                      {option.full_name} · {option.role_name}
                                     </option>
                                   ))}
                                 </select>
@@ -2305,7 +2306,7 @@ const updatePayload: any = {
                       Agregar otra cita
                     </button>
                     <p className="text-sm text-slate-500">
-                      La primera cita queda como continuidad principal y las demás salen como adicionales al finalizar.
+                      La primera cita queda como continuidad principal y las demas salen como adicionales al finalizar.
                     </p>
                   </div>
                 </div>
@@ -2352,7 +2353,7 @@ const updatePayload: any = {
               <div>
                 <h2 className="text-2xl font-bold text-slate-900">Casos visibles</h2>
                 <p className="mt-1 text-sm leading-6 text-[#51695C]">
-                  Solo aparecen los casos asignados hoy y aún activos para trabajar.
+                  Solo aparecen los casos asignados hoy y aun activos para trabajar.
                 </p>
               </div>
 
@@ -2431,7 +2432,7 @@ const updatePayload: any = {
 
                               <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-3 shadow-inner">
                                 <p className="text-sm font-semibold text-[#24312A]">
-                                  Recepción
+                                  recepción
                                 </p>
                                 {receptionSummary.length > 0 ? (
                                   <ul className="mt-2 space-y-1 text-sm text-slate-600">
@@ -2474,3 +2475,4 @@ const updatePayload: any = {
 
 const inputClass =
   "w-full rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-4 text-base text-slate-900 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
+
