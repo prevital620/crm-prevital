@@ -767,8 +767,8 @@ function imprimirDocumentoNutricional({
 
         <h2>Antecedentes</h2>
         <div class="grid">
-          <div class="item"><strong>Patológicos</strong><br/>${texto(profile?.patologicos)}</div>
-          <div class="item"><strong>Quirúrgicos</strong><br/>${texto(profile?.quirurgicos)}</div>
+          <div class="item"><strong>Patológicos</strong><br/>${texto(profile?.antecedentes_patologicos)}</div>
+          <div class="item"><strong>Quirúrgicos</strong><br/>${texto(profile?.cirugias)}</div>
           <div class="item"><strong>Alérgicos</strong><br/>${texto(profile?.alergicos)}</div>
           <div class="item"><strong>Medicamentos</strong><br/>${texto(profile?.medicamentos)}</div>
         </div>
@@ -777,16 +777,15 @@ function imprimirDocumentoNutricional({
         <div class="grid">
           <div class="item"><strong>Peso</strong><br/>${texto(profile?.peso)}</div>
           <div class="item"><strong>Talla</strong><br/>${texto(profile?.talla)}</div>
-          <div class="item"><strong>IMC</strong><br/>${texto(profile?.imc)}</div>
-          <div class="item"><strong>Grasa corporal</strong><br/>${texto(profile?.grasa_corporal)}</div>
+          <div class="item"><strong>IMC</strong><br/>${texto(profile?.indice_masa_corporal)}</div>
+          <div class="item"><strong>Grasa corporal</strong><br/>${texto(profile?.porcentaje_masa_corporal)}</div>
+          <div class="item"><strong>Dinamometría</strong><br/>${texto(profile?.dinamometria)}</div>
           <div class="item"><strong>Masa muscular</strong><br/>${texto(profile?.masa_muscular)}</div>
-          <div class="item"><strong>Agua corporal</strong><br/>${texto(profile?.agua_corporal)}</div>
+          <div class="item"><strong>Metabolismo en reposo</strong><br/>${texto(profile?.metabolismo_reposo)}</div>
           <div class="item"><strong>Grasa visceral</strong><br/>${texto(profile?.grasa_visceral)}</div>
-          <div class="item"><strong>Edad metabólica</strong><br/>${texto(profile?.edad_metabolica)}</div>
-          <div class="item"><strong>Cintura</strong><br/>${texto(profile?.cintura)}</div>
-          <div class="item"><strong>Cadera</strong><br/>${texto(profile?.cadera)}</div>
-          <div class="item"><strong>Brazo</strong><br/>${texto(profile?.brazo)}</div>
-          <div class="item"><strong>Pierna</strong><br/>${texto(profile?.pierna)}</div>
+          <div class="item"><strong>Edad corporal</strong><br/>${texto(profile?.edad_corporal)}</div>
+          <div class="item"><strong>Cintura</strong><br/>${texto(profile?.circunferencia_cintura)}</div>
+          <div class="item"><strong>Brazo</strong><br/>${texto(profile?.perimetro_brazo)}</div>
           <div class="item"><strong>Perímetro pantorrilla</strong><br/>${texto(profile?.perimetro_pantorrilla)}</div>
           <div class="item"><strong>Clasificación</strong><br/>${texto(profile?.clasificacion_nutricional)}</div>
         </div>
@@ -3385,23 +3384,19 @@ function imprimirRegistroComercial() {
         ocupacionLabel ? `Ocupación: ${ocupacionLabel}` : "",
         commercialForm.edad ? `Edad: ${commercialForm.edad}` : "",
         `Hipertenso: ${commercialForm.hipertenso === "si" ? "Sí" : "No"}`,
-        commercialForm.hipertenso === "si" && commercialForm.hipertenso_cual
-          ? `Hipertensión detalle: ${commercialForm.hipertenso_cual}`
-          : "",
         `Diabético: ${commercialForm.diabetico === "si" ? "Sí" : "No"}`,
-        commercialForm.diabetico === "si" && commercialForm.diabetico_cual
-          ? `Diabetes detalle: ${commercialForm.diabetico_cual}`
-          : "",
         `Cirugías: ${commercialForm.cirugias === "si" ? "Sí" : "No"}`,
-        commercialForm.cirugias === "si" && commercialForm.cirugias_cuales
-          ? `Cirugías cuáles: ${commercialForm.cirugias_cuales}`
+        commercialForm.cirugias === "si" && commercialForm.cirugias_cual
+          ? `Cirugías cuáles: ${commercialForm.cirugias_cual}`
           : "",
         `Medicamentos: ${commercialForm.medicamentos === "si" ? "Sí" : "No"}`,
-        commercialForm.medicamentos === "si" && commercialForm.medicamentos_cuales
-          ? `Medicamentos cuáles: ${commercialForm.medicamentos_cuales}`
+        commercialForm.medicamentos === "si" && commercialForm.medicamentos_cual
+          ? `Medicamentos cuáles: ${commercialForm.medicamentos_cual}`
           : "",
-        `Acompañante: ${commercialForm.acompanante === "si" ? "Sí" : "No"}`,
-        commercialForm.acompanante === "si" && commercialForm.acompanante_parentesco
+        commercialForm.acompanante_nombre
+          ? `Acompañante: ${commercialForm.acompanante_nombre}`
+          : "",
+        commercialForm.acompanante_parentesco
           ? `Acompañante parentesco: ${commercialForm.acompanante_parentesco}`
           : "",
         `Enfermedades: ${commercialForm.enfermedades === "si" ? "Sí" : "No"}`,
