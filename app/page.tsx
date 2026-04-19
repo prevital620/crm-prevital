@@ -145,6 +145,12 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "comercial", "gerencia_comercial"],
   },
   {
+    title: "Retractos y renegociaciones",
+    subtitle: "Preparar ajustes de ventas con impacto financiero y comisional.",
+    href: "/comercial/ajustes",
+    roles: ["super_user", "gerente", "gerente_comercial", "gerencia_comercial"],
+  },
+  {
     title: "Gerencia comercial",
     subtitle: "Supervisar cartera, ventas y desempeño comercial.",
     href: "/gerencia/comercial",
