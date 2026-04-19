@@ -818,14 +818,20 @@ export default function GerenciaComercialPage() {
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
-            <a href="/" className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]">
+            <Link href="/" className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]">
               Inicio
-            </a>
+            </Link>
             <Link
               href="/comercial"
               className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
             >
               Ir a Comercial
+            </Link>
+            <Link
+              href="/comercial/ajustes"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#365243] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+            >
+              Retractos y renegociaciones
             </Link>
           </div>
         </section>
