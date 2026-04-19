@@ -97,6 +97,12 @@ const quickActions: QuickAction[] = [
     roles: ["super_user"],
   },
   {
+    title: "Carga historica",
+    subtitle: "Registrar casos anteriores con fechas reales.",
+    href: "/carga-historica",
+    roles: ["super_user"],
+  },
+  {
     title: "Gestión de leads",
     subtitle: "Asignar y gestionar leads del call center.",
     href: "/call-center",
