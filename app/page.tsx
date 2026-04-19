@@ -1,9 +1,10 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
-import { supabase } from "@/lib/supabase";
 import { useRouter } from "next/navigation";
+import { supabase } from "@/lib/supabase";
 import LogoutButton from "@/components/logout-button";
 import { getCurrentUserRole, normalizeRoleCode } from "@/lib/auth";
 import { repairMojibake } from "@/lib/text/repairMojibake";
@@ -18,14 +19,7 @@ import {
   PrevitalFilterBar,
   PrevitalFilterGroup,
 } from "@/components/layout/prevital-filter-bar";
-import {
-  Activity,
-  Building2,
-  LayoutGrid,
-  RefreshCcw,
-  ShieldCheck,
-  Users,
-} from "lucide-react";
+import { Activity, LayoutGrid, RefreshCcw, ShieldCheck, Users } from "lucide-react";
 
 type Lead = {
   id: string;
@@ -36,17 +30,6 @@ type Lead = {
   city: string | null;
   status: string;
   created_at: string;
-};
-
-type Department = {
-  id: string;
-  name: string;
-};
-
-type Role = {
-  id: string;
-  name: string;
-  code: string;
 };
 
 type Profile = {
@@ -64,6 +47,12 @@ type QuickAction = {
   roles: string[];
 };
 
+type QuickActionSection = {
+  title: string;
+  description: string;
+  items: QuickAction[];
+};
+
 const quickActions: QuickAction[] = [
   {
     title: "Nuevo lead",
@@ -75,14 +64,7 @@ const quickActions: QuickAction[] = [
     title: "Consultar leads",
     subtitle: "Revisar leads creados y su estado.",
     href: "/leads",
-    roles: [
-      "super_user",
-      "promotor_opc",
-      "supervisor_opc",
-      "supervisor_call_center",
-      "confirmador",
-      "tmk",
-    ],
+    roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
     title: "Crear usuario",
@@ -103,7 +85,7 @@ const quickActions: QuickAction[] = [
     roles: ["super_user"],
   },
   {
-    title: "Gestión de leads",
+    title: "Gestion de leads",
     subtitle: "Asignar y gestionar leads del call center.",
     href: "/call-center",
     roles: ["super_user", "supervisor_call_center", "confirmador"],
@@ -116,25 +98,25 @@ const quickActions: QuickAction[] = [
   },
   {
     title: "Configurar cupos",
-    subtitle: "Abrir agenda y organizar cupos del día.",
+    subtitle: "Abrir agenda y organizar cupos del dia.",
     href: "/recepcion?view=config",
     roles: ["super_user", "supervisor_call_center"],
   },
   {
-    title: "Recepción",
-    subtitle: "Ver agenda, citas y admisión del sistema.",
+    title: "Recepcion",
+    subtitle: "Incluye agenda, citas, admision y configuracion de cupos.",
     href: "/recepcion",
     roles: ["super_user", "recepcion"],
   },
   {
-    title: "Nutrición",
-    subtitle: "Ver agenda, pacientes y valoración nutricional.",
+    title: "Nutricion",
+    subtitle: "Ver agenda, pacientes y valoracion nutricional.",
     href: "/nutricion",
     roles: ["super_user", "nutricionista"],
   },
   {
     title: "Fisioterapia",
-    subtitle: "Ver agenda, pacientes y atención de fisioterapia.",
+    subtitle: "Ver agenda, pacientes y atencion de fisioterapia.",
     href: "/fisioterapia",
     roles: ["super_user", "fisioterapeuta"],
   },
@@ -152,7 +134,7 @@ const quickActions: QuickAction[] = [
   },
   {
     title: "Gerencia comercial",
-    subtitle: "Supervisar cartera, ventas y desempeño comercial.",
+    subtitle: "Supervisar cartera, ventas y desempeno comercial.",
     href: "/gerencia/comercial",
     roles: ["super_user", "gerencia_comercial"],
   },
@@ -177,9 +159,8 @@ export default function HomePage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
+  const [totalLeadCount, setTotalLeadCount] = useState(0);
   const [leads, setLeads] = useState<Lead[]>([]);
-  const [departments, setDepartments] = useState<Department[]>([]);
-  const [roles, setRoles] = useState<Role[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
 
   const [errorMessage, setErrorMessage] = useState("");
@@ -194,9 +175,7 @@ export default function HomePage() {
         error: sessionError,
       } = await supabase.auth.getSession();
 
-      if (sessionError) {
-        throw sessionError;
-      }
+      if (sessionError) throw sessionError;
 
       if (!session) {
         router.push("/login");
@@ -231,9 +210,7 @@ export default function HomePage() {
 
         setCheckingSession(false);
         setLoading(false);
-        setErrorMessage(
-          error?.message || "No se pudieron cargar los roles del usuario."
-        );
+        setErrorMessage(error?.message || "No se pudieron cargar los roles del usuario.");
         return;
       }
 
@@ -260,17 +237,9 @@ export default function HomePage() {
 
       setCurrentUserName(profile?.full_name || "Usuario");
 
-      const singleReceptionAccess =
-        normalizedRole === "recepcion" &&
-        normalizedAllRoles.length === 1;
-
-      const singleCommercialAccess =
-        normalizedRole === "comercial" &&
-        normalizedAllRoles.length === 1;
-
-      const singleAdminAccess =
-        normalizedRole === "administrador" &&
-        normalizedAllRoles.length === 1;
+      const singleReceptionAccess = normalizedRole === "recepcion" && normalizedAllRoles.length === 1;
+      const singleCommercialAccess = normalizedRole === "comercial" && normalizedAllRoles.length === 1;
+      const singleAdminAccess = normalizedRole === "administrador" && normalizedAllRoles.length === 1;
 
       if (singleReceptionAccess) {
         router.push("/recepcion");
@@ -290,7 +259,7 @@ export default function HomePage() {
       setCheckingSession(false);
       await loadDashboard(normalizedRole, session.user.id);
     } catch (error: any) {
-      setErrorMessage(error?.message || "No se pudo validar la sesión.");
+      setErrorMessage(error?.message || "No se pudo validar la sesion.");
       setCheckingSession(false);
       setLoading(false);
     }
@@ -310,6 +279,10 @@ export default function HomePage() {
         .order("created_at", { ascending: false })
         .limit(20);
 
+      let leadsCountQuery = supabase
+        .from("leads")
+        .select("*", { count: "exact", head: true });
+
       if (effectiveRole === "promotor_opc" && effectiveUserId) {
         leadsQuery = supabase
           .from("leads")
@@ -317,6 +290,11 @@ export default function HomePage() {
           .eq("created_by_user_id", effectiveUserId)
           .order("created_at", { ascending: false })
           .limit(20);
+
+        leadsCountQuery = supabase
+          .from("leads")
+          .select("*", { count: "exact", head: true })
+          .eq("created_by_user_id", effectiveUserId);
       }
 
       if (
@@ -331,30 +309,31 @@ export default function HomePage() {
           .or(`assigned_to_user_id.eq.${effectiveUserId},created_by_user_id.eq.${effectiveUserId}`)
           .order("created_at", { ascending: false })
           .limit(20);
+
+        leadsCountQuery = supabase
+          .from("leads")
+          .select("*", { count: "exact", head: true })
+          .or(`assigned_to_user_id.eq.${effectiveUserId},created_by_user_id.eq.${effectiveUserId}`);
       }
 
-      const [leadsResult, departmentsResult, rolesResult, profilesResult] =
-        await Promise.all([
-          leadsQuery,
-          supabase.from("departments").select("id, name").order("name", { ascending: true }),
-          supabase.from("roles").select("id, name, code").order("name", { ascending: true }),
-          supabase
-            .from("profiles")
-            .select("id, full_name, job_title, is_active, created_at")
-            .order("created_at", { ascending: false }),
-        ]);
+      const [leadsResult, leadsCountResult, profilesResult] = await Promise.all([
+        leadsQuery,
+        leadsCountQuery,
+        supabase
+          .from("profiles")
+          .select("id, full_name, job_title, is_active, created_at")
+          .order("created_at", { ascending: false }),
+      ]);
 
       if (leadsResult.error) throw leadsResult.error;
-      if (departmentsResult.error) throw departmentsResult.error;
-      if (rolesResult.error) throw rolesResult.error;
+      if (leadsCountResult.error) throw leadsCountResult.error;
       if (profilesResult.error) throw profilesResult.error;
 
+      setTotalLeadCount(leadsCountResult.count ?? 0);
       setLeads((leadsResult.data as Lead[]) ?? []);
-      setDepartments((departmentsResult.data as Department[]) ?? []);
-      setRoles((rolesResult.data as Role[]) ?? []);
       setProfiles((profilesResult.data as Profile[]) ?? []);
     } catch (error: any) {
-      setErrorMessage(error?.message || "Ocurrió un error cargando el dashboard.");
+      setErrorMessage(error?.message || "Ocurrio un error cargando el panel.");
     } finally {
       setLoading(false);
     }
@@ -385,19 +364,65 @@ export default function HomePage() {
       });
     }
 
+    if (effectiveRoles.includes("super_user")) {
+      return base.filter(
+        (action) => !["/recepcion?view=agenda", "/recepcion?view=config"].includes(action.href)
+      );
+    }
+
     return base;
   }, [allRoleCodes, currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
-
-  const totalLeads = leads.length;
-  const totalDepartments = departments.length;
-  const totalRoles = roles.length;
+  const totalLeads = totalLeadCount || leads.length;
   const totalUsers = profiles.length;
 
   const activeUsers = useMemo(() => {
     return profiles.filter((item) => item.is_active).length;
   }, [profiles]);
+
+  const superUserSections = useMemo<QuickActionSection[]>(() => {
+    if (!isSuperUser) return [];
+
+    const sectionMap: Array<{ title: string; description: string; hrefs: string[] }> = [
+      {
+        title: "Captacion y seguimiento",
+        description: "Leads, call center y gestion comercial.",
+        hrefs: [
+          "/leads/nuevo",
+          "/leads",
+          "/call-center",
+          "/comercial",
+          "/comercial/ajustes",
+          "/gerencia/comercial",
+        ],
+      },
+      {
+        title: "Operacion y atencion",
+        description: "Recepcion y modulos clinicos del dia a dia.",
+        hrefs: ["/recepcion", "/nutricion", "/fisioterapia"],
+      },
+      {
+        title: "Administracion",
+        description: "Usuarios, historicos y control global del CRM.",
+        hrefs: ["/usuarios/nuevo", "/usuarios", "/carga-historica", "/admin"],
+      },
+    ];
+
+    return sectionMap
+      .map((section) => ({
+        title: section.title,
+        description: section.description,
+        items: section.hrefs
+          .map((href) => visibleQuickActions.find((action) => action.href === href))
+          .filter(Boolean) as QuickAction[],
+      }))
+      .filter((section) => section.items.length > 0);
+  }, [isSuperUser, visibleQuickActions]);
+
+  const superUserActionCount = useMemo(() => {
+    return superUserSections.reduce((acc, section) => acc + section.items.length, 0);
+  }, [superUserSections]);
 
   if (checkingSession) {
     return (
@@ -405,7 +430,7 @@ export default function HomePage() {
         <div className="mx-auto max-w-4xl">
           <PrevitalCard>
             <PrevitalCardContent className="p-8">
-              <p className="text-sm text-slate-500">Validando sesión...</p>
+              <p className="text-sm text-slate-500">Validando sesion...</p>
             </PrevitalCardContent>
           </PrevitalCard>
         </div>
@@ -417,36 +442,25 @@ export default function HomePage() {
     <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[420px] w-[420px] opacity-[0.05] md:h-[520px] md:w-[520px]">
-          <Image
-            src="/prevital-logo.jpeg"
-            alt="Prevital"
-            fill
-            className="object-contain"
-            priority
-          />
+          <Image src="/prevital-logo.jpeg" alt="Prevital" fill className="object-contain" priority />
         </div>
       </div>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
           <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
-            <Image
-              src="/prevital-logo.jpeg"
-              alt="Prevital"
-              fill
-              className="object-contain p-1"
-              priority
-            />
+            <Image src="/prevital-logo.jpeg" alt="Prevital" fill className="object-contain p-1" priority />
           </div>
         </div>
+
         <PrevitalPageHeader
           title="CRM Prevital"
-          subtitle="Accesos y resumen según el rol autenticado."
+          subtitle="Accesos y resumen segun el rol autenticado."
           actions={
             <div className="flex flex-wrap items-center gap-3">
               <div className="rounded-2xl border border-[#D6E8DA] bg-[#EAF4EC] px-5 py-3 text-[#4F6F5B]">
                 <p className="text-sm font-semibold">{currentUserName || "Usuario"}</p>
                 <p className="text-xs text-[#5E8F6C]">
-                  {allRoleNames.length > 0 ? allRoleNames.join(" · ") : currentRoleName || "Rol"}
+                  {allRoleNames.length > 0 ? allRoleNames.join(" / ") : currentRoleName || "Rol"}
                 </p>
               </div>
               <LogoutButton />
@@ -462,7 +476,7 @@ export default function HomePage() {
             </div>
             <div className="inline-flex items-center gap-2 rounded-2xl bg-white px-4 py-2 text-sm text-slate-600">
               <ShieldCheck className="h-4 w-4 text-[#5E8F6C]" />
-              <span>{allRoleNames.length > 0 ? allRoleNames.join(" · ") : currentRoleName || "Rol"}</span>
+              <span>{allRoleNames.length > 0 ? allRoleNames.join(" / ") : currentRoleName || "Rol"}</span>
             </div>
           </PrevitalFilterGroup>
 
@@ -483,43 +497,31 @@ export default function HomePage() {
 
         {isSuperUser ? (
           <>
-            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+            <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <StatCard
-                title="Leads"
+                title="Leads totales"
                 value={loading ? "..." : String(totalLeads)}
-                subtitle="Según tu rol"
+                subtitle="Conteo real en la base de datos"
                 icon={<Activity className="h-5 w-5" />}
-              />
-              <StatCard
-                title="Departamentos"
-                value={loading ? "..." : String(totalDepartments)}
-                subtitle="Estructura base"
-                icon={<Building2 className="h-5 w-5" />}
-              />
-              <StatCard
-                title="Roles"
-                value={loading ? "..." : String(totalRoles)}
-                subtitle="Roles configurados"
-                icon={<ShieldCheck className="h-5 w-5" />}
               />
               <StatCard
                 title="Usuarios"
                 value={loading ? "..." : String(totalUsers)}
-                subtitle="Perfiles internos"
+                subtitle={`${activeUsers} activos actualmente`}
                 icon={<Users className="h-5 w-5" />}
               />
               <StatCard
-                title="Usuarios activos"
-                value={loading ? "..." : String(activeUsers)}
-                subtitle="Perfiles habilitados"
-                icon={<Users className="h-5 w-5" />}
+                title="Accesos clave"
+                value={loading ? "..." : String(superUserActionCount)}
+                subtitle="Atajos principales del super usuario"
+                icon={<LayoutGrid className="h-5 w-5" />}
               />
             </section>
 
             <PrevitalCard>
               <PrevitalCardHeader
-                title="Accesos disponibles"
-                description="Solo ves los módulos permitidos para tu rol."
+                title="Centro de control"
+                description="Recepcion ya incluye agenda visible y configuracion de cupos. Desde aqui organizas los accesos por bloque."
                 action={
                   <PrevitalButton
                     variant="secondary"
@@ -532,78 +534,46 @@ export default function HomePage() {
                 }
               />
               <PrevitalCardContent>
-                <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-                  {visibleQuickActions.map((action) => (
-                    <a
-                      key={action.title}
-                      href={action.href}
-                      className="group rounded-3xl border border-[#D6E8DA] bg-[#F8F7F4] p-5 transition hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:bg-white"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-lg font-semibold text-slate-800">{repairMojibake(action.title)}</h3>
-                          <p className="mt-2 text-sm text-slate-500">{repairMojibake(action.subtitle)}</p>
-                        </div>
-                        <span className="rounded-full border border-[#D6E8DA] bg-white px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
-                          Abrir
-                        </span>
+                <div className="grid gap-6 xl:grid-cols-3">
+                  {superUserSections.map((section) => (
+                    <div key={section.title} className="rounded-3xl border border-[#D6E8DA] bg-[#F8F7F4] p-5">
+                      <h3 className="text-lg font-semibold text-[#24312A]">{section.title}</h3>
+                      <p className="mt-2 text-sm text-slate-500">{section.description}</p>
+
+                      <div className="mt-4 space-y-3">
+                        {section.items.map((action) => (
+                          <Link
+                            key={action.href}
+                            href={action.href}
+                            className="group block rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4 transition hover:-translate-y-0.5 hover:border-[#BCD7C2]"
+                          >
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <h4 className="text-base font-semibold text-slate-800">
+                                  {repairMojibake(action.title)}
+                                </h4>
+                                <p className="mt-1 text-sm text-slate-500">
+                                  {repairMojibake(action.subtitle)}
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-[#D6E8DA] bg-[#F4FAF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+                                Abrir
+                              </span>
+                            </div>
+                          </Link>
+                        ))}
                       </div>
-                    </a>
+                    </div>
                   ))}
                 </div>
               </PrevitalCardContent>
             </PrevitalCard>
-
-            <section className="grid gap-6 xl:grid-cols-3">
-              <div className="xl:col-span-2">
-                <PrevitalCard>
-                  <PrevitalCardHeader
-                    title="Leads recientes"
-                    description="Vista rápida según tu rol."
-                  />
-                  <PrevitalCardContent>
-                    {loading ? (
-                      <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
-                        Cargando leads...
-                      </div>
-                    ) : leads.length === 0 ? (
-                      <div className="rounded-3xl border border-dashed border-[#D6E8DA] bg-[#F8F7F4] p-6 text-sm text-slate-500">
-                        No hay leads visibles para este usuario.
-                      </div>
-                    ) : (
-                      <div className="space-y-3">
-                        {leads.slice(0, 6).map((lead) => (
-                          <LeadCard key={lead.id} lead={lead} formatDate={formatDate} />
-                        ))}
-                      </div>
-                    )}
-                  </PrevitalCardContent>
-                </PrevitalCard>
-              </div>
-
-              <div className="space-y-6">
-                <SimpleListCard
-                  title="Departamentos"
-                  subtitle="Resumen general."
-                  items={departments.map((x) => x.name)}
-                  loading={loading}
-                  emptyText="No hay departamentos registrados."
-                />
-                <SimpleListCard
-                  title="Roles"
-                  subtitle="Estructura configurada."
-                  items={roles.map((x) => `${x.name} · ${x.code}`)}
-                  loading={loading}
-                  emptyText="No hay roles registrados."
-                />
-              </div>
-            </section>
           </>
         ) : (
           <PrevitalCard>
             <PrevitalCardHeader
               title="Accesos disponibles"
-              description="Solo ves los módulos permitidos para tu rol."
+              description="Solo ves los modulos permitidos para tu rol."
               action={
                 <PrevitalButton
                   variant="secondary"
@@ -623,7 +593,7 @@ export default function HomePage() {
               ) : (
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-2">
                   {visibleQuickActions.map((action) => (
-                    <a
+                    <Link
                       key={action.title}
                       href={action.href}
                       className="group relative overflow-hidden rounded-3xl border border-[#D6E8DA] bg-white p-5 shadow-sm transition duration-200 hover:-translate-y-1 hover:border-[#BCD7C2] hover:shadow-md"
@@ -644,7 +614,7 @@ export default function HomePage() {
                           Abrir
                         </span>
                       </div>
-                    </a>
+                    </Link>
                   ))}
                 </div>
               )}
@@ -674,9 +644,7 @@ function StatCard({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-sm font-medium text-slate-500">{title}</p>
-            <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">
-              {value}
-            </p>
+            <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
             <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
           </div>
 
@@ -687,90 +655,4 @@ function StatCard({
       </PrevitalCardContent>
     </PrevitalCard>
   );
-}
-
-function LeadCard({
-  lead,
-  formatDate,
-}: {
-  lead: Lead;
-  formatDate: (value: string | null | undefined) => string;
-}) {
-  const displayName =
-    lead.full_name?.trim() ||
-    `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() ||
-    "Sin nombre";
-
-  return (
-    <div className="group rounded-3xl border border-[#D6E8DA] bg-white p-4 shadow-sm transition duration-200 hover:-translate-y-0.5 hover:border-[#BCD7C2] hover:shadow-md">
-      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-        <div className="min-w-0">
-          <h3 className="truncate text-base font-semibold text-[#24312A] transition group-hover:text-[#4F6F5B]">
-            {displayName}
-          </h3>
-          <p className="mt-1 text-sm text-slate-600">
-            {lead.phone} · {lead.city || "Sin ciudad"}
-          </p>
-          <p className="mt-2 text-xs text-slate-500">
-            {formatDate(lead.created_at)}
-          </p>
-        </div>
-
-        <span className="inline-flex w-fit rounded-full border border-[#D6E8DA] bg-[#F4FAF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
-          {lead.status || "Sin estado"}
-        </span>
-      </div>
-    </div>
-  );
-}
-
-function SimpleListCard({
-  title,
-  subtitle,
-  items,
-  loading,
-  emptyText,
-}: {
-  title: string;
-  subtitle: string;
-  items: string[];
-  loading: boolean;
-  emptyText: string;
-}) {
-  return (
-    <PrevitalCard>
-      <PrevitalCardHeader title={title} description={subtitle} />
-      <PrevitalCardContent>
-        <div className="max-h-[320px] space-y-3 overflow-auto pr-1">
-          {loading ? (
-            <p className="text-sm text-slate-500">Cargando...</p>
-          ) : items.length === 0 ? (
-            <p className="text-sm text-slate-500">{emptyText}</p>
-          ) : (
-            items.map((item) => (
-              <div
-                key={item}
-                className="rounded-2xl border border-slate-200 bg-[#F8F7F4] px-4 py-3 text-sm font-medium text-slate-700"
-              >
-                {item}
-              </div>
-            ))
-          )}
-        </div>
-      </PrevitalCardContent>
-    </PrevitalCard>
-  );
-}
-
-function formatDate(value: string | null | undefined) {
-  if (!value) return "Sin fecha";
-
-  try {
-    return new Date(value).toLocaleString("es-CO", {
-      dateStyle: "medium",
-      timeStyle: "short",
-    });
-  } catch {
-    return value;
-  }
 }
