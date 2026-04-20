@@ -210,6 +210,20 @@ function serviceLabel(value: string | null | undefined) {
   return serviceOptions.find((item) => item.value === value)?.label || value || "Sin definir";
 }
 
+function isCommercialSaleCase(item: CommercialCase) {
+  const service = (item.purchased_service || "").trim();
+  const saleValue = Number(item.sale_value || 0);
+  const volumeValue = Number(item.volume_amount || 0);
+  const cashValue = Number(item.cash_amount || 0);
+  const portfolioValue = Number(item.portfolio_amount || 0);
+
+  const hasDefinedService = Boolean(service);
+  const hasRealAmount =
+    saleValue > 0 || volumeValue > 0 || cashValue > 0 || portfolioValue > 0;
+
+  return hasDefinedService && hasRealAmount;
+}
+
 function buildAdjustmentAuditBlock(input: {
   userName: string;
   selectedCase: CommercialCase;
@@ -473,13 +487,14 @@ export default function ComercialAjustesPage() {
   const filteredCases = useMemo(() => {
     const q = search.trim().toLowerCase();
     return cases.filter((item) => {
+      const isEligibleSale = isCommercialSaleCase(item);
       const matchesStatus = statusFilter ? item.status === statusFilter : true;
       const matchesSearch = q
         ? item.customer_name.toLowerCase().includes(q) ||
           (item.phone || "").toLowerCase().includes(q) ||
           (item.city || "").toLowerCase().includes(q)
         : true;
-      return matchesStatus && matchesSearch;
+      return isEligibleSale && matchesStatus && matchesSearch;
     });
   }, [cases, search, statusFilter]);
 
