@@ -2,6 +2,7 @@
 
 import Image from "next/image";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
@@ -209,6 +210,7 @@ const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
 ];
 
 export default function CallCenterPage() {
+  const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [callCenterUsers, setCallCenterUsers] = useState<CallCenterUser[]>([]);
@@ -410,6 +412,19 @@ export default function CallCenterPage() {
   useEffect(() => {
     void validarAcceso();
   }, []);
+
+  useEffect(() => {
+    const requestedFilter = searchParams.get("filter");
+    const requestedDate = searchParams.get("date");
+
+    if (requestedDate === "today") {
+      setFechaFiltro(hoyISO());
+    }
+
+    if (requestedFilter === "redes") {
+      setQuickFilter("redes");
+    }
+  }, [searchParams]);
 
   useEffect(() => {
     if (authorized) {

@@ -392,6 +392,13 @@ export default function ImportarLeadsPage() {
                 >
                   Consultar leads
                 </Link>
+
+                <Link
+                  href="/call-center?filter=redes&date=today"
+                  className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-[#F3F8F5] px-5 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-white"
+                >
+                  Ver leads redes hoy
+                </Link>
               </div>
             </div>
           </div>
@@ -485,7 +492,21 @@ export default function ImportarLeadsPage() {
 
               {mensaje ? (
                 <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
-                  {mensaje}
+                  <p>{mensaje}</p>
+                  <div className="mt-3 flex flex-wrap gap-3">
+                    <Link
+                      href="/call-center?filter=redes&date=today"
+                      className="inline-flex items-center justify-center rounded-2xl border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-[#2D6B4A] transition hover:bg-emerald-100"
+                    >
+                      Ir a Gestión de leads
+                    </Link>
+                    <Link
+                      href="/leads"
+                      className="inline-flex items-center justify-center rounded-2xl border border-emerald-300 bg-white px-4 py-2 text-sm font-medium text-[#2D6B4A] transition hover:bg-emerald-100"
+                    >
+                      Ver leads creados
+                    </Link>
+                  </div>
                 </div>
               ) : null}
 
