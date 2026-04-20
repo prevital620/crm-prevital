@@ -20,6 +20,9 @@ type Role = {
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
+const inputClass =
+  "w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-4 text-base text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
+
 export default function NuevoUsuarioPage() {
   const [loading, setLoading] = useState(false);
   const [loadingData, setLoadingData] = useState(true);
@@ -29,6 +32,7 @@ export default function NuevoUsuarioPage() {
 
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
+  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
 
   const [form, setForm] = useState({
     full_name: "",
@@ -36,7 +40,6 @@ export default function NuevoUsuarioPage() {
     phone: "",
     job_title: "",
     department_id: "",
-    role_id: "",
   });
 
   async function cargarDatos() {
@@ -100,8 +103,8 @@ export default function NuevoUsuarioPage() {
       return;
     }
 
-    if (!form.role_id) {
-      setError("Debes seleccionar un rol.");
+    if (selectedRoleIds.length === 0) {
+      setError("Debes seleccionar al menos un rol.");
       return;
     }
 
@@ -113,7 +116,10 @@ export default function NuevoUsuarioPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(form),
+        body: JSON.stringify({
+          ...form,
+          role_ids: selectedRoleIds,
+        }),
       });
 
       const result = await response.json();
@@ -125,7 +131,7 @@ export default function NuevoUsuarioPage() {
       }
 
       setMensaje(
-        `Usuario creado correctamente. Contraseña temporal: ${result.tempPassword}`
+        `Usuario creado correctamente. Contrasena temporal: ${result.tempPassword}`
       );
 
       setForm({
@@ -134,10 +140,10 @@ export default function NuevoUsuarioPage() {
         phone: "",
         job_title: "",
         department_id: "",
-        role_id: "",
       });
+      setSelectedRoleIds([]);
     } catch (err: any) {
-      setError(err?.message || "Ocurrió un error inesperado.");
+      setError(err?.message || "Ocurrio un error inesperado.");
     } finally {
       setLoading(false);
     }
@@ -158,7 +164,7 @@ export default function NuevoUsuarioPage() {
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
         <div className="mx-auto max-w-3xl rounded-[32px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(150,102,95,0.12)]">
           <p className="text-sm font-medium text-[#9A4E43]">
-            {error || "No tienes permiso para entrar a este módulo."}
+            {error || "No tienes permiso para entrar a este modulo."}
           </p>
         </div>
       </main>
@@ -199,12 +205,16 @@ export default function NuevoUsuarioPage() {
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Super Usuario</p>
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">
+                Super Usuario
+              </p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3rem]">
                 Crear usuario
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
-                Crea empleados del CRM, asígnales departamento, cargo y rol. La contraseña inicial será Prevital2026* y deberán cambiarla en el primer ingreso.
+                Crea empleados del CRM, asignales departamento, cargo y uno o
+                varios roles. La contrasena inicial sera Prevital2026* y
+                deberan cambiarla en el primer ingreso.
               </p>
             </div>
 
@@ -247,7 +257,7 @@ export default function NuevoUsuarioPage() {
 
             <input
               className={inputClass}
-              placeholder="Teléfono"
+              placeholder="Telefono"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
@@ -256,9 +266,7 @@ export default function NuevoUsuarioPage() {
               className={inputClass}
               placeholder="Cargo"
               value={form.job_title}
-              onChange={(e) =>
-                setForm({ ...form, job_title: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, job_title: e.target.value })}
             />
 
             <select
@@ -276,18 +284,52 @@ export default function NuevoUsuarioPage() {
               ))}
             </select>
 
-            <select
-              className={inputClass}
-              value={form.role_id}
-              onChange={(e) => setForm({ ...form, role_id: e.target.value })}
-            >
-              <option value="">Selecciona un rol</option>
-              {roles.map((role) => (
-                <option key={role.id} value={role.id}>
-                  {role.name}
-                </option>
-              ))}
-            </select>
+            <div className="rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4">
+              <p className="mb-3 text-sm font-medium text-[#24312A]">
+                Roles y accesos permitidos
+              </p>
+
+              <div className="grid gap-3 md:grid-cols-2">
+                {roles.map((role) => {
+                  const checked = selectedRoleIds.includes(role.id);
+
+                  return (
+                    <label
+                      key={role.id}
+                      className="flex items-start gap-3 rounded-[24px] border border-[#D6E8DA] bg-white/92 p-4 text-sm text-[#607368] shadow-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={checked}
+                        onChange={(e) => {
+                          const isChecked = e.target.checked;
+                          setSelectedRoleIds((prev) => {
+                            if (isChecked) {
+                              return Array.from(new Set([...prev, role.id]));
+                            }
+
+                            return prev.filter((item) => item !== role.id);
+                          });
+                        }}
+                      />
+                      <span>
+                        <span className="block font-medium text-[#24312A]">
+                          {role.name}
+                        </span>
+                        <span className="text-xs text-[#607368]">
+                          {role.code}
+                        </span>
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
+
+              <p className="mt-3 text-xs text-[#607368]">
+                Puedes crear el usuario desde el inicio con varios accesos, por
+                ejemplo Comercial y Fisioterapia.
+              </p>
+            </div>
 
             <button
               type="submit"
@@ -298,7 +340,10 @@ export default function NuevoUsuarioPage() {
             </button>
 
             <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
-              El cambio de correo y el borrado real del usuario requieren la lógica segura del backend o API de usuarios. Esta pantalla crea correctamente, pero el correo luego no debe editarse solo desde el cliente.
+              El cambio de correo y el borrado real del usuario requieren la
+              logica segura del backend o API de usuarios. Esta pantalla crea
+              correctamente, pero el correo luego no debe editarse solo desde
+              el cliente.
             </div>
 
             {mensaje ? (
@@ -318,6 +363,3 @@ export default function NuevoUsuarioPage() {
     </main>
   );
 }
-
-const inputClass =
-  "w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-4 text-base text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";

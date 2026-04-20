@@ -27,6 +27,14 @@ export async function POST(request: Request) {
     const job_title = String(body?.job_title || "").trim();
     const department_id = String(body?.department_id || "").trim();
     const role_id = String(body?.role_id || "").trim();
+    const role_ids = Array.isArray(body?.role_ids)
+      ? body.role_ids
+          .map((item: unknown) => String(item || "").trim())
+          .filter(Boolean)
+      : [];
+    const selectedRoleIds = Array.from(
+      new Set(role_ids.length > 0 ? role_ids : role_id ? [role_id] : [])
+    );
 
     if (!full_name) {
       return NextResponse.json(
@@ -42,9 +50,9 @@ export async function POST(request: Request) {
       );
     }
 
-    if (!role_id) {
+    if (selectedRoleIds.length === 0) {
       return NextResponse.json(
-        { error: "Debes seleccionar un rol." },
+        { error: "Debes seleccionar al menos un rol." },
         { status: 400 }
       );
     }
@@ -101,12 +109,14 @@ export async function POST(request: Request) {
       );
     }
 
-    const { error: roleError } = await supabaseAdmin.from("user_roles").insert([
-      {
-        user_id: userId,
-        role_id,
-      },
-    ]);
+    const roleRows = selectedRoleIds.map((selectedRoleId) => ({
+      user_id: userId,
+      role_id: selectedRoleId,
+    }));
+
+    const { error: roleError } = await supabaseAdmin
+      .from("user_roles")
+      .insert(roleRows);
 
     if (roleError) {
       await supabaseAdmin.from("profiles").delete().eq("id", userId);
