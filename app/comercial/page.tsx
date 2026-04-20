@@ -197,6 +197,7 @@ const paymentMethodOptions = [
   { value: "transferencia", label: "Transferencia" },
   { value: "mixto", label: "Mixto" },
   { value: "cartera", label: "Cartera" },
+  { value: "creditos", label: "Créditos" },
 ];
 
 const nextStepOptions = [
@@ -1425,12 +1426,17 @@ export default function ComercialPage() {
           : saleOutcome;
 
       const paymentMethod = form.payment_method || null;
-const isCreditPayment = ["addi", "welly", "medipay"].includes(paymentMethod || "");
-const creditDiscountAmount = isCreditPayment ? Math.round(cashNumber * 0.1) : 0;
-const adminDiscountAmount = 200000;
-const netCommissionBase = Math.max(0, cashNumber - creditDiscountAmount - adminDiscountAmount);
-const grossBonusBase = volumeNumber || 0;
-const hayVenta = volumeNumber > 0 || !!form.purchased_service;
+      const isCreditPayment = ["addi", "welly", "medipay", "creditos"].includes(
+        paymentMethod || ""
+      );
+      const creditDiscountAmount = isCreditPayment ? Math.round(cashNumber * 0.1) : 0;
+      const adminDiscountAmount = 200000;
+      const netCommissionBase = Math.max(
+        0,
+        cashNumber - creditDiscountAmount - adminDiscountAmount
+      );
+      const grossBonusBase = volumeNumber || 0;
+      const hayVenta = volumeNumber > 0 || !!form.purchased_service;
       const plannedFollowUps = getPrimaryFollowUp(form, nextAppointments);
 
       const incompleteFollowUp = plannedFollowUps.find(
