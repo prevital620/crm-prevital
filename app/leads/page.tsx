@@ -170,6 +170,11 @@ export default function LeadsPage() {
     roleCode === "supervisor_opc" || roleCode === "super_user";
 
   const isSuperUser = roleCode === "super_user";
+  const canScheduleFromLeadsList =
+    roleCode === "tmk" ||
+    roleCode === "confirmador" ||
+    roleCode === "supervisor_call_center" ||
+    roleCode === "super_user";
   const hideLeadHeroMeta = roleCode === "supervisor_opc";
 
   async function validarAcceso() {
@@ -825,6 +830,15 @@ export default function LeadsPage() {
                               Ver / editar
                             </a>
 
+                            {canScheduleFromLeadsList && !isScheduled(lead) ? (
+                              <a
+                                href={`/recepcion?leadId=${lead.id}&view=agenda`}
+                                className="inline-flex rounded-2xl border border-[#5F7D66] bg-white px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:bg-[#F4FAF6]"
+                              >
+                                Agendar cita
+                              </a>
+                            ) : null}
+
                             {isSuperUser ? (
                               <button
                                 type="button"
@@ -1075,6 +1089,15 @@ export default function LeadsPage() {
                               >
                                 Ver / editar
                               </a>
+
+                              {canScheduleFromLeadsList && !isScheduled(lead) ? (
+                                <a
+                                  href={`/recepcion?leadId=${lead.id}&view=agenda`}
+                                  className="inline-flex rounded-2xl border border-[#5F7D66] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                                >
+                                  Agendar cita
+                                </a>
+                              ) : null}
 
                               {isSuperUser ? (
                                 <button
