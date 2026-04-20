@@ -49,6 +49,7 @@ type AppointmentRow = {
 
 type QuickFilter =
   | "todos"
+  | "redes"
   | "nuevos"
   | "sin_asignar"
   | "sin_asignar_pendientes_no_contestan"
@@ -194,6 +195,7 @@ function traducirFuenteComision(value: string | null) {
 
 const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "todos", label: "Todos" },
+  { key: "redes", label: "Leads redes" },
   { key: "sin_asignar", label: "Sin asignar" },
   { key: "pendientes", label: "Pendientes" },
   { key: "no_contestan", label: "No contestan" },
@@ -218,7 +220,7 @@ export default function CallCenterPage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [mensaje, setMensaje] = useState("");
   const [error, setError] = useState("");
-  const [fechaFiltro, setFechaFiltro] = useState("");
+  const [fechaFiltro, setFechaFiltro] = useState(hoyISO());
   const [busqueda, setBusqueda] = useState("");
   const [selectedAssignments, setSelectedAssignments] = useState<Record<string, string>>({});
   const [selectedStatuses, setSelectedStatuses] = useState<Record<string, string>>({});
@@ -691,6 +693,9 @@ export default function CallCenterPage() {
   const resumen = useMemo(() => {
     return {
       total: leadsDelDia.length,
+      redes: leadsDelDia.filter(
+        (lead) => (lead.source || "").toLowerCase() === "redes" && obtenerEstadoVisible(lead) === "nuevo"
+      ).length,
       nuevos: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo").length,
       sinAsignar: leadsDelDia.filter((lead) => !estaAsignado(lead)).length,
       sinAsignarPendientesNoContestan: leadsUltimos30Dias.filter((lead) =>
@@ -717,6 +722,12 @@ export default function CallCenterPage() {
 
     if (quickFilter === "nuevos") {
       base = base.filter((lead) => obtenerEstadoVisible(lead) === "nuevo");
+    }
+
+    if (quickFilter === "redes") {
+      base = base.filter(
+        (lead) => (lead.source || "").toLowerCase() === "redes" && obtenerEstadoVisible(lead) === "nuevo"
+      );
     }
 
     if (quickFilter === "sin_asignar") {
@@ -792,6 +803,7 @@ export default function CallCenterPage() {
     ? quickFilterButtons
     : quickFilterButtons.filter(
         (item) =>
+          item.key !== "redes" &&
           item.key !== "sin_asignar" &&
           item.key !== "sin_asignar_pendientes_no_contestan" &&
           item.key !== "asignados"
@@ -799,6 +811,12 @@ export default function CallCenterPage() {
 
   const statCards = [
     { key: "todos", title: "Todos", value: resumen.total, highlight: false },
+    {
+      key: "redes",
+      title: "Leads redes",
+      value: resumen.redes,
+      highlight: resumen.redes > 0,
+    },
     {
       key: "sin_asignar_pendientes_no_contestan",
       title: "Sin asignar nuevos / pendientes / no contestan (30 d\u00EDas)",
@@ -865,7 +883,8 @@ export default function CallCenterPage() {
   const visibleStatCards = statCards.filter(
     (card) =>
       isSupervisorCallCenterView ||
-      (card.key !== "sin_asignar" &&
+      (card.key !== "redes" &&
+        card.key !== "sin_asignar" &&
         card.key !== "sin_asignar_pendientes_no_contestan" &&
         card.key !== "asignados")
   );
@@ -989,6 +1008,21 @@ export default function CallCenterPage() {
                 >
                   Configurar cupos
                 </a>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFechaFiltro(hoyISO());
+                    setQuickFilter("redes");
+                  }}
+                  className={`inline-flex items-center justify-center rounded-2xl px-4 py-2 text-sm font-medium transition ${
+                    quickFilter === "redes"
+                      ? "bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] text-white shadow-[0_16px_30px_rgba(63,105,82,0.3)]"
+                      : "border border-[#CFE4D8] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#ECF8F1_100%)] text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-white"
+                  }`}
+                >
+                  {`Leads redes hoy (${resumen.redes})`}
+                </button>
 
                 <button
                   type="button"
