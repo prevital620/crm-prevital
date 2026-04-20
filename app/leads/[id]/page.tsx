@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
@@ -114,6 +115,9 @@ export default function EditarLeadPage() {
     city: "",
     status: "nuevo",
   });
+
+  const isProtectedLeadSource =
+    isPromotorOpc || form.source === "opc" || form.source === "redes";
 
   async function validarAccesoYLead() {
     if (!leadId) return;
@@ -266,7 +270,9 @@ export default function EditarLeadPage() {
     setMensaje("");
 
     try {
-      const sourceValue = isPromotorOpc ? "opc" : normalizeLeadSource(form.source);
+      const sourceValue = isProtectedLeadSource
+        ? normalizeLeadSource(form.source)
+        : normalizeLeadSource(form.source);
 
       const { error } = await supabase
         .from("leads")
@@ -361,12 +367,12 @@ export default function EditarLeadPage() {
               </p>
             </div>
 
-            <a
+            <Link
               href="/leads"
               className="inline-flex items-center justify-center rounded-2xl border border-slate-300 px-4 py-3 text-sm font-medium text-slate-700"
             >
               Volver a leads
-            </a>
+            </Link>
           </div>
         </section>
 
@@ -560,21 +566,28 @@ export default function EditarLeadPage() {
                       OPC
                     </div>
                   ) : (
-                    <select
-                      className={inputClass}
-                      value={form.source}
-                      onChange={(e) =>
-                        setForm({ ...form, source: e.target.value })
-                      }
-                      disabled={!canEdit}
-                    >
-                      <option value="">Selecciona</option>
-                      {leadSourceOptions.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
+                    <div className="space-y-2">
+                      <select
+                        className={inputClass}
+                        value={form.source}
+                        onChange={(e) =>
+                          setForm({ ...form, source: e.target.value })
+                        }
+                        disabled={!canEdit || isProtectedLeadSource}
+                      >
+                        <option value="">Selecciona</option>
+                        {leadSourceOptions.map((option) => (
+                          <option key={option.value} value={option.value}>
+                            {option.label}
+                          </option>
+                        ))}
+                      </select>
+                      {isProtectedLeadSource ? (
+                        <p className="text-xs leading-5 text-slate-500">
+                          Este lead tiene origen protegido. Si viene de OPC o redes, el origen no se puede cambiar.
+                        </p>
+                      ) : null}
+                    </div>
                   )
                 }
               />

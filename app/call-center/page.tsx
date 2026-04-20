@@ -1189,10 +1189,13 @@ function CallCenterPageContent() {
                   currentRoleCode === "super_user" ||
                   currentRoleCode === "supervisor_call_center" ||
                   currentRoleCode === "confirmador";
-                const isProtectedOpcLead =
-                  lead.source === "opc" || lead.commission_source_type === "opc";
+                const isProtectedCommissionLead =
+                  lead.source === "opc" ||
+                  lead.commission_source_type === "opc" ||
+                  lead.source === "redes" ||
+                  lead.commission_source_type === "redes";
                 const canEditCommissionSource =
-                  canManageCommissionSource && !isProtectedOpcLead;
+                  canManageCommissionSource && !isProtectedCommissionLead;
 
                 const activeAppointment = activeAppointmentByLeadId[lead.id];
                 const hasActiveAppointment = !!activeAppointment;
@@ -1365,9 +1368,9 @@ function CallCenterPageContent() {
                                 ? "Guardando..."
                                 : "Guardar fuente"}
                             </button>
-                            {isProtectedOpcLead ? (
+                            {isProtectedCommissionLead ? (
                               <p className="text-xs leading-5 text-[#5F7D66]">
-                                Lead protegido por origen OPC. La fuente de comisión no se puede cambiar desde supervisor.
+                                Lead protegido por origen o fuente de comisión. Si viene de OPC o redes, la fuente no se puede cambiar desde supervisor.
                               </p>
                             ) : null}
                           </div>
