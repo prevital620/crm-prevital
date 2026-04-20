@@ -1429,6 +1429,9 @@ export default function ComercialPage() {
       const isCreditPayment = ["addi", "welly", "medipay", "creditos"].includes(
         paymentMethod || ""
       );
+      const creditProvider = ["addi", "welly", "medipay"].includes(paymentMethod || "")
+        ? paymentMethod
+        : null;
       const creditDiscountAmount = isCreditPayment ? Math.round(cashNumber * 0.1) : 0;
       const adminDiscountAmount = 200000;
       const netCommissionBase = Math.max(
@@ -1491,7 +1494,7 @@ const updatePayload: any = {
         call_user_id: leadInheritance?.assigned_to_user_id || currentCaseFound?.call_user_id || null,
         opc_user_id: leadInheritance?.created_by_user_id || currentCaseFound?.opc_user_id || null,
         is_credit_payment: isCreditPayment,
-        credit_provider: isCreditPayment ? paymentMethod : null,
+        credit_provider: creditProvider,
         credit_discount_amount: creditDiscountAmount,
         admin_discount_amount: adminDiscountAmount,
         net_commission_base: netCommissionBase,
