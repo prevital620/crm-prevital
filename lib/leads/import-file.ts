@@ -42,11 +42,17 @@ const PHONE_ALIASES = [
   "celular",
   "movil",
   "whatsapp",
+  "numero_de_whatsapp",
+  "numero_whatsapp",
   "phone",
   "phone_number",
+  "secondary_phone",
+  "secondary_phone_number",
   "telefono_whatsapp",
   "numero_de_telefono",
   "numero_telefono",
+  "numero_de_telefono_secundario",
+  "numero_telefono_secundario",
   "numero_de_celular",
   "numero_celular",
 ];
@@ -152,14 +158,17 @@ function detectColumns(headers: string[]): ImportDetectedColumns {
   const normalizedHeaders = headers.map(normalizeHeader);
 
   const nameIndex = findFirstMatchingIndex(normalizedHeaders, NAME_ALIASES);
-  const phoneIndex = findFirstMatchingIndex(normalizedHeaders, PHONE_ALIASES);
+  const phoneIndexes = findAllMatchingIndexes(normalizedHeaders, PHONE_ALIASES);
   const cityIndex = findFirstMatchingIndex(normalizedHeaders, CITY_ALIASES);
   const notesIndex = findFirstMatchingIndex(normalizedHeaders, NOTES_ALIASES);
 
   return {
     headers,
     nameHeader: nameIndex >= 0 ? headers[nameIndex] || null : null,
-    phoneHeader: phoneIndex >= 0 ? headers[phoneIndex] || null : null,
+    phoneHeader:
+      phoneIndexes.length > 0
+        ? phoneIndexes.map((index) => headers[index]).filter(Boolean).join(" / ") || null
+        : null,
     cityHeader: cityIndex >= 0 ? headers[cityIndex] || null : null,
     notesHeader: notesIndex >= 0 ? headers[notesIndex] || null : null,
   };
@@ -168,14 +177,14 @@ function detectColumns(headers: string[]): ImportDetectedColumns {
 function mapRows(headers: string[], rows: string[][]): ImportParsedRow[] {
   const normalizedHeaders = headers.map(normalizeHeader);
   const nameIndex = findFirstMatchingIndex(normalizedHeaders, NAME_ALIASES);
-  const phoneIndex = findFirstMatchingIndex(normalizedHeaders, PHONE_ALIASES);
+  const phoneIndexes = findAllMatchingIndexes(normalizedHeaders, PHONE_ALIASES);
   const cityIndex = findFirstMatchingIndex(normalizedHeaders, CITY_ALIASES);
   const notesIndex = findFirstMatchingIndex(normalizedHeaders, NOTES_ALIASES);
 
   return rows.map((row, index) => ({
     rowNumber: index + 2,
     nombre: nameIndex >= 0 ? String(row[nameIndex] || "").trim() : "",
-    telefono: phoneIndex >= 0 ? String(row[phoneIndex] || "").trim() : "",
+    telefono: getFirstFilledValue(row, phoneIndexes),
     ciudad: cityIndex >= 0 ? String(row[cityIndex] || "").trim() : "",
     observaciones: notesIndex >= 0 ? String(row[notesIndex] || "").trim() : "",
   }));
@@ -235,4 +244,23 @@ function normalizeHeader(value: string) {
 
 function findFirstMatchingIndex(headers: string[], aliases: string[]) {
   return headers.findIndex((header) => aliases.includes(header));
+}
+
+function findAllMatchingIndexes(headers: string[], aliases: string[]) {
+  return headers.reduce<number[]>((indexes, header, index) => {
+    if (aliases.includes(header)) {
+      indexes.push(index);
+    }
+
+    return indexes;
+  }, []);
+}
+
+function getFirstFilledValue(row: string[], indexes: number[]) {
+  for (const index of indexes) {
+    const value = String(row[index] || "").trim();
+    if (value) return value;
+  }
+
+  return "";
 }
