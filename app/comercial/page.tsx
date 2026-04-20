@@ -1703,18 +1703,18 @@ const updatePayload: any = {
                 Selecciona un caso de la lista para empezar a atenderlo.
               </div>
             ) : (
-              <div className="mt-5 space-y-5">
-                <div className="rounded-2xl border border-[#CFE7D6] bg-[#EEF8F1] p-4">
-                  <div className="flex flex-wrap items-center gap-3">
-                    <span className="text-sm font-semibold text-[#2F5E46]">Estado del caso:</span>
-                    <StatusBadge
-                      label="En atención"
-                      className="bg-emerald-100 text-emerald-700"
-                    />
-                    {currentCase?.assigned_at ? (
-                      <span className="text-sm text-[#2F5E46]">
-                        Desde: {formatDate(currentCase.assigned_at)}
-                      </span>
+                <div className="mt-5 space-y-5">
+                  <div className="rounded-2xl border border-[#CFE7D6] bg-[#EEF8F1] p-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      <span className="text-sm font-semibold text-[#2F5E46]">Estado del caso:</span>
+                      <StatusBadge
+                        label={traducirEstadoComercial(currentCase?.status || "en_atencion_comercial")}
+                        className={commercialStatusClass(currentCase?.status || "en_atencion_comercial")}
+                      />
+                      {currentCase?.assigned_at ? (
+                        <span className="text-sm text-[#2F5E46]">
+                          Desde: {formatDate(currentCase.assigned_at)}
+                        </span>
                     ) : null}
                   </div>
                 </div>
