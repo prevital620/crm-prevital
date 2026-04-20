@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { buildPendingDeliveryNotes } from "@/lib/appointments/receptionDelivery";
+import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
 
 type AppointmentRow = {
   id: string;
@@ -49,6 +50,27 @@ type PhysiotherapyProfileRow = {
   rangos_movimiento_articular: string | null;
   plan_intervencion: string | null;
   observaciones_generales: string | null;
+};
+
+type CommercialCaseSummary = {
+  id: string;
+  appointment_id: string | null;
+  next_appointment_id: string | null;
+  lead_id: string | null;
+  status: string | null;
+  purchased_service: string | null;
+  sale_value: number | null;
+  cash_amount: number | null;
+  portfolio_amount: number | null;
+  payment_method: string | null;
+  sale_result: string | null;
+  sales_assessment: string | null;
+  proposal_text: string | null;
+  closing_notes: string | null;
+  commercial_notes: string | null;
+  lead_source_type: string | null;
+  commission_source_type: string | null;
+  created_at: string;
 };
 
 type FormState = {
@@ -129,6 +151,41 @@ function buildReceptionDeliveryFlag(currentNotes: string | null | undefined) {
   return buildPendingDeliveryNotes(currentNotes, "fisioterapia");
 }
 
+function formatMoney(value: number | null | undefined) {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(Number(value || 0));
+}
+
+function paymentMethodLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    efectivo: "Efectivo",
+    transferencia: "Transferencia",
+    tarjeta: "Tarjeta",
+    addi: "Addi",
+    welly: "Welly",
+    medipay: "MediPay",
+    mixto: "Mixto",
+  };
+
+  return map[value || ""] || value || "Sin definir";
+}
+
+function sourceLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    opc: "OPC",
+    tmk: "TMK",
+    redes: "Redes",
+    base: "Base",
+    directo: "Directo",
+    otro: "Otro",
+  };
+
+  return map[value || ""] || value || "Sin definir";
+}
+
 export default function FisioterapiaAtencionPage() {
   const params = useParams();
   const appointmentId = String(params?.appointmentId || "");
@@ -136,6 +193,7 @@ export default function FisioterapiaAtencionPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [appointment, setAppointment] = useState<AppointmentRow | null>(null);
+  const [commercialCase, setCommercialCase] = useState<CommercialCaseSummary | null>(null);
   const [userId, setUserId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(initialForm);
   const [message, setMessage] = useState("");
@@ -170,6 +228,71 @@ export default function FisioterapiaAtencionPage() {
       if (!appointmentData) throw new Error("No se encontrÃ³ la cita.");
 
       setAppointment(appointmentData as AppointmentRow);
+
+      let linkedCommercialCase: CommercialCaseSummary | null = null;
+      const { data: directCaseData, error: directCaseError } = await supabase
+        .from("commercial_cases")
+        .select(`
+          id,
+          appointment_id,
+          next_appointment_id,
+          lead_id,
+          status,
+          purchased_service,
+          sale_value,
+          cash_amount,
+          portfolio_amount,
+          payment_method,
+          sale_result,
+          sales_assessment,
+          proposal_text,
+          closing_notes,
+          commercial_notes,
+          lead_source_type,
+          commission_source_type,
+          created_at
+        `)
+        .or(`appointment_id.eq.${appointmentId},next_appointment_id.eq.${appointmentId}`)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (directCaseError) throw directCaseError;
+      linkedCommercialCase = (directCaseData as CommercialCaseSummary | null) || null;
+
+      if (!linkedCommercialCase && appointmentData.lead_id) {
+        const { data: leadCaseData, error: leadCaseError } = await supabase
+          .from("commercial_cases")
+          .select(`
+            id,
+            appointment_id,
+            next_appointment_id,
+            lead_id,
+            status,
+            purchased_service,
+            sale_value,
+            cash_amount,
+            portfolio_amount,
+            payment_method,
+            sale_result,
+            sales_assessment,
+            proposal_text,
+            closing_notes,
+            commercial_notes,
+            lead_source_type,
+            commission_source_type,
+            created_at
+          `)
+          .eq("lead_id", appointmentData.lead_id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (leadCaseError) throw leadCaseError;
+        linkedCommercialCase = (leadCaseData as CommercialCaseSummary | null) || null;
+      }
+
+      setCommercialCase(linkedCommercialCase);
 
       let foundUser: UserRow | null = null;
 
@@ -502,6 +625,45 @@ export default function FisioterapiaAtencionPage() {
           </div>
         </section>
 
+        {commercialCase ? (
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <h2 className="text-2xl font-bold text-[#24312A]">Resumen comercial</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Esta información viene del cierre comercial y acompaña la atención del especialista.
+            </p>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+              <InfoBox label="Servicio vendido" value={commercialCase.purchased_service || "Sin definir"} />
+              <InfoBox label="Resultado" value={commercialCase.sale_result || "Sin definir"} />
+              <InfoBox label="Forma de pago" value={paymentMethodLabel(commercialCase.payment_method)} />
+              <InfoBox label="Origen comercial" value={sourceLabel(commercialCase.lead_source_type)} />
+              <InfoBox label="Fuente comisión" value={sourceLabel(commercialCase.commission_source_type)} />
+              <InfoBox label="Valor total" value={formatMoney(commercialCase.sale_value)} />
+              <InfoBox label="Contado" value={formatMoney(commercialCase.cash_amount)} />
+              <InfoBox label="Cartera" value={formatMoney(commercialCase.portfolio_amount)} />
+            </div>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-2">
+              <ReadOnlyTextBlock
+                label="Valoración comercial"
+                value={commercialCase.sales_assessment}
+              />
+              <ReadOnlyTextBlock
+                label="Propuesta comercial"
+                value={commercialCase.proposal_text}
+              />
+              <ReadOnlyTextBlock
+                label="Notas de cierre"
+                value={commercialCase.closing_notes}
+              />
+              <ReadOnlyTextBlock
+                label="Notas comerciales"
+                value={parseStoredCommercialNotes(commercialCase.commercial_notes).commercialNotes}
+              />
+            </div>
+          </section>
+        ) : null}
+
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
@@ -657,6 +819,23 @@ function LargeTextAreaField({
         value={value}
         onChange={(e) => onChange(e.target.value)}
       />
+    </div>
+  );
+}
+
+function ReadOnlyTextBlock({
+  label,
+  value,
+}: {
+  label: string;
+  value: string | null | undefined;
+}) {
+  return (
+    <div>
+      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+      <div className="min-h-[140px] rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4 text-sm leading-6 text-[#24312A]">
+        {value?.trim() || "Sin información registrada."}
+      </div>
     </div>
   );
 }
