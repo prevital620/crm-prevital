@@ -216,6 +216,7 @@ export default function ImportarLeadsPage() {
           city: row.ciudad.trim() || null,
           observations: row.observaciones.trim() || null,
           source: "redes",
+          commission_source_type: "redes",
           status: "nuevo",
           created_by_user_id: currentUserId,
           assigned_to_user_id: autoAssignsLead ? currentUserId : null,
