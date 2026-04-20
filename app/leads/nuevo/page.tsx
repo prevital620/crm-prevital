@@ -7,6 +7,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import { leadSourceOptions, normalizeLeadSource } from "@/lib/lead-source";
+import { SLOT_OPTIONS } from "@/lib/agenda/agendaDurations";
 import SessionBadge from "@/components/session-badge";
 
 const maritalStatusOptions = [
@@ -47,6 +48,7 @@ export default function NuevoLeadPage() {
   const [error, setError] = useState("");
   const isPromotorOpc = currentRoleCode === "promotor_opc";
   const isSupervisorOpc = currentRoleCode === "supervisor_opc";
+  const isTmk = currentRoleCode === "tmk";
   const autoAssignsLead =
     currentRoleCode === "tmk" ||
     currentRoleCode === "confirmador" ||
@@ -66,6 +68,11 @@ export default function NuevoLeadPage() {
     observations: "",
     city: "",
     status: "nuevo",
+  });
+  const [scheduleNow, setScheduleNow] = useState(false);
+  const [scheduleForm, setScheduleForm] = useState({
+    appointment_date: hoyISO(),
+    appointment_time: "08:00",
   });
 
   async function cargarAcceso() {
@@ -146,37 +153,73 @@ export default function NuevoLeadPage() {
     setLoading(true);
 
     try {
+      let createdLeadId = "";
       const sourceValue = isPromotorOpc ? "opc" : normalizeLeadSource(form.source);
+      const fullName = [form.first_name.trim(), form.last_name.trim()]
+        .filter(Boolean)
+        .join(" ");
+      const leadPayload = {
+        first_name: form.first_name.trim(),
+        last_name: form.last_name.trim() || null,
+        phone: form.phone.trim(),
+        age: form.age ? Number(form.age) : null,
+        marital_status: form.marital_status || null,
+        has_eps:
+          form.has_eps === ""
+            ? null
+            : form.has_eps === "si"
+            ? true
+            : false,
+        affiliation_type: form.affiliation_type || null,
+        capture_location: form.capture_location.trim() || null,
+        interest_service: form.interest_service.trim() || null,
+        source: sourceValue,
+        observations: form.observations.trim() || null,
+        city: form.city.trim() || null,
+        status: scheduleNow ? "agendado" : form.status,
+        created_by_user_id: currentUserId,
+        assigned_to_user_id: autoAssignsLead ? currentUserId : null,
+      };
 
-      const { error } = await supabase.from("leads").insert([
-        {
-          first_name: form.first_name.trim(),
-          last_name: form.last_name.trim() || null,
-          phone: form.phone.trim(),
-          age: form.age ? Number(form.age) : null,
-          marital_status: form.marital_status || null,
-          has_eps:
-            form.has_eps === ""
-              ? null
-              : form.has_eps === "si"
-              ? true
-              : false,
-          affiliation_type: form.affiliation_type || null,
-          capture_location: form.capture_location.trim() || null,
-          interest_service: form.interest_service.trim() || null,
-          source: sourceValue,
-          observations: form.observations.trim() || null,
+      const { data: createdLead, error: leadError } = await supabase
+        .from("leads")
+        .insert([leadPayload])
+        .select("id")
+        .single();
+
+      if (leadError || !createdLead) throw leadError || new Error("No se pudo crear el lead.");
+      createdLeadId = createdLead.id;
+
+      if (scheduleNow && isTmk) {
+        const appointmentPayload = {
+          lead_id: createdLead.id,
+          patient_name: fullName || form.first_name.trim(),
+          phone: form.phone.trim() || null,
           city: form.city.trim() || null,
-          status: form.status,
+          appointment_date: scheduleForm.appointment_date,
+          appointment_time: scheduleForm.appointment_time,
+          status: "agendada",
+          service_type: form.interest_service.trim() || "valoracion",
+          specialist_user_id: null,
+          notes: "Creada desde TMK al registrar el lead.",
           created_by_user_id: currentUserId,
-          assigned_to_user_id: autoAssignsLead ? currentUserId : null,
-        },
-      ]);
+          updated_by_user_id: currentUserId,
+        };
 
-      if (error) throw error;
+        const { error: appointmentError } = await supabase
+          .from("appointments")
+          .insert([appointmentPayload]);
+
+        if (appointmentError) {
+          await supabase.from("leads").delete().eq("id", createdLeadId);
+          throw appointmentError;
+        }
+      }
 
       setMensaje(
-        autoAssignsLead
+        scheduleNow && isTmk
+          ? "Lead creado y cita agendada correctamente."
+          : autoAssignsLead
           ? "Lead creado y autoasignado correctamente."
           : "Lead creado correctamente."
       );
@@ -195,6 +238,11 @@ export default function NuevoLeadPage() {
         observations: "",
         city: "",
         status: "nuevo",
+      });
+      setScheduleNow(false);
+      setScheduleForm({
+        appointment_date: hoyISO(),
+        appointment_time: "08:00",
       });
     } catch (err: any) {
       setError(err?.message || "No se pudo crear el lead.");
@@ -569,6 +617,69 @@ export default function NuevoLeadPage() {
             </div>
             </div>
 
+            {isTmk ? (
+              <div className="rounded-[28px] border border-[#DCEBE1] bg-white/88 p-5 shadow-sm">
+                <SectionTitle
+                  title="Agenda inmediata"
+                  description="Si ya lograron concretar la visita, deja la cita creada desde este mismo paso."
+                />
+
+                <div className="mt-5 space-y-4">
+                  <label className="flex items-center gap-3 rounded-[24px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 text-sm text-[#32453A] shadow-inner">
+                    <input
+                      type="checkbox"
+                      checked={scheduleNow}
+                      onChange={(e) => setScheduleNow(e.target.checked)}
+                    />
+                    Agendar este lead de una vez
+                  </label>
+
+                  {scheduleNow ? (
+                    <div className="grid gap-4 sm:grid-cols-2">
+                      <Field
+                        label="Fecha de la cita"
+                        input={
+                          <input
+                            className={inputClass}
+                            type="date"
+                            value={scheduleForm.appointment_date}
+                            onChange={(e) =>
+                              setScheduleForm((prev) => ({
+                                ...prev,
+                                appointment_date: e.target.value,
+                              }))
+                            }
+                          />
+                        }
+                      />
+
+                      <Field
+                        label="Hora de la cita"
+                        input={
+                          <select
+                            className={inputClass}
+                            value={scheduleForm.appointment_time}
+                            onChange={(e) =>
+                              setScheduleForm((prev) => ({
+                                ...prev,
+                                appointment_time: e.target.value,
+                              }))
+                            }
+                          >
+                            {SLOT_OPTIONS.map((slot) => (
+                              <option key={slot.value} value={slot.value}>
+                                {slot.label}
+                              </option>
+                            ))}
+                          </select>
+                        }
+                      />
+                    </div>
+                  ) : null}
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex flex-col gap-3 pt-2 sm:flex-row">
               <button
                 type="submit"
@@ -636,6 +747,10 @@ function Field({
       {input}
     </label>
   );
+}
+
+function hoyISO() {
+  return new Date().toISOString().slice(0, 10);
 }
 
 const inputClass =
