@@ -67,6 +67,12 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
+    title: "Importar leads",
+    subtitle: "Subir plantilla CSV de redes con repetidos ignorados.",
+    href: "/leads/importar",
+    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
+  },
+  {
     title: "Crear usuario",
     subtitle: "Registrar usuario y asignar departamento y rol.",
     href: "/usuarios/nuevo",
@@ -391,6 +397,7 @@ export default function HomePage() {
         hrefs: [
           "/leads/nuevo",
           "/leads",
+          "/leads/importar",
           "/call-center",
           "/comercial",
           "/comercial/ajustes",
