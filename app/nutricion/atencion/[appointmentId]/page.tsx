@@ -9,7 +9,11 @@ import {
   buildPendingDeliveryNotes,
   parseDeliveryRecommendation,
 } from "@/lib/appointments/receptionDelivery";
-import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
+import {
+  parseSpecialistReceptionSummary,
+  specialistPlanLabel,
+} from "@/lib/specialists/receptionSummary";
+import { repairMojibake } from "@/lib/text/repairMojibake";
 
 type AppointmentRow = {
   id: string;
@@ -30,6 +34,7 @@ type UserRow = {
   documento: string | null;
   telefono: string | null;
   ciudad: string | null;
+  ocupacion: string | null;
 };
 
 type NutritionProfileRow = {
@@ -160,9 +165,9 @@ const initialForm: FormState = {
 };
 
 const classificationOptions = [
-  "DesnutriciÃ³n grado 1",
-  "DesnutriciÃ³n grado 2",
-  "DesnutriciÃ³n grado 3",
+  "Desnutrición grado 1",
+  "Desnutrición grado 2",
+  "Desnutrición grado 3",
   "Normal",
   "Sobrepeso",
   "Pre obeso",
@@ -179,16 +184,16 @@ const metricFields: Array<{
 }> = [
   { key: "peso", label: "Peso", placeholder: "Ej: 70 kg" },
   { key: "talla", label: "Talla", placeholder: "Ej: 1.65 m" },
-  { key: "perimetro_brazo", label: "PerÃ­metro brazo", placeholder: "Ej: 28 cm" },
-  { key: "indice_masa_corporal", label: "Ãndice masa corporal", placeholder: "Ej: 25" },
+  { key: "perimetro_brazo", label: "Perímetro brazo", placeholder: "Ej: 28 cm" },
+  { key: "indice_masa_corporal", label: "Índice masa corporal", placeholder: "Ej: 25" },
   { key: "porcentaje_masa_corporal", label: "Grasa corporal", placeholder: "Ej: 30%" },
   { key: "masa_muscular", label: "Masa muscular", placeholder: "Ej: 42 kg" },
   { key: "metabolismo_reposo", label: "Metabolismo en reposo", placeholder: "Ej: 1450 kcal" },
   { key: "grasa_visceral", label: "Grasa visceral", placeholder: "Ej: 8" },
   { key: "edad_corporal", label: "Edad corporal", placeholder: "Ej: 40" },
-  { key: "dinamometria", label: "DinamometrÃ­a", placeholder: "Ej: 28 kg" },
+  { key: "dinamometria", label: "Dinamometría", placeholder: "Ej: 28 kg" },
   { key: "circunferencia_cintura", label: "Circunferencia cintura", placeholder: "Ej: 86 cm" },
-  { key: "perimetro_pantorrilla", label: "PerÃ­metro pantorrilla", placeholder: "Ej: 35 cm" },
+  { key: "perimetro_pantorrilla", label: "Perímetro pantorrilla", placeholder: "Ej: 35 cm" },
 ];
 
 function formatHora(hora: string | null | undefined) {
@@ -219,41 +224,6 @@ function normalizeText(value: string | null | undefined) {
     .toLowerCase();
 }
 
-function formatMoney(value: number | null | undefined) {
-  return new Intl.NumberFormat("es-CO", {
-    style: "currency",
-    currency: "COP",
-    maximumFractionDigits: 0,
-  }).format(Number(value || 0));
-}
-
-function paymentMethodLabel(value: string | null | undefined) {
-  const map: Record<string, string> = {
-    efectivo: "Efectivo",
-    transferencia: "Transferencia",
-    tarjeta: "Tarjeta",
-    addi: "Addi",
-    welly: "Welly",
-    medipay: "MediPay",
-    mixto: "Mixto",
-  };
-
-  return map[value || ""] || value || "Sin definir";
-}
-
-function sourceLabel(value: string | null | undefined) {
-  const map: Record<string, string> = {
-    opc: "OPC",
-    tmk: "TMK",
-    redes: "Redes",
-    base: "Base",
-    directo: "Directo",
-    otro: "Otro",
-  };
-
-  return map[value || ""] || value || "Sin definir";
-}
-
 export default function NutricionAtencionPage() {
   const params = useParams();
   const appointmentId = String(params?.appointmentId || "");
@@ -268,6 +238,7 @@ export default function NutricionAtencionPage() {
   const [error, setError] = useState("");
   const [finalized, setFinalized] = useState(false);
   const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
+  const [fallbackOccupation, setFallbackOccupation] = useState("");
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -317,6 +288,24 @@ export default function NutricionAtencionPage() {
     );
   }, [form]);
 
+  const receptionSummary = useMemo(
+    () =>
+      parseSpecialistReceptionSummary(
+        commercialCase?.commercial_notes,
+        commercialCase?.sale_result,
+        {
+          document: form.document,
+          occupation: fallbackOccupation,
+        }
+      ),
+    [commercialCase, fallbackOccupation, form.document]
+  );
+
+  const acquiredPlanLabel = useMemo(
+    () => specialistPlanLabel(commercialCase?.purchased_service || appointment?.service_type),
+    [appointment?.service_type, commercialCase?.purchased_service]
+  );
+
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({
       ...prev,
@@ -336,8 +325,8 @@ export default function NutricionAtencionPage() {
         .eq("id", appointmentId)
         .single();
 
-      if (appointmentError) throw appointmentError;
-      if (!appointmentData) throw new Error("No se encontrÃ³ la cita.");
+        if (appointmentError) throw appointmentError;
+        if (!appointmentData) throw new Error("No se encontró la cita.");
 
       setAppointment(appointmentData as AppointmentRow);
 
@@ -411,7 +400,7 @@ export default function NutricionAtencionPage() {
       if (appointmentData.phone) {
         const { data: usersByPhone, error: userPhoneError } = await supabase
           .from("users")
-          .select("id, nombre, documento, telefono, ciudad")
+          .select("id, nombre, documento, telefono, ciudad, ocupacion")
           .eq("telefono", appointmentData.phone)
           .limit(1);
 
@@ -424,7 +413,7 @@ export default function NutricionAtencionPage() {
       if (!foundUser && appointmentData.patient_name) {
         const { data: usersByName, error: userNameError } = await supabase
           .from("users")
-          .select("id, nombre, documento, telefono, ciudad")
+          .select("id, nombre, documento, telefono, ciudad, ocupacion")
           .eq("nombre", appointmentData.patient_name)
           .limit(1);
 
@@ -435,6 +424,15 @@ export default function NutricionAtencionPage() {
       }
 
       let nutritionProfile: NutritionProfileRow | null = null;
+        const parsedReceptionSummary = parseSpecialistReceptionSummary(
+          linkedCommercialCase?.commercial_notes,
+          linkedCommercialCase?.sale_result,
+          {
+            document: foundUser?.documento,
+            occupation: foundUser?.ocupacion,
+          }
+        );
+        setFallbackOccupation(foundUser?.ocupacion || "");
       const deliveryRecommendation = parseDeliveryRecommendation(
         appointmentData.notes,
         "nutricion"
@@ -453,11 +451,11 @@ export default function NutricionAtencionPage() {
         setUserId(null);
       }
 
-      setForm({
-        document: foundUser?.documento || "",
-        phone: appointmentData.phone || foundUser?.telefono || "",
-        city: appointmentData.city || foundUser?.ciudad || "",
-        age: "",
+        setForm({
+          document: parsedReceptionSummary.document || foundUser?.documento || "",
+          phone: appointmentData.phone || foundUser?.telefono || "",
+          city: appointmentData.city || foundUser?.ciudad || "",
+          age: parsedReceptionSummary.age || "",
         sex: "",
         antecedentes_patologicos: nutritionProfile?.antecedentes_patologicos || "",
         cirugias: nutritionProfile?.cirugias || "",
@@ -649,12 +647,12 @@ export default function NutricionAtencionPage() {
 
       if (nextStatus === "finalizada") {
         setFinalized(true);
-        setMessage("Consulta finalizada. El cliente quedÃ³ pendiente para RecepciÃ³n, impresiÃ³n y entrega de productos.");
+        setMessage("Consulta finalizada. El cliente quedó pendiente para Recepción, impresión y entrega de productos.");
       } else {
         setMessage("Cambios guardados correctamente.");
       }
     } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la atenciÃ³n nutricional.");
+      setError(err?.message || "No se pudo guardar la atención nutricional.");
     } finally {
       setSaving(false);
     }
@@ -684,7 +682,7 @@ export default function NutricionAtencionPage() {
     return (
       <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
         <div className="mx-auto max-w-5xl rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <p className="text-sm text-slate-500">Cargando atenciÃ³n nutricional...</p>
+          <p className="text-sm text-slate-500">{repairMojibake("Cargando atención nutricional...")}</p>
         </div>
       </main>
     );
@@ -694,7 +692,7 @@ export default function NutricionAtencionPage() {
     return (
       <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
         <div className="mx-auto max-w-5xl rounded-3xl border border-red-200 bg-white p-6 shadow-sm">
-          <p className="text-sm text-red-700">{error || "No se encontrÃ³ la cita."}</p>
+          <p className="text-sm text-red-700">{repairMojibake(error || "No se encontró la cita.")}</p>
           <Link href="/nutricion/agenda" className="mt-4 inline-flex rounded-2xl border border-[#D6E8DA] px-4 py-2 text-sm font-medium text-[#4F6F5B]">
             Volver a agenda
           </Link>
@@ -717,10 +715,10 @@ export default function NutricionAtencionPage() {
 
           <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">MÃ³dulo de NutriciÃ³n</p>
-              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">{appointment.patient_name || ""}</h1>
+              <p className="text-sm font-semibold uppercase tracking-wide text-[#5F7D66]">Módulo de Nutrición</p>
+              <h1 className="mt-2 text-3xl font-bold text-[#24312A]">{repairMojibake(appointment.patient_name || "")}</h1>
               <p className="mt-3 text-sm text-slate-600">
-                Cita {appointment.id || ""} Â· Lead {appointment.lead_id || ""}
+                Atención clínica programada
               </p>
             </div>
 
@@ -763,51 +761,40 @@ export default function NutricionAtencionPage() {
 
           <div className="mt-6 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <InfoBox label="Documento" value={form.document} />
-            <InfoBox label="TelÃ©fono" value={form.phone} />
+            <InfoBox label="Teléfono" value={form.phone} />
             <InfoBox label="Edad" value={form.age} />
-            <InfoBox label="Sexo" value={form.sex} />
+            <InfoBox label="EPS" value={receptionSummary.eps} />
             <InfoBox label="Fecha" value={appointment.appointment_date || ""} />
             <InfoBox label="Hora" value={formatHora(appointment.appointment_time)} />
-            <InfoBox label="Origen" value={appointment.service_type || ""} />
+            <InfoBox label="Ocupación" value={receptionSummary.occupation} />
             <InfoBox label="Estado" value={traducirEstado(appointment.status)} />
+          </div>
+
+          <div className="mt-5">
+            <ReadOnlyTextBlock
+              label="Antecedentes básicos de recepción"
+              value={receptionSummary.basicHistory}
+            />
           </div>
         </section>
 
-        {commercialCase ? (
+        {commercialCase?.purchased_service || appointment.service_type ? (
           <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-bold text-[#24312A]">Resumen comercial</h2>
+            <h2 className="text-2xl font-bold text-[#24312A]">Plan adquirido</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Esta información viene del cierre comercial y acompaña la atención del especialista.
+              Esta información acompaña la atención del especialista sin mostrar datos sensibles del cierre comercial.
             </p>
 
-            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-              <InfoBox label="Servicio vendido" value={commercialCase.purchased_service || "Sin definir"} />
-              <InfoBox label="Resultado" value={commercialCase.sale_result || "Sin definir"} />
-              <InfoBox label="Forma de pago" value={paymentMethodLabel(commercialCase.payment_method)} />
-              <InfoBox label="Origen comercial" value={sourceLabel(commercialCase.lead_source_type)} />
-              <InfoBox label="Fuente comisión" value={sourceLabel(commercialCase.commission_source_type)} />
-              <InfoBox label="Valor total" value={formatMoney(commercialCase.sale_value)} />
-              <InfoBox label="Contado" value={formatMoney(commercialCase.cash_amount)} />
-              <InfoBox label="Cartera" value={formatMoney(commercialCase.portfolio_amount)} />
-            </div>
-
-            <div className="mt-5 grid gap-4 xl:grid-cols-2">
-              <ReadOnlyTextBlock
-                label="Valoración comercial"
-                value={commercialCase.sales_assessment}
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <InfoBox
+                label="Plan adquirido"
+                value={acquiredPlanLabel}
               />
-              <ReadOnlyTextBlock
-                label="Propuesta comercial"
-                value={commercialCase.proposal_text}
+              <InfoBox
+                label="Servicio agendado"
+                value={specialistPlanLabel(appointment.service_type)}
               />
-              <ReadOnlyTextBlock
-                label="Notas de cierre"
-                value={commercialCase.closing_notes}
-              />
-              <ReadOnlyTextBlock
-                label="Notas comerciales"
-                value={parseStoredCommercialNotes(commercialCase.commercial_notes).commercialNotes}
-              />
+              <InfoBox label="Especialidad" value="Nutrición" />
             </div>
           </section>
         ) : null}
@@ -831,10 +818,10 @@ export default function NutricionAtencionPage() {
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-            <SmallTextAreaField label="Antecedentes patolÃ³gicos" value={form.antecedentes_patologicos} onChange={(v) => updateField("antecedentes_patologicos", v)} />
-            <SmallTextAreaField label="CirugÃ­as" value={form.cirugias} onChange={(v) => updateField("cirugias", v)} />
-            <SmallTextAreaField label="TÃ³xicos" value={form.toxicos} onChange={(v) => updateField("toxicos", v)} />
-            <SmallTextAreaField label="AlÃ©rgicos" value={form.alergicos} onChange={(v) => updateField("alergicos", v)} />
+            <SmallTextAreaField label="Antecedentes patológicos" value={form.antecedentes_patologicos} onChange={(v) => updateField("antecedentes_patologicos", v)} />
+            <SmallTextAreaField label="Cirugías" value={form.cirugias} onChange={(v) => updateField("cirugias", v)} />
+            <SmallTextAreaField label="Tóxicos" value={form.toxicos} onChange={(v) => updateField("toxicos", v)} />
+            <SmallTextAreaField label="Alérgicos" value={form.alergicos} onChange={(v) => updateField("alergicos", v)} />
             <SmallTextAreaField label="Medicamentos" value={form.medicamentos} onChange={(v) => updateField("medicamentos", v)} />
             <SmallTextAreaField label="Familiares" value={form.familiares} onChange={(v) => updateField("familiares", v)} />
           </div>
@@ -843,7 +830,7 @@ export default function NutricionAtencionPage() {
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <h2 className="text-2xl font-bold text-[#24312A]">Formulario nutricional</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Medidas y composiciÃ³n corporal para la valoraciÃ³n nutricional.
+            {repairMojibake("Medidas y composición corporal para la valoración nutricional.")}
           </p>
 
           <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -861,10 +848,10 @@ export default function NutricionAtencionPage() {
 
         <section className="grid gap-6 xl:grid-cols-2">
           <div className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-            <h2 className="text-2xl font-bold text-[#24312A]">ClasificaciÃ³n y objetivos</h2>
+            <h2 className="text-2xl font-bold text-[#24312A]">Clasificación y objetivos</h2>
             <div className="mt-5 space-y-4">
               <div>
-                <label className="mb-2 block text-sm font-medium text-slate-700">ClasificaciÃ³n nutricional</label>
+                <label className="mb-2 block text-sm font-medium text-slate-700">Clasificación nutricional</label>
                 <select
                   className={inputClass}
                   value={form.clasificacion_nutricional}
@@ -977,8 +964,8 @@ function InfoBox({
 }) {
   return (
     <div className="rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4">
-      <p className="text-sm font-semibold uppercase tracking-wide text-[#657D9B]">{label}</p>
-      <p className="mt-2 text-[#24312A]">{value || " "}</p>
+      <p className="text-sm font-semibold uppercase tracking-wide text-[#657D9B]">{repairMojibake(label)}</p>
+      <p className="mt-2 text-[#24312A]">{repairMojibake(value || " ")}</p>
     </div>
   );
 }
@@ -996,11 +983,11 @@ function InputField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+      <label className="mb-2 block text-sm font-medium text-slate-700">{repairMojibake(label)}</label>
       <input
         className={inputClass}
         value={value}
-        placeholder={placeholder}
+        placeholder={repairMojibake(placeholder)}
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
@@ -1018,7 +1005,7 @@ function SmallTextAreaField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+      <label className="mb-2 block text-sm font-medium text-slate-700">{repairMojibake(label)}</label>
       <textarea
         className={inputClass + " min-h-[110px] resize-none"}
         rows={3}
@@ -1042,7 +1029,7 @@ function LargeTextAreaField({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+      <label className="mb-2 block text-sm font-medium text-slate-700">{repairMojibake(label)}</label>
       <textarea
         className={inputClass + " min-h-[160px] resize-none"}
         rows={rows}
@@ -1062,9 +1049,9 @@ function ReadOnlyTextBlock({
 }) {
   return (
     <div>
-      <label className="mb-2 block text-sm font-medium text-slate-700">{label}</label>
+      <label className="mb-2 block text-sm font-medium text-slate-700">{repairMojibake(label)}</label>
       <div className="min-h-[140px] rounded-2xl border border-[#D6E8DA] bg-[#FBFCFB] p-4 text-sm leading-6 text-[#24312A]">
-        {value?.trim() || "Sin información registrada."}
+        {repairMojibake(value?.trim() || "Sin información registrada.")}
       </div>
     </div>
   );

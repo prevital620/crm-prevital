@@ -1028,6 +1028,7 @@ function RecepcionContent() {
   const [loading, setLoading] = useState(true);
   const [savingAppointment, setSavingAppointment] = useState(false);
   const [savingStatusId, setSavingStatusId] = useState<string | null>(null);
+  const [deletingAppointmentId, setDeletingAppointmentId] = useState<string | null>(null);
   const [savingConfig, setSavingConfig] = useState(false);
   const [queueActionId, setQueueActionId] = useState<string | null>(null);
 
@@ -1229,6 +1230,7 @@ function RecepcionContent() {
 
   const canManageAgendaConfig =
     currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
+  const isSuperUser = currentRoleCode === "super_user";
   const isSupervisorCallCenter = currentRoleCode === "supervisor_call_center";
   const isAgendaConfigOnlyView =
     isSupervisorCallCenter && receptionView === "config";
@@ -3377,12 +3379,15 @@ function imprimirRegistroComercial() {
 
       const notesParts = [
         fuenteLabel ? `Fuente: ${fuenteLabel}` : "",
+        commercialForm.documento ? `Documento: ${commercialForm.documento}` : "",
         `Clasificación inicial: ${clasificacion}`,
         commercialForm.clasificacion_motivo
           ? `Motivo clasificación: ${commercialForm.clasificacion_motivo}`
           : "",
         ocupacionLabel ? `Ocupación: ${ocupacionLabel}` : "",
         commercialForm.edad ? `Edad: ${commercialForm.edad}` : "",
+        `Tiene EPS: ${commercialForm.tiene_eps === "si" ? "Sí" : "No"}`,
+        commercialForm.afiliacion ? `Afiliación: ${commercialForm.afiliacion}` : "",
         `Hipertenso: ${commercialForm.hipertenso === "si" ? "Sí" : "No"}`,
         `Diabético: ${commercialForm.diabetico === "si" ? "Sí" : "No"}`,
         `Cirugías: ${commercialForm.cirugias === "si" ? "Sí" : "No"}`,
@@ -3924,6 +3929,81 @@ function imprimirRegistroComercial() {
 
   async function guardarEstado(id: string) {
     return actualizarEstadoCita(id);
+  }
+
+  async function eliminarCita(id: string) {
+    if (!isSuperUser) return;
+
+    const appointmentActual = appointments.find((item) => item.id === id);
+
+    if (!appointmentActual) {
+      setError("No se encontró la cita que intentas eliminar.");
+      return;
+    }
+
+    const tieneIngresoComercial = commercialCases.some(
+      (item) => item.appointment_id === id
+    );
+
+    if (tieneIngresoComercial) {
+      setError(
+        "Esta cita ya tiene registro comercial. Para proteger el historial, no se puede eliminar desde aquí."
+      );
+      return;
+    }
+
+    const confirmado = window.confirm(
+      `¿Eliminar la cita de ${appointmentActual.patient_name || "este cliente"} del ${appointmentActual.appointment_date} a las ${formatHora(appointmentActual.appointment_time)}? Esta acción no se puede deshacer.`
+    );
+
+    if (!confirmado) return;
+
+    try {
+      setDeletingAppointmentId(id);
+      setError("");
+      setMensaje("");
+
+      const { error } = await supabase.from("appointments").delete().eq("id", id);
+
+      if (error) throw error;
+
+      if (appointmentActual.lead_id) {
+        const tieneOtraCitaActiva = appointments.some(
+          (item) =>
+            item.id !== id &&
+            item.lead_id === appointmentActual.lead_id &&
+            ACTIVE_APPOINTMENT_STATUSES.includes(item.status)
+        );
+
+        const { error: leadError } = await supabase
+          .from("leads")
+          .update({
+            status: tieneOtraCitaActiva ? "agendado" : "contactado",
+          })
+          .eq("id", appointmentActual.lead_id);
+
+        if (leadError) throw leadError;
+      }
+
+      if (editingAppointmentId === id) {
+        resetForm();
+      }
+
+      if (selectedQuickAppointmentId === id) {
+        setSelectedQuickAppointmentId(null);
+      }
+
+      if (selectedCommercialAppointmentId === id) {
+        setSelectedCommercialAppointmentId(null);
+      }
+
+      await cargarTodo();
+      setMensaje("Cita eliminada correctamente.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo eliminar la cita.");
+    } finally {
+      setDeletingAppointmentId(null);
+    }
   }
 
   if (loadingAuth) {
@@ -6523,6 +6603,19 @@ function imprimirRegistroComercial() {
                             >
                               Reagendar
                             </button>
+
+                            {isSuperUser ? (
+                              <button
+                                type="button"
+                                onClick={() => eliminarCita(item.id)}
+                                disabled={deletingAppointmentId === item.id}
+                                className="rounded-2xl border border-rose-300 px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
+                              >
+                                {deletingAppointmentId === item.id
+                                  ? "Eliminando..."
+                                  : "Eliminar cita"}
+                              </button>
+                            ) : null}
                           </div>
                         </div>
 
