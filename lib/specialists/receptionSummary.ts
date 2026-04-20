@@ -35,8 +35,8 @@ function extractByPrefixes(parts: string[], prefixes: string[]) {
   for (const part of parts) {
     const [rawLabel, ...rest] = part.split(":");
     if (rest.length === 0) continue;
-    const normalizedLabel = normalizeLabel(rawLabel);
-    if (!normalizedPrefixes.includes(normalizedLabel)) continue;
+    const normalizedCurrentLabel = normalizeLabel(rawLabel);
+    if (!normalizedPrefixes.includes(normalizedCurrentLabel)) continue;
     return cleanText(rest.join(":"));
   }
 

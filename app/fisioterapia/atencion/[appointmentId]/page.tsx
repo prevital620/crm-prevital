@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { buildPendingDeliveryNotes } from "@/lib/appointments/receptionDelivery";
+import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
 import {
   parseSpecialistReceptionSummary,
   specialistPlanLabel,
@@ -194,6 +195,15 @@ export default function FisioterapiaAtencionPage() {
     [appointment?.service_type, commercialCase?.purchased_service]
   );
 
+  const specialistCommercialContext = useMemo(() => {
+    const storedNotes = parseStoredCommercialNotes(commercialCase?.commercial_notes);
+    return {
+      commercialNotes: repairMojibake(storedNotes.commercialNotes || "").trim(),
+      salesAssessment: repairMojibake(commercialCase?.sales_assessment || "").trim(),
+      proposalText: repairMojibake(commercialCase?.proposal_text || "").trim(),
+    };
+  }, [commercialCase]);
+
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({
       ...prev,
@@ -375,13 +385,13 @@ export default function FisioterapiaAtencionPage() {
     const nextErrors: string[] = [];
 
     if (!form.presion_arterial.trim()) {
-      nextErrors.push("La presiÃ³n arterial es obligatoria.");
+      nextErrors.push("La presión arterial es obligatoria.");
     }
     if (!form.frecuencia_cardiaca.trim()) {
       nextErrors.push("La frecuencia cardiaca es obligatoria.");
     }
     if (!form.plan_intervencion.trim()) {
-      nextErrors.push("El plan de intervenciÃ³n es obligatorio.");
+      nextErrors.push("El plan de intervención es obligatorio.");
     }
 
     return nextErrors;
@@ -642,6 +652,32 @@ export default function FisioterapiaAtencionPage() {
               <InfoBox label="Plan adquirido" value={acquiredPlanLabel} />
               <InfoBox label="Servicio agendado" value={specialistPlanLabel(appointment.service_type)} />
               <InfoBox label="Especialidad" value="Fisioterapia" />
+            </div>
+          </section>
+        ) : null}
+
+        {specialistCommercialContext.commercialNotes ||
+        specialistCommercialContext.salesAssessment ||
+        specialistCommercialContext.proposalText ? (
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <h2 className="text-2xl font-bold text-[#24312A]">Contexto comercial para especialista</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Resumen útil para orientar la consulta sin mostrar datos financieros ni de comisión.
+            </p>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-3">
+              <ReadOnlyTextBlock
+                label="Notas comerciales"
+                value={specialistCommercialContext.commercialNotes}
+              />
+              <ReadOnlyTextBlock
+                label="Valoración comercial"
+                value={specialistCommercialContext.salesAssessment}
+              />
+              <ReadOnlyTextBlock
+                label="Propuesta comercial"
+                value={specialistCommercialContext.proposalText}
+              />
             </div>
           </section>
         ) : null}

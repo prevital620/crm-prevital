@@ -9,6 +9,7 @@ import {
   buildPendingDeliveryNotes,
   parseDeliveryRecommendation,
 } from "@/lib/appointments/receptionDelivery";
+import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
 import {
   parseSpecialistReceptionSummary,
   specialistPlanLabel,
@@ -206,11 +207,11 @@ function traducirEstado(status: string | null | undefined) {
     agendada: "Agendada",
     confirmada: "Confirmada",
     en_espera: "En espera",
-    asistio: "AsistiÃ³",
-    no_asistio: "No asistiÃ³",
+    asistio: "Asistió",
+    no_asistio: "No asistió",
     reagendada: "Reagendada",
     cancelada: "Cancelada",
-    en_atencion: "En atenciÃ³n",
+    en_atencion: "En atención",
     finalizada: "Finalizada",
   };
   return map[status || ""] || status || "";
@@ -305,6 +306,15 @@ export default function NutricionAtencionPage() {
     () => specialistPlanLabel(commercialCase?.purchased_service || appointment?.service_type),
     [appointment?.service_type, commercialCase?.purchased_service]
   );
+
+  const specialistCommercialContext = useMemo(() => {
+    const storedNotes = parseStoredCommercialNotes(commercialCase?.commercial_notes);
+    return {
+      commercialNotes: repairMojibake(storedNotes.commercialNotes || "").trim(),
+      salesAssessment: repairMojibake(commercialCase?.sales_assessment || "").trim(),
+      proposalText: repairMojibake(commercialCase?.proposal_text || "").trim(),
+    };
+  }, [commercialCase]);
 
   function updateField<K extends keyof FormState>(key: K, value: FormState[K]) {
     setForm((prev) => ({
@@ -489,7 +499,7 @@ export default function NutricionAtencionPage() {
 
       setFinalized((appointmentData.status || "") === "finalizada");
     } catch (err: any) {
-      setError(err?.message || "No se pudo cargar la atenciÃ³n nutricional.");
+      setError(err?.message || "No se pudo cargar la atención nutricional.");
     } finally {
       setLoading(false);
     }
@@ -499,7 +509,7 @@ export default function NutricionAtencionPage() {
     const nextErrors: string[] = [];
 
     if (!form.clasificacion_nutricional.trim()) {
-      nextErrors.push("La clasificaciÃ³n nutricional es obligatoria.");
+      nextErrors.push("La clasificación nutricional es obligatoria.");
     }
     if (!form.objetivo_nutricional.trim()) {
       nextErrors.push("El objetivo nutricional es obligatorio.");
@@ -516,7 +526,7 @@ export default function NutricionAtencionPage() {
     if (!appointment) throw new Error("No hay cita cargada.");
 
     const payload = {
-      nombre: appointment.patient_name?.trim() || "Cliente nutriciÃ³n",
+      nombre: appointment.patient_name?.trim() || "Cliente nutrición",
       documento: form.document.trim() || null,
       telefono: form.phone.trim() || appointment.phone || null,
       ciudad: form.city.trim() || appointment.city || null,
@@ -795,6 +805,32 @@ export default function NutricionAtencionPage() {
                 value={specialistPlanLabel(appointment.service_type)}
               />
               <InfoBox label="Especialidad" value="Nutrición" />
+            </div>
+          </section>
+        ) : null}
+
+        {specialistCommercialContext.commercialNotes ||
+        specialistCommercialContext.salesAssessment ||
+        specialistCommercialContext.proposalText ? (
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <h2 className="text-2xl font-bold text-[#24312A]">Contexto comercial para especialista</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Resumen útil para orientar la consulta sin mostrar datos financieros ni de comisión.
+            </p>
+
+            <div className="mt-5 grid gap-4 xl:grid-cols-3">
+              <ReadOnlyTextBlock
+                label="Notas comerciales"
+                value={specialistCommercialContext.commercialNotes}
+              />
+              <ReadOnlyTextBlock
+                label="Valoración comercial"
+                value={specialistCommercialContext.salesAssessment}
+              />
+              <ReadOnlyTextBlock
+                label="Propuesta comercial"
+                value={specialistCommercialContext.proposalText}
+              />
             </div>
           </section>
         ) : null}
