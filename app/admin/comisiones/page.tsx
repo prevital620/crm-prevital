@@ -368,10 +368,6 @@ export default function AdminComisionesPage() {
         collaboratorName: string;
         area: string;
         ventas: number;
-        ventasOpc: number;
-        baseNetaOpc: number;
-        ventasTmk: number;
-        baseNetaTmk: number;
         volumen: number;
         caja: number;
         cartera: number;
@@ -393,10 +389,6 @@ export default function AdminComisionesPage() {
           collaboratorName,
           area,
           ventas: 0,
-          ventasOpc: 0,
-          baseNetaOpc: 0,
-          ventasTmk: 0,
-          baseNetaTmk: 0,
           volumen: 0,
           caja: 0,
           cartera: 0,
@@ -406,14 +398,6 @@ export default function AdminComisionesPage() {
 
       const current = map.get(collaboratorId)!;
       current.ventas += 1;
-      if (item.commission_source_type === "opc") {
-        current.ventasOpc += 1;
-        current.baseNetaOpc += Number(item.net_commission_base || 0);
-      }
-      if (item.commission_source_type === "tmk") {
-        current.ventasTmk += 1;
-        current.baseNetaTmk += Number(item.net_commission_base || 0);
-      }
       current.volumen += Number(item.volume_amount || 0);
       current.caja += Number(item.cash_amount || 0);
       current.cartera += Number(item.portfolio_amount || 0);
@@ -662,10 +646,6 @@ export default function AdminComisionesPage() {
                     <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Área</th>
                     <th className="px-3 py-3">Ventas</th>
-                    <th className="px-3 py-3">Ventas OPC</th>
-                    <th className="px-3 py-3">Base OPC</th>
-                    <th className="px-3 py-3">Ventas TMK</th>
-                    <th className="px-3 py-3">Base TMK</th>
                     <th className="px-3 py-3">Volumen</th>
                     <th className="px-3 py-3">Caja</th>
                     <th className="px-3 py-3">Cartera</th>
@@ -678,10 +658,6 @@ export default function AdminComisionesPage() {
                       <td className="px-3 py-3 font-medium text-slate-900">{item.collaboratorName}</td>
                       <td className="px-3 py-3 text-slate-700">{item.area}</td>
                       <td className="px-3 py-3 text-slate-700">{item.ventas}</td>
-                      <td className="px-3 py-3 text-slate-700">{item.ventasOpc}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNetaOpc)}</td>
-                      <td className="px-3 py-3 text-slate-700">{item.ventasTmk}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNetaTmk)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.volumen)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.caja)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.cartera)}</td>
