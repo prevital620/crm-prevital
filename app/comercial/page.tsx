@@ -991,11 +991,11 @@ export default function ComercialPage() {
 
   useEffect(() => {
     if (!editingCaseId) return;
-    const exists = filteredCases.some((item) => item.id === editingCaseId);
+    const exists = cases.some((item) => item.id === editingCaseId);
     if (!exists) {
       resetForm();
     }
-  }, [filteredCases, editingCaseId]);
+  }, [cases, editingCaseId]);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
