@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 import { getLeadSourceLabel } from "@/lib/lead-source";
+import { dateToLocalISO } from "@/lib/datetime/dateHelpers";
 
 type LeadRow = {
   id: string;
@@ -93,6 +94,7 @@ function hoyISO() {
 
 function soloFecha(fecha: string | null | undefined) {
   if (!fecha) return "";
+  if (fecha.includes("T")) return dateToLocalISO(fecha);
   return fecha.slice(0, 10);
 }
 
