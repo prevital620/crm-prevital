@@ -3,7 +3,7 @@
 import Image from "next/image";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
@@ -210,6 +210,14 @@ const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
 ];
 
 export default function CallCenterPage() {
+  return (
+    <Suspense fallback={<CallCenterPageFallback />}>
+      <CallCenterPageContent />
+    </Suspense>
+  );
+}
+
+function CallCenterPageContent() {
   const searchParams = useSearchParams();
   const [leads, setLeads] = useState<Lead[]>([]);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
@@ -1443,6 +1451,16 @@ function StatCard({
       <p className="text-sm font-medium text-[#5B6E63]">{safeTitle}</p>
       <p className="mt-2 text-3xl font-bold tracking-tight text-[#24312A]">{value}</p>
     </button>
+  );
+}
+
+function CallCenterPageFallback() {
+  return (
+    <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#F1FBF5_0%,_#FAFCF9_48%,_#FFFDF9_100%)] p-6 md:p-10">
+      <div className="mx-auto max-w-7xl rounded-[32px] border border-[#CFE4D8] bg-white/90 p-6 shadow-[0_18px_50px_rgba(95,125,102,0.12)] backdrop-blur">
+        <p className="text-sm text-slate-500">Cargando gestión de leads...</p>
+      </div>
+    </main>
   );
 }
 
