@@ -538,6 +538,11 @@ export default function ComercialPage() {
     [currentCase]
   );
 
+  const isEditingFinalizedCase = useMemo(
+    () => currentCase?.status === "finalizado",
+    [currentCase?.status]
+  );
+
   const todayIso = useMemo(() => hoyISO(), []);
 
   const currentCaseCommissionSummary = useMemo(() => {
@@ -1679,13 +1684,19 @@ const updatePayload: any = {
           <div className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
             <div className="flex items-start justify-between gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-slate-900">
-                  {editingCaseId ? "Atender caso" : "Selecciona un caso"}
-                </h2>
-                <p className="mt-1 text-sm leading-6 text-[#51695C]">
-                  Aquí ves lo registrado en recepción y completas el cierre comercial.
-                </p>
-              </div>
+                  <h2 className="text-2xl font-bold text-slate-900">
+                    {editingCaseId
+                      ? isEditingFinalizedCase
+                        ? "Editar gestión finalizada"
+                        : "Atender caso"
+                      : "Selecciona un caso"}
+                  </h2>
+                  <p className="mt-1 text-sm leading-6 text-[#51695C]">
+                    {editingCaseId && isEditingFinalizedCase
+                      ? "Aquí revisas o ajustas una gestión ya cerrada sin reabrir el caso."
+                      : "Aquí ves lo registrado en recepción y completas el cierre comercial."}
+                  </p>
+                </div>
 
               {editingCaseId ? (
                 <button
@@ -1704,18 +1715,34 @@ const updatePayload: any = {
               </div>
             ) : (
                 <div className="mt-5 space-y-5">
-                  <div className="rounded-2xl border border-[#CFE7D6] bg-[#EEF8F1] p-4">
+                  <div
+                    className={`rounded-2xl border p-4 ${
+                      isEditingFinalizedCase
+                        ? "border-emerald-200 bg-emerald-50"
+                        : "border-[#CFE7D6] bg-[#EEF8F1]"
+                    }`}
+                  >
                     <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-sm font-semibold text-[#2F5E46]">Estado del caso:</span>
+                      <span
+                        className={`text-sm font-semibold ${
+                          isEditingFinalizedCase ? "text-emerald-800" : "text-[#2F5E46]"
+                        }`}
+                      >
+                        Estado del caso:
+                      </span>
                       <StatusBadge
                         label={traducirEstadoComercial(currentCase?.status || "en_atencion_comercial")}
                         className={commercialStatusClass(currentCase?.status || "en_atencion_comercial")}
                       />
                       {currentCase?.assigned_at ? (
-                        <span className="text-sm text-[#2F5E46]">
+                        <span
+                          className={`text-sm ${
+                            isEditingFinalizedCase ? "text-emerald-800" : "text-[#2F5E46]"
+                          }`}
+                        >
                           Desde: {formatDate(currentCase.assigned_at)}
                         </span>
-                    ) : null}
+                      ) : null}
                   </div>
                 </div>
 
