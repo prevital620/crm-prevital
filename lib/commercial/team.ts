@@ -1,7 +1,9 @@
 export type CommercialTeamKey = "am" | "pm";
 
 type TeamProfileInput = {
+  full_name?: string | null;
   job_title?: string | null;
+  role_name?: string | null;
   departments?: { name: string | null }[] | null;
 };
 
@@ -41,7 +43,12 @@ export function inferCommercialTeam(
     ? profile.departments.map((item) => item?.name || "")
     : [];
 
-  return inferCommercialTeamFromStrings([profile.job_title || "", ...departmentNames]);
+  return inferCommercialTeamFromStrings([
+    profile.full_name || "",
+    profile.job_title || "",
+    profile.role_name || "",
+    ...departmentNames,
+  ]);
 }
 
 export function inferCommercialTeamFromDate(

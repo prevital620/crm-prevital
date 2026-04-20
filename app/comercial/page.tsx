@@ -868,7 +868,9 @@ export default function ComercialPage() {
             job_title: row.job_title || null,
             departments: Array.isArray(row.departments) ? row.departments : [],
             team_key: inferCommercialTeam({
+              full_name: row.full_name || null,
               job_title: row.job_title || null,
+              role_name: role?.name || null,
               departments: Array.isArray(row.departments) ? row.departments : [],
             }),
           };
