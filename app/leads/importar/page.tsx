@@ -7,16 +7,13 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import { digitsOnly } from "@/lib/users/userLookup";
 import SessionBadge from "@/components/session-badge";
+import {
+  parseLeadImportFile,
+  type ImportDetectedColumns,
+  type ImportParsedRow,
+} from "@/lib/leads/import-file";
 
-type ParsedRow = {
-  rowNumber: number;
-  nombre: string;
-  telefono: string;
-  ciudad: string;
-  observaciones: string;
-};
-
-type CandidateRow = ParsedRow & {
+type CandidateRow = ImportParsedRow & {
   normalizedPhone: string;
   firstName: string;
   lastName: string;
@@ -47,6 +44,8 @@ export default function ImportarLeadsPage() {
   const [error, setError] = useState("");
   const [mensaje, setMensaje] = useState("");
   const [fileName, setFileName] = useState("");
+  const [detectedColumns, setDetectedColumns] = useState<ImportDetectedColumns | null>(null);
+  const [detectedFormat, setDetectedFormat] = useState<"csv" | "xlsx" | null>(null);
   const [parsedRows, setParsedRows] = useState<CandidateRow[]>([]);
 
   const autoAssignsLead =
@@ -108,11 +107,16 @@ export default function ImportarLeadsPage() {
     setError("");
     setMensaje("");
     setParsedRows([]);
+    setDetectedColumns(null);
+    setDetectedFormat(null);
     setFileName(file.name);
 
     try {
-      const rawText = await file.text();
-      const rows = parseDelimitedText(rawText);
+      const parsed = await parseLeadImportFile(file);
+      const rows = parsed.rows;
+
+      setDetectedColumns(parsed.columns);
+      setDetectedFormat(parsed.format);
 
       if (rows.length === 0) {
         throw new Error("El archivo no tiene filas validas para revisar.");
@@ -125,60 +129,54 @@ export default function ImportarLeadsPage() {
         const normalizedPhone = digitsOnly(row.telefono);
         const { firstName, lastName } = splitFullName(row.nombre);
 
+        if (!parsed.columns.nameHeader) {
+          return buildCandidateRow(row, normalizedPhone, firstName, lastName, "invalido", "Columna de nombre no encontrada.");
+        }
+
+        if (!parsed.columns.phoneHeader) {
+          return buildCandidateRow(row, normalizedPhone, firstName, lastName, "invalido", "Columna de telefono no encontrada.");
+        }
+
         if (!row.nombre.trim()) {
-          return {
-            ...row,
-            normalizedPhone,
-            firstName,
-            lastName,
-            status: "invalido" as const,
-            reason: "Falta el nombre.",
-          };
+          return buildCandidateRow(row, normalizedPhone, firstName, lastName, "invalido", "Nombre vacio.");
         }
 
         if (!normalizedPhone) {
-          return {
-            ...row,
-            normalizedPhone,
-            firstName,
-            lastName,
-            status: "invalido" as const,
-            reason: "Telefono vacio o invalido.",
-          };
+          return buildCandidateRow(row, normalizedPhone, firstName, lastName, "invalido", "Telefono vacio.");
         }
 
         if (existingPhones.has(normalizedPhone)) {
-          return {
-            ...row,
+          return buildCandidateRow(
+            row,
             normalizedPhone,
             firstName,
             lastName,
-            status: "duplicado_base" as const,
-            reason: "Ya existe un lead con ese telefono.",
-          };
+            "duplicado_base",
+            "Telefono ya existe en base."
+          );
         }
 
         if (seenInFile.has(normalizedPhone)) {
-          return {
-            ...row,
+          return buildCandidateRow(
+            row,
             normalizedPhone,
             firstName,
             lastName,
-            status: "duplicado_archivo" as const,
-            reason: "Telefono repetido dentro del archivo.",
-          };
+            "duplicado_archivo",
+            "Telefono repetido en archivo."
+          );
         }
 
         seenInFile.add(normalizedPhone);
 
-        return {
-          ...row,
+        return buildCandidateRow(
+          row,
           normalizedPhone,
           firstName,
           lastName,
-          status: "listo" as const,
-          reason: "Listo para importar.",
-        };
+          "listo",
+          "Listo para importar."
+        );
       });
 
       setParsedRows(candidates);
@@ -292,7 +290,7 @@ export default function ImportarLeadsPage() {
   if (loadingAuth) {
     return (
       <main className="min-h-screen bg-[#F8F7F4] pb-10">
-        <div className="mx-auto w-full max-w-5xl px-4 pt-4 sm:px-6 sm:pt-6">
+        <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
           <section className={panelClass}>
             <p className="text-sm text-slate-500">Validando acceso...</p>
           </section>
@@ -304,7 +302,7 @@ export default function ImportarLeadsPage() {
   if (!authorized) {
     return (
       <main className="min-h-screen bg-[#F8F7F4] pb-10">
-        <div className="mx-auto w-full max-w-5xl px-4 pt-4 sm:px-6 sm:pt-6">
+        <div className="mx-auto w-full max-w-6xl px-4 pt-4 sm:px-6 sm:pt-6">
           <section className="rounded-[28px] border border-[#F2C9C9] bg-white p-6 shadow-sm">
             <p className="text-sm font-medium text-red-700">
               {error || "No tienes permiso para entrar a este modulo."}
@@ -354,12 +352,15 @@ export default function ImportarLeadsPage() {
                 Importar leads de redes
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
-                Sube una plantilla CSV con nombre y telefono. El sistema crea los nuevos,
-                aplica origen automatico redes y ignora repetidos por telefono.
+                Sube un archivo CSV o XLSX. El sistema crea solo los leads nuevos,
+                aplica origen automatico redes e ignora repetidos por telefono.
               </p>
               <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
                 <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">
-                  Plantilla simple para Excel
+                  Plantilla CSV simple
+                </span>
+                <span className="rounded-full bg-[#F3F8F5] px-3 py-1 ring-1 ring-[#D8ECE1]">
+                  Tambien acepta XLSX directo
                 </span>
                 <span className="rounded-full bg-[#F3F8F5] px-3 py-1 ring-1 ring-[#D8ECE1]">
                   Origen fijo: redes
@@ -404,7 +405,7 @@ export default function ImportarLeadsPage() {
                   Carga del archivo
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Usa la plantilla, completa tus leads del dia y sube el archivo en CSV.
+                  Usa la plantilla o sube el XLSX tal como sale de Excel.
                 </p>
               </div>
 
@@ -420,16 +421,16 @@ export default function ImportarLeadsPage() {
             <div className="mt-5 grid gap-4">
               <label className="block">
                 <div className="mb-2 text-sm font-medium text-slate-700">
-                  Archivo CSV
+                  Archivo CSV o XLSX
                 </div>
                 <input
                   className={inputClass}
                   type="file"
-                  accept=".csv,.txt"
+                  accept=".csv,.txt,.xlsx"
                   onChange={(e) => void handleFileChange(e.target.files?.[0] || null)}
                 />
                 <p className="mt-2 text-xs text-slate-500">
-                  La plantilla se descarga en CSV y la puedes abrir o guardar desde Excel.
+                  Se detectan automaticamente columnas como Nombre completo, Telefono, Celular, Phone Number y similares.
                 </p>
               </label>
 
@@ -448,6 +449,11 @@ export default function ImportarLeadsPage() {
               {fileName ? (
                 <div className="rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-4 text-sm text-[#4F6F5B]">
                   Archivo cargado: <span className="font-semibold">{fileName}</span>
+                  {detectedFormat ? (
+                    <span className="ml-2 text-slate-500">
+                      ({detectedFormat.toUpperCase()})
+                    </span>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -465,6 +471,8 @@ export default function ImportarLeadsPage() {
                   type="button"
                   onClick={() => {
                     setFileName("");
+                    setDetectedColumns(null);
+                    setDetectedFormat(null);
                     setParsedRows([]);
                     setMensaje("");
                     setError("");
@@ -513,6 +521,41 @@ export default function ImportarLeadsPage() {
                 <span className="font-semibold">observaciones</span>.
               </p>
             </div>
+
+            {detectedColumns ? (
+              <div className="mt-5 rounded-2xl border border-[#D6E8DA] bg-white p-4 text-sm text-slate-600 shadow-sm">
+                <p className="font-medium text-[#24312A]">Columnas detectadas</p>
+                <div className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <DetectedField
+                    label="Nombre"
+                    value={detectedColumns.nameHeader || "No encontrada"}
+                    found={Boolean(detectedColumns.nameHeader)}
+                  />
+                  <DetectedField
+                    label="Telefono"
+                    value={detectedColumns.phoneHeader || "No encontrada"}
+                    found={Boolean(detectedColumns.phoneHeader)}
+                  />
+                  <DetectedField
+                    label="Ciudad"
+                    value={detectedColumns.cityHeader || "No detectada"}
+                    found={Boolean(detectedColumns.cityHeader)}
+                  />
+                  <DetectedField
+                    label="Observaciones"
+                    value={detectedColumns.notesHeader || "No detectada"}
+                    found={Boolean(detectedColumns.notesHeader)}
+                  />
+                </div>
+
+                <p className="mt-4 text-xs text-slate-500">
+                  Encabezados leidos:{" "}
+                  {detectedColumns.headers.length > 0
+                    ? detectedColumns.headers.join(" | ")
+                    : "Sin encabezados detectados"}
+                </p>
+              </div>
+            ) : null}
           </section>
         </div>
 
@@ -599,6 +642,27 @@ function SummaryCard({
   );
 }
 
+function DetectedField({
+  label,
+  value,
+  found,
+}: {
+  label: string;
+  value: string;
+  found: boolean;
+}) {
+  return (
+    <div className="rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6B8B77]">
+        {label}
+      </p>
+      <p className={`mt-2 text-sm font-medium ${found ? "text-[#24312A]" : "text-rose-700"}`}>
+        {value}
+      </p>
+    </div>
+  );
+}
+
 function StatusPill({ status }: { status: CandidateRow["status"] }) {
   const config =
     status === "listo"
@@ -628,98 +692,22 @@ function StatusPill({ status }: { status: CandidateRow["status"] }) {
   );
 }
 
-function parseDelimitedText(content: string) {
-  const cleaned = content.replace(/^\uFEFF/, "").trim();
-  if (!cleaned) return [] as ParsedRow[];
-
-  const lines = cleaned
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
-
-  if (lines.length < 2) return [] as ParsedRow[];
-
-  const delimiter = detectDelimiter(lines[0]);
-  const headers = splitCsvLine(lines[0], delimiter).map(normalizeHeader);
-
-  const nameIndex = headers.findIndex((header) =>
-    ["nombre", "name", "full_name", "cliente"].includes(header)
-  );
-  const phoneIndex = headers.findIndex((header) =>
-    ["telefono", "phone", "celular", "movil"].includes(header)
-  );
-  const cityIndex = headers.findIndex((header) =>
-    ["ciudad", "city"].includes(header)
-  );
-  const notesIndex = headers.findIndex((header) =>
-    ["observaciones", "observation", "obs", "notas", "notes"].includes(header)
-  );
-
-  if (nameIndex < 0 || phoneIndex < 0) {
-    throw new Error("La plantilla debe incluir minimo las columnas nombre y telefono.");
-  }
-
-  return lines.slice(1).map((line, index) => {
-    const cells = splitCsvLine(line, delimiter);
-    return {
-      rowNumber: index + 2,
-      nombre: (cells[nameIndex] || "").trim(),
-      telefono: (cells[phoneIndex] || "").trim(),
-      ciudad: cityIndex >= 0 ? (cells[cityIndex] || "").trim() : "",
-      observaciones: notesIndex >= 0 ? (cells[notesIndex] || "").trim() : "",
-    };
-  });
-}
-
-function detectDelimiter(headerLine: string) {
-  const commaCount = (headerLine.match(/,/g) || []).length;
-  const semicolonCount = (headerLine.match(/;/g) || []).length;
-  const tabCount = (headerLine.match(/\t/g) || []).length;
-
-  if (tabCount > commaCount && tabCount > semicolonCount) return "\t";
-  if (semicolonCount > commaCount) return ";";
-  return ",";
-}
-
-function splitCsvLine(line: string, delimiter: string) {
-  const result: string[] = [];
-  let current = "";
-  let inQuotes = false;
-
-  for (let index = 0; index < line.length; index += 1) {
-    const char = line[index];
-    const nextChar = line[index + 1];
-
-    if (char === '"') {
-      if (inQuotes && nextChar === '"') {
-        current += '"';
-        index += 1;
-      } else {
-        inQuotes = !inQuotes;
-      }
-      continue;
-    }
-
-    if (char === delimiter && !inQuotes) {
-      result.push(current);
-      current = "";
-      continue;
-    }
-
-    current += char;
-  }
-
-  result.push(current);
-  return result.map((item) => item.trim());
-}
-
-function normalizeHeader(value: string) {
-  return value
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/\s+/g, "_")
-    .trim();
+function buildCandidateRow(
+  row: ImportParsedRow,
+  normalizedPhone: string,
+  firstName: string,
+  lastName: string,
+  status: CandidateRow["status"],
+  reason: string
+): CandidateRow {
+  return {
+    ...row,
+    normalizedPhone,
+    firstName,
+    lastName,
+    status,
+    reason,
+  };
 }
 
 function splitFullName(fullName: string) {
