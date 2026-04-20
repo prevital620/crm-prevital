@@ -32,6 +32,7 @@ type Lead = {
 type CallCenterUser = {
   id: string;
   full_name: string;
+  is_active: boolean;
   role_name: string;
   role_code: string;
 };
@@ -283,7 +284,8 @@ function CallCenterPageContent() {
         user_id,
         profiles!user_roles_user_id_fkey (
           id,
-          full_name
+          full_name,
+          is_active
         ),
         roles!user_roles_role_id_fkey (
           name,
@@ -302,10 +304,12 @@ function CallCenterPageContent() {
       .map((row) => ({
         id: row.profiles?.id || row.user_id,
         full_name: row.profiles?.full_name || "Sin nombre",
+        is_active: Boolean(row.profiles?.is_active),
         role_name: row.roles?.name || "",
         role_code: row.roles?.code || "",
       }))
       .filter((user) =>
+        user.is_active &&
         ["supervisor_call_center", "confirmador", "tmk"].includes(user.role_code)
       )
       .sort((a, b) => a.full_name.localeCompare(b.full_name));
