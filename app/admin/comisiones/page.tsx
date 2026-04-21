@@ -55,6 +55,16 @@ type CommissionEntry = {
   totalCommission: number;
 };
 
+type CaseCorrectionState = {
+  caseId: string;
+  customerName: string;
+  assignedCommercialUserId: string;
+  commissionSourceType: string;
+  opcUserId: string;
+  callUserId: string;
+  saleOriginType: "lead" | "directo";
+};
+
 const allowedRoles = [
   "super_user",
   "administrador",
@@ -264,6 +274,14 @@ const commissionSourceQuickFilters = [
   { value: "otro", label: "Otro" },
 ];
 
+const commissionSourceOptions = [
+  { value: "base", label: "Base" },
+  { value: "opc", label: "OPC" },
+  { value: "tmk", label: "TMK" },
+  { value: "redes", label: "Redes" },
+  { value: "otro", label: "Otro" },
+];
+
 function StatCard({
   title,
   value,
@@ -298,6 +316,8 @@ export default function AdminComisionesPage() {
   const [collaboratorFilter, setCollaboratorFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [commissionSourceFilter, setCommissionSourceFilter] = useState("");
+  const [editingCase, setEditingCase] = useState<CaseCorrectionState | null>(null);
+  const [savingCorrection, setSavingCorrection] = useState(false);
 
   async function validarAcceso() {
     try {
@@ -373,6 +393,50 @@ export default function AdminComisionesPage() {
     }
   }
 
+  function abrirCorreccion(caseItem: AdminCommercialCase) {
+    setEditingCase({
+      caseId: caseItem.id,
+      customerName: caseItem.customer_name,
+      assignedCommercialUserId: caseItem.assigned_commercial_user_id || "",
+      commissionSourceType: caseItem.commission_source_type || "otro",
+      opcUserId: caseItem.opc_user_id || "",
+      callUserId: caseItem.call_user_id || "",
+      saleOriginType: inferSaleOriginType(caseItem),
+    });
+    setError("");
+  }
+
+  async function guardarCorreccion() {
+    if (!editingCase) return;
+
+    try {
+      setSavingCorrection(true);
+      setError("");
+
+      const payload = {
+        assigned_commercial_user_id: editingCase.assignedCommercialUserId || null,
+        commission_source_type: editingCase.commissionSourceType || null,
+        opc_user_id: editingCase.opcUserId || null,
+        call_user_id: editingCase.callUserId || null,
+        sale_origin_type: editingCase.saleOriginType,
+      };
+
+      const { error: updateError } = await supabase
+        .from("commercial_cases")
+        .update(payload)
+        .eq("id", editingCase.caseId);
+
+      if (updateError) throw updateError;
+
+      await cargarDatos();
+      setEditingCase(null);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo guardar la corrección del caso.");
+    } finally {
+      setSavingCorrection(false);
+    }
+  }
+
   useEffect(() => {
     void validarAcceso();
   }, []);
@@ -389,6 +453,12 @@ export default function AdminComisionesPage() {
     return map;
   }, [profiles]);
 
+  const caseMap = useMemo(() => {
+    const map = new Map<string, AdminCommercialCase>();
+    cases.forEach((item) => map.set(item.id, item));
+    return map;
+  }, [cases]);
+
   const collaboratorOptions = useMemo(() => {
     return profiles.map((profile) => ({
       id: profile.id,
@@ -396,6 +466,24 @@ export default function AdminComisionesPage() {
       area: normalizeArea(profile.job_title),
     }));
   }, [profiles]);
+
+  const commercialOptions = useMemo(() => {
+    return collaboratorOptions.filter((item) =>
+      ["Comercial", "Gerencia comercial"].includes(item.area)
+    );
+  }, [collaboratorOptions]);
+
+  const opcOptions = useMemo(() => {
+    return collaboratorOptions.filter((item) =>
+      ["OPC", "Supervisor OPC"].includes(item.area)
+    );
+  }, [collaboratorOptions]);
+
+  const tmkOptions = useMemo(() => {
+    return collaboratorOptions.filter((item) =>
+      ["TMK", "Call center", "Supervisor Call"].includes(item.area)
+    );
+  }, [collaboratorOptions]);
 
   const areaOptions = useMemo(() => {
     const unique = new Set<string>();
@@ -827,6 +915,146 @@ export default function AdminComisionesPage() {
             </div>
           </div>
 
+          {editingCase ? (
+            <div className="mt-5 rounded-[28px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(247,252,248,0.96)_0%,_rgba(255,255,255,0.98)_100%)] p-5 shadow-[0_14px_32px_rgba(95,125,102,0.10)]">
+              <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-[#24312A]">
+                    Corregir caso: {editingCase.customerName}
+                  </h3>
+                  <p className="text-sm text-[#607368]">
+                    Ajusta comercial, fuente, OPC, TMK y si fue lead o directo.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setEditingCase(null)}
+                  className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                >
+                  Cerrar editor
+                </button>
+              </div>
+
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Comercial</label>
+                  <select
+                    className={inputClass}
+                    value={editingCase.assignedCommercialUserId}
+                    onChange={(e) =>
+                      setEditingCase((current) =>
+                        current
+                          ? { ...current, assignedCommercialUserId: e.target.value }
+                          : current
+                      )
+                    }
+                  >
+                    <option value="">Sin asignar</option>
+                    {commercialOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Fuente comisión</label>
+                  <select
+                    className={inputClass}
+                    value={editingCase.commissionSourceType}
+                    onChange={(e) =>
+                      setEditingCase((current) =>
+                        current
+                          ? { ...current, commissionSourceType: e.target.value }
+                          : current
+                      )
+                    }
+                  >
+                    {commissionSourceOptions.map((item) => (
+                      <option key={item.value} value={item.value}>
+                        {item.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">OPC</label>
+                  <select
+                    className={inputClass}
+                    value={editingCase.opcUserId}
+                    onChange={(e) =>
+                      setEditingCase((current) =>
+                        current ? { ...current, opcUserId: e.target.value } : current
+                      )
+                    }
+                  >
+                    <option value="">Sin OPC</option>
+                    {opcOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">TMK / Call center</label>
+                  <select
+                    className={inputClass}
+                    value={editingCase.callUserId}
+                    onChange={(e) =>
+                      setEditingCase((current) =>
+                        current ? { ...current, callUserId: e.target.value } : current
+                      )
+                    }
+                  >
+                    <option value="">Sin TMK</option>
+                    {tmkOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Origen venta</label>
+                  <select
+                    className={inputClass}
+                    value={editingCase.saleOriginType}
+                    onChange={(e) =>
+                      setEditingCase((current) =>
+                        current
+                          ? {
+                              ...current,
+                              saleOriginType: e.target.value as "lead" | "directo",
+                            }
+                          : current
+                      )
+                    }
+                  >
+                    <option value="lead">Lead</option>
+                    <option value="directo">Directo</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <button
+                  type="button"
+                  onClick={() => void guardarCorreccion()}
+                  disabled={savingCorrection}
+                  className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_18px_36px_rgba(95,125,102,0.22)] transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {savingCorrection ? "Guardando..." : "Guardar corrección"}
+                </button>
+              </div>
+            </div>
+          ) : null}
+
           {loading ? (
             <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
               Cargando detalle...
@@ -852,33 +1080,48 @@ export default function AdminComisionesPage() {
                     <th className="px-3 py-3">Fijo</th>
                     <th className="px-3 py-3">Venta</th>
                     <th className="px-3 py-3">Total</th>
+                    <th className="px-3 py-3">Corregir</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {commissionEntries.map((item) => (
-                    <tr
-                      key={`${item.caseId}-${item.commissionKind}-${item.beneficiaryId}`}
-                      className="border-b border-slate-100 align-top"
-                    >
-                      <td className="px-3 py-3">
-                        <div className="font-medium text-slate-900">{item.customerName}</div>
-                        <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
-                      </td>
-                      <td className="px-3 py-3 text-slate-700">{formatDateTime(item.createdAt)}</td>
-                      <td className="px-3 py-3 text-slate-700">{item.beneficiaryName}</td>
-                      <td className="px-3 py-3 text-slate-700">{item.beneficiaryArea}</td>
-                      <td className="px-3 py-3 text-slate-700">{commissionKindLabel(item.commissionKind)}</td>
-                      <td className="px-3 py-3 text-slate-700">{commissionSourceLabel(item.sourceType)}</td>
-                      <td className="px-3 py-3 text-slate-700">
-                        {item.saleOriginType === "directo" ? "Directo" : "Lead"}
-                      </td>
-                      <td className="px-3 py-3 text-slate-700">{item.isQ ? "Q" : "No Q"}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNeta)}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.fixedCommission)}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.saleCommission)}</td>
-                      <td className="px-3 py-3 font-semibold text-slate-900">{formatMoney(item.totalCommission)}</td>
-                    </tr>
-                  ))}
+                  {commissionEntries.map((item) => {
+                    const caseItem = caseMap.get(item.caseId);
+
+                    return (
+                      <tr
+                        key={`${item.caseId}-${item.commissionKind}-${item.beneficiaryId}`}
+                        className="border-b border-slate-100 align-top"
+                      >
+                        <td className="px-3 py-3">
+                          <div className="font-medium text-slate-900">{item.customerName}</div>
+                          <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">{formatDateTime(item.createdAt)}</td>
+                        <td className="px-3 py-3 text-slate-700">{item.beneficiaryName}</td>
+                        <td className="px-3 py-3 text-slate-700">{item.beneficiaryArea}</td>
+                        <td className="px-3 py-3 text-slate-700">{commissionKindLabel(item.commissionKind)}</td>
+                        <td className="px-3 py-3 text-slate-700">{commissionSourceLabel(item.sourceType)}</td>
+                        <td className="px-3 py-3 text-slate-700">
+                          {item.saleOriginType === "directo" ? "Directo" : "Lead"}
+                        </td>
+                        <td className="px-3 py-3 text-slate-700">{item.isQ ? "Q" : "No Q"}</td>
+                        <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNeta)}</td>
+                        <td className="px-3 py-3 text-slate-700">{formatMoney(item.fixedCommission)}</td>
+                        <td className="px-3 py-3 text-slate-700">{formatMoney(item.saleCommission)}</td>
+                        <td className="px-3 py-3 font-semibold text-slate-900">{formatMoney(item.totalCommission)}</td>
+                        <td className="px-3 py-3">
+                          <button
+                            type="button"
+                            onClick={() => caseItem && abrirCorreccion(caseItem)}
+                            disabled={!caseItem}
+                            className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/88 px-3 py-2 text-xs font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7] disabled:cursor-not-allowed disabled:opacity-60"
+                          >
+                            Editar caso
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
