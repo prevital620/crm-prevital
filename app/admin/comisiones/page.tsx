@@ -697,6 +697,8 @@ export default function AdminComisionesPage() {
                     <th className="px-3 py-3">Fecha</th>
                     <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Área</th>
+                    <th className="px-3 py-3">Fuente comisión</th>
+                    <th className="px-3 py-3">Responsable fuente</th>
                     <th className="px-3 py-3">Volumen</th>
                     <th className="px-3 py-3">Caja</th>
                     <th className="px-3 py-3">Cartera</th>
