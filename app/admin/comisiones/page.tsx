@@ -6,6 +6,11 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
+import {
+  inferCommercialTeam,
+  getCommercialTeamLabel,
+  type CommercialTeamKey,
+} from "@/lib/commercial/team";
 
 type AdminCommercialCase = {
   id: string;
@@ -17,6 +22,8 @@ type AdminCommercialCase = {
   cash_amount: number | null;
   portfolio_amount: number | null;
   net_commission_base: number | null;
+  gross_bonus_base: number | null;
+  counts_for_commercial_bonus: boolean | null;
   payment_method: string | null;
   assigned_commercial_user_id: string | null;
   commission_source_type: string | null;
@@ -41,7 +48,7 @@ type CommissionEntry = {
   beneficiaryId: string;
   beneficiaryName: string;
   beneficiaryArea: string;
-  commissionKind: "opc" | "tmk";
+  commissionKind: "opc" | "tmk" | "comercial" | "gerencia_comercial";
   sourceType: string | null;
   saleOriginType: "lead" | "directo";
   isQ: boolean;
@@ -53,6 +60,23 @@ type CommissionEntry = {
   fixedCommission: number;
   saleCommission: number;
   totalCommission: number;
+};
+
+type CollaboratorOption = {
+  id: string;
+  name: string;
+  area: string;
+  teamKey: CommercialTeamKey | null;
+};
+
+type BonusRow = {
+  collaboratorId: string;
+  collaboratorName: string;
+  teamKey: CommercialTeamKey | null;
+  bonusBase: number;
+  individualBonus: number;
+  groupBonus: number;
+  totalBonus: number;
 };
 
 type CaseCorrectionState = {
@@ -115,7 +139,10 @@ function commissionSourceLabel(value: string | null | undefined) {
 }
 
 function commissionKindLabel(value: CommissionEntry["commissionKind"]) {
-  return value === "opc" ? "OPC" : "TMK";
+  if (value === "opc") return "OPC";
+  if (value === "tmk") return "TMK";
+  if (value === "comercial") return "Comercial";
+  return "Gerencia comercial";
 }
 
 function normalizeText(value: string | null | undefined) {
@@ -180,6 +207,24 @@ function matchesCommissionQuickFilter(caseItem: AdminCommercialCase, quickFilter
   if (quickFilter === "opc") return Boolean(caseItem.opc_user_id);
   if (quickFilter === "tmk") return Boolean(caseItem.call_user_id);
   return (caseItem.commission_source_type || "") === quickFilter;
+}
+
+function getCommercialRate(baseNeta: number) {
+  if (baseNeta <= 500000) return 0.05;
+  if (baseNeta <= 1200000) return 0.06;
+  if (baseNeta <= 2300000) return 0.07;
+  if (baseNeta <= 3000000) return 0.1;
+  if (baseNeta <= 4000000) return 0.12;
+  return 0.15;
+}
+
+function getCommercialIndividualBonus(total: number) {
+  if (total >= 52000000) return 3000000;
+  if (total >= 42000000) return 2100000;
+  if (total >= 32000000) return 1500000;
+  if (total >= 27000000) return 1000000;
+  if (total >= 21000000) return 600000;
+  return 0;
 }
 
 function buildCommissionEntries(
@@ -316,6 +361,8 @@ export default function AdminComisionesPage() {
   const [collaboratorFilter, setCollaboratorFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [commissionSourceFilter, setCommissionSourceFilter] = useState("");
+  const [goalAm, setGoalAm] = useState("150000000");
+  const [goalPm, setGoalPm] = useState("150000000");
   const [editingCase, setEditingCase] = useState<CaseCorrectionState | null>(null);
   const [savingCorrection, setSavingCorrection] = useState(false);
 
@@ -365,6 +412,8 @@ export default function AdminComisionesPage() {
             cash_amount,
             portfolio_amount,
             net_commission_base,
+            gross_bonus_base,
+            counts_for_commercial_bonus,
             payment_method,
             assigned_commercial_user_id,
             commission_source_type,
@@ -464,8 +513,18 @@ export default function AdminComisionesPage() {
       id: profile.id,
       name: profile.full_name || "Sin nombre",
       area: normalizeArea(profile.job_title),
+      teamKey: inferCommercialTeam({
+        full_name: profile.full_name,
+        job_title: profile.job_title,
+      }),
     }));
   }, [profiles]);
+
+  const collaboratorOptionMap = useMemo(() => {
+    const map = new Map<string, CollaboratorOption>();
+    collaboratorOptions.forEach((item) => map.set(item.id, item));
+    return map;
+  }, [collaboratorOptions]);
 
   const commercialOptions = useMemo(() => {
     return collaboratorOptions.filter((item) =>
@@ -483,6 +542,19 @@ export default function AdminComisionesPage() {
     return collaboratorOptions.filter((item) =>
       ["TMK", "Call center", "Supervisor Call"].includes(item.area)
     );
+  }, [collaboratorOptions]);
+
+  const managerByTeam = useMemo(() => {
+    const map = new Map<CommercialTeamKey, CollaboratorOption>();
+
+    collaboratorOptions.forEach((item) => {
+      if (item.area !== "Gerencia comercial" || !item.teamKey) return;
+      if (!map.has(item.teamKey)) {
+        map.set(item.teamKey, item);
+      }
+    });
+
+    return map;
   }, [collaboratorOptions]);
 
   const areaOptions = useMemo(() => {
@@ -514,6 +586,9 @@ export default function AdminComisionesPage() {
 
   const casosFiltrados = useMemo(() => {
     const q = normalizeText(search);
+    const selectedCollaborator = collaboratorFilter
+      ? collaboratorOptionMap.get(collaboratorFilter) || null
+      : null;
 
     return cases.filter((item) => {
       const createdDate = item.created_at?.slice(0, 10) || "";
@@ -524,6 +599,10 @@ export default function AdminComisionesPage() {
       const callProfile = item.call_user_id ? profileMap.get(item.call_user_id) : null;
       const collaboratorName = commercialProfile?.full_name || "";
       const collaboratorArea = normalizeArea(commercialProfile?.job_title);
+      const collaboratorTeam = inferCommercialTeam({
+        full_name: commercialProfile?.full_name,
+        job_title: commercialProfile?.job_title,
+      });
       const opcName = item.opc_user_id ? profileMap.get(item.opc_user_id)?.full_name || "" : "";
       const callName = item.call_user_id ? profileMap.get(item.call_user_id)?.full_name || "" : "";
       const opcArea = normalizeArea(opcProfile?.job_title);
@@ -532,14 +611,18 @@ export default function AdminComisionesPage() {
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
       const matchesCollaborator = collaboratorFilter
-        ? [
-            item.assigned_commercial_user_id || "",
-            item.opc_user_id || "",
-            item.call_user_id || "",
-          ].includes(collaboratorFilter)
+        ? selectedCollaborator?.area === "Gerencia comercial"
+          ? Boolean(selectedCollaborator.teamKey && collaboratorTeam === selectedCollaborator.teamKey)
+          : [
+              item.assigned_commercial_user_id || "",
+              item.opc_user_id || "",
+              item.call_user_id || "",
+            ].includes(collaboratorFilter)
         : true;
       const matchesArea = areaFilter
-        ? [collaboratorArea, opcArea, callArea].includes(areaFilter)
+        ? areaFilter === "Gerencia comercial"
+          ? Boolean(collaboratorTeam)
+          : [collaboratorArea, opcArea, callArea].includes(areaFilter)
         : true;
       const matchesCommissionSource = matchesCommissionQuickFilter(item, commissionSourceFilter);
       const matchesSearch = q
@@ -566,29 +649,153 @@ export default function AdminComisionesPage() {
     dateFrom,
     dateTo,
     collaboratorFilter,
+    collaboratorOptionMap,
     areaFilter,
     commissionSourceFilter,
     search,
   ]);
 
   const commissionEntries = useMemo(() => {
-    return casosFiltrados.flatMap((item) => buildCommissionEntries(item, profileMap));
-  }, [casosFiltrados, profileMap]);
+    const entries = casosFiltrados.flatMap((item) => buildCommissionEntries(item, profileMap));
+
+    casosFiltrados.forEach((item) => {
+      if (!hasRealSale(item) || !item.assigned_commercial_user_id) return;
+
+      const commercial = collaboratorOptionMap.get(item.assigned_commercial_user_id);
+      const baseNeta = Number(item.net_commission_base || 0);
+      const teamKey = commercial?.teamKey || null;
+      const manager = teamKey ? managerByTeam.get(teamKey) : null;
+
+      entries.push({
+        caseId: item.id,
+        customerName: item.customer_name,
+        phone: item.phone,
+        createdAt: item.created_at,
+        beneficiaryId: item.assigned_commercial_user_id,
+        beneficiaryName: commercial?.name || "Comercial sin asignar",
+        beneficiaryArea: commercial?.area || "Comercial",
+        commissionKind: "comercial",
+        sourceType: item.commission_source_type || null,
+        saleOriginType: inferSaleOriginType(item),
+        isQ: isCaseQ(item),
+        hasSale: true,
+        volume: Number(item.volume_amount || 0),
+        cash: Number(item.cash_amount || 0),
+        portfolio: Number(item.portfolio_amount || 0),
+        baseNeta,
+        fixedCommission: 0,
+        saleCommission: baseNeta * getCommercialRate(baseNeta),
+        totalCommission: baseNeta * getCommercialRate(baseNeta),
+      });
+
+      if (manager) {
+        const managerCommission = baseNeta * 0.035;
+        entries.push({
+          caseId: item.id,
+          customerName: item.customer_name,
+          phone: item.phone,
+          createdAt: item.created_at,
+          beneficiaryId: manager.id,
+          beneficiaryName: manager.name,
+          beneficiaryArea: manager.area,
+          commissionKind: "gerencia_comercial",
+          sourceType: item.commission_source_type || null,
+          saleOriginType: inferSaleOriginType(item),
+          isQ: isCaseQ(item),
+          hasSale: true,
+          volume: Number(item.volume_amount || 0),
+          cash: Number(item.cash_amount || 0),
+          portfolio: Number(item.portfolio_amount || 0),
+          baseNeta,
+          fixedCommission: 0,
+          saleCommission: managerCommission,
+          totalCommission: managerCommission,
+        });
+      }
+    });
+
+    return entries;
+  }, [casosFiltrados, profileMap, collaboratorOptionMap, managerByTeam]);
 
   const ventasFiltradas = useMemo(() => {
     return casosFiltrados.filter((item) => hasRealSale(item));
   }, [casosFiltrados]);
 
+  const bonusRows = useMemo(() => {
+    const byCommercial = new Map<string, BonusRow>();
+    const teamTotals = new Map<CommercialTeamKey, number>();
+
+    ventasFiltradas.forEach((item) => {
+      if (!item.assigned_commercial_user_id) return;
+      if (!item.counts_for_commercial_bonus) return;
+
+      const commercial = collaboratorOptionMap.get(item.assigned_commercial_user_id);
+      const teamKey = commercial?.teamKey || null;
+      const bonusBase = Number(item.gross_bonus_base || item.volume_amount || 0);
+
+      if (!byCommercial.has(item.assigned_commercial_user_id)) {
+        byCommercial.set(item.assigned_commercial_user_id, {
+          collaboratorId: item.assigned_commercial_user_id,
+          collaboratorName: commercial?.name || "Comercial sin asignar",
+          teamKey,
+          bonusBase: 0,
+          individualBonus: 0,
+          groupBonus: 0,
+          totalBonus: 0,
+        });
+      }
+
+      const current = byCommercial.get(item.assigned_commercial_user_id)!;
+      current.bonusBase += bonusBase;
+
+      if (teamKey) {
+        teamTotals.set(teamKey, (teamTotals.get(teamKey) || 0) + bonusBase);
+      }
+    });
+
+    byCommercial.forEach((item) => {
+      item.individualBonus = getCommercialIndividualBonus(item.bonusBase);
+    });
+
+    const metaAm = Number(goalAm || 0);
+    const metaPm = Number(goalPm || 0);
+
+    (["am", "pm"] as CommercialTeamKey[]).forEach((teamKey) => {
+      const teamTarget = teamKey === "am" ? metaAm : metaPm;
+      const teamTotal = teamTotals.get(teamKey) || 0;
+      if (!teamTarget || teamTotal < teamTarget) return;
+
+      const winner = Array.from(byCommercial.values())
+        .filter((item) => item.teamKey === teamKey)
+        .sort((a, b) => b.bonusBase - a.bonusBase)[0];
+
+      if (winner) {
+        winner.groupBonus += 1000000;
+      }
+    });
+
+    return Array.from(byCommercial.values())
+      .map((item) => ({
+        ...item,
+        totalBonus: item.individualBonus + item.groupBonus,
+      }))
+      .filter((item) => item.totalBonus > 0 || item.bonusBase > 0)
+      .sort((a, b) => b.totalBonus - a.totalBonus || b.bonusBase - a.bonusBase);
+  }, [ventasFiltradas, collaboratorOptionMap, goalAm, goalPm]);
+
   const resumen = useMemo(() => {
+    const totalBonos = bonusRows.reduce((acc, item) => acc + item.totalBonus, 0);
     return {
       total: ventasFiltradas.length,
       volumen: ventasFiltradas.reduce((acc, item) => acc + Number(item.volume_amount || 0), 0),
       caja: ventasFiltradas.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
       cartera: ventasFiltradas.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
       baseNeta: ventasFiltradas.reduce((acc, item) => acc + Number(item.net_commission_base || 0), 0),
-      comisionTotal: commissionEntries.reduce((acc, item) => acc + item.totalCommission, 0),
+      bonosTotal: totalBonos,
+      comisionTotal:
+        commissionEntries.reduce((acc, item) => acc + item.totalCommission, 0) + totalBonos,
     };
-  }, [ventasFiltradas, commissionEntries]);
+  }, [ventasFiltradas, commissionEntries, bonusRows]);
 
   const resumenPorColaborador = useMemo(() => {
     const map = new Map<
@@ -602,6 +809,7 @@ export default function AdminComisionesPage() {
         ventas: number;
         fijo: number;
         variable: number;
+        bono: number;
         baseNeta: number;
         totalComision: number;
       }
@@ -620,6 +828,7 @@ export default function AdminComisionesPage() {
           ventas: 0,
           fijo: 0,
           variable: 0,
+          bono: 0,
           baseNeta: 0,
           totalComision: 0,
         });
@@ -634,8 +843,31 @@ export default function AdminComisionesPage() {
       current.totalComision += item.totalCommission;
     });
 
+    bonusRows.forEach((item) => {
+      if (!map.has(item.collaboratorId)) {
+        const profile = collaboratorOptionMap.get(item.collaboratorId);
+        map.set(item.collaboratorId, {
+          collaboratorId: item.collaboratorId,
+          collaboratorName: item.collaboratorName,
+          area: profile?.area || "Comercial",
+          tipoComision: profile?.area === "Gerencia comercial" ? "Gerencia comercial" : "Comercial",
+          casosQ: 0,
+          ventas: 0,
+          fijo: 0,
+          variable: 0,
+          bono: 0,
+          baseNeta: 0,
+          totalComision: 0,
+        });
+      }
+
+      const current = map.get(item.collaboratorId)!;
+      current.bono += item.totalBonus;
+      current.totalComision += item.totalBonus;
+    });
+
     return Array.from(map.values()).sort((a, b) => b.totalComision - a.totalComision);
-  }, [commissionEntries]);
+  }, [commissionEntries, bonusRows, collaboratorOptionMap]);
 
   if (loadingAuth) {
     return (
@@ -792,6 +1024,30 @@ export default function AdminComisionesPage() {
             </div>
           </div>
 
+          <div className="mt-4 grid gap-4 md:grid-cols-2">
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Meta grupo AM</label>
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                value={goalAm}
+                onChange={(e) => setGoalAm(e.target.value.replace(/\D/g, ""))}
+                placeholder="150000000"
+              />
+            </div>
+
+            <div>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Meta grupo PM</label>
+              <input
+                className={inputClass}
+                inputMode="numeric"
+                value={goalPm}
+                onChange={(e) => setGoalPm(e.target.value.replace(/\D/g, ""))}
+                placeholder="150000000"
+              />
+            </div>
+          </div>
+
           <div className="mt-4 flex flex-wrap gap-3">
             <button
               type="button"
@@ -842,13 +1098,62 @@ export default function AdminComisionesPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
           <StatCard title="Ventas" value={String(resumen.total)} subtitle="Ventas reales filtradas" />
           <StatCard title="Volumen" value={formatMoney(resumen.volumen)} subtitle="Suma filtrada" />
           <StatCard title="Caja" value={formatMoney(resumen.caja)} subtitle="Pago recibido" />
           <StatCard title="Cartera" value={formatMoney(resumen.cartera)} subtitle="Saldo pendiente" />
           <StatCard title="Base neta" value={formatMoney(resumen.baseNeta)} subtitle="Base comisionable" />
+          <StatCard title="Bonos" value={formatMoney(resumen.bonosTotal)} subtitle="Total mensual calculado" />
           <StatCard title="Comisión" value={formatMoney(resumen.comisionTotal)} subtitle="Total calculado" />
+        </section>
+
+        <section className={panelClass}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="text-2xl font-bold text-slate-900">Bonos comerciales mensuales</h2>
+              <p className="mt-1 text-sm text-[#607368]">
+                Bonos individuales por volumen bruto y bono grupal para el #1 de AM o PM cuando el equipo cumple meta.
+              </p>
+            </div>
+          </div>
+
+          {loading ? (
+            <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
+              Cargando bonos...
+            </div>
+          ) : bonusRows.length === 0 ? (
+            <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
+              No hay bonos para esos filtros.
+            </div>
+          ) : (
+            <div className="mt-5 overflow-auto">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-[#D7EADF] text-left text-[#5B6E63]">
+                    <th className="px-3 py-3">Colaborador</th>
+                    <th className="px-3 py-3">Equipo</th>
+                    <th className="px-3 py-3">Base bono</th>
+                    <th className="px-3 py-3">Bono individual</th>
+                    <th className="px-3 py-3">Bono grupal</th>
+                    <th className="px-3 py-3">Total bono</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {bonusRows.map((item) => (
+                    <tr key={item.collaboratorId} className="border-b border-slate-100">
+                      <td className="px-3 py-3 font-medium text-slate-900">{item.collaboratorName}</td>
+                      <td className="px-3 py-3 text-slate-700">{getCommercialTeamLabel(item.teamKey)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.bonusBase)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.individualBonus)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.groupBonus)}</td>
+                      <td className="px-3 py-3 font-semibold text-slate-900">{formatMoney(item.totalBonus)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
         </section>
 
         <section className={panelClass}>
@@ -881,6 +1186,7 @@ export default function AdminComisionesPage() {
                     <th className="px-3 py-3">Ventas</th>
                     <th className="px-3 py-3">Fijo</th>
                     <th className="px-3 py-3">Venta</th>
+                    <th className="px-3 py-3">Bono</th>
                     <th className="px-3 py-3">Base neta</th>
                     <th className="px-3 py-3">Total comisión</th>
                   </tr>
@@ -895,6 +1201,7 @@ export default function AdminComisionesPage() {
                       <td className="px-3 py-3 text-slate-700">{item.ventas}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.fijo)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.variable)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.bono)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNeta)}</td>
                       <td className="px-3 py-3 font-semibold text-slate-900">{formatMoney(item.totalComision)}</td>
                     </tr>
