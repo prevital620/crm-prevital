@@ -560,8 +560,20 @@ export default function AdminComisionesPage() {
     () => getCommissionAreaFromRole(currentRoleCode),
     [currentRoleCode]
   );
-  const effectiveAreaFilter = isAdminView ? areaFilter : commissionAreaForRole || "";
-  const effectiveCollaboratorFilter = isAdminView ? collaboratorFilter : currentUserId || "";
+  const isSelfScopedRole =
+    currentRoleCode === "promotor_opc" ||
+    currentRoleCode === "tmk" ||
+    currentRoleCode === "comercial";
+  const isTeamScopedRole =
+    currentRoleCode === "supervisor_opc" ||
+    currentRoleCode === "supervisor_call_center" ||
+    currentRoleCode === "gerencia_comercial";
+  const canSeeCommercialBonuses =
+    isAdminView || currentRoleCode === "comercial" || currentRoleCode === "gerencia_comercial";
+  const effectiveAreaFilter =
+    isAdminView || isSelfScopedRole ? areaFilter || commissionAreaForRole || "" : "";
+  const effectiveCollaboratorFilter =
+    isAdminView || isSelfScopedRole ? collaboratorFilter || currentUserId || "" : "";
   const effectiveShowInactive = isAdminView ? showInactive : false;
 
   const visibleCollaboratorOptions = useMemo(() => {
@@ -574,13 +586,20 @@ export default function AdminComisionesPage() {
     collaboratorOptions.forEach((item) => map.set(item.id, item));
     return map;
   }, [collaboratorOptions]);
+  const currentCollaborator = currentUserId ? collaboratorOptionMap.get(currentUserId) || null : null;
 
   useEffect(() => {
     if (!authorized || !currentUserId || isAdminView) return;
 
-    setAreaFilter((current) => current || commissionAreaForRole);
-    setCollaboratorFilter((current) => current || currentUserId);
-  }, [authorized, currentUserId, isAdminView, commissionAreaForRole]);
+    if (isSelfScopedRole) {
+      setAreaFilter((current) => current || commissionAreaForRole);
+      setCollaboratorFilter((current) => current || currentUserId);
+      return;
+    }
+
+    setAreaFilter("");
+    setCollaboratorFilter("");
+  }, [authorized, currentUserId, isAdminView, commissionAreaForRole, isSelfScopedRole]);
 
   const commercialOptions = useMemo(() => {
     return visibleCollaboratorOptions.filter((item) =>
@@ -701,6 +720,43 @@ export default function AdminComisionesPage() {
       const collaboratorAreaForFilter = areaFilter || selectedCollaborator?.area || "";
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
+      const matchesRoleScope = isAdminView
+        ? true
+        : currentRoleCode === "promotor_opc"
+          ? item.opc_user_id === currentUserId
+          : currentRoleCode === "tmk"
+            ? item.call_user_id === currentUserId
+            : currentRoleCode === "comercial"
+              ? item.assigned_commercial_user_id === currentUserId
+              : currentRoleCode === "supervisor_opc"
+                ? Boolean(
+                    (
+                      (opcProfile
+                        ? supervisorOpcByTeam.get(
+                            inferCommercialTeam({
+                              full_name: opcProfile.full_name,
+                              job_title: opcProfile.job_title,
+                            }) || ""
+                          )
+                        : null) || fallbackSupervisorOpc
+                    )?.id === currentUserId
+                  )
+                : currentRoleCode === "supervisor_call_center"
+                  ? Boolean(
+                      (
+                        (callProfile
+                          ? supervisorCallByTeam.get(
+                              inferCommercialTeam({
+                                full_name: callProfile.full_name,
+                                job_title: callProfile.job_title,
+                              }) || ""
+                            )
+                          : null) || fallbackSupervisorCall
+                      )?.id === currentUserId
+                    )
+                  : currentRoleCode === "gerencia_comercial"
+                    ? Boolean(currentCollaborator?.teamKey && collaboratorTeam === currentCollaborator.teamKey)
+                    : true;
       const matchesCollaborator = effectiveCollaboratorFilter
         ? collaboratorAreaForFilter === "Gerencia comercial"
           ? Boolean(selectedCollaborator?.teamKey && collaboratorTeam === selectedCollaborator.teamKey)
@@ -766,6 +822,7 @@ export default function AdminComisionesPage() {
       return (
         matchesDateFrom &&
         matchesDateTo &&
+        matchesRoleScope &&
         matchesCollaborator &&
         matchesArea &&
         matchesCommissionSource &&
@@ -786,6 +843,10 @@ export default function AdminComisionesPage() {
     supervisorCallByTeam,
     fallbackSupervisorOpc,
     fallbackSupervisorCall,
+    isAdminView,
+    currentRoleCode,
+    currentUserId,
+    currentCollaborator,
   ]);
 
   const commissionEntries = useMemo(() => {
@@ -965,9 +1026,67 @@ export default function AdminComisionesPage() {
     fallbackSupervisorCall,
   ]);
 
+  const scopedCommissionEntries = useMemo(() => {
+    if (isAdminView || isSelfScopedRole) {
+      return commissionEntries;
+    }
+
+    if (currentRoleCode === "supervisor_opc") {
+      return commissionEntries.filter((item) => {
+        if (item.commissionKind === "supervisor_opc") {
+          return item.beneficiaryId === currentUserId;
+        }
+
+        if (item.commissionKind !== "opc") return false;
+
+        return casosFiltrados.some(
+          (caseItem) => caseItem.id === item.caseId && caseItem.opc_user_id === item.beneficiaryId
+        );
+      });
+    }
+
+    if (currentRoleCode === "supervisor_call_center") {
+      return commissionEntries.filter((item) => {
+        if (item.commissionKind === "supervisor_call") {
+          return item.beneficiaryId === currentUserId;
+        }
+
+        if (item.commissionKind !== "tmk") return false;
+
+        return casosFiltrados.some(
+          (caseItem) => caseItem.id === item.caseId && caseItem.call_user_id === item.beneficiaryId
+        );
+      });
+    }
+
+    if (currentRoleCode === "gerencia_comercial") {
+      return commissionEntries.filter((item) => {
+        if (!currentCollaborator?.teamKey) return false;
+
+        if (item.commissionKind === "gerencia_comercial") {
+          return item.beneficiaryId === currentUserId;
+        }
+
+        const beneficiary = collaboratorOptionMap.get(item.beneficiaryId);
+        return beneficiary?.teamKey === currentCollaborator.teamKey;
+      });
+    }
+
+    return commissionEntries;
+  }, [
+    commissionEntries,
+    isAdminView,
+    isSelfScopedRole,
+    currentRoleCode,
+    currentUserId,
+    casosFiltrados,
+    collaboratorOptionMap,
+    currentCollaborator,
+  ]);
+
   const ventasFiltradas = useMemo(() => {
     const visibleCaseIds = new Set(
-      commissionEntries.filter((item) => item.hasSale).map((item) => item.caseId)
+      scopedCommissionEntries.filter((item) => item.hasSale).map((item) => item.caseId)
     );
 
     if (visibleCaseIds.size === 0 && !effectiveAreaFilter && !effectiveCollaboratorFilter) {
@@ -975,10 +1094,11 @@ export default function AdminComisionesPage() {
     }
 
     return casosFiltrados.filter((item) => hasRealSale(item) && visibleCaseIds.has(item.id));
-  }, [casosFiltrados, commissionEntries, effectiveAreaFilter, effectiveCollaboratorFilter]);
+  }, [casosFiltrados, scopedCommissionEntries, effectiveAreaFilter, effectiveCollaboratorFilter]);
 
   const bonusRows = useMemo(() => {
     if (
+      !canSeeCommercialBonuses ||
       effectiveAreaFilter === "OPC" ||
       effectiveAreaFilter === "Supervisor OPC" ||
       effectiveAreaFilter === "TMK" ||
@@ -1069,6 +1189,7 @@ export default function AdminComisionesPage() {
     goalPm,
     effectiveAreaFilter,
     effectiveCollaboratorFilter,
+    canSeeCommercialBonuses,
   ]);
 
   const resumen = useMemo(() => {
@@ -1080,9 +1201,9 @@ export default function AdminComisionesPage() {
       baseNeta: ventasFiltradas.reduce((acc, item) => acc + Number(item.net_commission_base || 0), 0),
       bonosTotal: totalBonos,
       comisionTotal:
-        commissionEntries.reduce((acc, item) => acc + item.totalCommission, 0) + totalBonos,
+        scopedCommissionEntries.reduce((acc, item) => acc + item.totalCommission, 0) + totalBonos,
     };
-  }, [ventasFiltradas, commissionEntries, bonusRows]);
+  }, [ventasFiltradas, scopedCommissionEntries, bonusRows]);
 
   const resumenPorColaborador = useMemo(() => {
     const map = new Map<
@@ -1102,7 +1223,7 @@ export default function AdminComisionesPage() {
       }
     >();
 
-    commissionEntries.forEach((item) => {
+    scopedCommissionEntries.forEach((item) => {
       const collaboratorId = item.beneficiaryId;
 
       if (!map.has(collaboratorId)) {
@@ -1154,7 +1275,7 @@ export default function AdminComisionesPage() {
     });
 
     return Array.from(map.values()).sort((a, b) => b.totalComision - a.totalComision);
-  }, [commissionEntries, bonusRows, collaboratorOptionMap]);
+  }, [scopedCommissionEntries, bonusRows, collaboratorOptionMap]);
 
   if (loadingAuth) {
     return (
@@ -1363,7 +1484,9 @@ export default function AdminComisionesPage() {
             </div>
           ) : (
             <div className="mt-4 rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm text-[#4F6F5B] shadow-sm">
-              Mostrando solo las comisiones del colaborador actual.
+              {isTeamScopedRole
+                ? "Mostrando las comisiones del equipo a tu cargo."
+                : "Mostrando solo tus comisiones."}
             </div>
           )}
 
@@ -1384,8 +1507,8 @@ export default function AdminComisionesPage() {
               onClick={() => {
                 setDateFrom(inicioMesISO());
                 setDateTo(hoyISO());
-                setAreaFilter(isAdminView ? "" : commissionAreaForRole);
-                setCollaboratorFilter(isAdminView ? "" : currentUserId || "");
+                setAreaFilter(isAdminView || isTeamScopedRole ? "" : commissionAreaForRole);
+                setCollaboratorFilter(isAdminView || isTeamScopedRole ? "" : currentUserId || "");
                 setCommissionSourceFilter("");
                 setSearch("");
               }}
@@ -1686,7 +1809,7 @@ export default function AdminComisionesPage() {
             <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
               Cargando detalle...
             </div>
-          ) : commissionEntries.length === 0 ? (
+          ) : scopedCommissionEntries.length === 0 ? (
             <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
               No hay comisiones para esos filtros.
             </div>
@@ -1711,7 +1834,7 @@ export default function AdminComisionesPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {commissionEntries.map((item) => {
+                  {scopedCommissionEntries.map((item) => {
                     const caseItem = caseMap.get(item.caseId);
 
                     return (
