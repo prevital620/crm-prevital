@@ -150,6 +150,21 @@ const quickActions: QuickAction[] = [
     href: "/admin",
     roles: ["super_user", "administrador"],
   },
+  {
+    title: "Mis comisiones",
+    subtitle: "Ver tu comision en tiempo real segun fechas y cierres reales.",
+    href: "/admin/comisiones",
+    roles: [
+      "super_user",
+      "administrador",
+      "promotor_opc",
+      "supervisor_opc",
+      "tmk",
+      "supervisor_call_center",
+      "comercial",
+      "gerencia_comercial",
+    ],
+  },
 ];
 
 export default function HomePage() {
@@ -402,6 +417,7 @@ export default function HomePage() {
           "/comercial",
           "/comercial/ajustes",
           "/gerencia/comercial",
+          "/admin/comisiones",
         ],
       },
       {
