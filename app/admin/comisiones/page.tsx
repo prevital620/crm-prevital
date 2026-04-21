@@ -554,23 +554,26 @@ export default function AdminComisionesPage() {
     }));
   }, [profiles]);
 
-  const visibleCollaboratorOptions = useMemo(() => {
-    if (showInactive) return collaboratorOptions;
-    return collaboratorOptions.filter((item) => item.isActive);
-  }, [collaboratorOptions, showInactive]);
-
-  const collaboratorOptionMap = useMemo(() => {
-    const map = new Map<string, CollaboratorOption>();
-    collaboratorOptions.forEach((item) => map.set(item.id, item));
-    return map;
-  }, [collaboratorOptions]);
-
   const isAdminView = currentRoleCode === "super_user" || currentRoleCode === "administrador";
   const isPersonalView = authorized && !isAdminView;
   const commissionAreaForRole = useMemo(
     () => getCommissionAreaFromRole(currentRoleCode),
     [currentRoleCode]
   );
+  const effectiveAreaFilter = isAdminView ? areaFilter : commissionAreaForRole || "";
+  const effectiveCollaboratorFilter = isAdminView ? collaboratorFilter : currentUserId || "";
+  const effectiveShowInactive = isAdminView ? showInactive : false;
+
+  const visibleCollaboratorOptions = useMemo(() => {
+    if (effectiveShowInactive) return collaboratorOptions;
+    return collaboratorOptions.filter((item) => item.isActive);
+  }, [collaboratorOptions, effectiveShowInactive]);
+
+  const collaboratorOptionMap = useMemo(() => {
+    const map = new Map<string, CollaboratorOption>();
+    collaboratorOptions.forEach((item) => map.set(item.id, item));
+    return map;
+  }, [collaboratorOptions]);
 
   useEffect(() => {
     if (!authorized || !currentUserId || isAdminView) return;
@@ -655,12 +658,12 @@ export default function AdminComisionesPage() {
 
   const filteredCollaboratorOptions = useMemo(() => {
     const baseOptions = visibleCollaboratorOptions;
-    if (!areaFilter) return baseOptions;
-    return baseOptions.filter((item) => item.area === areaFilter);
-  }, [visibleCollaboratorOptions, areaFilter]);
+    if (!effectiveAreaFilter) return baseOptions;
+    return baseOptions.filter((item) => item.area === effectiveAreaFilter);
+  }, [visibleCollaboratorOptions, effectiveAreaFilter]);
 
   useEffect(() => {
-    if (!collaboratorFilter) return;
+    if (!isAdminView || !collaboratorFilter) return;
 
     const stillExists = filteredCollaboratorOptions.some(
       (item) => item.id === collaboratorFilter
@@ -669,12 +672,12 @@ export default function AdminComisionesPage() {
     if (!stillExists) {
       setCollaboratorFilter("");
     }
-  }, [areaFilter, collaboratorFilter, filteredCollaboratorOptions]);
+  }, [isAdminView, collaboratorFilter, filteredCollaboratorOptions]);
 
   const casosFiltrados = useMemo(() => {
     const q = normalizeText(search);
-    const selectedCollaborator = collaboratorFilter
-      ? collaboratorOptionMap.get(collaboratorFilter) || null
+    const selectedCollaborator = effectiveCollaboratorFilter
+      ? collaboratorOptionMap.get(effectiveCollaboratorFilter) || null
       : null;
 
     return cases.filter((item) => {
@@ -698,7 +701,7 @@ export default function AdminComisionesPage() {
       const collaboratorAreaForFilter = areaFilter || selectedCollaborator?.area || "";
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
-      const matchesCollaborator = collaboratorFilter
+      const matchesCollaborator = effectiveCollaboratorFilter
         ? collaboratorAreaForFilter === "Gerencia comercial"
           ? Boolean(selectedCollaborator?.teamKey && collaboratorTeam === selectedCollaborator.teamKey)
           : collaboratorAreaForFilter === "Supervisor OPC"
@@ -712,7 +715,7 @@ export default function AdminComisionesPage() {
                         }) || ""
                       )
                     : null) || fallbackSupervisorOpc
-                )?.id === collaboratorFilter
+                )?.id === effectiveCollaboratorFilter
               )
             : collaboratorAreaForFilter === "Supervisor Call"
               ? Boolean(
@@ -725,30 +728,30 @@ export default function AdminComisionesPage() {
                           }) || ""
                         )
                       : null) || fallbackSupervisorCall
-                  )?.id === collaboratorFilter
+                  )?.id === effectiveCollaboratorFilter
                 )
           : collaboratorAreaForFilter === "Comercial"
-            ? item.assigned_commercial_user_id === collaboratorFilter
+            ? item.assigned_commercial_user_id === effectiveCollaboratorFilter
             : collaboratorAreaForFilter === "OPC" || collaboratorAreaForFilter === "Supervisor OPC"
-              ? item.opc_user_id === collaboratorFilter
+              ? item.opc_user_id === effectiveCollaboratorFilter
               : collaboratorAreaForFilter === "TMK" ||
                   collaboratorAreaForFilter === "Call center" ||
                   collaboratorAreaForFilter === "Supervisor Call"
-                ? item.call_user_id === collaboratorFilter
+                ? item.call_user_id === effectiveCollaboratorFilter
                 : [
                     item.assigned_commercial_user_id || "",
                     item.opc_user_id || "",
                     item.call_user_id || "",
-                  ].includes(collaboratorFilter)
+                  ].includes(effectiveCollaboratorFilter)
         : true;
-      const matchesArea = areaFilter
-        ? areaFilter === "Gerencia comercial"
+      const matchesArea = effectiveAreaFilter
+        ? effectiveAreaFilter === "Gerencia comercial"
           ? Boolean(collaboratorTeam)
-          : areaFilter === "Supervisor OPC"
+          : effectiveAreaFilter === "Supervisor OPC"
             ? Boolean(item.opc_user_id)
-            : areaFilter === "Supervisor Call"
+            : effectiveAreaFilter === "Supervisor Call"
               ? Boolean(item.call_user_id)
-          : [collaboratorArea, opcArea, callArea].includes(areaFilter)
+          : [collaboratorArea, opcArea, callArea].includes(effectiveAreaFilter)
         : true;
       const matchesCommissionSource = matchesCommissionQuickFilter(item, commissionSourceFilter);
       const matchesSearch = q
@@ -774,9 +777,9 @@ export default function AdminComisionesPage() {
     profileMap,
     dateFrom,
     dateTo,
-    collaboratorFilter,
+    effectiveCollaboratorFilter,
     collaboratorOptionMap,
-    areaFilter,
+    effectiveAreaFilter,
     commissionSourceFilter,
     search,
     supervisorOpcByTeam,
@@ -927,23 +930,25 @@ export default function AdminComisionesPage() {
 
     return rawEntries.filter((item) => {
       const matchesArea = areaFilter
-        ? areaFilter === "Comercial"
+        ? effectiveAreaFilter === "Comercial"
           ? item.commissionKind === "comercial"
-          : areaFilter === "Gerencia comercial"
+          : effectiveAreaFilter === "Gerencia comercial"
             ? item.commissionKind === "gerencia_comercial"
-            : areaFilter === "OPC" || areaFilter === "Supervisor OPC"
-              ? areaFilter === "Supervisor OPC"
+            : effectiveAreaFilter === "OPC" || effectiveAreaFilter === "Supervisor OPC"
+              ? effectiveAreaFilter === "Supervisor OPC"
                 ? item.commissionKind === "supervisor_opc"
                 : item.commissionKind === "opc"
-              : areaFilter === "TMK" ||
-                  areaFilter === "Call center" ||
-                  areaFilter === "Supervisor Call"
-                ? areaFilter === "Supervisor Call"
+              : effectiveAreaFilter === "TMK" ||
+                  effectiveAreaFilter === "Call center" ||
+                  effectiveAreaFilter === "Supervisor Call"
+                ? effectiveAreaFilter === "Supervisor Call"
                   ? item.commissionKind === "supervisor_call"
                   : item.commissionKind === "tmk"
                 : true
         : true;
-      const matchesCollaborator = collaboratorFilter ? item.beneficiaryId === collaboratorFilter : true;
+      const matchesCollaborator = effectiveCollaboratorFilter
+        ? item.beneficiaryId === effectiveCollaboratorFilter
+        : true;
 
       return matchesArea && matchesCollaborator;
     });
@@ -952,8 +957,8 @@ export default function AdminComisionesPage() {
     profileMap,
     collaboratorOptionMap,
     managerByTeam,
-    areaFilter,
-    collaboratorFilter,
+    effectiveAreaFilter,
+    effectiveCollaboratorFilter,
     supervisorOpcByTeam,
     supervisorCallByTeam,
     fallbackSupervisorOpc,
@@ -965,27 +970,27 @@ export default function AdminComisionesPage() {
       commissionEntries.filter((item) => item.hasSale).map((item) => item.caseId)
     );
 
-    if (visibleCaseIds.size === 0 && !areaFilter && !collaboratorFilter) {
+    if (visibleCaseIds.size === 0 && !effectiveAreaFilter && !effectiveCollaboratorFilter) {
       return casosFiltrados.filter((item) => hasRealSale(item));
     }
 
     return casosFiltrados.filter((item) => hasRealSale(item) && visibleCaseIds.has(item.id));
-  }, [casosFiltrados, commissionEntries, areaFilter, collaboratorFilter]);
+  }, [casosFiltrados, commissionEntries, effectiveAreaFilter, effectiveCollaboratorFilter]);
 
   const bonusRows = useMemo(() => {
     if (
-      areaFilter === "OPC" ||
-      areaFilter === "Supervisor OPC" ||
-      areaFilter === "TMK" ||
-      areaFilter === "Call center" ||
-      areaFilter === "Supervisor Call" ||
-      areaFilter === "Gerencia comercial"
+      effectiveAreaFilter === "OPC" ||
+      effectiveAreaFilter === "Supervisor OPC" ||
+      effectiveAreaFilter === "TMK" ||
+      effectiveAreaFilter === "Call center" ||
+      effectiveAreaFilter === "Supervisor Call" ||
+      effectiveAreaFilter === "Gerencia comercial"
     ) {
       return [];
     }
 
-    const selectedCollaborator = collaboratorFilter
-      ? collaboratorOptionMap.get(collaboratorFilter) || null
+    const selectedCollaborator = effectiveCollaboratorFilter
+      ? collaboratorOptionMap.get(effectiveCollaboratorFilter) || null
       : null;
 
     if (
@@ -1052,10 +1057,19 @@ export default function AdminComisionesPage() {
         ...item,
         totalBonus: item.individualBonus + item.groupBonus,
       }))
-      .filter((item) => (collaboratorFilter ? item.collaboratorId === collaboratorFilter : true))
+      .filter((item) =>
+        effectiveCollaboratorFilter ? item.collaboratorId === effectiveCollaboratorFilter : true
+      )
       .filter((item) => item.totalBonus > 0 || item.bonusBase > 0)
       .sort((a, b) => b.totalBonus - a.totalBonus || b.bonusBase - a.bonusBase);
-  }, [ventasFiltradas, collaboratorOptionMap, goalAm, goalPm, areaFilter, collaboratorFilter]);
+  }, [
+    ventasFiltradas,
+    collaboratorOptionMap,
+    goalAm,
+    goalPm,
+    effectiveAreaFilter,
+    effectiveCollaboratorFilter,
+  ]);
 
   const resumen = useMemo(() => {
     const totalBonos = bonusRows.reduce((acc, item) => acc + item.totalBonus, 0);
