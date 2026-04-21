@@ -3655,7 +3655,23 @@ function imprimirRegistroComercial() {
     setMensaje("");
     setError("");
 
-    if (!form.patient_name.trim()) {
+    const effectiveLeadId =
+      form.mode === "lead" ? form.lead_id || leadIdFromUrl || "" : "";
+    const selectedLeadForSave = effectiveLeadId
+      ? leads.find((item) => item.id === effectiveLeadId) || null
+      : null;
+    const effectivePatientName =
+      form.patient_name.trim() ||
+      selectedLeadForSave?.full_name ||
+      [selectedLeadForSave?.first_name, selectedLeadForSave?.last_name]
+        .filter(Boolean)
+        .join(" ")
+        .trim() ||
+      "";
+    const effectivePhone = form.phone.trim() || selectedLeadForSave?.phone || "";
+    const effectiveCity = form.city.trim() || selectedLeadForSave?.city || "";
+
+    if (!effectivePatientName) {
       setError("Debes indicar el nombre del cliente.");
       return;
     }
@@ -3731,10 +3747,10 @@ function imprimirRegistroComercial() {
 
     if (
       form.mode === "lead" &&
-      form.lead_id &&
+      effectiveLeadId &&
       appointments.some(
         (item) =>
-          item.lead_id === form.lead_id &&
+          item.lead_id === effectiveLeadId &&
           ACTIVE_APPOINTMENT_STATUSES.includes(item.status) &&
           item.id !== editingAppointmentId
       )
@@ -3747,10 +3763,10 @@ function imprimirRegistroComercial() {
 
     try {
       const payload = {
-        lead_id: form.mode === "lead" ? form.lead_id || null : null,
-        patient_name: form.patient_name.trim(),
-        phone: form.phone.trim() || null,
-        city: form.city.trim() || null,
+        lead_id: form.mode === "lead" ? effectiveLeadId || null : null,
+        patient_name: effectivePatientName,
+        phone: effectivePhone || null,
+        city: effectiveCity || null,
         appointment_date: form.appointment_date,
         appointment_time: form.appointment_time,
         status: form.status,

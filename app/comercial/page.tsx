@@ -1441,20 +1441,25 @@ export default function ComercialPage() {
       const grossBonusBase = volumeNumber || 0;
       const hayVenta = volumeNumber > 0 || !!form.purchased_service;
       const plannedFollowUps = getPrimaryFollowUp(form, nextAppointments);
+      const shouldValidateAndCreateFollowUps = !currentCaseFound?.next_appointment_created;
 
-      const incompleteFollowUp = plannedFollowUps.find(
-        (item) => !item.service_type || !item.appointment_date || !item.appointment_time
-      );
+      const incompleteFollowUp = shouldValidateAndCreateFollowUps
+        ? plannedFollowUps.find(
+            (item) => !item.service_type || !item.appointment_date || !item.appointment_time
+          )
+        : null;
 
       if (incompleteFollowUp) {
         throw new Error("Completa servicio, fecha y hora en cada cita que quieras agendar.");
       }
 
-      const unavailableFollowUp = plannedFollowUps.find((item, index) => {
-        const availability = getFollowUpSlotAvailability(item, index, plannedFollowUps);
-        const selectedSlot = availability.find((slot) => slot.value === item.appointment_time);
-        return !selectedSlot || selectedSlot.disabled;
-      });
+      const unavailableFollowUp = shouldValidateAndCreateFollowUps
+        ? plannedFollowUps.find((item, index) => {
+            const availability = getFollowUpSlotAvailability(item, index, plannedFollowUps);
+            const selectedSlot = availability.find((slot) => slot.value === item.appointment_time);
+            return !selectedSlot || selectedSlot.disabled;
+          })
+        : null;
 
       if (unavailableFollowUp) {
         throw new Error(
@@ -1519,7 +1524,7 @@ const updatePayload: any = {
         statusFinal === "finalizado" &&
         hayVenta &&
         plannedFollowUps.length > 0 &&
-        !currentCaseFound?.next_appointment_created
+        shouldValidateAndCreateFollowUps
       ) {
         const appointmentPayload = plannedFollowUps.map((item, index) => ({
           lead_id: currentCaseFound?.lead_id || null,
