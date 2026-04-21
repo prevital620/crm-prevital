@@ -1877,6 +1877,7 @@ function RecepcionContent() {
   }
 
   function appointmentMatchesActiveSection(item: AppointmentRow) {
+    if (activeSection === "agenda") return true;
     return getSectionForService(item.service_type) === activeSection;
   }
 
