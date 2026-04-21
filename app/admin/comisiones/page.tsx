@@ -38,6 +38,7 @@ type ProfileOption = {
   id: string;
   full_name: string;
   job_title: string | null;
+  is_active: boolean | null;
 };
 
 type CommissionEntry = {
@@ -67,6 +68,7 @@ type CollaboratorOption = {
   name: string;
   area: string;
   teamKey: CommercialTeamKey | null;
+  isActive: boolean;
 };
 
 type BonusRow = {
@@ -340,8 +342,10 @@ function StatCard({
     <div className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.96)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
       <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
       <p className="text-sm font-medium text-[#5B6E63]">{title}</p>
-      <p className="mt-2 text-3xl font-bold text-[#24312A]">{value}</p>
-      <p className="mt-2 text-xs text-[#607368]">{subtitle}</p>
+      <p className="mt-2 text-[1.9rem] font-bold leading-tight tracking-tight text-[#24312A] md:text-[2.15rem]">
+        {value}
+      </p>
+      <p className="mt-2 text-[11px] leading-5 text-[#607368] md:text-xs">{subtitle}</p>
     </div>
   );
 }
@@ -363,6 +367,7 @@ export default function AdminComisionesPage() {
   const [commissionSourceFilter, setCommissionSourceFilter] = useState("");
   const [goalAm, setGoalAm] = useState("150000000");
   const [goalPm, setGoalPm] = useState("150000000");
+  const [showInactive, setShowInactive] = useState(false);
   const [editingCase, setEditingCase] = useState<CaseCorrectionState | null>(null);
   const [savingCorrection, setSavingCorrection] = useState(false);
 
@@ -375,7 +380,7 @@ export default function AdminComisionesPage() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesiÃ³n para usar este mÃ³dulo.");
+        setError("Debes iniciar sesión para usar este módulo.");
         return;
       }
 
@@ -426,7 +431,7 @@ export default function AdminComisionesPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("profiles")
-          .select("id, full_name, job_title")
+          .select("id, full_name, job_title, is_active")
           .order("full_name", { ascending: true }),
       ]);
 
@@ -517,8 +522,14 @@ export default function AdminComisionesPage() {
         full_name: profile.full_name,
         job_title: profile.job_title,
       }),
+      isActive: profile.is_active !== false,
     }));
   }, [profiles]);
+
+  const visibleCollaboratorOptions = useMemo(() => {
+    if (showInactive) return collaboratorOptions;
+    return collaboratorOptions.filter((item) => item.isActive);
+  }, [collaboratorOptions, showInactive]);
 
   const collaboratorOptionMap = useMemo(() => {
     const map = new Map<string, CollaboratorOption>();
@@ -527,22 +538,22 @@ export default function AdminComisionesPage() {
   }, [collaboratorOptions]);
 
   const commercialOptions = useMemo(() => {
-    return collaboratorOptions.filter((item) =>
+    return visibleCollaboratorOptions.filter((item) =>
       ["Comercial", "Gerencia comercial"].includes(item.area)
     );
-  }, [collaboratorOptions]);
+  }, [visibleCollaboratorOptions]);
 
   const opcOptions = useMemo(() => {
-    return collaboratorOptions.filter((item) =>
+    return visibleCollaboratorOptions.filter((item) =>
       ["OPC", "Supervisor OPC"].includes(item.area)
     );
-  }, [collaboratorOptions]);
+  }, [visibleCollaboratorOptions]);
 
   const tmkOptions = useMemo(() => {
-    return collaboratorOptions.filter((item) =>
+    return visibleCollaboratorOptions.filter((item) =>
       ["TMK", "Call center", "Supervisor Call"].includes(item.area)
     );
-  }, [collaboratorOptions]);
+  }, [visibleCollaboratorOptions]);
 
   const managerByTeam = useMemo(() => {
     const map = new Map<CommercialTeamKey, CollaboratorOption>();
@@ -560,17 +571,18 @@ export default function AdminComisionesPage() {
   const areaOptions = useMemo(() => {
     const unique = new Set<string>();
 
-    collaboratorOptions.forEach((item) => {
+    visibleCollaboratorOptions.forEach((item) => {
       if (item.area) unique.add(item.area);
     });
 
     return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
-  }, [collaboratorOptions]);
+  }, [visibleCollaboratorOptions]);
 
   const filteredCollaboratorOptions = useMemo(() => {
-    if (!areaFilter) return collaboratorOptions;
-    return collaboratorOptions.filter((item) => item.area === areaFilter);
-  }, [collaboratorOptions, areaFilter]);
+    const baseOptions = visibleCollaboratorOptions;
+    if (!areaFilter) return baseOptions;
+    return baseOptions.filter((item) => item.area === areaFilter);
+  }, [visibleCollaboratorOptions, areaFilter]);
 
   useEffect(() => {
     if (!collaboratorFilter) return;
@@ -608,16 +620,25 @@ export default function AdminComisionesPage() {
       const opcArea = normalizeArea(opcProfile?.job_title);
       const callArea = normalizeArea(callProfile?.job_title);
 
+      const collaboratorAreaForFilter = areaFilter || selectedCollaborator?.area || "";
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
       const matchesCollaborator = collaboratorFilter
-        ? selectedCollaborator?.area === "Gerencia comercial"
-          ? Boolean(selectedCollaborator.teamKey && collaboratorTeam === selectedCollaborator.teamKey)
-          : [
-              item.assigned_commercial_user_id || "",
-              item.opc_user_id || "",
-              item.call_user_id || "",
-            ].includes(collaboratorFilter)
+        ? collaboratorAreaForFilter === "Gerencia comercial"
+          ? Boolean(selectedCollaborator?.teamKey && collaboratorTeam === selectedCollaborator.teamKey)
+          : collaboratorAreaForFilter === "Comercial"
+            ? item.assigned_commercial_user_id === collaboratorFilter
+            : collaboratorAreaForFilter === "OPC" || collaboratorAreaForFilter === "Supervisor OPC"
+              ? item.opc_user_id === collaboratorFilter
+              : collaboratorAreaForFilter === "TMK" ||
+                  collaboratorAreaForFilter === "Call center" ||
+                  collaboratorAreaForFilter === "Supervisor Call"
+                ? item.call_user_id === collaboratorFilter
+                : [
+                    item.assigned_commercial_user_id || "",
+                    item.opc_user_id || "",
+                    item.call_user_id || "",
+                  ].includes(collaboratorFilter)
         : true;
       const matchesArea = areaFilter
         ? areaFilter === "Gerencia comercial"
@@ -656,7 +677,7 @@ export default function AdminComisionesPage() {
   ]);
 
   const commissionEntries = useMemo(() => {
-    const entries = casosFiltrados.flatMap((item) => buildCommissionEntries(item, profileMap));
+    const rawEntries = casosFiltrados.flatMap((item) => buildCommissionEntries(item, profileMap));
 
     casosFiltrados.forEach((item) => {
       if (!hasRealSale(item) || !item.assigned_commercial_user_id) return;
@@ -666,7 +687,7 @@ export default function AdminComisionesPage() {
       const teamKey = commercial?.teamKey || null;
       const manager = teamKey ? managerByTeam.get(teamKey) : null;
 
-      entries.push({
+      rawEntries.push({
         caseId: item.id,
         customerName: item.customer_name,
         phone: item.phone,
@@ -690,7 +711,7 @@ export default function AdminComisionesPage() {
 
       if (manager) {
         const managerCommission = baseNeta * 0.035;
-        entries.push({
+        rawEntries.push({
           caseId: item.id,
           customerName: item.customer_name,
           phone: item.phone,
@@ -714,14 +735,61 @@ export default function AdminComisionesPage() {
       }
     });
 
-    return entries;
-  }, [casosFiltrados, profileMap, collaboratorOptionMap, managerByTeam]);
+    return rawEntries.filter((item) => {
+      const matchesArea = areaFilter
+        ? areaFilter === "Comercial"
+          ? item.commissionKind === "comercial"
+          : areaFilter === "Gerencia comercial"
+            ? item.commissionKind === "gerencia_comercial"
+            : areaFilter === "OPC" || areaFilter === "Supervisor OPC"
+              ? item.commissionKind === "opc"
+              : areaFilter === "TMK" ||
+                  areaFilter === "Call center" ||
+                  areaFilter === "Supervisor Call"
+                ? item.commissionKind === "tmk"
+                : true
+        : true;
+      const matchesCollaborator = collaboratorFilter ? item.beneficiaryId === collaboratorFilter : true;
+
+      return matchesArea && matchesCollaborator;
+    });
+  }, [casosFiltrados, profileMap, collaboratorOptionMap, managerByTeam, areaFilter, collaboratorFilter]);
 
   const ventasFiltradas = useMemo(() => {
-    return casosFiltrados.filter((item) => hasRealSale(item));
-  }, [casosFiltrados]);
+    const visibleCaseIds = new Set(
+      commissionEntries.filter((item) => item.hasSale).map((item) => item.caseId)
+    );
+
+    if (visibleCaseIds.size === 0 && !areaFilter && !collaboratorFilter) {
+      return casosFiltrados.filter((item) => hasRealSale(item));
+    }
+
+    return casosFiltrados.filter((item) => hasRealSale(item) && visibleCaseIds.has(item.id));
+  }, [casosFiltrados, commissionEntries, areaFilter, collaboratorFilter]);
 
   const bonusRows = useMemo(() => {
+    if (
+      areaFilter === "OPC" ||
+      areaFilter === "Supervisor OPC" ||
+      areaFilter === "TMK" ||
+      areaFilter === "Call center" ||
+      areaFilter === "Supervisor Call" ||
+      areaFilter === "Gerencia comercial"
+    ) {
+      return [];
+    }
+
+    const selectedCollaborator = collaboratorFilter
+      ? collaboratorOptionMap.get(collaboratorFilter) || null
+      : null;
+
+    if (
+      selectedCollaborator &&
+      !["Comercial", "Gerencia comercial"].includes(selectedCollaborator.area)
+    ) {
+      return [];
+    }
+
     const byCommercial = new Map<string, BonusRow>();
     const teamTotals = new Map<CommercialTeamKey, number>();
 
@@ -779,9 +847,10 @@ export default function AdminComisionesPage() {
         ...item,
         totalBonus: item.individualBonus + item.groupBonus,
       }))
+      .filter((item) => (collaboratorFilter ? item.collaboratorId === collaboratorFilter : true))
       .filter((item) => item.totalBonus > 0 || item.bonusBase > 0)
       .sort((a, b) => b.totalBonus - a.totalBonus || b.bonusBase - a.bonusBase);
-  }, [ventasFiltradas, collaboratorOptionMap, goalAm, goalPm]);
+  }, [ventasFiltradas, collaboratorOptionMap, goalAm, goalPm, areaFilter, collaboratorFilter]);
 
   const resumen = useMemo(() => {
     const totalBonos = bonusRows.reduce((acc, item) => acc + item.totalBonus, 0);
@@ -789,7 +858,6 @@ export default function AdminComisionesPage() {
       total: ventasFiltradas.length,
       volumen: ventasFiltradas.reduce((acc, item) => acc + Number(item.volume_amount || 0), 0),
       caja: ventasFiltradas.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
-      cartera: ventasFiltradas.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
       baseNeta: ventasFiltradas.reduce((acc, item) => acc + Number(item.net_commission_base || 0), 0),
       bonosTotal: totalBonos,
       comisionTotal:
@@ -884,7 +952,7 @@ export default function AdminComisionesPage() {
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
         <div className="mx-auto max-w-7xl rounded-[32px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(150,102,95,0.12)]">
           <p className="text-sm font-medium text-[#9A4E43]">
-            {error || "No tienes permiso para entrar a este mÃ³dulo."}
+            {error || "No tienes permiso para entrar a este módulo."}
           </p>
         </div>
       </main>
@@ -928,7 +996,7 @@ export default function AdminComisionesPage() {
               <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Admin</p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3rem]">Comisiones</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
-                Vista separada para revisar base neta, ventas y resumen por colaborador.
+                Vista separada para revisar base neta, ventas y comisiones por colaborador.
               </p>
             </div>
 
@@ -982,7 +1050,7 @@ export default function AdminComisionesPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Ãrea o rol</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Área o rol</label>
               <select
                 className={inputClass}
                 value={areaFilter}
@@ -1007,7 +1075,7 @@ export default function AdminComisionesPage() {
                 <option value="">Todos</option>
                 {filteredCollaboratorOptions.map((item) => (
                   <option key={item.id} value={item.id}>
-                    {item.name}
+                    {item.name}{item.isActive ? "" : " (Inhabilitado)"}
                   </option>
                 ))}
               </select>
@@ -1046,6 +1114,18 @@ export default function AdminComisionesPage() {
                 placeholder="150000000"
               />
             </div>
+          </div>
+
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <label className="inline-flex items-center gap-2 rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm">
+              <input
+                type="checkbox"
+                className="h-4 w-4 rounded border-[#A8CDB5] text-[#4F7B63] focus:ring-[#DDEFE4]"
+                checked={showInactive}
+                onChange={(e) => setShowInactive(e.target.checked)}
+              />
+              Incluir inhabilitados
+            </label>
           </div>
 
           <div className="mt-4 flex flex-wrap gap-3">
@@ -1098,11 +1178,10 @@ export default function AdminComisionesPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-7">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <StatCard title="Ventas" value={String(resumen.total)} subtitle="Ventas reales filtradas" />
           <StatCard title="Volumen" value={formatMoney(resumen.volumen)} subtitle="Suma filtrada" />
           <StatCard title="Caja" value={formatMoney(resumen.caja)} subtitle="Pago recibido" />
-          <StatCard title="Cartera" value={formatMoney(resumen.cartera)} subtitle="Saldo pendiente" />
           <StatCard title="Base neta" value={formatMoney(resumen.baseNeta)} subtitle="Base comisionable" />
           <StatCard title="Bonos" value={formatMoney(resumen.bonosTotal)} subtitle="Total mensual calculado" />
           <StatCard title="Comisión" value={formatMoney(resumen.comisionTotal)} subtitle="Total calculado" />
@@ -1128,9 +1207,9 @@ export default function AdminComisionesPage() {
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-full text-[13px] leading-5">
                 <thead>
-                  <tr className="border-b border-[#D7EADF] text-left text-[#5B6E63]">
+                  <tr className="border-b border-[#D7EADF] text-left text-xs uppercase tracking-[0.14em] text-[#5B6E63]">
                     <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Equipo</th>
                     <th className="px-3 py-3">Base bono</th>
@@ -1176,9 +1255,9 @@ export default function AdminComisionesPage() {
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-full text-[13px] leading-5">
                 <thead>
-                  <tr className="border-b border-[#D7EADF] text-left text-[#5B6E63]">
+                  <tr className="border-b border-[#D7EADF] text-left text-xs uppercase tracking-[0.14em] text-[#5B6E63]">
                     <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Área</th>
                     <th className="px-3 py-3">Tipo</th>
@@ -1372,9 +1451,9 @@ export default function AdminComisionesPage() {
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
-              <table className="min-w-full text-sm">
+              <table className="min-w-full text-[13px] leading-5">
                 <thead>
-                  <tr className="border-b border-[#D7EADF] text-left text-[#5B6E63]">
+                  <tr className="border-b border-[#D7EADF] text-left text-xs uppercase tracking-[0.14em] text-[#5B6E63]">
                     <th className="px-3 py-3">Cliente</th>
                     <th className="px-3 py-3">Fecha</th>
                     <th className="px-3 py-3">Beneficiario</th>
