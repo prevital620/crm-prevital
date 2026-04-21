@@ -1,10 +1,11 @@
-"use client";
+﻿"use client";
 
 import Image from "next/image";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
+import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
 
 type AdminCommercialCase = {
   id: string;
@@ -21,12 +22,37 @@ type AdminCommercialCase = {
   commission_source_type: string | null;
   opc_user_id: string | null;
   call_user_id: string | null;
+  lead_id: string | null;
+  sale_origin_type: string | null;
+  commercial_notes: string | null;
 };
 
 type ProfileOption = {
   id: string;
   full_name: string;
   job_title: string | null;
+};
+
+type CommissionEntry = {
+  caseId: string;
+  customerName: string;
+  phone: string | null;
+  createdAt: string;
+  beneficiaryId: string;
+  beneficiaryName: string;
+  beneficiaryArea: string;
+  commissionKind: "opc" | "tmk";
+  sourceType: string | null;
+  saleOriginType: "lead" | "directo";
+  isQ: boolean;
+  hasSale: boolean;
+  volume: number;
+  cash: number;
+  portfolio: number;
+  baseNeta: number;
+  fixedCommission: number;
+  saleCommission: number;
+  totalCommission: number;
 };
 
 const allowedRoles = [
@@ -65,22 +91,6 @@ function formatDateTime(value: string | null | undefined) {
   }
 }
 
-function paymentMethodLabel(value: string | null | undefined) {
-  const map: Record<string, string> = {
-    contado: "Contado",
-    tarjeta: "Tarjeta",
-    transferencia: "Transferencia",
-    mixto: "Mixto",
-    cartera: "Cartera",
-    addi: "Addi",
-    welly: "Welly",
-    medipay: "Medipay",
-  };
-
-  if (!value) return "Sin definir";
-  return map[value] || value;
-}
-
 function commissionSourceLabel(value: string | null | undefined) {
   const map: Record<string, string> = {
     opc: "OPC",
@@ -92,6 +102,10 @@ function commissionSourceLabel(value: string | null | undefined) {
 
   if (!value) return "Sin definir";
   return map[value] || value;
+}
+
+function commissionKindLabel(value: CommissionEntry["commissionKind"]) {
+  return value === "opc" ? "OPC" : "TMK";
 }
 
 function normalizeText(value: string | null | undefined) {
@@ -116,6 +130,123 @@ function normalizeArea(jobTitle: string | null | undefined) {
   if (value.includes("admin")) return "Administrador";
 
   return jobTitle || "Sin rol";
+}
+
+function inferSaleOriginType(caseItem: AdminCommercialCase): "lead" | "directo" {
+  if (caseItem.sale_origin_type === "lead" || caseItem.sale_origin_type === "directo") {
+    return caseItem.sale_origin_type;
+  }
+
+  if (caseItem.lead_id || caseItem.commission_source_type === "base") {
+    return "lead";
+  }
+
+  return "directo";
+}
+
+function extractInitialClassification(value: string | null | undefined) {
+  const receptionSummary = parseStoredCommercialNotes(value).receptionSummary;
+  const normalized = normalizeText(receptionSummary);
+  const match = normalized.match(/clasificacion inicial:\s*(q|no q)/);
+  if (!match) return null;
+  return match[1] === "q" ? "Q" : "No Q";
+}
+
+function hasRealSale(caseItem: AdminCommercialCase) {
+  return (
+    Number(caseItem.volume_amount || 0) > 0 ||
+    Number(caseItem.cash_amount || 0) > 0 ||
+    Number(caseItem.portfolio_amount || 0) > 0
+  );
+}
+
+function isCaseQ(caseItem: AdminCommercialCase) {
+  if (hasRealSale(caseItem)) return true;
+  return extractInitialClassification(caseItem.commercial_notes) === "Q";
+}
+
+function matchesCommissionQuickFilter(caseItem: AdminCommercialCase, quickFilter: string) {
+  if (!quickFilter) return true;
+  if (quickFilter === "opc") return Boolean(caseItem.opc_user_id);
+  if (quickFilter === "tmk") return Boolean(caseItem.call_user_id);
+  return (caseItem.commission_source_type || "") === quickFilter;
+}
+
+function buildCommissionEntries(
+  caseItem: AdminCommercialCase,
+  profileMap: Map<string, ProfileOption>
+): CommissionEntry[] {
+  const entries: CommissionEntry[] = [];
+  const volume = Number(caseItem.volume_amount || 0);
+  const cash = Number(caseItem.cash_amount || 0);
+  const portfolio = Number(caseItem.portfolio_amount || 0);
+  const baseNeta = Number(caseItem.net_commission_base || 0);
+  const saleOriginType = inferSaleOriginType(caseItem);
+  const sourceType = caseItem.commission_source_type || null;
+  const hasSale = hasRealSale(caseItem);
+  const isQ = isCaseQ(caseItem);
+
+  if (caseItem.opc_user_id) {
+    const opcProfile = profileMap.get(caseItem.opc_user_id);
+    const fixedCommission =
+      saleOriginType === "directo" ? (isQ ? 10000 : 0) : isQ ? 5000 : 1000;
+    const saleCommission = hasSale
+      ? baseNeta * (saleOriginType === "directo" ? 0.02 : 0.01)
+      : 0;
+
+    entries.push({
+      caseId: caseItem.id,
+      customerName: caseItem.customer_name,
+      phone: caseItem.phone,
+      createdAt: caseItem.created_at,
+      beneficiaryId: caseItem.opc_user_id,
+      beneficiaryName: opcProfile?.full_name || "OPC sin asignar",
+      beneficiaryArea: normalizeArea(opcProfile?.job_title),
+      commissionKind: "opc",
+      sourceType,
+      saleOriginType,
+      isQ,
+      hasSale,
+      volume,
+      cash,
+      portfolio,
+      baseNeta,
+      fixedCommission,
+      saleCommission,
+      totalCommission: fixedCommission + saleCommission,
+    });
+  }
+
+  if (caseItem.call_user_id) {
+    const callProfile = profileMap.get(caseItem.call_user_id);
+    const isBase = sourceType === "base";
+    const fixedCommission = isQ ? (isBase ? 10000 : 5000) : 0;
+    const saleCommission = hasSale ? baseNeta * (isBase ? 0.02 : 0.01) : 0;
+
+    entries.push({
+      caseId: caseItem.id,
+      customerName: caseItem.customer_name,
+      phone: caseItem.phone,
+      createdAt: caseItem.created_at,
+      beneficiaryId: caseItem.call_user_id,
+      beneficiaryName: callProfile?.full_name || "TMK sin asignar",
+      beneficiaryArea: normalizeArea(callProfile?.job_title),
+      commissionKind: "tmk",
+      sourceType,
+      saleOriginType,
+      isQ,
+      hasSale,
+      volume,
+      cash,
+      portfolio,
+      baseNeta,
+      fixedCommission,
+      saleCommission,
+      totalCommission: fixedCommission + saleCommission,
+    });
+  }
+
+  return entries;
 }
 
 const panelClass =
@@ -177,7 +308,7 @@ export default function AdminComisionesPage() {
 
       if (!auth.user || !auth.roleCode) {
         setAuthorized(false);
-        setError("Debes iniciar sesión para usar este módulo.");
+        setError("Debes iniciar sesiÃ³n para usar este mÃ³dulo.");
         return;
       }
 
@@ -218,7 +349,10 @@ export default function AdminComisionesPage() {
             assigned_commercial_user_id,
             commission_source_type,
             opc_user_id,
-            call_user_id
+            call_user_id,
+            lead_id,
+            sale_origin_type,
+            commercial_notes
           `)
           .order("created_at", { ascending: false }),
         supabase
@@ -290,37 +424,36 @@ export default function AdminComisionesPage() {
     }
   }, [areaFilter, collaboratorFilter, filteredCollaboratorOptions]);
 
-  const ventasReales = useMemo(() => {
-    return cases.filter((item) => {
-      const volume = Number(item.volume_amount || 0);
-      const cash = Number(item.cash_amount || 0);
-      const portfolio = Number(item.portfolio_amount || 0);
-      return volume > 0 || cash > 0 || portfolio > 0;
-    });
-  }, [cases]);
-
-  const ventasFiltradas = useMemo(() => {
+  const casosFiltrados = useMemo(() => {
     const q = normalizeText(search);
 
-    return ventasReales.filter((item) => {
+    return cases.filter((item) => {
       const createdDate = item.created_at?.slice(0, 10) || "";
-      const profile = item.assigned_commercial_user_id
+      const commercialProfile = item.assigned_commercial_user_id
         ? profileMap.get(item.assigned_commercial_user_id)
         : null;
-      const collaboratorName = profile?.full_name || "";
-      const collaboratorArea = normalizeArea(profile?.job_title);
+      const opcProfile = item.opc_user_id ? profileMap.get(item.opc_user_id) : null;
+      const callProfile = item.call_user_id ? profileMap.get(item.call_user_id) : null;
+      const collaboratorName = commercialProfile?.full_name || "";
+      const collaboratorArea = normalizeArea(commercialProfile?.job_title);
       const opcName = item.opc_user_id ? profileMap.get(item.opc_user_id)?.full_name || "" : "";
       const callName = item.call_user_id ? profileMap.get(item.call_user_id)?.full_name || "" : "";
+      const opcArea = normalizeArea(opcProfile?.job_title);
+      const callArea = normalizeArea(callProfile?.job_title);
 
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
       const matchesCollaborator = collaboratorFilter
-        ? (item.assigned_commercial_user_id || "") === collaboratorFilter
+        ? [
+            item.assigned_commercial_user_id || "",
+            item.opc_user_id || "",
+            item.call_user_id || "",
+          ].includes(collaboratorFilter)
         : true;
-      const matchesArea = areaFilter ? collaboratorArea === areaFilter : true;
-      const matchesCommissionSource = commissionSourceFilter
-        ? (item.commission_source_type || "") === commissionSourceFilter
+      const matchesArea = areaFilter
+        ? [collaboratorArea, opcArea, callArea].includes(areaFilter)
         : true;
+      const matchesCommissionSource = matchesCommissionQuickFilter(item, commissionSourceFilter);
       const matchesSearch = q
         ? normalizeText(item.customer_name).includes(q) ||
           normalizeText(item.phone).includes(q) ||
@@ -340,7 +473,7 @@ export default function AdminComisionesPage() {
       );
     });
   }, [
-    ventasReales,
+    cases,
     profileMap,
     dateFrom,
     dateTo,
@@ -350,6 +483,14 @@ export default function AdminComisionesPage() {
     search,
   ]);
 
+  const commissionEntries = useMemo(() => {
+    return casosFiltrados.flatMap((item) => buildCommissionEntries(item, profileMap));
+  }, [casosFiltrados, profileMap]);
+
+  const ventasFiltradas = useMemo(() => {
+    return casosFiltrados.filter((item) => hasRealSale(item));
+  }, [casosFiltrados]);
+
   const resumen = useMemo(() => {
     return {
       total: ventasFiltradas.length,
@@ -357,8 +498,9 @@ export default function AdminComisionesPage() {
       caja: ventasFiltradas.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
       cartera: ventasFiltradas.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
       baseNeta: ventasFiltradas.reduce((acc, item) => acc + Number(item.net_commission_base || 0), 0),
+      comisionTotal: commissionEntries.reduce((acc, item) => acc + item.totalCommission, 0),
     };
-  }, [ventasFiltradas]);
+  }, [ventasFiltradas, commissionEntries]);
 
   const resumenPorColaborador = useMemo(() => {
     const map = new Map<
@@ -367,45 +509,45 @@ export default function AdminComisionesPage() {
         collaboratorId: string;
         collaboratorName: string;
         area: string;
+        tipoComision: string;
+        casosQ: number;
         ventas: number;
-        volumen: number;
-        caja: number;
-        cartera: number;
+        fijo: number;
+        variable: number;
         baseNeta: number;
+        totalComision: number;
       }
     >();
 
-    ventasFiltradas.forEach((item) => {
-      const collaboratorId = item.assigned_commercial_user_id || "sin_asignar";
-      const profile = item.assigned_commercial_user_id
-        ? profileMap.get(item.assigned_commercial_user_id)
-        : null;
-      const collaboratorName = profile?.full_name || "Sin asignar";
-      const area = normalizeArea(profile?.job_title);
+    commissionEntries.forEach((item) => {
+      const collaboratorId = item.beneficiaryId;
 
       if (!map.has(collaboratorId)) {
         map.set(collaboratorId, {
           collaboratorId,
-          collaboratorName,
-          area,
+          collaboratorName: item.beneficiaryName,
+          area: item.beneficiaryArea,
+          tipoComision: commissionKindLabel(item.commissionKind),
+          casosQ: 0,
           ventas: 0,
-          volumen: 0,
-          caja: 0,
-          cartera: 0,
+          fijo: 0,
+          variable: 0,
           baseNeta: 0,
+          totalComision: 0,
         });
       }
 
       const current = map.get(collaboratorId)!;
-      current.ventas += 1;
-      current.volumen += Number(item.volume_amount || 0);
-      current.caja += Number(item.cash_amount || 0);
-      current.cartera += Number(item.portfolio_amount || 0);
-      current.baseNeta += Number(item.net_commission_base || 0);
+      if (item.isQ) current.casosQ += 1;
+      if (item.hasSale) current.ventas += 1;
+      current.fijo += item.fixedCommission;
+      current.variable += item.saleCommission;
+      current.baseNeta += item.baseNeta;
+      current.totalComision += item.totalCommission;
     });
 
-    return Array.from(map.values()).sort((a, b) => b.baseNeta - a.baseNeta);
-  }, [ventasFiltradas, profileMap]);
+    return Array.from(map.values()).sort((a, b) => b.totalComision - a.totalComision);
+  }, [commissionEntries]);
 
   if (loadingAuth) {
     return (
@@ -422,7 +564,7 @@ export default function AdminComisionesPage() {
       <main className="min-h-screen bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
         <div className="mx-auto max-w-7xl rounded-[32px] border border-[#E6C9C5] bg-[linear-gradient(180deg,_rgba(255,250,249,0.98)_0%,_rgba(255,243,241,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(150,102,95,0.12)]">
           <p className="text-sm font-medium text-[#9A4E43]">
-            {error || "No tienes permiso para entrar a este módulo."}
+            {error || "No tienes permiso para entrar a este mÃ³dulo."}
           </p>
         </div>
       </main>
@@ -520,7 +662,7 @@ export default function AdminComisionesPage() {
             </div>
 
             <div>
-              <label className="mb-2 block text-sm font-medium text-slate-700">Área o rol</label>
+              <label className="mb-2 block text-sm font-medium text-slate-700">Ãrea o rol</label>
               <select
                 className={inputClass}
                 value={areaFilter}
@@ -612,12 +754,13 @@ export default function AdminComisionesPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
           <StatCard title="Ventas" value={String(resumen.total)} subtitle="Ventas reales filtradas" />
           <StatCard title="Volumen" value={formatMoney(resumen.volumen)} subtitle="Suma filtrada" />
           <StatCard title="Caja" value={formatMoney(resumen.caja)} subtitle="Pago recibido" />
           <StatCard title="Cartera" value={formatMoney(resumen.cartera)} subtitle="Saldo pendiente" />
           <StatCard title="Base neta" value={formatMoney(resumen.baseNeta)} subtitle="Base comisionable" />
+          <StatCard title="Comisión" value={formatMoney(resumen.comisionTotal)} subtitle="Total calculado" />
         </section>
 
         <section className={panelClass}>
@@ -625,7 +768,7 @@ export default function AdminComisionesPage() {
             <div>
               <h2 className="text-2xl font-bold text-slate-900">Resumen por colaborador</h2>
               <p className="mt-1 text-sm text-[#607368]">
-                Agrupado según las ventas reales del rango filtrado.
+                Agrupado según la comisión calculada para el rango filtrado.
               </p>
             </div>
           </div>
@@ -645,11 +788,13 @@ export default function AdminComisionesPage() {
                   <tr className="border-b border-[#D7EADF] text-left text-[#5B6E63]">
                     <th className="px-3 py-3">Colaborador</th>
                     <th className="px-3 py-3">Área</th>
+                    <th className="px-3 py-3">Tipo</th>
+                    <th className="px-3 py-3">Casos Q</th>
                     <th className="px-3 py-3">Ventas</th>
-                    <th className="px-3 py-3">Volumen</th>
-                    <th className="px-3 py-3">Caja</th>
-                    <th className="px-3 py-3">Cartera</th>
+                    <th className="px-3 py-3">Fijo</th>
+                    <th className="px-3 py-3">Venta</th>
                     <th className="px-3 py-3">Base neta</th>
+                    <th className="px-3 py-3">Total comisión</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -657,11 +802,13 @@ export default function AdminComisionesPage() {
                     <tr key={item.collaboratorId} className="border-b border-slate-100">
                       <td className="px-3 py-3 font-medium text-slate-900">{item.collaboratorName}</td>
                       <td className="px-3 py-3 text-slate-700">{item.area}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.tipoComision}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.casosQ}</td>
                       <td className="px-3 py-3 text-slate-700">{item.ventas}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.volumen)}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.caja)}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.cartera)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.fijo)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.variable)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNeta)}</td>
+                      <td className="px-3 py-3 font-semibold text-slate-900">{formatMoney(item.totalComision)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -673,9 +820,9 @@ export default function AdminComisionesPage() {
         <section className={panelClass}>
           <div className="flex items-center justify-between gap-3">
             <div>
-              <h2 className="text-2xl font-bold text-slate-900">Detalle base para comisiones</h2>
+              <h2 className="text-2xl font-bold text-slate-900">Detalle de comisión calculada</h2>
               <p className="mt-1 text-sm text-[#607368]">
-                Detalle de ventas reales con base neta filtrada.
+                Una fila por beneficiario con su fijo, variable y total.
               </p>
             </div>
           </div>
@@ -684,9 +831,9 @@ export default function AdminComisionesPage() {
             <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
               Cargando detalle...
             </div>
-          ) : ventasFiltradas.length === 0 ? (
+          ) : commissionEntries.length === 0 ? (
             <div className="mt-5 rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
-              No hay ventas reales para esos filtros.
+              No hay comisiones para esos filtros.
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
@@ -695,57 +842,43 @@ export default function AdminComisionesPage() {
                   <tr className="border-b border-[#D7EADF] text-left text-[#5B6E63]">
                     <th className="px-3 py-3">Cliente</th>
                     <th className="px-3 py-3">Fecha</th>
-                    <th className="px-3 py-3">Colaborador</th>
+                    <th className="px-3 py-3">Beneficiario</th>
                     <th className="px-3 py-3">Área</th>
-                    <th className="px-3 py-3">Fuente comisión</th>
-                    <th className="px-3 py-3">Responsable fuente</th>
-                    <th className="px-3 py-3">Volumen</th>
-                    <th className="px-3 py-3">Caja</th>
-                    <th className="px-3 py-3">Cartera</th>
+                    <th className="px-3 py-3">Tipo</th>
+                    <th className="px-3 py-3">Fuente</th>
+                    <th className="px-3 py-3">Origen</th>
+                    <th className="px-3 py-3">Q</th>
                     <th className="px-3 py-3">Base neta</th>
-                    <th className="px-3 py-3">Pago</th>
+                    <th className="px-3 py-3">Fijo</th>
+                    <th className="px-3 py-3">Venta</th>
+                    <th className="px-3 py-3">Total</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {ventasFiltradas.map((item) => {
-                    const profile = item.assigned_commercial_user_id
-                      ? profileMap.get(item.assigned_commercial_user_id)
-                      : null;
-                    const sourceProfile =
-                      item.commission_source_type === "opc" && item.opc_user_id
-                        ? profileMap.get(item.opc_user_id)
-                        : item.commission_source_type === "tmk" && item.call_user_id
-                          ? profileMap.get(item.call_user_id)
-                          : null;
-                    const sourceResponsible =
-                      sourceProfile?.full_name ||
-                      (item.commission_source_type === "base"
-                        ? "Lead base"
-                        : item.commission_source_type === "redes"
-                          ? "Redes"
-                          : "No definido");
-
-                    return (
-                      <tr key={item.id} className="border-b border-slate-100 align-top">
-                        <td className="px-3 py-3">
-                          <div className="font-medium text-slate-900">{item.customer_name}</div>
-                          <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">{formatDateTime(item.created_at)}</td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {profile?.full_name || "Sin asignar"}
-                        </td>
-                        <td className="px-3 py-3 text-slate-700">{normalizeArea(profile?.job_title)}</td>
-                        <td className="px-3 py-3 text-slate-700">{commissionSourceLabel(item.commission_source_type)}</td>
-                        <td className="px-3 py-3 text-slate-700">{sourceResponsible}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.volume_amount || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.cash_amount || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.portfolio_amount || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{formatMoney(Number(item.net_commission_base || 0))}</td>
-                        <td className="px-3 py-3 text-slate-700">{paymentMethodLabel(item.payment_method)}</td>
-                      </tr>
-                    );
-                  })}
+                  {commissionEntries.map((item) => (
+                    <tr
+                      key={`${item.caseId}-${item.commissionKind}-${item.beneficiaryId}`}
+                      className="border-b border-slate-100 align-top"
+                    >
+                      <td className="px-3 py-3">
+                        <div className="font-medium text-slate-900">{item.customerName}</div>
+                        <div className="text-slate-500">{item.phone || "Sin teléfono"}</div>
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">{formatDateTime(item.createdAt)}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.beneficiaryName}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.beneficiaryArea}</td>
+                      <td className="px-3 py-3 text-slate-700">{commissionKindLabel(item.commissionKind)}</td>
+                      <td className="px-3 py-3 text-slate-700">{commissionSourceLabel(item.sourceType)}</td>
+                      <td className="px-3 py-3 text-slate-700">
+                        {item.saleOriginType === "directo" ? "Directo" : "Lead"}
+                      </td>
+                      <td className="px-3 py-3 text-slate-700">{item.isQ ? "Q" : "No Q"}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNeta)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.fixedCommission)}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.saleCommission)}</td>
+                      <td className="px-3 py-3 font-semibold text-slate-900">{formatMoney(item.totalCommission)}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
@@ -755,3 +888,5 @@ export default function AdminComisionesPage() {
     </main>
   );
 }
+
+
