@@ -687,6 +687,47 @@ export default function AdminComisionesPage() {
     supervisorOpcOptions.length === 1 ? supervisorOpcOptions[0] : null;
   const fallbackSupervisorCall =
     supervisorCallOptions.length === 1 ? supervisorCallOptions[0] : null;
+  const resolvedCurrentTeamKey = useMemo(() => {
+    if (currentCollaborator?.teamKey) return currentCollaborator.teamKey;
+
+    if (currentRoleCode === "supervisor_opc") {
+      const mappedTeam = Array.from(supervisorOpcByTeam.entries()).find(
+        ([, item]) => item.id === currentUserId
+      )?.[0];
+      if (mappedTeam === "am" || mappedTeam === "pm") return mappedTeam;
+      if (fallbackSupervisorOpc?.teamKey) return fallbackSupervisorOpc.teamKey;
+    }
+
+    if (currentRoleCode === "supervisor_call_center") {
+      const mappedTeam = Array.from(supervisorCallByTeam.entries()).find(
+        ([, item]) => item.id === currentUserId
+      )?.[0];
+      if (mappedTeam === "am" || mappedTeam === "pm") return mappedTeam;
+      if (fallbackSupervisorCall?.teamKey) return fallbackSupervisorCall.teamKey;
+    }
+
+    if (currentRoleCode === "gerencia_comercial") {
+      const mappedTeam = Array.from(managerByTeam.entries()).find(
+        ([, item]) => item.id === currentUserId
+      )?.[0];
+      if (mappedTeam === "am" || mappedTeam === "pm") return mappedTeam;
+      if (managerByTeam.size === 1) {
+        const onlyTeam = Array.from(managerByTeam.keys())[0];
+        if (onlyTeam === "am" || onlyTeam === "pm") return onlyTeam;
+      }
+    }
+
+    return null;
+  }, [
+    currentCollaborator?.teamKey,
+    currentRoleCode,
+    currentUserId,
+    supervisorOpcByTeam,
+    supervisorCallByTeam,
+    fallbackSupervisorOpc?.teamKey,
+    fallbackSupervisorCall?.teamKey,
+    managerByTeam,
+  ]);
 
   const areaOptions = useMemo(() => {
     const unique = new Set<string>();
@@ -699,11 +740,11 @@ export default function AdminComisionesPage() {
   }, [visibleCollaboratorOptions]);
 
   const teamScopedCollaboratorOptions = useMemo(() => {
-    if (!isTeamScopedRole || !currentCollaborator?.teamKey) return [];
+    if (!isTeamScopedRole || !resolvedCurrentTeamKey) return [];
 
     if (currentRoleCode === "supervisor_opc") {
       return visibleCollaboratorOptions.filter(
-        (item) => item.area === "OPC" && item.teamKey === currentCollaborator.teamKey
+        (item) => item.area === "OPC" && item.teamKey === resolvedCurrentTeamKey
       );
     }
 
@@ -711,18 +752,18 @@ export default function AdminComisionesPage() {
       return visibleCollaboratorOptions.filter(
         (item) =>
           ["TMK", "Call center"].includes(item.area) &&
-          item.teamKey === currentCollaborator.teamKey
+          item.teamKey === resolvedCurrentTeamKey
       );
     }
 
     if (currentRoleCode === "gerencia_comercial") {
       return visibleCollaboratorOptions.filter(
-        (item) => item.area === "Comercial" && item.teamKey === currentCollaborator.teamKey
+        (item) => item.area === "Comercial" && item.teamKey === resolvedCurrentTeamKey
       );
     }
 
     return [];
-  }, [currentCollaborator?.teamKey, currentRoleCode, isTeamScopedRole, visibleCollaboratorOptions]);
+  }, [resolvedCurrentTeamKey, currentRoleCode, isTeamScopedRole, visibleCollaboratorOptions]);
 
   const filteredCollaboratorOptions = useMemo(() => {
     if (isTeamScopedRole) {
@@ -808,7 +849,7 @@ export default function AdminComisionesPage() {
                       )?.id === currentUserId
                     )
                   : currentRoleCode === "gerencia_comercial"
-                    ? Boolean(currentCollaborator?.teamKey && collaboratorTeam === currentCollaborator.teamKey)
+                    ? Boolean(resolvedCurrentTeamKey && collaboratorTeam === resolvedCurrentTeamKey)
                     : true;
       const matchesCollaborator = effectiveCollaboratorFilter
         ? collaboratorAreaForFilter === "Gerencia comercial"
@@ -1044,8 +1085,8 @@ export default function AdminComisionesPage() {
 
     return rawEntries.filter((item) => {
       const matchesArea = areaFilter
-        ? effectiveAreaFilter === "Comercial"
-          ? item.commissionKind === "comercial"
+          ? effectiveAreaFilter === "Comercial"
+            ? item.commissionKind === "comercial"
           : effectiveAreaFilter === "Gerencia comercial"
             ? item.commissionKind === "gerencia_comercial"
             : effectiveAreaFilter === "OPC" || effectiveAreaFilter === "Supervisor OPC"
@@ -1115,13 +1156,15 @@ export default function AdminComisionesPage() {
     if (currentRoleCode === "gerencia_comercial") {
       return commissionEntries.filter((item) => {
         if (!currentCollaborator?.teamKey) return false;
+        const scopedTeamKey = resolvedCurrentTeamKey;
+        if (!scopedTeamKey) return false;
 
         if (item.commissionKind === "gerencia_comercial") {
           return item.beneficiaryId === currentUserId;
         }
 
         const beneficiary = collaboratorOptionMap.get(item.beneficiaryId);
-        return beneficiary?.teamKey === currentCollaborator.teamKey;
+        return beneficiary?.teamKey === scopedTeamKey;
       });
     }
 
@@ -1134,7 +1177,7 @@ export default function AdminComisionesPage() {
     currentUserId,
     casosFiltrados,
     collaboratorOptionMap,
-    currentCollaborator,
+    resolvedCurrentTeamKey,
   ]);
 
   const ventasFiltradas = useMemo(() => {
