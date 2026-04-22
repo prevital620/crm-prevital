@@ -555,7 +555,6 @@ export default function AdminComisionesPage() {
   }, [profiles]);
 
   const isAdminView = currentRoleCode === "super_user" || currentRoleCode === "administrador";
-  const isPersonalView = authorized && !isAdminView;
   const commissionAreaForRole = useMemo(
     () => getCommissionAreaFromRole(currentRoleCode),
     [currentRoleCode]
@@ -570,11 +569,16 @@ export default function AdminComisionesPage() {
     currentRoleCode === "gerencia_comercial";
   const canSeeCommercialBonuses =
     isAdminView || currentRoleCode === "comercial" || currentRoleCode === "gerencia_comercial";
+  const canManageInactiveFilter = isAdminView || isTeamScopedRole;
   const effectiveAreaFilter =
     isAdminView || isSelfScopedRole ? areaFilter || commissionAreaForRole || "" : "";
   const effectiveCollaboratorFilter =
-    isAdminView || isSelfScopedRole ? collaboratorFilter || currentUserId || "" : "";
-  const effectiveShowInactive = isAdminView ? showInactive : false;
+    isAdminView || isSelfScopedRole
+      ? collaboratorFilter || currentUserId || ""
+      : isTeamScopedRole
+        ? collaboratorFilter
+        : "";
+  const effectiveShowInactive = canManageInactiveFilter ? showInactive : false;
 
   const visibleCollaboratorOptions = useMemo(() => {
     if (effectiveShowInactive) return collaboratorOptions;
@@ -588,6 +592,13 @@ export default function AdminComisionesPage() {
   }, [collaboratorOptions]);
   const currentCollaborator = currentUserId ? collaboratorOptionMap.get(currentUserId) || null : null;
 
+  const teamScopedCollaboratorLabel = useMemo(() => {
+    if (currentRoleCode === "supervisor_opc") return "OPC";
+    if (currentRoleCode === "supervisor_call_center") return "TMK";
+    if (currentRoleCode === "gerencia_comercial") return "Comercial";
+    return "Colaborador";
+  }, [currentRoleCode]);
+
   useEffect(() => {
     if (!authorized || !currentUserId || isAdminView) return;
 
@@ -597,9 +608,21 @@ export default function AdminComisionesPage() {
       return;
     }
 
+    if (isTeamScopedRole) {
+      setAreaFilter("");
+      return;
+    }
+
     setAreaFilter("");
     setCollaboratorFilter("");
-  }, [authorized, currentUserId, isAdminView, commissionAreaForRole, isSelfScopedRole]);
+  }, [
+    authorized,
+    currentUserId,
+    isAdminView,
+    commissionAreaForRole,
+    isSelfScopedRole,
+    isTeamScopedRole,
+  ]);
 
   const commercialOptions = useMemo(() => {
     return visibleCollaboratorOptions.filter((item) =>
@@ -675,14 +698,44 @@ export default function AdminComisionesPage() {
     return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
   }, [visibleCollaboratorOptions]);
 
+  const teamScopedCollaboratorOptions = useMemo(() => {
+    if (!isTeamScopedRole || !currentCollaborator?.teamKey) return [];
+
+    if (currentRoleCode === "supervisor_opc") {
+      return visibleCollaboratorOptions.filter(
+        (item) => item.area === "OPC" && item.teamKey === currentCollaborator.teamKey
+      );
+    }
+
+    if (currentRoleCode === "supervisor_call_center") {
+      return visibleCollaboratorOptions.filter(
+        (item) =>
+          ["TMK", "Call center"].includes(item.area) &&
+          item.teamKey === currentCollaborator.teamKey
+      );
+    }
+
+    if (currentRoleCode === "gerencia_comercial") {
+      return visibleCollaboratorOptions.filter(
+        (item) => item.area === "Comercial" && item.teamKey === currentCollaborator.teamKey
+      );
+    }
+
+    return [];
+  }, [currentCollaborator?.teamKey, currentRoleCode, isTeamScopedRole, visibleCollaboratorOptions]);
+
   const filteredCollaboratorOptions = useMemo(() => {
+    if (isTeamScopedRole) {
+      return teamScopedCollaboratorOptions;
+    }
+
     const baseOptions = visibleCollaboratorOptions;
     if (!effectiveAreaFilter) return baseOptions;
     return baseOptions.filter((item) => item.area === effectiveAreaFilter);
-  }, [visibleCollaboratorOptions, effectiveAreaFilter]);
+  }, [isTeamScopedRole, teamScopedCollaboratorOptions, visibleCollaboratorOptions, effectiveAreaFilter]);
 
   useEffect(() => {
-    if (!isAdminView || !collaboratorFilter) return;
+    if ((!isAdminView && !isTeamScopedRole) || !collaboratorFilter) return;
 
     const stillExists = filteredCollaboratorOptions.some(
       (item) => item.id === collaboratorFilter
@@ -691,7 +744,7 @@ export default function AdminComisionesPage() {
     if (!stillExists) {
       setCollaboratorFilter("");
     }
-  }, [isAdminView, collaboratorFilter, filteredCollaboratorOptions]);
+  }, [isAdminView, isTeamScopedRole, collaboratorFilter, filteredCollaboratorOptions]);
 
   const casosFiltrados = useMemo(() => {
     const q = normalizeText(search);
@@ -1374,7 +1427,11 @@ export default function AdminComisionesPage() {
         ) : null}
 
         <section className={panelClass}>
-          <div className={`grid gap-4 md:grid-cols-2 ${isPersonalView ? "xl:grid-cols-3" : "xl:grid-cols-5"}`}>
+          <div
+            className={`grid gap-4 md:grid-cols-2 ${
+              isAdminView || isTeamScopedRole ? "xl:grid-cols-4" : "xl:grid-cols-3"
+            }`}
+          >
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Desde</label>
               <input
@@ -1412,9 +1469,15 @@ export default function AdminComisionesPage() {
                     ))}
                   </select>
                 </div>
+              </>
+            ) : null}
 
+            {isAdminView || isTeamScopedRole ? (
+              <>
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Colaborador</label>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">
+                    {isAdminView ? "Colaborador" : teamScopedCollaboratorLabel}
+                  </label>
                   <select
                     className={inputClass}
                     value={collaboratorFilter}
@@ -1443,7 +1506,7 @@ export default function AdminComisionesPage() {
           </div>
 
           <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {isAdminView || commissionAreaForRole === "Comercial" || commissionAreaForRole === "Gerencia comercial" ? (
+            {isAdminView ? (
               <>
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Meta grupo AM</label>
@@ -1470,7 +1533,7 @@ export default function AdminComisionesPage() {
             ) : null}
           </div>
 
-          {isAdminView ? (
+          {canManageInactiveFilter ? (
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <label className="inline-flex items-center gap-2 rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm">
                 <input
