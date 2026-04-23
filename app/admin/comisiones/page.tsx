@@ -39,6 +39,9 @@ type ProfileOption = {
   full_name: string;
   job_title: string | null;
   is_active: boolean | null;
+  department_id?: string | null;
+  department_names?: string[];
+  role_names?: Array<{ code: string | null; name: string | null }>;
 };
 
 type CommissionEntry = {
@@ -183,6 +186,44 @@ function normalizeArea(jobTitle: string | null | undefined) {
   if (value.includes("admin")) return "Administrador";
 
   return jobTitle || "Sin rol";
+}
+
+function getProfileDepartments(profile: ProfileOption | null | undefined) {
+  return (profile?.department_names || []).filter(Boolean);
+}
+
+function getPrimaryProfileRole(profile: ProfileOption | null | undefined) {
+  return (profile?.role_names || []).find(
+    (item) => normalizeText(item?.code) || normalizeText(item?.name)
+  ) || null;
+}
+
+function getCollaboratorArea(profile: ProfileOption | null | undefined) {
+  const primaryRole = getPrimaryProfileRole(profile);
+  const roleCode = normalizeText(primaryRole?.code);
+  const roleName = normalizeText(primaryRole?.name);
+
+  if (roleCode === "promotor_opc") return "OPC";
+  if (roleCode === "supervisor_opc") return "Supervisor OPC";
+  if (roleCode === "tmk") return "TMK";
+  if (roleCode === "supervisor_call_center") return "Supervisor Call";
+  if (roleCode === "comercial") return "Comercial";
+  if (roleCode === "gerencia_comercial" || roleCode === "gerente_comercial") {
+    return "Gerencia comercial";
+  }
+  if (roleCode === "administrador" || roleCode === "super_user") return "Administrador";
+
+  if (roleName.includes("promotor opc")) return "OPC";
+  if (roleName.includes("supervisor opc")) return "Supervisor OPC";
+  if (roleName === "tmk") return "TMK";
+  if (roleName.includes("supervisor call")) return "Supervisor Call";
+  if (roleName.includes("gerencia comercial") || roleName.includes("gerente comercial")) {
+    return "Gerencia comercial";
+  }
+  if (roleName.includes("comercial")) return "Comercial";
+  if (roleName.includes("administrador")) return "Administrador";
+
+  return normalizeArea(profile?.job_title);
 }
 
 function inferSaleOriginType(caseItem: AdminCommercialCase): "lead" | "directo" {
@@ -432,7 +473,7 @@ export default function AdminComisionesPage() {
       setLoading(true);
       setError("");
 
-      const [casesResult, profilesResult] = await Promise.all([
+      const [casesResult, profilesResult, departmentsResult, userRolesResult] = await Promise.all([
         supabase
           .from("commercial_cases")
           .select(`
@@ -459,15 +500,72 @@ export default function AdminComisionesPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("profiles")
-          .select("id, full_name, job_title, is_active")
+          .select("id, full_name, job_title, is_active, department_id")
           .order("full_name", { ascending: true }),
+        supabase.from("departments").select("id, name"),
+        supabase.from("user_roles").select(`
+          user_id,
+          roles (
+            code,
+            name
+          )
+        `),
       ]);
 
       if (casesResult.error) throw casesResult.error;
       if (profilesResult.error) throw profilesResult.error;
+      if (departmentsResult.error) throw departmentsResult.error;
+      if (userRolesResult.error) throw userRolesResult.error;
+
+      const departmentMap = new Map<string, string>();
+      ((departmentsResult.data as Array<{ id: string; name: string | null }> | null) || []).forEach(
+        (item) => {
+          if (item?.id) {
+            departmentMap.set(item.id, item.name || "");
+          }
+        }
+      );
+
+      const rolesByUser = new Map<string, Array<{ code: string | null; name: string | null }>>();
+      (
+        (userRolesResult.data as
+          | Array<{
+              user_id: string;
+              roles:
+                | { code: string | null; name: string | null }
+                | Array<{ code: string | null; name: string | null }>
+                | null;
+            }>
+          | null) || []
+      ).forEach((item) => {
+        if (!item?.user_id) return;
+        const current = rolesByUser.get(item.user_id) || [];
+        const roleItems = Array.isArray(item.roles)
+          ? item.roles
+          : item.roles
+            ? [item.roles]
+            : [];
+
+        roleItems.forEach((role) => {
+          current.push({
+            code: role?.code || null,
+            name: role?.name || null,
+          });
+        });
+
+        rolesByUser.set(item.user_id, current);
+      });
 
       setCases((casesResult.data as AdminCommercialCase[]) || []);
-      setProfiles((profilesResult.data as ProfileOption[]) || []);
+      setProfiles(
+        (((profilesResult.data as ProfileOption[] | null) || []).map((profile) => ({
+          ...profile,
+          department_names: profile.department_id
+            ? [departmentMap.get(profile.department_id) || ""].filter(Boolean)
+            : [],
+          role_names: rolesByUser.get(profile.id) || [],
+        })) as ProfileOption[]) || []
+      );
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los datos de comisiones.");
     } finally {
@@ -545,10 +643,13 @@ export default function AdminComisionesPage() {
     return profiles.map((profile) => ({
       id: profile.id,
       name: profile.full_name || "Sin nombre",
-      area: normalizeArea(profile.job_title),
+      area: getCollaboratorArea(profile),
       teamKey: inferCommercialTeam({
         full_name: profile.full_name,
         job_title: profile.job_title,
+        role_name:
+          getPrimaryProfileRole(profile)?.name || getPrimaryProfileRole(profile)?.code || "",
+        departments: getProfileDepartments(profile).map((name) => ({ name })),
       }),
       isActive: profile.is_active !== false,
     }));
@@ -801,15 +902,20 @@ export default function AdminComisionesPage() {
       const opcProfile = item.opc_user_id ? profileMap.get(item.opc_user_id) : null;
       const callProfile = item.call_user_id ? profileMap.get(item.call_user_id) : null;
       const collaboratorName = commercialProfile?.full_name || "";
-      const collaboratorArea = normalizeArea(commercialProfile?.job_title);
+      const collaboratorArea = getCollaboratorArea(commercialProfile);
       const collaboratorTeam = inferCommercialTeam({
         full_name: commercialProfile?.full_name,
         job_title: commercialProfile?.job_title,
+        role_name:
+          getPrimaryProfileRole(commercialProfile)?.name ||
+          getPrimaryProfileRole(commercialProfile)?.code ||
+          "",
+        departments: getProfileDepartments(commercialProfile).map((name) => ({ name })),
       });
       const opcName = item.opc_user_id ? profileMap.get(item.opc_user_id)?.full_name || "" : "";
       const callName = item.call_user_id ? profileMap.get(item.call_user_id)?.full_name || "" : "";
-      const opcArea = normalizeArea(opcProfile?.job_title);
-      const callArea = normalizeArea(callProfile?.job_title);
+      const opcArea = getCollaboratorArea(opcProfile);
+      const callArea = getCollaboratorArea(callProfile);
 
       const collaboratorAreaForFilter = areaFilter || selectedCollaborator?.area || "";
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
@@ -825,11 +931,18 @@ export default function AdminComisionesPage() {
               : currentRoleCode === "supervisor_opc"
                 ? Boolean(
                     (
-                      (opcProfile
+                        (opcProfile
                         ? supervisorOpcByTeam.get(
                             inferCommercialTeam({
                               full_name: opcProfile.full_name,
                               job_title: opcProfile.job_title,
+                              role_name:
+                                getPrimaryProfileRole(opcProfile)?.name ||
+                                getPrimaryProfileRole(opcProfile)?.code ||
+                                "",
+                              departments: getProfileDepartments(opcProfile).map((name) => ({
+                                name,
+                              })),
                             }) || ""
                           )
                         : null) || fallbackSupervisorOpc
@@ -843,6 +956,13 @@ export default function AdminComisionesPage() {
                               inferCommercialTeam({
                                 full_name: callProfile.full_name,
                                 job_title: callProfile.job_title,
+                                role_name:
+                                  getPrimaryProfileRole(callProfile)?.name ||
+                                  getPrimaryProfileRole(callProfile)?.code ||
+                                  "",
+                                departments: getProfileDepartments(callProfile).map((name) => ({
+                                  name,
+                                })),
                               }) || ""
                             )
                           : null) || fallbackSupervisorCall
@@ -862,6 +982,13 @@ export default function AdminComisionesPage() {
                         inferCommercialTeam({
                           full_name: opcProfile.full_name,
                           job_title: opcProfile.job_title,
+                          role_name:
+                            getPrimaryProfileRole(opcProfile)?.name ||
+                            getPrimaryProfileRole(opcProfile)?.code ||
+                            "",
+                          departments: getProfileDepartments(opcProfile).map((name) => ({
+                            name,
+                          })),
                         }) || ""
                       )
                     : null) || fallbackSupervisorOpc
@@ -875,6 +1002,13 @@ export default function AdminComisionesPage() {
                           inferCommercialTeam({
                             full_name: callProfile.full_name,
                             job_title: callProfile.job_title,
+                            role_name:
+                              getPrimaryProfileRole(callProfile)?.name ||
+                              getPrimaryProfileRole(callProfile)?.code ||
+                              "",
+                            departments: getProfileDepartments(callProfile).map((name) => ({
+                              name,
+                            })),
                           }) || ""
                         )
                       : null) || fallbackSupervisorCall
