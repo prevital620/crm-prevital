@@ -407,7 +407,7 @@ function StatCard({
     <div className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.98)_0%,_rgba(245,252,247,0.96)_100%)] p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
       <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
       <p className="text-sm font-medium text-[#5B6E63]">{title}</p>
-      <p className="mt-2 text-[1.9rem] font-bold leading-tight tracking-tight text-[#24312A] md:text-[2.15rem]">
+      <p className="mt-2 text-[1.6rem] font-bold leading-tight tracking-tight text-[#24312A] md:text-[1.85rem]">
         {value}
       </p>
       <p className="mt-2 text-[11px] leading-5 text-[#607368] md:text-xs">{subtitle}</p>
@@ -698,6 +698,19 @@ export default function AdminComisionesPage() {
     if (currentRoleCode === "supervisor_call_center") return "TMK";
     if (currentRoleCode === "gerencia_comercial") return "Comercial";
     return "Colaborador";
+  }, [currentRoleCode]);
+
+  const teamScopedEmptyLabel = useMemo(() => {
+    if (currentRoleCode === "supervisor_opc") {
+      return "No encontramos OPC activos asignados a tu equipo.";
+    }
+    if (currentRoleCode === "supervisor_call_center") {
+      return "No encontramos TMK activos asignados a tu equipo.";
+    }
+    if (currentRoleCode === "gerencia_comercial") {
+      return "No encontramos comerciales activos asignados a tu equipo.";
+    }
+    return "No encontramos colaboradores en tu equipo.";
   }, [currentRoleCode]);
 
   useEffect(() => {
@@ -1650,25 +1663,29 @@ export default function AdminComisionesPage() {
             ) : null}
 
             {isAdminView || isTeamScopedRole ? (
-              <>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">
-                    {isAdminView ? "Colaborador" : teamScopedCollaboratorLabel}
-                  </label>
-                  <select
-                    className={inputClass}
-                    value={collaboratorFilter}
-                    onChange={(e) => setCollaboratorFilter(e.target.value)}
-                  >
-                    <option value="">Todos</option>
-                    {filteredCollaboratorOptions.map((item) => (
-                      <option key={item.id} value={item.id}>
-                        {item.name}{item.isActive ? "" : " (Inhabilitado)"}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              </>
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  {isAdminView ? "Colaborador" : `${teamScopedCollaboratorLabel} del equipo`}
+                </label>
+                <select
+                  className={inputClass}
+                  value={collaboratorFilter}
+                  onChange={(e) => setCollaboratorFilter(e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {filteredCollaboratorOptions.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.name}
+                      {item.isActive ? "" : " (Inhabilitado)"}
+                    </option>
+                  ))}
+                </select>
+                {isTeamScopedRole && filteredCollaboratorOptions.length === 0 ? (
+                  <p className="mt-2 text-xs leading-5 text-[#7A8A81]">
+                    {teamScopedEmptyLabel}
+                  </p>
+                ) : null}
+              </div>
             ) : null}
 
             <div>
@@ -1780,7 +1797,7 @@ export default function AdminComisionesPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <StatCard title="Ventas" value={String(resumen.total)} subtitle="Ventas reales filtradas" />
           <StatCard title="Volumen" value={formatMoney(resumen.volumen)} subtitle="Suma filtrada" />
           <StatCard title="Caja" value={formatMoney(resumen.caja)} subtitle="Pago recibido" />
@@ -1810,7 +1827,7 @@ export default function AdminComisionesPage() {
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
-              <table className="min-w-full text-[13px] leading-5">
+              <table className="min-w-full text-[12px] leading-5 md:text-[13px]">
                 <thead>
                   <tr className="border-b border-[#D7EADF] text-left text-xs uppercase tracking-[0.14em] text-[#5B6E63]">
                     <th className="px-3 py-3">Colaborador</th>
@@ -1859,7 +1876,7 @@ export default function AdminComisionesPage() {
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
-              <table className="min-w-full text-[13px] leading-5">
+              <table className="min-w-full text-[12px] leading-5 md:text-[13px]">
                 <thead>
                   <tr className="border-b border-[#D7EADF] text-left text-xs uppercase tracking-[0.14em] text-[#5B6E63]">
                     <th className="px-3 py-3">Colaborador</th>
@@ -2055,7 +2072,7 @@ export default function AdminComisionesPage() {
             </div>
           ) : (
             <div className="mt-5 overflow-auto">
-              <table className="min-w-full text-[13px] leading-5">
+              <table className="min-w-full text-[12px] leading-5 md:text-[13px]">
                 <thead>
                   <tr className="border-b border-[#D7EADF] text-left text-xs uppercase tracking-[0.14em] text-[#5B6E63]">
                     <th className="px-3 py-3">Cliente</th>
