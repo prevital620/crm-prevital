@@ -3788,13 +3788,17 @@ function imprimirRegistroComercial() {
         updated_by_user_id: currentUserId,
       };
 
+      let savedAppointment: AppointmentRow | null = null;
+
       if (editingAppointmentId) {
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from("appointments")
           .update(payload)
+          .select("*")
           .eq("id", editingAppointmentId);
 
         if (error) throw error;
+        savedAppointment = data?.[0] ?? null;
 
         if (payload.lead_id) {
           await actualizarEstadoLeadPorCita(payload.lead_id, payload.status);
@@ -3802,14 +3806,18 @@ function imprimirRegistroComercial() {
 
         setMensaje("Cita actualizada correctamente. La impresion ya quedo habilitada.");
       } else {
-        const { error } = await supabase.from("appointments").insert([
-          {
-            ...payload,
-            created_by_user_id: currentUserId,
-          },
-        ]);
+        const { data, error } = await supabase
+          .from("appointments")
+          .insert([
+            {
+              ...payload,
+              created_by_user_id: currentUserId,
+            },
+          ])
+          .select("*");
 
         if (error) throw error;
+        savedAppointment = data?.[0] ?? null;
 
         if (payload.lead_id) {
           await actualizarEstadoLeadPorCita(payload.lead_id, payload.status);
@@ -3818,8 +3826,12 @@ function imprimirRegistroComercial() {
         setMensaje("Cita creada correctamente. La impresion ya quedo habilitada.");
       }
 
-      setLastSavedAppointmentPrint(buildAppointmentPrintData());
+      setLastSavedAppointmentPrint(savedAppointment || buildAppointmentPrintData());
       resetForm({ preserveLastSavedAppointmentPrint: true });
+      setFechaFiltro((savedAppointment?.appointment_date || payload.appointment_date) ?? hoyISO());
+      if (savedAppointment?.id) {
+        setSelectedQuickAppointmentId(savedAppointment.id);
+      }
       await cargarTodo();
     } catch (err: any) {
       setError(err?.message || "No se pudo guardar la cita.");
