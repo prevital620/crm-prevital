@@ -42,6 +42,11 @@ type CommercialUser = {
   team_key: CommercialTeamKey | null;
 };
 
+type ProfileRole = {
+  name: string;
+  code: string;
+};
+
 type GerenciaTab = "pendientes" | "comerciales" | "en_gestion" | "finalizados";
 
 const allowedRoles = [
@@ -194,6 +199,60 @@ function inferCaseTeamKey(
   return inferCommercialTeamFromDate(item.assigned_at || item.created_at);
 }
 
+function getProfileRoles(rawRoles: any[]): ProfileRole[] {
+  return rawRoles
+    .map((entry) => entry?.roles)
+    .filter(Boolean)
+    .map((role) => ({
+      name: String(role.name || ""),
+      code: String(role.code || ""),
+    }))
+    .filter((role) => role.code || role.name);
+}
+
+function getPrimaryVisibleRole(roles: ProfileRole[]) {
+  return (
+    roles.find((role) => visibleTeamRoleCodes.includes(role.code)) ||
+    roles.find((role) => gerenciaRoleCodes.includes(role.code)) ||
+    roles[0] ||
+    null
+  );
+}
+
+function getResolvedTeamKey(params: {
+  full_name?: string | null;
+  job_title?: string | null;
+  roleNames?: string[];
+  departments?: { name: string | null }[] | null;
+  cases?: Pick<CommercialCase, "assigned_by_user_id" | "assigned_at" | "created_at">[];
+  userId?: string | null;
+}) {
+  const inferredFromProfile = inferCommercialTeam({
+    full_name: params.full_name || null,
+    job_title: params.job_title || null,
+    role_name: (params.roleNames || []).filter(Boolean).join(" "),
+    departments: params.departments || [],
+  });
+
+  if (inferredFromProfile) return inferredFromProfile;
+
+  const userId = params.userId || null;
+  const relatedCases = userId
+    ? (params.cases || []).filter((item) => item.assigned_by_user_id === userId)
+    : [];
+
+  if (!relatedCases.length) return null;
+
+  const counts: Record<CommercialTeamKey, number> = { am: 0, pm: 0 };
+  relatedCases.forEach((item) => {
+    const inferred = inferCommercialTeamFromDate(item.assigned_at || item.created_at);
+    if (inferred) counts[inferred] += 1;
+  });
+
+  if (counts.am === 0 && counts.pm === 0) return null;
+  return counts.pm > counts.am ? "pm" : "am";
+}
+
 export default function GerenciaComercialPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
@@ -306,19 +365,24 @@ export default function GerenciaComercialPage() {
       const users = profileRows
         .map((row) => {
           const rawRoles = Array.isArray(row.user_roles) ? row.user_roles : [];
-          const role = rawRoles[0]?.roles;
+          const roleItems = getProfileRoles(rawRoles);
+          const primaryRole = getPrimaryVisibleRole(roleItems);
+          const departments = Array.isArray(row.departments) ? row.departments : [];
+
           return {
             id: row.id,
             full_name: row.full_name || "Sin nombre",
-            role_name: role?.name || "",
-            role_code: role?.code || "",
+            role_name: primaryRole?.name || "",
+            role_code: primaryRole?.code || "",
             job_title: row.job_title || null,
-            departments: Array.isArray(row.departments) ? row.departments : [],
-            team_key: inferCommercialTeam({
+            departments,
+            team_key: getResolvedTeamKey({
               full_name: row.full_name || null,
               job_title: row.job_title || null,
-              role_name: role?.name || null,
-              departments: Array.isArray(row.departments) ? row.departments : [],
+              roleNames: roleItems.map((role) => role.name),
+              departments,
+              cases: casesData,
+              userId: row.id,
             }),
           } as CommercialUser;
         })
@@ -335,14 +399,26 @@ export default function GerenciaComercialPage() {
         gerenciaRoleCodes.includes(currentRoleCode) &&
         !dedupedMap.has(currentUserId)
       ) {
+        const currentProfile = profileRows.find((row) => row.id === currentUserId);
+        const currentRawRoles = Array.isArray(currentProfile?.user_roles) ? currentProfile.user_roles : [];
+        const currentRoleItems = getProfileRoles(currentRawRoles);
+        const currentDepartments = Array.isArray(currentProfile?.departments) ? currentProfile.departments : [];
+
         dedupedMap.set(currentUserId, {
           id: currentUserId,
-          full_name: "Gerencia comercial",
+          full_name: currentProfile?.full_name || "Gerencia comercial",
           role_name: currentRoleName || "Gerencia comercial",
           role_code: currentRoleCode,
-          job_title: null,
-          departments: [],
-          team_key: null,
+          job_title: currentProfile?.job_title || null,
+          departments: currentDepartments,
+          team_key: getResolvedTeamKey({
+            full_name: currentProfile?.full_name || null,
+            job_title: currentProfile?.job_title || null,
+            roleNames: currentRoleItems.map((role) => role.name).concat(currentRoleName || ""),
+            departments: currentDepartments,
+            cases: casesData,
+            userId: currentUserId,
+          }),
         });
       }
 
@@ -365,7 +441,6 @@ export default function GerenciaComercialPage() {
               return user.role_code === "comercial";
             });
 
-      const visibleUserIds = new Set(visibleUsers.map((user) => user.id));
       const visibleCaseRows =
         currentRoleCode === "super_user"
           ? casesData
