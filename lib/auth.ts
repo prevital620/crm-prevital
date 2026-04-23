@@ -10,6 +10,9 @@ type AuthRoleResult = {
 
 const ROLE_PRIORITY = [
   "super_user",
+  "administrador",
+  "coordinador_clinico",
+  "auditor_clinico",
   "gerencia_comercial",
   "gerente_comercial",
   "gerente",

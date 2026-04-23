@@ -115,6 +115,20 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "recepcion"],
   },
   {
+    title: "Consulta cliente",
+    subtitle: "Ver trazabilidad operativa y comercial sin mostrar contenido clinico.",
+    href: "/consulta-cliente",
+    roles: [
+      "super_user",
+      "administrador",
+      "recepcion",
+      "comercial",
+      "gerencia_comercial",
+      "gerente",
+      "gerente_comercial",
+    ],
+  },
+  {
     title: "Nutricion",
     subtitle: "Ver agenda, pacientes y valoracion nutricional.",
     href: "/nutricion",
@@ -125,6 +139,18 @@ const quickActions: QuickAction[] = [
     subtitle: "Ver agenda, pacientes y atencion de fisioterapia.",
     href: "/fisioterapia",
     roles: ["super_user", "fisioterapeuta"],
+  },
+  {
+    title: "Consulta clinica",
+    subtitle: "Buscar pacientes y revisar encuentros clinicos autorizados.",
+    href: "/consulta-clinica",
+    roles: [
+      "nutricionista",
+      "fisioterapeuta",
+      "medico_general",
+      "coordinador_clinico",
+      "auditor_clinico",
+    ],
   },
   {
     title: "Comercial",
@@ -423,7 +449,7 @@ export default function HomePage() {
       {
         title: "Operacion y atencion",
         description: "Recepcion y modulos clinicos del dia a dia.",
-        hrefs: ["/recepcion", "/nutricion", "/fisioterapia"],
+        hrefs: ["/recepcion", "/consulta-cliente", "/nutricion", "/fisioterapia"],
       },
       {
         title: "Administracion",

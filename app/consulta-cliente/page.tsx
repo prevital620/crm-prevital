@@ -1,0 +1,539 @@
+"use client";
+import { useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Search, RefreshCcw, Phone, MapPin, CalendarDays } from "lucide-react";
+
+import LogoutButton from "@/components/logout-button";
+import { PrevitalPageHeader } from "@/components/layout/prevital-page-header";
+import {
+  PrevitalFilterBar,
+  PrevitalFilterGroup,
+  PrevitalInput,
+} from "@/components/layout/prevital-filter-bar";
+import { PrevitalBadge } from "@/components/ui/prevital-badge";
+import { PrevitalButton } from "@/components/ui/prevital-button";
+import {
+  PrevitalCard,
+  PrevitalCardContent,
+  PrevitalCardHeader,
+} from "@/components/ui/prevital-card";
+import { getCurrentUserRole, normalizeRoleCode } from "@/lib/auth";
+import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
+import type {
+  CustomerConsultDetail,
+  CustomerConsultResponse,
+  CustomerConsultSummary,
+} from "@/lib/customers/types";
+import { supabase } from "@/lib/supabase";
+
+const ALLOWED_ROLES = [
+  "super_user",
+  "administrador",
+  "recepcion",
+  "comercial",
+  "gerencia_comercial",
+  "gerente",
+  "gerente_comercial",
+] as const;
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "Sin fecha";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("es-CO", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function formatMoney(value: number | null | undefined) {
+  return new Intl.NumberFormat("es-CO", {
+    style: "currency",
+    currency: "COP",
+    maximumFractionDigits: 0,
+  }).format(value || 0);
+}
+
+export default function ConsultaClientePage() {
+  const router = useRouter();
+
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [currentUserName, setCurrentUserName] = useState("Usuario");
+  const [currentRoleLabel, setCurrentRoleLabel] = useState("Rol");
+  const [scopeLabel, setScopeLabel] = useState("");
+  const [searchTerm, setSearchTerm] = useState("");
+  const [items, setItems] = useState<CustomerConsultSummary[]>([]);
+  const [selectedRef, setSelectedRef] = useState<string | null>(null);
+  const [detail, setDetail] = useState<CustomerConsultDetail | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+
+  const selectedCommercialNotes = useMemo(() => {
+    if (!detail?.commercial_cases?.length) {
+      return null;
+    }
+
+    const primaryCase = detail.commercial_cases[0];
+    const parsed = parseStoredCommercialNotes(primaryCase.commercial_notes);
+
+    return {
+      receptionSummary: parsed.receptionSummary,
+      commercialNotes: parsed.commercialNotes,
+      assessment: primaryCase.sales_assessment,
+      proposal: primaryCase.proposal_text,
+      closingNotes: primaryCase.closing_notes,
+    };
+  }, [detail]);
+
+  async function ensureAccess() {
+    try {
+      setCheckingSession(true);
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      if (!session) {
+        router.push("/login");
+        return;
+      }
+
+      const auth = await getCurrentUserRole();
+      const effectiveRoles = Array.from(
+        new Set(
+          [auth.roleCode, ...(auth.allRoleCodes || [])]
+            .map((role) => normalizeRoleCode(role))
+            .filter(Boolean)
+        )
+      ) as string[];
+
+      const allowed = effectiveRoles.some((role) =>
+        (ALLOWED_ROLES as readonly string[]).includes(role)
+      );
+
+      if (!allowed) {
+        router.push("/");
+        return;
+      }
+
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("id", session.user.id)
+        .maybeSingle();
+
+      setCurrentUserName(profile?.full_name || "Usuario");
+      setCurrentRoleLabel(auth.allRoleNames?.join(" / ") || auth.roleName || "Rol");
+    } catch (error: any) {
+      setErrorMessage(error?.message || "No fue posible validar el acceso.");
+    } finally {
+      setCheckingSession(false);
+    }
+  }
+
+  async function loadData(query = searchTerm, ref = selectedRef) {
+    try {
+      setLoading(true);
+      setErrorMessage("");
+
+      const params = new URLSearchParams();
+      if (query.trim()) params.set("q", query.trim());
+      if (ref) params.set("ref", ref);
+
+      const response = await fetch(`/api/consulta-cliente?${params.toString()}`, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      const payload = (await response.json()) as
+        | CustomerConsultResponse
+        | { error?: string };
+
+      if (!response.ok) {
+        throw new Error((payload as { error?: string }).error || "No fue posible consultar clientes.");
+      }
+
+      const data = payload as CustomerConsultResponse;
+      setItems(data.items || []);
+      setDetail(data.detail || null);
+      setScopeLabel(
+        data.scope === "full"
+          ? "Vista completa autorizada."
+          : data.scope === "team"
+            ? "Mostrando solo clientes del equipo autorizado."
+            : data.scope === "self"
+              ? "Mostrando solo clientes vinculados a tu gestión."
+              : ""
+      );
+
+      if (!ref && data.items?.length) {
+        const firstRef = data.items[0].ref;
+        setSelectedRef(firstRef);
+        void loadData(query, firstRef);
+      }
+    } catch (error: any) {
+      setErrorMessage(error?.message || "No se pudo cargar la consulta de clientes.");
+      setItems([]);
+      setDetail(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    void ensureAccess();
+  }, []);
+
+  useEffect(() => {
+    if (!checkingSession) {
+      void loadData();
+    }
+  }, [checkingSession]);
+
+  if (checkingSession) {
+    return (
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-5xl">
+          <PrevitalCard>
+            <PrevitalCardContent className="p-8 text-sm text-slate-500">
+              Validando acceso a consulta cliente...
+            </PrevitalCardContent>
+          </PrevitalCard>
+        </div>
+      </main>
+    );
+  }
+
+  return (
+    <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+      <div className="mx-auto max-w-7xl space-y-6">
+        <PrevitalPageHeader
+          title="Consulta cliente"
+          subtitle="Trazabilidad operativa y comercial del cliente, sin mostrar contenido clínico."
+          actions={
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="rounded-2xl border border-[#D6E8DA] bg-[#EAF4EC] px-5 py-3 text-[#4F6F5B]">
+                <p className="text-sm font-semibold">{currentUserName}</p>
+                <p className="text-xs text-[#5E8F6C]">{currentRoleLabel}</p>
+              </div>
+              <LogoutButton />
+            </div>
+          }
+        />
+
+        <PrevitalFilterBar>
+          <PrevitalFilterGroup>
+            <PrevitalInput
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Buscar por cliente, teléfono o ciudad"
+              className="min-w-[280px] flex-1"
+            />
+          </PrevitalFilterGroup>
+
+          <div className="flex flex-wrap gap-3">
+            <PrevitalButton
+              variant="secondary"
+              leftIcon={<Search className="h-4 w-4" />}
+              onClick={() => void loadData(searchTerm, selectedRef)}
+            >
+              Buscar
+            </PrevitalButton>
+            <PrevitalButton
+              variant="secondary"
+              leftIcon={<RefreshCcw className="h-4 w-4" />}
+              onClick={() => {
+                setSearchTerm("");
+                void loadData("", selectedRef);
+              }}
+            >
+              Actualizar
+            </PrevitalButton>
+            <PrevitalButton variant="secondary" onClick={() => router.push("/")}>
+              Inicio
+            </PrevitalButton>
+          </div>
+        </PrevitalFilterBar>
+
+        {scopeLabel ? (
+          <div className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-3 text-sm text-[#4F6F5B]">
+            {scopeLabel}
+          </div>
+        ) : null}
+
+        {errorMessage ? (
+          <div className="rounded-2xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {errorMessage}
+          </div>
+        ) : null}
+
+        <div className="grid gap-6 xl:grid-cols-[380px_minmax(0,1fr)]">
+          <PrevitalCard>
+            <PrevitalCardHeader
+              title="Clientes"
+              description="Selecciona un cliente para ver su trazabilidad completa."
+            />
+            <PrevitalCardContent className="space-y-3">
+              {loading && items.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-[#F8F7F4] p-4 text-sm text-slate-500">
+                  Cargando clientes...
+                </div>
+              ) : null}
+
+              {!loading && items.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-slate-200 bg-[#F8F7F4] p-4 text-sm text-slate-500">
+                  No hay clientes para esos filtros.
+                </div>
+              ) : null}
+
+              {items.map((item) => (
+                <button
+                  key={item.ref}
+                  type="button"
+                  onClick={() => {
+                    setSelectedRef(item.ref);
+                    void loadData(searchTerm, item.ref);
+                  }}
+                  className={`w-full rounded-2xl border px-4 py-4 text-left transition ${
+                    selectedRef === item.ref
+                      ? "border-[#7FA287] bg-[#F4FAF6]"
+                      : "border-[#D6E8DA] bg-white hover:border-[#BCD7C2]"
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <p className="text-base font-semibold text-[#24312A]">{item.display_name}</p>
+                      <div className="mt-2 space-y-1 text-sm text-slate-500">
+                        <p className="flex items-center gap-2">
+                          <Phone className="h-4 w-4" />
+                          <span>{item.phone || "Sin teléfono"}</span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <MapPin className="h-4 w-4" />
+                          <span>{item.city || "Sin ciudad"}</span>
+                        </p>
+                        <p className="flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4" />
+                          <span>{formatDateTime(item.latest_created_at)}</span>
+                        </p>
+                      </div>
+                    </div>
+                    <PrevitalBadge status={item.latest_status || undefined}>
+                      {item.latest_status || "Sin estado"}
+                    </PrevitalBadge>
+                  </div>
+                  <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                    <PrevitalBadge>{item.origin_label}</PrevitalBadge>
+                    {item.has_lead ? <PrevitalBadge>Lead</PrevitalBadge> : null}
+                    {item.has_appointments ? <PrevitalBadge>Citas</PrevitalBadge> : null}
+                    {item.has_commercial_case ? <PrevitalBadge>Comercial</PrevitalBadge> : null}
+                  </div>
+                </button>
+              ))}
+            </PrevitalCardContent>
+          </PrevitalCard>
+
+          <div className="space-y-6">
+            <PrevitalCard>
+              <PrevitalCardHeader
+                title={detail?.identity.full_name || "Detalle del cliente"}
+                description="Resumen operativo del cliente seleccionado."
+              />
+              <PrevitalCardContent>
+                {!detail ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-[#F8F7F4] p-5 text-sm text-slate-500">
+                    Selecciona un cliente a la izquierda para consultar su trazabilidad.
+                  </div>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-3">
+                    <InfoTile label="Teléfono" value={detail.identity.phone || "Sin teléfono"} />
+                    <InfoTile label="Ciudad" value={detail.identity.city || "Sin ciudad"} />
+                    <InfoTile
+                      label="Citas"
+                      value={String(detail.appointments.length)}
+                      icon={<CalendarDays className="h-4 w-4" />}
+                    />
+                  </div>
+                )}
+              </PrevitalCardContent>
+            </PrevitalCard>
+
+            {detail?.lead ? (
+              <PrevitalCard>
+                <PrevitalCardHeader title="Lead" description="Origen y datos de captación." />
+                <PrevitalCardContent className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <InfoTile label="Origen" value={detail.lead.source || "Sin origen"} />
+                  <InfoTile label="Estado" value={detail.lead.status || "Sin estado"} />
+                  <InfoTile
+                    label="Servicio de interés"
+                    value={detail.lead.interest_service || "Sin servicio"}
+                  />
+                  <InfoTile
+                    label="Captación"
+                    value={detail.lead.capture_location || "Sin lugar"}
+                  />
+                  <InfoTile
+                    label="Creado por"
+                    value={detail.lead.created_by_name || "Sin registro"}
+                  />
+                  <InfoTile
+                    label="Fecha lead"
+                    value={formatDateTime(detail.lead.created_at)}
+                  />
+                </PrevitalCardContent>
+              </PrevitalCard>
+            ) : null}
+
+            <PrevitalCard>
+              <PrevitalCardHeader
+                title="Citas"
+                description="Agenda y seguimiento operativo del cliente."
+              />
+              <PrevitalCardContent className="space-y-3">
+                {!detail?.appointments?.length ? (
+                  <EmptyBlock message="Este cliente no tiene citas registradas." />
+                ) : (
+                  detail.appointments.map((appointment) => (
+                    <div
+                      key={appointment.id}
+                      className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4"
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <div className="space-y-1 text-sm text-slate-600">
+                          <p className="font-semibold text-[#24312A]">
+                            {appointment.service || "Sin servicio"}
+                          </p>
+                          <p>
+                            {appointment.date} · {appointment.time}
+                          </p>
+                          <p>{appointment.city || "Sin ciudad"}</p>
+                        </div>
+                        <PrevitalBadge status={appointment.status}>
+                          {appointment.status}
+                        </PrevitalBadge>
+                      </div>
+                      {appointment.notes ? (
+                        <div className="mt-3 rounded-2xl bg-[#F8F7F4] px-3 py-3 text-sm text-slate-600">
+                          {appointment.notes}
+                        </div>
+                      ) : null}
+                    </div>
+                  ))
+                )}
+              </PrevitalCardContent>
+            </PrevitalCard>
+
+            <PrevitalCard>
+              <PrevitalCardHeader
+                title="Gestión comercial"
+                description="Ventas, seguimiento y notas comerciales del cliente."
+              />
+              <PrevitalCardContent className="space-y-4">
+                {!detail?.commercial_cases?.length ? (
+                  <EmptyBlock message="Este cliente no tiene casos comerciales registrados." />
+                ) : (
+                  <>
+                    {selectedCommercialNotes ? (
+                      <div className="grid gap-4 lg:grid-cols-2">
+                        <TextBlock
+                          title="Resumen de recepción"
+                          value={selectedCommercialNotes.receptionSummary}
+                        />
+                        <TextBlock
+                          title="Notas comerciales"
+                          value={selectedCommercialNotes.commercialNotes}
+                        />
+                        <TextBlock
+                          title="Valoración comercial"
+                          value={selectedCommercialNotes.assessment}
+                        />
+                        <TextBlock
+                          title="Propuesta comercial"
+                          value={selectedCommercialNotes.proposal}
+                        />
+                        <TextBlock
+                          title="Notas de cierre"
+                          value={selectedCommercialNotes.closingNotes}
+                        />
+                      </div>
+                    ) : null}
+
+                    <div className="space-y-3">
+                      {detail.commercial_cases.map((caseItem) => (
+                        <div
+                          key={caseItem.id}
+                          className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4"
+                        >
+                          <div className="flex flex-wrap items-center justify-between gap-3">
+                            <div className="space-y-1 text-sm text-slate-600">
+                              <p className="font-semibold text-[#24312A]">
+                                {caseItem.purchased_service || "Sin servicio definido"}
+                              </p>
+                              <p>{formatDateTime(caseItem.created_at)}</p>
+                              <p>
+                                Comercial: {caseItem.commercial_name || "Sin asignar"} · Resultado:{" "}
+                                {caseItem.sale_result || "Sin resultado"}
+                              </p>
+                            </div>
+                            <div className="text-right text-sm text-slate-600">
+                              <p className="font-semibold text-[#24312A]">
+                                {formatMoney(caseItem.sale_value ?? caseItem.volume_amount ?? 0)}
+                              </p>
+                              <PrevitalBadge status={caseItem.status || undefined}>
+                                {caseItem.status || "Sin estado"}
+                              </PrevitalBadge>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </PrevitalCardContent>
+            </PrevitalCard>
+          </div>
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function InfoTile({
+  label,
+  value,
+  icon,
+}: {
+  label: string;
+  value: string;
+  icon?: React.ReactNode;
+}) {
+  return (
+    <div className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-4">
+      <p className="text-xs uppercase tracking-[0.24em] text-[#6C8A77]">{label}</p>
+      <p className="mt-2 flex items-center gap-2 text-base font-semibold text-[#24312A]">
+        {icon}
+        <span>{value}</span>
+      </p>
+    </div>
+  );
+}
+
+function TextBlock({ title, value }: { title: string; value: string | null | undefined }) {
+  if (!value?.trim()) return null;
+
+  return (
+    <div className="rounded-2xl border border-[#D6E8DA] bg-[#F8F7F4] px-4 py-4">
+      <p className="text-xs uppercase tracking-[0.24em] text-[#6C8A77]">{title}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function EmptyBlock({ message }: { message: string }) {
+  return (
+    <div className="rounded-2xl border border-dashed border-slate-200 bg-[#F8F7F4] p-4 text-sm text-slate-500">
+      {message}
+    </div>
+  );
+}

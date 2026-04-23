@@ -4,6 +4,21 @@ import Image from "next/image";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
+import {
+  createClinicalAttachment,
+  createClinicalEvolution,
+  ensureClinicalEncounter,
+  getClinicalEncounterByAppointment,
+  saveClinicalConsent,
+  saveClinicalHistory,
+  updateClinicalEncounterStatus,
+} from "@/lib/clinical/client";
+import type {
+  ClinicalAttachment,
+  ClinicalConsent,
+  ClinicalEncounterBundle,
+  ClinicalEvolution,
+} from "@/lib/clinical/types";
 import { supabase } from "@/lib/supabase";
 import {
   buildPendingDeliveryNotes,
@@ -197,6 +212,17 @@ const metricFields: Array<{
   { key: "perimetro_pantorrilla", label: "Perímetro pantorrilla", placeholder: "Ej: 35 cm" },
 ];
 
+const CLINICAL_CONSENT_CONFIG = [
+  {
+    type: "consentimiento_informado",
+    label: "Consentimiento informado de atención",
+  },
+  {
+    type: "autorizacion_tratamiento",
+    label: "Autorización del tratamiento o plan recomendado",
+  },
+] as const;
+
 function formatHora(hora: string | null | undefined) {
   if (!hora) return "";
   return hora.slice(0, 5);
@@ -225,6 +251,52 @@ function normalizeText(value: string | null | undefined) {
     .toLowerCase();
 }
 
+function pickFirst(...values: Array<string | null | undefined>) {
+  for (const value of values) {
+    if (typeof value !== "string") continue;
+    const trimmed = value.trim();
+    if (trimmed) return trimmed;
+  }
+  return "";
+}
+
+function buildSummaryLines(lines: Array<[string, string | null | undefined]>) {
+  const normalized = lines
+    .map(([label, value]) => [label, (value || "").trim()] as const)
+    .filter(([, value]) => value.length > 0)
+    .map(([label, value]) => `${label}: ${value}`);
+
+  return normalized.length > 0 ? normalized.join("\n") : null;
+}
+
+function formatDateTime(value: string | null | undefined) {
+  if (!value) return "";
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+
+  return new Intl.DateTimeFormat("es-CO", {
+    dateStyle: "short",
+    timeStyle: "short",
+  }).format(date);
+}
+
+function buildConsentValueMap(consents: ClinicalConsent[]) {
+  return CLINICAL_CONSENT_CONFIG.reduce<Record<string, boolean>>((accumulator, item) => {
+    const match = consents.find((consent) => consent.consent_type === item.type);
+    accumulator[item.type] = Boolean(match?.accepted);
+    return accumulator;
+  }, {});
+}
+
+function buildConsentDateMap(consents: ClinicalConsent[]) {
+  return CLINICAL_CONSENT_CONFIG.reduce<Record<string, string>>((accumulator, item) => {
+    const match = consents.find((consent) => consent.consent_type === item.type);
+    accumulator[item.type] = match?.accepted_at || match?.created_at || "";
+    return accumulator;
+  }, {});
+}
+
 export default function NutricionAtencionPage() {
   const params = useParams();
   const appointmentId = String(params?.appointmentId || "");
@@ -238,8 +310,25 @@ export default function NutricionAtencionPage() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const [finalized, setFinalized] = useState(false);
-  const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
-  const [fallbackOccupation, setFallbackOccupation] = useState("");
+    const [inventoryOptions, setInventoryOptions] = useState<InventoryOption[]>([]);
+    const [fallbackOccupation, setFallbackOccupation] = useState("");
+    const [clinicalEncounterId, setClinicalEncounterId] = useState<string | null>(null);
+    const [clinicalSyncWarning, setClinicalSyncWarning] = useState("");
+    const [clinicalEvolutions, setClinicalEvolutions] = useState<ClinicalEvolution[]>([]);
+    const [newEvolutionNote, setNewEvolutionNote] = useState("");
+    const [evolutionSaving, setEvolutionSaving] = useState(false);
+    const [clinicalConsentValues, setClinicalConsentValues] = useState<Record<string, boolean>>(
+      () => buildConsentValueMap([])
+    );
+    const [clinicalConsentDates, setClinicalConsentDates] = useState<Record<string, string>>(
+      () => buildConsentDateMap([])
+    );
+    const [consentSaving, setConsentSaving] = useState(false);
+    const [clinicalAttachments, setClinicalAttachments] = useState<ClinicalAttachment[]>([]);
+    const [newAttachmentName, setNewAttachmentName] = useState("");
+    const [newAttachmentUrl, setNewAttachmentUrl] = useState("");
+    const [newAttachmentMimeType, setNewAttachmentMimeType] = useState("");
+    const [attachmentSaving, setAttachmentSaving] = useState(false);
 
   useEffect(() => {
     if (!appointmentId) return;
@@ -327,7 +416,16 @@ export default function NutricionAtencionPage() {
     try {
       setLoading(true);
       setError("");
-      setMessage("");
+        setMessage("");
+        setClinicalSyncWarning("");
+        setClinicalEncounterId(null);
+        setClinicalEvolutions([]);
+        setClinicalConsentValues(buildConsentValueMap([]));
+        setClinicalConsentDates(buildConsentDateMap([]));
+        setClinicalAttachments([]);
+        setNewAttachmentName("");
+        setNewAttachmentUrl("");
+        setNewAttachmentMimeType("");
 
       const { data: appointmentData, error: appointmentError } = await supabase
         .from("appointments")
@@ -434,15 +532,15 @@ export default function NutricionAtencionPage() {
       }
 
       let nutritionProfile: NutritionProfileRow | null = null;
-        const parsedReceptionSummary = parseSpecialistReceptionSummary(
-          linkedCommercialCase?.commercial_notes,
-          linkedCommercialCase?.sale_result,
-          {
-            document: foundUser?.documento,
-            occupation: foundUser?.ocupacion,
-          }
-        );
-        setFallbackOccupation(foundUser?.ocupacion || "");
+      const parsedReceptionSummary = parseSpecialistReceptionSummary(
+        linkedCommercialCase?.commercial_notes,
+        linkedCommercialCase?.sale_result,
+        {
+          document: foundUser?.documento,
+          occupation: foundUser?.ocupacion,
+        }
+      );
+      setFallbackOccupation(foundUser?.ocupacion || "");
       const deliveryRecommendation = parseDeliveryRecommendation(
         appointmentData.notes,
         "nutricion"
@@ -461,18 +559,51 @@ export default function NutricionAtencionPage() {
         setUserId(null);
       }
 
-        setForm({
-          document: parsedReceptionSummary.document || foundUser?.documento || "",
-          phone: appointmentData.phone || foundUser?.telefono || "",
-          city: appointmentData.city || foundUser?.ciudad || "",
-          age: parsedReceptionSummary.age || "",
-        sex: "",
+      let clinicalBundle: ClinicalEncounterBundle | null = null;
+      try {
+        clinicalBundle = await getClinicalEncounterByAppointment(appointmentId, "nutricion");
+      } catch {}
+
+        if (clinicalBundle) {
+          setClinicalEncounterId(clinicalBundle.encounter.id);
+          setClinicalEvolutions(clinicalBundle.evolutions || []);
+          setClinicalConsentValues(buildConsentValueMap(clinicalBundle.consents || []));
+          setClinicalConsentDates(buildConsentDateMap(clinicalBundle.consents || []));
+          setClinicalAttachments(clinicalBundle.attachments || []);
+          setFallbackOccupation((current) => current || clinicalBundle?.patient?.occupation || "");
+        }
+
+      setForm({
+        document: pickFirst(
+          parsedReceptionSummary.document,
+          foundUser?.documento,
+          clinicalBundle?.patient?.document_number
+        ),
+        phone: pickFirst(
+          appointmentData.phone,
+          foundUser?.telefono,
+          clinicalBundle?.patient?.phone
+        ),
+        city: pickFirst(
+          appointmentData.city,
+          foundUser?.ciudad,
+          clinicalBundle?.patient?.city
+        ),
+        age: pickFirst(
+          parsedReceptionSummary.age,
+          clinicalBundle?.patient?.age != null ? String(clinicalBundle.patient.age) : ""
+        ),
+        sex: pickFirst(clinicalBundle?.patient?.sex),
         antecedentes_patologicos: nutritionProfile?.antecedentes_patologicos || "",
-        cirugias: nutritionProfile?.cirugias || "",
-        toxicos: nutritionProfile?.toxicos || "",
-        alergicos: nutritionProfile?.alergicos || "",
-        medicamentos: nutritionProfile?.medicamentos || "",
-        familiares: nutritionProfile?.familiares || "",
+        cirugias:
+          nutritionProfile?.cirugias || clinicalBundle?.background?.surgical || "",
+        toxicos: nutritionProfile?.toxicos || clinicalBundle?.background?.toxic || "",
+        alergicos:
+          nutritionProfile?.alergicos || clinicalBundle?.background?.allergies || "",
+        medicamentos:
+          nutritionProfile?.medicamentos || clinicalBundle?.background?.medications || "",
+        familiares:
+          nutritionProfile?.familiares || clinicalBundle?.background?.family_history || "",
         peso: nutritionProfile?.peso || "",
         talla: nutritionProfile?.talla || "",
         perimetro_brazo: nutritionProfile?.perimetro_brazo || "",
@@ -485,12 +616,27 @@ export default function NutricionAtencionPage() {
         edad_corporal: nutritionProfile?.edad_corporal || "",
         circunferencia_cintura: nutritionProfile?.circunferencia_cintura || "",
         perimetro_pantorrilla: nutritionProfile?.perimetro_pantorrilla || "",
-        clasificacion_nutricional: nutritionProfile?.clasificacion_nutricional || "",
-        objetivo_nutricional: nutritionProfile?.objetivo_nutricional || "",
+        clasificacion_nutricional:
+          nutritionProfile?.clasificacion_nutricional ||
+          clinicalBundle?.history?.assessment ||
+          "",
+        objetivo_nutricional:
+          nutritionProfile?.objetivo_nutricional ||
+          clinicalBundle?.history?.chief_complaint ||
+          "",
         recomendaciones_nutricionales: nutritionProfile?.recomendaciones_nutricionales || "",
-        datos_alimentarios: nutritionProfile?.datos_alimentarios || "",
-        plan_nutricional: nutritionProfile?.plan_nutricional || "",
-        observaciones_generales: nutritionProfile?.observaciones_generales || "",
+        datos_alimentarios:
+          nutritionProfile?.datos_alimentarios ||
+          clinicalBundle?.history?.current_illness ||
+          "",
+        plan_nutricional:
+          nutritionProfile?.plan_nutricional ||
+          clinicalBundle?.history?.plan ||
+          "",
+        observaciones_generales:
+          nutritionProfile?.observaciones_generales ||
+          clinicalBundle?.background?.notes ||
+          "",
         reception_product_id: "",
         reception_product_name: deliveryRecommendation?.productName || "",
         reception_product_quantity: String(deliveryRecommendation?.quantity || 1),
@@ -552,6 +698,7 @@ export default function NutricionAtencionPage() {
     setSaving(true);
     setError("");
     setMessage("");
+    setClinicalSyncWarning("");
 
     try {
       const ensuredUserId = await ensureUser();
@@ -655,6 +802,71 @@ export default function NutricionAtencionPage() {
           : prev
       );
 
+      try {
+        const bundle = await ensureClinicalEncounter({
+          appointmentId: appointment.id,
+          specialty: "nutricion",
+          patient: {
+            source_user_id: ensuredUserId,
+            source_lead_id: appointment.lead_id,
+            full_name: appointment.patient_name?.trim() || "Paciente clinico",
+            document_number: form.document.trim() || null,
+            phone: form.phone.trim() || appointment.phone || null,
+            city: form.city.trim() || appointment.city || null,
+            eps: receptionSummary.eps || null,
+            occupation: receptionSummary.occupation || fallbackOccupation || null,
+            age: form.age.trim() ? Number(form.age) : null,
+            sex: form.sex.trim() || null,
+          },
+        });
+
+        setClinicalEncounterId(bundle.encounter.id);
+
+        await saveClinicalHistory(bundle.encounter.id, {
+          history: {
+            chief_complaint: form.objetivo_nutricional.trim() || null,
+            current_illness: form.datos_alimentarios.trim() || null,
+            review_of_systems: null,
+            physical_exam: buildSummaryLines([
+              ["Peso", form.peso],
+              ["Talla", form.talla],
+              ["Perimetro brazo", form.perimetro_brazo],
+              ["Indice de masa corporal", form.indice_masa_corporal],
+              ["Porcentaje de masa corporal", form.porcentaje_masa_corporal],
+              ["Dinamometria", form.dinamometria],
+              ["Masa muscular", form.masa_muscular],
+              ["Metabolismo en reposo", form.metabolismo_reposo],
+              ["Grasa visceral", form.grasa_visceral],
+              ["Edad corporal", form.edad_corporal],
+              ["Circunferencia cintura", form.circunferencia_cintura],
+              ["Perimetro pantorrilla", form.perimetro_pantorrilla],
+            ]),
+            assessment: form.clasificacion_nutricional.trim() || null,
+            plan: buildSummaryLines([
+              ["Plan nutricional", form.plan_nutricional],
+              ["Recomendaciones", form.recomendaciones_nutricionales],
+            ]),
+          },
+          background: {
+            pathological: form.antecedentes_patologicos.trim() || null,
+            surgical: form.cirugias.trim() || null,
+            toxic: form.toxicos.trim() || null,
+            allergies: form.alergicos.trim() || null,
+            medications: form.medicamentos.trim() || null,
+            family_history: form.familiares.trim() || null,
+            notes: form.observaciones_generales.trim() || null,
+          },
+        });
+
+        if (nextStatus === "finalizada") {
+          await updateClinicalEncounterStatus(bundle.encounter.id, "closed");
+        }
+      } catch {
+        setClinicalSyncWarning(
+          "Los cambios se guardaron, pero no se sincronizo la historia clinica segura."
+        );
+      }
+
       if (nextStatus === "finalizada") {
         setFinalized(true);
         setMessage("Consulta finalizada. El cliente quedó pendiente para Recepción, impresión y entrega de productos.");
@@ -672,7 +884,7 @@ export default function NutricionAtencionPage() {
     await saveAll();
   }
 
-  async function handleFinalize() {
+    async function handleFinalize() {
     const validationErrors = validateBeforeFinalize();
     if (validationErrors.length > 0) {
       setError(validationErrors.join(" "));
@@ -680,8 +892,178 @@ export default function NutricionAtencionPage() {
       return;
     }
 
-    await saveAll("finalizada");
-  }
+      await saveAll("finalizada");
+    }
+
+    async function handleSaveEvolution() {
+      const note = newEvolutionNote.trim();
+
+      if (!appointment || !note) {
+        setError("Escribe una evolución clínica antes de guardarla.");
+        return;
+      }
+
+      setEvolutionSaving(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const bundle = await ensureClinicalEncounter({
+          appointmentId,
+          specialty: "nutricion",
+          specialistUserId: userId,
+          patient: {
+            source_user_id: userId,
+            source_lead_id: appointment.lead_id,
+            full_name: appointment.patient_name || "Paciente nutrición",
+            document_number: form.document || null,
+            phone: form.phone || appointment.phone || null,
+            city: form.city || appointment.city || null,
+            occupation: fallbackOccupation || null,
+            age: form.age ? Number(form.age) || null : null,
+            sex: form.sex || null,
+          },
+        });
+
+        setClinicalEncounterId(bundle.encounter.id);
+
+        const evolution = await createClinicalEvolution(bundle.encounter.id, {
+          note,
+        });
+
+        setClinicalEvolutions((current) => [evolution, ...current]);
+        setNewEvolutionNote("");
+        setMessage("Evolución clínica guardada.");
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "No se pudo guardar la evolución clínica."
+        );
+      } finally {
+        setEvolutionSaving(false);
+      }
+    }
+
+    async function handleSaveConsents() {
+      if (!appointment) {
+        setError("No se encontró la atención para guardar los consentimientos.");
+        return;
+      }
+
+      setConsentSaving(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const bundle = await ensureClinicalEncounter({
+          appointmentId,
+          specialty: "nutricion",
+          specialistUserId: userId,
+          patient: {
+            source_user_id: userId,
+            source_lead_id: appointment.lead_id,
+            full_name: appointment.patient_name || "Paciente nutrición",
+            document_number: form.document || null,
+            phone: form.phone || appointment.phone || null,
+            city: form.city || appointment.city || null,
+            occupation: fallbackOccupation || null,
+            age: form.age ? Number(form.age) || null : null,
+            sex: form.sex || null,
+          },
+        });
+
+        setClinicalEncounterId(bundle.encounter.id);
+
+        const savedConsents = await Promise.all(
+          CLINICAL_CONSENT_CONFIG.map((item) =>
+            saveClinicalConsent(bundle.encounter.id, {
+              consentType: item.type,
+              accepted: Boolean(clinicalConsentValues[item.type]),
+            })
+          )
+        );
+
+        setClinicalConsentValues(buildConsentValueMap(savedConsents));
+        setClinicalConsentDates(buildConsentDateMap(savedConsents));
+        setMessage("Consentimientos clínicos guardados.");
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "No se pudieron guardar los consentimientos clínicos."
+        );
+      } finally {
+        setConsentSaving(false);
+      }
+    }
+
+    async function handleSaveAttachment() {
+      if (!appointment) {
+        setError("No se encontró la atención para guardar el anexo.");
+        return;
+      }
+
+      const fileName = newAttachmentName.trim();
+      const fileUrl = newAttachmentUrl.trim();
+      const mimeType = newAttachmentMimeType.trim();
+
+      if (!fileName || !fileUrl) {
+        setError("Debes ingresar nombre y URL o ruta del anexo.");
+        return;
+      }
+
+      setAttachmentSaving(true);
+      setError("");
+      setMessage("");
+
+      try {
+        const bundle =
+          clinicalEncounterId && userId
+            ? { encounter: { id: clinicalEncounterId }, patient: null }
+            : await ensureClinicalEncounter({
+                appointmentId,
+                specialty: "nutricion",
+                specialistUserId: userId,
+                patient: {
+                  source_lead_id: appointment.lead_id,
+                  full_name: appointment.patient_name || "Paciente nutrición",
+                  document_number: form.document || null,
+                  phone: form.phone || null,
+                  city: form.city || null,
+                  eps: receptionSummary.eps || null,
+                  occupation: fallbackOccupation || null,
+                  age: form.age ? Number(form.age) : null,
+                  sex: form.sex || null,
+                },
+              });
+
+        const encounterId = bundle.encounter.id;
+        if (!clinicalEncounterId) {
+          setClinicalEncounterId(encounterId);
+        }
+
+        const attachment = await createClinicalAttachment(encounterId, {
+          fileName,
+          fileUrl,
+          mimeType: mimeType || null,
+        });
+
+        setClinicalAttachments((current) => [attachment, ...current]);
+        setNewAttachmentName("");
+        setNewAttachmentUrl("");
+        setNewAttachmentMimeType("");
+        setMessage("Anexo clínico guardado.");
+      } catch (saveError) {
+        setError(
+          saveError instanceof Error
+            ? saveError.message
+            : "No se pudo guardar el anexo clínico."
+        );
+      } finally {
+        setAttachmentSaving(false);
+      }
+    }
 
   function handlePrint() {
     if (typeof window === "undefined") return;
@@ -835,20 +1217,215 @@ export default function NutricionAtencionPage() {
           </section>
         ) : null}
 
+        {clinicalEncounterId ? (
+          <div className="rounded-2xl border border-sky-200 bg-sky-50 p-4 text-sm text-sky-800">
+            Historia clínica segura enlazada para esta atención.
+          </div>
+        ) : null}
+
+          {clinicalSyncWarning ? (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+              {clinicalSyncWarning}
+            </div>
+          ) : null}
+
         {error ? (
           <div className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
             {error}
           </div>
         ) : null}
 
-        {message ? (
-          <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
-            {message}
-          </div>
-        ) : null}
+          {message ? (
+            <div className="rounded-2xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
+              {message}
+            </div>
+          ) : null}
 
-        <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
-          <h2 className="text-2xl font-bold text-[#24312A]">Antecedentes personales</h2>
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-[#24312A]">Evoluciones clínicas</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Registra el seguimiento clínico de esta atención en la capa segura.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveEvolution}
+                disabled={evolutionSaving || !newEvolutionNote.trim()}
+                className="rounded-2xl bg-[#2F6F4F] px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-[#285E43] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {evolutionSaving ? "Guardando..." : "Guardar evolución"}
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-6 xl:grid-cols-[1.2fr_0.8fr]">
+              <LargeTextAreaField
+                label="Nueva evolución"
+                value={newEvolutionNote}
+                onChange={setNewEvolutionNote}
+                rows={6}
+                placeholder="Describe hallazgos, cambios, recomendaciones o seguimiento del paciente."
+              />
+
+              <div className="rounded-2xl border border-[#D6E8DA] bg-[#F8FCF8] p-4">
+                <h3 className="text-sm font-semibold uppercase tracking-[0.24em] text-[#5C7A67]">
+                  Historial
+                </h3>
+
+                <div className="mt-4 space-y-3">
+                  {clinicalEvolutions.length > 0 ? (
+                    clinicalEvolutions.map((evolution) => (
+                      <article
+                        key={evolution.id}
+                        className="rounded-2xl border border-[#D6E8DA] bg-white p-4 shadow-sm"
+                      >
+                        <p className="text-xs font-medium uppercase tracking-[0.2em] text-[#6C8A78]">
+                          {formatDateTime(evolution.evolution_date || evolution.created_at)}
+                        </p>
+                        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-[#24312A]">
+                          {evolution.note}
+                        </p>
+                      </article>
+                    ))
+                  ) : (
+                    <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-white p-4 text-sm text-slate-500">
+                      Aún no hay evoluciones registradas para esta atención.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-[#24312A]">Consentimientos clínicos</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Confirma los consentimientos básicos requeridos para esta atención.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveConsents}
+                disabled={consentSaving}
+                className="rounded-2xl border border-[#2F6F4F] px-5 py-3 text-sm font-semibold text-[#2F6F4F] transition hover:bg-[#F3FAF5] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {consentSaving ? "Guardando..." : "Guardar consentimientos"}
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2">
+              {CLINICAL_CONSENT_CONFIG.map((item) => (
+                <label
+                  key={item.type}
+                  className="flex items-start gap-3 rounded-2xl border border-[#D6E8DA] bg-[#F8FCF8] p-4"
+                >
+                  <input
+                    type="checkbox"
+                    checked={Boolean(clinicalConsentValues[item.type])}
+                    onChange={(event) =>
+                      setClinicalConsentValues((current) => ({
+                        ...current,
+                        [item.type]: event.target.checked,
+                      }))
+                    }
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-[#2F6F4F] focus:ring-[#2F6F4F]"
+                  />
+
+                  <div>
+                    <p className="text-sm font-semibold text-[#24312A]">{item.label}</p>
+                    <p className="mt-1 text-xs text-slate-500">
+                      {clinicalConsentDates[item.type]
+                        ? `Registrado: ${formatDateTime(clinicalConsentDates[item.type])}`
+                        : "Aún no registrado"}
+                    </p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-[#24312A]">Anexos clínicos</h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Registra soportes o enlaces relevantes para esta atención clínica.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={handleSaveAttachment}
+                disabled={attachmentSaving}
+                className="rounded-2xl border border-[#2F6F4F] px-5 py-3 text-sm font-semibold text-[#2F6F4F] transition hover:bg-[#F3FAF5] disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {attachmentSaving ? "Guardando..." : "Guardar anexo"}
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <InputField
+                label="Nombre del anexo"
+                value={newAttachmentName}
+                onChange={setNewAttachmentName}
+                placeholder="Ej: Consentimiento firmado"
+              />
+              <InputField
+                label="URL o ruta del soporte"
+                value={newAttachmentUrl}
+                onChange={setNewAttachmentUrl}
+                placeholder="Ej: https://... o ruta interna"
+              />
+              <InputField
+                label="Tipo o MIME"
+                value={newAttachmentMimeType}
+                onChange={setNewAttachmentMimeType}
+                placeholder="Ej: application/pdf"
+              />
+            </div>
+
+            <div className="mt-6 space-y-3">
+              {clinicalAttachments.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#FAFDFC] px-4 py-4 text-sm text-slate-500">
+                  Aún no hay anexos clínicos registrados.
+                </div>
+              ) : (
+                clinicalAttachments.map((attachment) => (
+                  <div
+                    key={attachment.id}
+                    className="rounded-2xl border border-[#D6E8DA] bg-[#FAFDFC] px-4 py-4"
+                  >
+                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-[#24312A]">
+                          {attachment.file_name}
+                        </p>
+                        <p className="mt-1 text-xs text-slate-500">
+                          {attachment.mime_type || "Sin tipo"} · {formatDateTime(attachment.created_at)}
+                        </p>
+                      </div>
+                      <a
+                        href={attachment.file_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-sm font-semibold text-[#2F6F4F] underline-offset-4 hover:underline"
+                      >
+                        Abrir soporte
+                      </a>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
+            <h2 className="text-2xl font-bold text-[#24312A]">Antecedentes personales</h2>
           <p className="mt-1 text-sm text-slate-500">
             Puedes ingresar o modificar los antecedentes reales del paciente.
           </p>
@@ -1057,11 +1634,13 @@ function LargeTextAreaField({
   value,
   onChange,
   rows = 6,
+  placeholder,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
   rows?: number;
+  placeholder?: string;
 }) {
   return (
     <div>
@@ -1070,6 +1649,7 @@ function LargeTextAreaField({
         className={inputClass + " min-h-[160px] resize-none"}
         rows={rows}
         value={value}
+        placeholder={placeholder}
         onChange={(e) => onChange(e.target.value)}
       />
     </div>
