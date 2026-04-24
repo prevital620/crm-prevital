@@ -116,7 +116,7 @@ const quickActions: QuickAction[] = [
   },
   {
     title: "Consulta cliente",
-    subtitle: "Ver trazabilidad operativa y comercial sin mostrar contenido clinico.",
+    subtitle: "Ver trazabilidad operativa y comercial sin mostrar contenido clínico.",
     href: "/consulta-cliente",
     roles: [
       "super_user",
@@ -141,8 +141,8 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "fisioterapeuta"],
   },
   {
-    title: "Consulta clinica",
-    subtitle: "Buscar pacientes y revisar encuentros clinicos autorizados.",
+    title: "Historia clínica",
+    subtitle: "Buscar pacientes y revisar encuentros clínicos autorizados.",
     href: "/consulta-clinica",
     roles: [
       "nutricionista",

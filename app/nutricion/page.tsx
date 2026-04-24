@@ -32,8 +32,8 @@ const quickCards = [
     icon: ClipboardPlus,
   },
   {
-    title: "Consulta clÃ­nica",
-    description: "Buscar pacientes y revisar historias clÃ­nicas autorizadas.",
+    title: "Historia clínica",
+    description: "Buscar pacientes y revisar historias clínicas autorizadas.",
     href: "/consulta-clinica",
     icon: FolderSearch,
   },
@@ -112,7 +112,7 @@ export default function NutricionHomePage() {
                 href="/consulta-clinica"
                 className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
               >
-                Consulta clÃ­nica
+                Historia clínica
               </Link>
             </div>
           </div>

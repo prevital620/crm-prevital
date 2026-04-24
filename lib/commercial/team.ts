@@ -1,4 +1,4 @@
-export type CommercialTeamKey = "am" | "pm";
+export type CommercialTeamKey = "am" | "pm" | "om";
 
 type TeamProfileInput = {
   full_name?: string | null;
@@ -22,6 +22,14 @@ export function inferCommercialTeamFromStrings(
     .filter(Boolean);
 
   for (const value of normalized) {
+    if (
+      /\b(o\.?\s?m\.?|om|operaciones comerciales|gerente om|gerencia om|operacion comercial)\b/.test(
+        value
+      )
+    ) {
+      return "om";
+    }
+
     if (/\b(a\.?\s?m\.?|am|manana|jornada manana|turno manana)\b/.test(value)) {
       return "am";
     }
@@ -65,5 +73,6 @@ export function inferCommercialTeamFromDate(
 export function getCommercialTeamLabel(team: CommercialTeamKey | null | undefined) {
   if (team === "am") return "Equipo AM";
   if (team === "pm") return "Equipo PM";
+  if (team === "om") return "Equipo OM";
   return "Equipo comercial";
 }

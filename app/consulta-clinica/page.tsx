@@ -123,6 +123,7 @@ function TextBlock({
 export default function ConsultaClinicaPage() {
   const router = useRouter();
 
+  const [accessDenied, setAccessDenied] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [loadingPatients, setLoadingPatients] = useState(false);
   const [loadingEncounters, setLoadingEncounters] = useState(false);
@@ -171,15 +172,6 @@ export default function ConsultaClinicaPage() {
         )
       ) as string[];
 
-      const allowed = effectiveRoles.some((role) =>
-        (ALLOWED_ROLES as readonly string[]).includes(role)
-      );
-
-      if (!allowed) {
-        router.push("/");
-        return;
-      }
-
       const { data: profile } = await supabase
         .from("profiles")
         .select("full_name")
@@ -187,6 +179,17 @@ export default function ConsultaClinicaPage() {
         .maybeSingle();
 
       setCurrentUserName(profile?.full_name || "Usuario");
+      const allowed = effectiveRoles.some((role) =>
+        (ALLOWED_ROLES as readonly string[]).includes(role)
+      );
+
+      if (!allowed) {
+        setScopeLabel("Solo el personal clínico autorizado puede consultar historias clínicas.");
+        setAccessDenied(true);
+        return;
+      }
+
+      setAccessDenied(false);
       setCurrentRoleLabel(auth.allRoleNames?.join(" / ") || auth.roleName || "Rol clínico");
       setScopeLabel(
         effectiveRoles.some((role) => ["coordinador_clinico", "auditor_clinico"].includes(role))
@@ -308,7 +311,40 @@ export default function ConsultaClinicaPage() {
         <div className="mx-auto max-w-5xl">
           <PrevitalCard>
             <PrevitalCardContent className="p-8 text-sm text-slate-500">
-              Validando acceso a consulta clínica...
+              Validando acceso a historia clínica...
+            </PrevitalCardContent>
+          </PrevitalCard>
+        </div>
+      </main>
+    );
+  }
+
+  if (accessDenied) {
+    return (
+      <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
+        <div className="mx-auto max-w-5xl space-y-6">
+          <PrevitalPageHeader
+            title="Historia clínica"
+            subtitle="Acceso reservado exclusivamente para el personal clínico autorizado."
+            actions={
+              <div className="flex flex-wrap items-center gap-3">
+                <div className="rounded-2xl border border-[#D6E8DA] bg-[#EAF4EC] px-5 py-3 text-[#4F6F5B]">
+                  <p className="text-sm font-semibold">{currentUserName}</p>
+                  <p className="text-xs text-[#5E8F6C]">{currentRoleLabel}</p>
+                </div>
+                <LogoutButton />
+              </div>
+            }
+          />
+          <PrevitalCard className="border-amber-200 bg-amber-50">
+            <PrevitalCardContent className="space-y-4 p-6 text-sm text-amber-900">
+              <p className="font-semibold">No tienes permiso para consultar historias clínicas.</p>
+              <p>{scopeLabel}</p>
+              <div>
+                <PrevitalButton variant="secondary" onClick={() => router.push("/")}>
+                  Volver a inicio
+                </PrevitalButton>
+              </div>
             </PrevitalCardContent>
           </PrevitalCard>
         </div>
@@ -322,7 +358,7 @@ export default function ConsultaClinicaPage() {
     <main className="min-h-screen bg-[#F8F7F4] p-6 md:p-8">
       <div className="mx-auto max-w-7xl space-y-6">
         <PrevitalPageHeader
-          title="Consulta clínica"
+          title="Historia clínica"
           subtitle="Consulta segura de pacientes, encuentros e historia clínica sin mezclarla con la operación comercial."
           actions={
             <div className="flex flex-wrap items-center gap-3">

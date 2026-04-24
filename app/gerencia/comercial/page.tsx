@@ -243,7 +243,7 @@ function getResolvedTeamKey(params: {
 
   if (!relatedCases.length) return null;
 
-  const counts: Record<CommercialTeamKey, number> = { am: 0, pm: 0 };
+  const counts: Record<CommercialTeamKey, number> = { am: 0, pm: 0, om: 0 };
   relatedCases.forEach((item) => {
     const inferred = inferCommercialTeamFromDate(item.assigned_at || item.created_at);
     if (inferred) counts[inferred] += 1;
@@ -434,8 +434,12 @@ export default function GerenciaComercialPage() {
 
       const visibleUsers =
         currentRoleCode === "super_user"
-          ? teamUsers
+          ? teamUsers.filter((user) => user.role_code === "comercial")
           : teamUsers.filter((user) => {
+              if (detectedTeam === "om") {
+                return user.role_code === "comercial";
+              }
+
               if (user.id === currentUserId) return true;
               if (detectedTeam) return user.team_key === detectedTeam;
               return user.role_code === "comercial";
@@ -446,6 +450,10 @@ export default function GerenciaComercialPage() {
           ? casesData
           : casesData.filter((item) => {
               const caseTeam = inferCaseTeamKey(item, dedupedMap);
+
+              if (detectedTeam === "om") {
+                return true;
+              }
 
               if (detectedTeam) {
                 return caseTeam === detectedTeam;
@@ -903,6 +911,12 @@ export default function GerenciaComercialPage() {
               className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
             >
               Ir a Comercial
+            </Link>
+            <Link
+              href="/consulta-cliente"
+              className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#365243] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+            >
+              Consulta cliente
             </Link>
             <Link
               href="/comercial/ajustes"
