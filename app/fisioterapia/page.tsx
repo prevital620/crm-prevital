@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { CalendarDays, ClipboardPlus, UserPlus, Activity, Sparkles, HeartPulse } from "lucide-react";
+import { CalendarDays, ClipboardPlus, UserPlus, Activity, Sparkles, HeartPulse, FolderSearch } from "lucide-react";
 
 const quickCards = [
   {
@@ -22,6 +22,12 @@ const quickCards = [
     description: "Programar una cita de fisioterapia de forma rápida.",
     href: "/fisioterapia/agendar",
     icon: ClipboardPlus,
+  },
+  {
+    title: "Consulta clÃ­nica",
+    description: "Buscar pacientes y revisar historias clÃ­nicas autorizadas.",
+    href: "/consulta-clinica",
+    icon: FolderSearch,
   },
 ];
 
@@ -74,7 +80,7 @@ export default function FisioterapiaHomePage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-2">
+            <div className="grid gap-3 sm:grid-cols-3">
               <Link
                 href="/"
                 className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
@@ -86,6 +92,12 @@ export default function FisioterapiaHomePage() {
                 className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105"
               >
                 Abrir agenda
+              </Link>
+              <Link
+                href="/consulta-clinica"
+                className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+              >
+                Consulta clÃ­nica
               </Link>
             </div>
           </div>
