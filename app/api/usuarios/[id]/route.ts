@@ -10,6 +10,7 @@ import {
 type UserUpdatePayload = {
   full_name?: string;
   phone?: string | null;
+  employee_code?: string | null;
   job_title?: string | null;
   department_id?: string | null;
   is_active?: boolean;
@@ -122,6 +123,13 @@ function parseUserUpdatePayload(body: unknown): UserUpdatePayload {
     result.phone = normalizeOptionalText(payload.phone);
   }
 
+  if ("employee_code" in payload) {
+    const normalizedCode = String(payload.employee_code ?? "")
+      .trim()
+      .toUpperCase();
+    result.employee_code = normalizedCode || null;
+  }
+
   if ("job_title" in payload) {
     result.job_title = normalizeOptionalText(payload.job_title);
   }
@@ -183,6 +191,22 @@ export async function PATCH(
 
     if ("phone" in payload) {
       profileUpdate.phone = payload.phone ?? null;
+    }
+
+    if ("employee_code" in payload) {
+      if (
+        payload.employee_code &&
+        !/^[A-Z]{2}\d{4}$/.test(payload.employee_code)
+      ) {
+        return NextResponse.json(
+          {
+            error: "El codigo debe tener 2 letras y 4 numeros. Ej: OP1234.",
+          },
+          { status: 400 }
+        );
+      }
+
+      profileUpdate.employee_code = payload.employee_code ?? null;
     }
 
     if ("job_title" in payload) {

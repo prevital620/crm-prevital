@@ -16,6 +16,7 @@ import { supabase } from "@/lib/supabase";
 type RoleUserOption = {
   id: string;
   full_name: string;
+  employee_code: string | null;
   role_code: string;
   role_name: string;
 };
@@ -220,6 +221,13 @@ function formatMoneyPreview(value: number) {
   });
 }
 
+function formatRoleUserLabel(user: RoleUserOption) {
+  const roleLabel = user.role_name || user.role_code;
+  return user.employee_code
+    ? `${user.employee_code} · ${user.full_name} - ${roleLabel}`
+    : `${user.full_name} - ${roleLabel}`;
+}
+
 function initialForm(): HistoricalForm {
   return {
     customer_name: "",
@@ -235,7 +243,7 @@ function initialForm(): HistoricalForm {
     lead_date: hoyISO(),
     lead_time: "08:00",
     lead_notes: "",
-    was_client: true,
+    was_client: false,
     create_appointment: true,
     appointment_date: hoyISO(),
     appointment_time: "08:00",
@@ -243,7 +251,7 @@ function initialForm(): HistoricalForm {
     appointment_service: "valoracion",
     specialist_user_id: "",
     appointment_notes: "",
-    create_sale: true,
+    create_sale: false,
     commercial_date: hoyISO(),
     commercial_time: "09:00",
     commercial_status: "finalizado",
@@ -382,7 +390,8 @@ export default function CargaHistoricaPage() {
             user_id,
             profiles!user_roles_user_id_fkey (
               id,
-              full_name
+              full_name,
+              employee_code
             ),
             roles!user_roles_role_id_fkey (
               name,
@@ -397,6 +406,7 @@ export default function CargaHistoricaPage() {
           .map((row) => ({
             id: row.profiles?.id || row.user_id,
             full_name: row.profiles?.full_name || "Sin nombre",
+            employee_code: row.profiles?.employee_code || null,
             role_name: row.roles?.name || "",
             role_code: row.roles?.code || "",
           }))
@@ -893,7 +903,15 @@ export default function CargaHistoricaPage() {
       }
 
       setMessage(
-        "Caso historico guardado correctamente. Ya quedo en leads, comercial, agenda y, si aplicaba, en inventario local."
+        [
+          "Caso historico guardado correctamente.",
+          "Ya quedo en leads.",
+          form.create_appointment ? "Tambien quedo en agenda." : null,
+          form.create_sale ? "Tambien quedo en comercial." : null,
+          form.has_delivery ? "Tambien quedo en inventario local." : null,
+        ]
+          .filter(Boolean)
+          .join(" ")
       );
       setForm(initialForm());
     } catch (err: any) {
@@ -1147,12 +1165,12 @@ export default function CargaHistoricaPage() {
                     value={form.source_user_id}
                     onChange={(e) => setValue("source_user_id", e.target.value)}
                   >
-                    <option value="">Selecciona</option>
-                    {sourceUsers.map((user) => (
-                      <option key={user.id} value={user.id}>
-                        {user.full_name} - {user.role_name || user.role_code}
-                      </option>
-                    ))}
+                      <option value="">Selecciona</option>
+                      {sourceUsers.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {formatRoleUserLabel(user)}
+                        </option>
+                      ))}
                   </select>
                 }
               />
@@ -1240,24 +1258,24 @@ export default function CargaHistoricaPage() {
           </section>
 
           <section className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
-            <ToggleCard
-              checked={form.was_client}
-              title="Fue cliente real"
-              description="Activalo si este lead ya tuvo compra, visita o tratamiento. Eso permitira enlazar la ficha de cliente."
-              onChange={(checked) => setValue("was_client", checked)}
-            />
+              <ToggleCard
+                checked={form.was_client}
+                title="Fue cliente real"
+                description="Activalo si esta persona realmente llego a ser cliente o paciente. Si no lo activas, puedes guardar solo el lead historico sin venta."
+                onChange={(checked) => setValue("was_client", checked)}
+              />
             <ToggleCard
               checked={form.create_appointment}
               title="Crear cita historica"
               description="Usalo cuando ya exista una fecha real de cita y quieras verla reflejada en agenda y trazabilidad."
               onChange={(checked) => setValue("create_appointment", checked)}
             />
-            <ToggleCard
-              checked={form.create_sale}
-              title="Registrar venta o ingreso"
-              description="Crea el caso comercial historico con sus valores reales, asignacion y estado final."
-              onChange={(checked) => setValue("create_sale", checked)}
-            />
+              <ToggleCard
+                checked={form.create_sale}
+                title="Registrar venta o ingreso"
+                description="Crea el caso comercial historico solo si si hubo venta o ingreso. Puedes dejarlo apagado para cargar clientes o leads sin venta."
+                onChange={(checked) => setValue("create_sale", checked)}
+              />
             <ToggleCard
               checked={form.nutrition_history_pending}
               title="Nutricion completa despues"
@@ -1341,12 +1359,12 @@ export default function CargaHistoricaPage() {
                       value={form.specialist_user_id}
                       onChange={(e) => setValue("specialist_user_id", e.target.value)}
                     >
-                      <option value="">Selecciona</option>
-                      {specialists.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.full_name} - {user.role_name || user.role_code}
-                        </option>
-                      ))}
+                        <option value="">Selecciona</option>
+                        {specialists.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {formatRoleUserLabel(user)}
+                          </option>
+                        ))}
                     </select>
                   }
                 />
@@ -1422,12 +1440,12 @@ export default function CargaHistoricaPage() {
                         setValue("assigned_commercial_user_id", e.target.value)
                       }
                     >
-                      <option value="">Selecciona</option>
-                      {commercialUsers.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.full_name} - {user.role_name || user.role_code}
-                        </option>
-                      ))}
+                        <option value="">Selecciona</option>
+                        {commercialUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {formatRoleUserLabel(user)}
+                          </option>
+                        ))}
                     </select>
                   }
                 />
@@ -1535,15 +1553,19 @@ export default function CargaHistoricaPage() {
                     </div>
                     <div>
                       <p className="text-sm text-[#698473]">Responsable</p>
-                      <p className="mt-1 text-base font-semibold text-[#24312A]">
-                        {selectedSourceUser?.full_name || "Sin definir"}
-                      </p>
+                        <p className="mt-1 text-base font-semibold text-[#24312A]">
+                          {selectedSourceUser
+                            ? formatRoleUserLabel(selectedSourceUser)
+                            : "Sin definir"}
+                        </p>
                     </div>
                     <div>
                       <p className="text-sm text-[#698473]">Comercial</p>
-                      <p className="mt-1 text-base font-semibold text-[#24312A]">
-                        {selectedCommercialUser?.full_name || "Sin asignar"}
-                      </p>
+                        <p className="mt-1 text-base font-semibold text-[#24312A]">
+                          {selectedCommercialUser
+                            ? formatRoleUserLabel(selectedCommercialUser)
+                            : "Sin asignar"}
+                        </p>
                     </div>
                     <div>
                       <p className="text-sm text-[#698473]">Base neta</p>

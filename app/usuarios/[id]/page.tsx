@@ -21,6 +21,7 @@ type Role = {
 type UserData = {
   id: string;
   full_name: string;
+  employee_code: string | null;
   phone: string | null;
   job_title: string | null;
   department_id: string | null;
@@ -64,6 +65,7 @@ export default function EditarUsuarioPage() {
   const [selectedCommercialTeam, setSelectedCommercialTeam] = useState<CommercialTeamValue>("");
   const [form, setForm] = useState({
     full_name: "",
+    employee_code: "",
     phone: "",
     job_title: "",
     department_id: "",
@@ -93,7 +95,9 @@ export default function EditarUsuarioPage() {
       const [userResult, departmentsResult, rolesResult, userRoleResult] = await Promise.all([
         supabase
           .from("profiles")
-          .select("id, full_name, phone, job_title, department_id, is_active, created_at")
+          .select(
+            "id, full_name, employee_code, phone, job_title, department_id, is_active, created_at"
+          )
           .eq("id", userId)
           .single(),
         supabase.from("departments").select("id, name").order("name", { ascending: true }),
@@ -118,6 +122,7 @@ export default function EditarUsuarioPage() {
       setSelectedCommercialTeam(inferCommercialTeam(user.job_title));
       setForm({
         full_name: user.full_name || "",
+        employee_code: user.employee_code || "",
         phone: user.phone || "",
         job_title: stripCommercialTeamSuffix(user.job_title || ""),
         department_id: user.department_id || "",
@@ -169,6 +174,7 @@ export default function EditarUsuarioPage() {
               ? `${stripCommercialTeamSuffix(form.job_title.trim())} ${selectedCommercialTeam}`.trim()
               : stripCommercialTeamSuffix(form.job_title.trim()) || null,
           full_name: form.full_name.trim(),
+          employee_code: form.employee_code.trim().toUpperCase() || null,
           phone: form.phone.trim() || null,
           department_id: form.department_id || null,
           is_active: form.is_active,
@@ -356,6 +362,15 @@ export default function EditarUsuarioPage() {
               placeholder="Teléfono"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+
+            <input
+              className={inputClass}
+              placeholder="Codigo interno opcional (Ej: OP1234)"
+              value={form.employee_code}
+              onChange={(e) =>
+                setForm({ ...form, employee_code: e.target.value.toUpperCase() })
+              }
             />
 
             <input

@@ -24,6 +24,9 @@ export async function POST(request: Request) {
     const full_name = String(body?.full_name || "").trim();
     const email = String(body?.email || "").trim().toLowerCase();
     const phone = String(body?.phone || "").trim();
+    const employee_code = String(body?.employee_code || "")
+      .trim()
+      .toUpperCase();
     const job_title = String(body?.job_title || "").trim();
     const department_id = String(body?.department_id || "").trim();
     const role_id = String(body?.role_id || "").trim();
@@ -53,6 +56,13 @@ export async function POST(request: Request) {
     if (selectedRoleIds.length === 0) {
       return NextResponse.json(
         { error: "Debes seleccionar al menos un rol." },
+        { status: 400 }
+      );
+    }
+
+    if (employee_code && !/^[A-Z]{2}\d{4}$/.test(employee_code)) {
+      return NextResponse.json(
+        { error: "El codigo debe tener 2 letras y 4 numeros. Ej: OP1234." },
         { status: 400 }
       );
     }
@@ -92,6 +102,7 @@ export async function POST(request: Request) {
           id: userId,
           full_name,
           phone: phone || null,
+          employee_code: employee_code || null,
           job_title: job_title || null,
           department_id: department_id || null,
           is_active: true,
@@ -159,6 +170,7 @@ export async function GET() {
         id,
         full_name,
         phone,
+        employee_code,
         job_title,
         is_active,
         created_at,

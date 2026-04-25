@@ -38,6 +38,7 @@ export default function NuevoUsuarioPage() {
     full_name: "",
     email: "",
     phone: "",
+    employee_code: "",
     job_title: "",
     department_id: "",
   });
@@ -118,6 +119,7 @@ export default function NuevoUsuarioPage() {
         },
         body: JSON.stringify({
           ...form,
+          employee_code: form.employee_code.trim().toUpperCase(),
           role_ids: selectedRoleIds,
         }),
       });
@@ -138,6 +140,7 @@ export default function NuevoUsuarioPage() {
         full_name: "",
         email: "",
         phone: "",
+        employee_code: "",
         job_title: "",
         department_id: "",
       });
@@ -260,6 +263,18 @@ export default function NuevoUsuarioPage() {
               placeholder="Telefono"
               value={form.phone}
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
+            />
+
+            <input
+              className={inputClass}
+              placeholder="Codigo interno opcional (Ej: OP1234)"
+              value={form.employee_code}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  employee_code: e.target.value.toUpperCase(),
+                })
+              }
             />
 
             <input

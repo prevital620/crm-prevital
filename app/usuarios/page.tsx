@@ -9,6 +9,7 @@ import SessionBadge from "@/components/session-badge";
 type UserRow = {
   id: string;
   full_name: string;
+  employee_code: string | null;
   email: string | null;
   phone: string | null;
   job_title: string | null;
@@ -227,6 +228,7 @@ Correo de acceso: ${user.email}`
 
       return (
         (user.full_name || "").toLowerCase().includes(q) ||
+        (user.employee_code || "").toLowerCase().includes(q) ||
         (user.email || "").toLowerCase().includes(q) ||
         (user.phone || "").toLowerCase().includes(q) ||
         (user.job_title || "").toLowerCase().includes(q) ||
@@ -391,6 +393,12 @@ Correo de acceso: ${user.email}`
                             <h3 className="text-lg font-semibold text-[#24312A]">
                               {user.full_name}
                             </h3>
+
+                            {user.employee_code ? (
+                              <span className="inline-flex rounded-full border border-[#CFE4D8] bg-[#F4FBF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+                                {user.employee_code}
+                              </span>
+                            ) : null}
 
                             <span
                               className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
