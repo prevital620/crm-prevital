@@ -397,8 +397,29 @@ export default function HomePage() {
       action.roles.some((role) => effectiveRoles.includes(role))
     );
 
+    const isCommercialProfile =
+      effectiveRoles.includes("comercial") ||
+      effectiveRoles.includes("gerencia_comercial") ||
+      effectiveRoles.includes("gerente_comercial") ||
+      effectiveRoles.includes("gerente");
+
+    const withCommercialEssentials = [...base];
+
+    if (isCommercialProfile) {
+      const commercialEssentials = ["/comercial#crear-cliente", "/admin/comisiones"];
+
+      commercialEssentials.forEach((href) => {
+        if (!withCommercialEssentials.some((action) => action.href === href)) {
+          const found = quickActions.find((action) => action.href === href);
+          if (found) {
+            withCommercialEssentials.push(found);
+          }
+        }
+      });
+    }
+
     if (effectiveRoles.includes("promotor_opc")) {
-      return base.sort((a, b) => {
+      return withCommercialEssentials.sort((a, b) => {
         const order: Record<string, number> = {
           "/leads/nuevo": 1,
           "/leads": 2,
@@ -408,7 +429,7 @@ export default function HomePage() {
     }
 
     if (effectiveRoles.includes("super_user")) {
-      return base.filter(
+      return withCommercialEssentials.filter(
         (action) => !["/recepcion?view=agenda", "/recepcion?view=config"].includes(action.href)
       );
     }
@@ -419,7 +440,7 @@ export default function HomePage() {
       effectiveRoles.includes("gerente_comercial") ||
       effectiveRoles.includes("gerente")
     ) {
-      return base.sort((a, b) => {
+      return withCommercialEssentials.sort((a, b) => {
         const order: Record<string, number> = {
           "/consulta-cliente": 1,
           "/comercial#crear-cliente": 2,
@@ -432,7 +453,7 @@ export default function HomePage() {
       });
     }
 
-    return base;
+    return withCommercialEssentials;
   }, [allRoleCodes, currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
