@@ -147,6 +147,12 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "comercial", "gerencia_comercial"],
   },
   {
+    title: "Crear cliente nuevo",
+    subtitle: "Abrir el formulario comercial para registrar un cliente nuevo.",
+    href: "/comercial#crear-cliente",
+    roles: ["super_user", "comercial", "gerencia_comercial", "gerente_comercial", "gerente"],
+  },
+  {
     title: "Retractos y renegociaciones",
     subtitle: "Preparar ajustes de ventas con impacto financiero y comisional.",
     href: "/comercial/ajustes",
@@ -177,6 +183,8 @@ const quickActions: QuickAction[] = [
       "supervisor_call_center",
       "comercial",
       "gerencia_comercial",
+      "gerente_comercial",
+      "gerente",
     ],
   },
 ];
@@ -403,6 +411,25 @@ export default function HomePage() {
       return base.filter(
         (action) => !["/recepcion?view=agenda", "/recepcion?view=config"].includes(action.href)
       );
+    }
+
+    if (
+      effectiveRoles.includes("comercial") ||
+      effectiveRoles.includes("gerencia_comercial") ||
+      effectiveRoles.includes("gerente_comercial") ||
+      effectiveRoles.includes("gerente")
+    ) {
+      return base.sort((a, b) => {
+        const order: Record<string, number> = {
+          "/consulta-cliente": 1,
+          "/comercial#crear-cliente": 2,
+          "/comercial": 3,
+          "/admin/comisiones": 4,
+          "/fisioterapia": 5,
+          "/nutricion": 6,
+        };
+        return (order[a.href] ?? 99) - (order[b.href] ?? 99);
+      });
     }
 
     return base;

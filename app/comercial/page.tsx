@@ -1723,7 +1723,10 @@ const updatePayload: any = {
               <StatCard title="No vendidos hoy" value={String(resumen.noVendidosHoy)} />
             </section>
 
-            <section className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
+            <section
+              id="crear-cliente"
+              className="mb-6 rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]"
+            >
               <div>
                 <h2 className="text-2xl font-bold text-[#24312A]">Crear cliente</h2>
                 <p className="mt-1 text-sm leading-6 text-[#51695C]">
