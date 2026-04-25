@@ -200,6 +200,14 @@ const paymentMethodOptions = [
   { value: "creditos", label: "Créditos" },
 ];
 
+const creditProviderOptions = [
+  { value: "", label: "Selecciona plataforma" },
+  { value: "addi", label: "Addi" },
+  { value: "welly", label: "Welly" },
+  { value: "medipay", label: "MediPay" },
+  { value: "sumaspay", label: "SumasPay" },
+];
+
 const nextStepOptions = [
   { value: "", label: "Sin continuidad todavía" },
   { value: "nutricion", label: "Nutrición" },
@@ -231,6 +239,23 @@ function serviceLabel(value: string) {
 function paymentMethodLabel(value: string) {
   const found = paymentMethodOptions.find((item) => item.value === value);
   return found?.label || value || "Sin definir";
+}
+
+function creditProviderLabel(value: string | null | undefined) {
+  const found = creditProviderOptions.find((item) => item.value === (value || ""));
+  return found?.label || value || "";
+}
+
+function buildPaymentMethodSummary(paymentMethod: string, creditProvider?: string | null) {
+  if (paymentMethod === "creditos" && creditProvider) {
+    return `Créditos - ${creditProviderLabel(creditProvider)}`;
+  }
+
+  if (["addi", "welly", "medipay", "sumaspay"].includes(paymentMethod)) {
+    return `Créditos - ${creditProviderLabel(paymentMethod)}`;
+  }
+
+  return paymentMethodLabel(paymentMethod);
 }
 
 function nextStepLabel(value: string) {
@@ -509,6 +534,7 @@ export default function ComercialPage() {
     proposal_text: "",
     purchased_service: "",
     payment_method: "",
+    credit_provider: "",
     cash_amount: "",
     portfolio_amount: "",
     volume_amount: "",
@@ -1169,7 +1195,14 @@ export default function ComercialPage() {
         sales_assessment: item.sales_assessment || "",
         proposal_text: item.proposal_text || "",
         purchased_service: item.purchased_service || "",
-        payment_method: item.payment_method || "",
+        payment_method: ["addi", "welly", "medipay", "sumaspay"].includes(item.payment_method || "")
+          ? "creditos"
+          : item.payment_method || "",
+        credit_provider:
+          item.credit_provider ||
+          (["addi", "welly", "medipay", "sumaspay"].includes(item.payment_method || "")
+            ? item.payment_method || ""
+            : ""),
         cash_amount: item.cash_amount ? String(item.cash_amount) : "",
         portfolio_amount: item.portfolio_amount ? String(item.portfolio_amount) : "",
         volume_amount:
@@ -1211,6 +1244,7 @@ export default function ComercialPage() {
       proposal_text: "",
       purchased_service: "",
       payment_method: "",
+      credit_provider: "",
       cash_amount: "",
       portfolio_amount: "",
       volume_amount: "",
@@ -1234,14 +1268,14 @@ export default function ComercialPage() {
 
     const allFollowUps = getPrimaryFollowUp(form, nextAppointments);
 
-    printPlanInstructions({
-      customerName: currentCase.customer_name,
-      phone: currentCase.phone,
-      city: currentCase.city,
-      commercialDate: formatDate(currentCase.created_at),
-      serviceName: serviceLabel(form.purchased_service),
-      paymentMethod: paymentMethodLabel(form.payment_method),
-      volumeAmount: calculatedVolume,
+      printPlanInstructions({
+        customerName: currentCase.customer_name,
+        phone: currentCase.phone,
+        city: currentCase.city,
+        commercialDate: formatDate(currentCase.created_at),
+        serviceName: serviceLabel(form.purchased_service),
+        paymentMethod: buildPaymentMethodSummary(form.payment_method, form.credit_provider),
+        volumeAmount: calculatedVolume,
       cashAmount: calculatedCash,
       portfolioAmount: calculatedPortfolio,
       nextStep:
@@ -1426,12 +1460,19 @@ export default function ComercialPage() {
           : saleOutcome;
 
       const paymentMethod = form.payment_method || null;
-      const isCreditPayment = ["addi", "welly", "medipay", "creditos"].includes(
-        paymentMethod || ""
-      );
-      const creditProvider = ["addi", "welly", "medipay"].includes(paymentMethod || "")
-        ? paymentMethod
-        : null;
+      const isCreditPayment =
+        paymentMethod === "creditos" ||
+        ["addi", "welly", "medipay", "sumaspay"].includes(paymentMethod || "");
+      const creditProvider =
+        paymentMethod === "creditos"
+          ? form.credit_provider || null
+          : ["addi", "welly", "medipay", "sumaspay"].includes(paymentMethod || "")
+          ? paymentMethod
+          : null;
+
+      if (paymentMethod === "creditos" && !creditProvider) {
+        throw new Error("Selecciona la plataforma de crédito.");
+      }
       const creditDiscountAmount = isCreditPayment ? Math.round(cashNumber * 0.1) : 0;
       const adminDiscountAmount = 200000;
       const netCommissionBase = Math.max(
@@ -1924,6 +1965,7 @@ const updatePayload: any = {
                           setForm((prev) => ({
                             ...prev,
                             payment_method: e.target.value,
+                            credit_provider: e.target.value === "creditos" ? prev.credit_provider : "",
                           }))
                         }
                       >
@@ -1935,6 +1977,30 @@ const updatePayload: any = {
                       </select>
                     }
                   />
+
+                  {form.payment_method === "creditos" ? (
+                    <Field
+                      label="Plataforma de crédito"
+                      input={
+                        <select
+                          className={inputClass}
+                          value={form.credit_provider}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              credit_provider: e.target.value,
+                            }))
+                          }
+                        >
+                          {creditProviderOptions.map((item) => (
+                            <option key={item.value} value={item.value}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      }
+                    />
+                  ) : null}
 
                   <Field
                     label="Volumen"

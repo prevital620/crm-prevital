@@ -19,12 +19,14 @@ import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import printNutritionSummary from "@/lib/print/templates/printNutritionSummary";
 import printPhysiotherapySummary from "@/lib/print/templates/printPhysiotherapySummary";
 import printReceptionRecord from "@/lib/print/templates/printReceptionRecord";
+import printDailyManifest from "@/lib/print/templates/printDailyManifest";
 import { normalizeCommercialCaseLeadSource } from "@/lib/lead-source";
 import {
   buildStoredCommercialNotes,
   parseStoredCommercialNotes,
 } from "@/lib/commercial/notes";
 import { digitsOnly } from "@/lib/users/userLookup";
+import { isSameLocalDay } from "@/lib/datetime/dateHelpers";
 import {
   getSectionForService,
   getSectionLabel,
@@ -159,6 +161,9 @@ type CommercialCaseRow = {
   assigned_commercial_user_id: string | null;
   assigned_by_user_id: string | null;
   assigned_at: string | null;
+  call_user_id: string | null;
+  opc_user_id: string | null;
+  commission_source_type: string | null;
   status: string;
   commercial_notes: string | null;
   sale_result: string | null;
@@ -167,6 +172,7 @@ type CommercialCaseRow = {
   sales_assessment: string | null;
   proposal_text: string | null;
   payment_method: string | null;
+  credit_provider: string | null;
   cash_amount: number | null;
   portfolio_amount: number | null;
   volume_amount: number | null;
@@ -182,6 +188,7 @@ type CommercialCaseRow = {
 type SourceUserOption = {
   id: string;
   full_name: string;
+  employee_code: string | null;
   role_name: string;
   role_code: string;
 };
@@ -317,9 +324,11 @@ const commercialPaymentOptions = [
   { value: "transferencia", label: "Transferencia" },
   { value: "mixto", label: "Mixto" },
   { value: "cartera", label: "Cartera" },
+  { value: "creditos", label: "Créditos" },
   { value: "addi", label: "Addi" },
   { value: "welly", label: "Welly" },
   { value: "medipay", label: "MediPay" },
+  { value: "sumaspay", label: "SumasPay" },
 ];
 
 const commercialNextStepOptions = [
@@ -435,6 +444,46 @@ function getCommercialReceptionSummary(item: CommercialCaseRow) {
     .split("|")
     .map((part) => repairMojibake(part).trim().replace(/\s+/g, " "))
     .filter(Boolean);
+}
+
+function paymentMethodSummaryComercial(
+  paymentMethod: string | null | undefined,
+  creditProvider: string | null | undefined
+) {
+  if (!paymentMethod) return "No registrado";
+  if (paymentMethod === "creditos") {
+    const provider = commercialPaymentOptions.find((option) => option.value === creditProvider)?.label;
+    return provider ? `Créditos - ${provider}` : "Créditos";
+  }
+  return paymentMethodLabelComercial(paymentMethod);
+}
+
+function getReceptionSummaryValue(item: CommercialCaseRow, label: string) {
+  const normalizedLabel = normalizeText(label);
+  const line = getCommercialReceptionSummary(item).find((entry) =>
+    normalizeText(entry).startsWith(`${normalizedLabel}:`)
+  );
+  return line?.split(":").slice(1).join(":").trim() || "";
+}
+
+function formatManifestTime(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function buildManifestObservation(item: CommercialCaseRow) {
+  return (
+    getReceptionSummaryValue(item, "Observaciones recepción") ||
+    getReceptionSummaryValue(item, "Motivo clasificación") ||
+    item.sales_assessment ||
+    item.closing_notes ||
+    ""
+  );
 }
 
 function numberFromMoneyText(value: string | number | null | undefined) {
@@ -1594,6 +1643,9 @@ function RecepcionContent() {
             id,
             lead_id,
             appointment_id,
+            call_user_id,
+            opc_user_id,
+            commission_source_type,
             customer_name,
             phone,
             city,
@@ -1601,12 +1653,14 @@ function RecepcionContent() {
             assigned_by_user_id,
             assigned_at,
             status,
+            commercial_notes,
             sale_result,
             purchased_service,
             sale_value,
             sales_assessment,
             proposal_text,
             payment_method,
+            credit_provider,
             cash_amount,
             portfolio_amount,
             volume_amount,
@@ -1621,15 +1675,16 @@ function RecepcionContent() {
           .order("created_at", { ascending: false }),
         supabase
           .from("user_roles")
-          .select(`
-            user_id,
-            profiles!user_roles_user_id_fkey (
-              id,
-              full_name
-            ),
-            roles!user_roles_role_id_fkey (
-              name,
-              code
+            .select(`
+              user_id,
+              profiles!user_roles_user_id_fkey (
+                id,
+                full_name,
+                employee_code
+              ),
+              roles!user_roles_role_id_fkey (
+                name,
+                code
             )
           `),
       ]);
@@ -1649,16 +1704,17 @@ function RecepcionContent() {
       const sourceUserRows = (sourceUsersResult.data as any[]) || [];
       const sourceUserMap = new Map<string, SourceUserOption>();
       const specialistMap = new Map<string, SpecialistOption>();
-      sourceUserRows.forEach((row) => {
-        const roleCode = row.roles?.code || "";
-        const id = row.profiles?.id || row.user_id;
-        if (!id) return;
-        const normalizedRow = {
-          id,
-          full_name: row.profiles?.full_name || "Sin nombre",
-          role_name: row.roles?.name || "",
-          role_code: roleCode,
-        };
+        sourceUserRows.forEach((row) => {
+          const roleCode = row.roles?.code || "";
+          const id = row.profiles?.id || row.user_id;
+          if (!id) return;
+          const normalizedRow = {
+            id,
+            full_name: row.profiles?.full_name || "Sin nombre",
+            employee_code: row.profiles?.employee_code || "",
+            role_name: row.roles?.name || "",
+            role_code: roleCode,
+          };
 
         if (
           ["promotor_opc", "supervisor_opc", "tmk", "confirmador", "supervisor_call_center"].includes(roleCode) &&
@@ -2293,7 +2349,7 @@ function RecepcionContent() {
 
   const commercialCasesToday = useMemo(() => {
     const today = hoyISO();
-    return commercialCases.filter((item) => item.created_at?.slice(0, 10) === today);
+    return commercialCases.filter((item) => isSameLocalDay(item.created_at, today));
   }, [commercialCases]);
 
   const commercialCasesFiltered = useMemo(() => {
@@ -2356,20 +2412,19 @@ function RecepcionContent() {
   }, [appointments]);
 
   const commercialPendingPrintCases = useMemo(() => {
-    const today = hoyISO();
     return commercialCases
       .filter(
         (item) =>
           item.status === "finalizado" &&
           hasCommercialSale(item) &&
-          ((item.closed_at || item.created_at || "").slice(0, 10) === today)
+          isSameLocalDay(item.closed_at || item.created_at, fechaFiltro)
       )
       .sort((a, b) => {
         const dateA = new Date(a.closed_at || a.created_at || 0).getTime();
         const dateB = new Date(b.closed_at || b.created_at || 0).getTime();
         return dateB - dateA;
       });
-  }, [commercialCases]);
+  }, [commercialCases, fechaFiltro]);
 
   const receptionLiveSummary = useMemo(
     () => ({
@@ -2381,12 +2436,46 @@ function RecepcionContent() {
         nutritionPendingAppointments.length +
         physiotherapyPendingAppointments.length,
     }),
-    [
-      commercialPendingPrintCases,
-      nutritionPendingAppointments,
-      physiotherapyPendingAppointments,
-    ]
+      [
+        commercialPendingPrintCases,
+        nutritionPendingAppointments,
+        physiotherapyPendingAppointments,
+      ]
+    );
+
+  const sourceUserById = useMemo(
+    () => new Map(sourceUsers.map((item) => [item.id, item])),
+    [sourceUsers]
   );
+
+  const manifestRows = useMemo(() => {
+    return commercialCases
+      .filter((item) => isSameLocalDay(item.created_at, fechaFiltro))
+      .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+      .map((item) => {
+        const tmk = item.call_user_id ? sourceUserById.get(item.call_user_id) : undefined;
+        const opc = item.opc_user_id ? sourceUserById.get(item.opc_user_id) : undefined;
+        const saleAmount = Number(item.volume_amount || item.sale_value || 0);
+        const hasSale = saleAmount > 0 && hasCommercialSale(item);
+
+        return {
+          horaLlegada: formatManifestTime(item.created_at),
+          horaSalida: formatManifestTime(item.closed_at),
+          nombreCompleto: item.customer_name || "Sin nombre",
+          codigoTMK: tmk?.employee_code || "",
+          codigoOPC: opc?.employee_code || "",
+          calificacion:
+            hasSale || normalizeText(item.status) === "finalizado"
+              ? "Q"
+              : getReceptionSummaryValue(item, "Clasificación inicial") || "Sin definir",
+          valorVenta: hasSale ? saleAmount.toLocaleString("es-CO") : "",
+          formaPago: hasSale
+            ? paymentMethodSummaryComercial(item.payment_method, item.credit_provider)
+            : "",
+          observaciones: buildManifestObservation(item),
+        };
+      });
+  }, [commercialCases, fechaFiltro, sourceUserById]);
 
   const selectedNutritionInventoryItem = useMemo(() => {
     if (nutritionDeliveryProductId) {
@@ -2494,16 +2583,16 @@ function RecepcionContent() {
         installmentValue
       );
 
-      printPlanInstructions({
-        customerName: item.customer_name,
-        phone: item.phone,
-        city: item.city,
-        commercialDate: item.closed_at || item.created_at,
-        serviceName: serviceLabelComercial(item.purchased_service),
-        paymentMethod: paymentMethodLabelComercial(item.payment_method),
-        volumeAmount: Number(item.volume_amount || item.sale_value || 0),
-        cashAmount: Number(item.cash_amount || 0),
-        portfolioAmount: Number(item.portfolio_amount || 0),
+        printPlanInstructions({
+          customerName: item.customer_name,
+          phone: item.phone,
+          city: item.city,
+          commercialDate: item.closed_at || item.created_at,
+          serviceName: serviceLabelComercial(item.purchased_service),
+          paymentMethod: paymentMethodSummaryComercial(item.payment_method, item.credit_provider),
+          volumeAmount: Number(item.volume_amount || item.sale_value || 0),
+          cashAmount: Number(item.cash_amount || 0),
+          portfolioAmount: Number(item.portfolio_amount || 0),
         nextStep: nextStepLabelComercial(item.next_step_type),
         receptionSummary: getCommercialReceptionSummary(item),
         assessment: item.sales_assessment,
@@ -2520,12 +2609,20 @@ function RecepcionContent() {
       setMensaje("Documento comercial listo para impresion.");
     } catch (err: any) {
       setError(err?.message || "No se pudo preparar la impresion comercial.");
-    } finally {
-      setQueueActionId(null);
+      } finally {
+        setQueueActionId(null);
+      }
     }
-  }
 
-  async function imprimirResumenNutricionDesdeRecepcion(item: AppointmentRow) {
+    function imprimirManifiestoDelDia() {
+      printDailyManifest({
+        fecha: fechaFiltro,
+        generatedAt: new Date().toLocaleString("es-CO"),
+        rows: manifestRows,
+      });
+    }
+
+    async function imprimirResumenNutricionDesdeRecepcion(item: AppointmentRow) {
     try {
       setQueueActionId(`nutrition-print-${item.id}`);
       setError("");
@@ -4263,18 +4360,27 @@ function imprimirRegistroComercial() {
             </div>
 
             <div className="mt-6 grid gap-4 xl:grid-cols-3">
-              <div className="rounded-[28px] border border-[#D6E8DA] bg-white/90 p-5 shadow-[0_16px_36px_rgba(95,125,102,0.08)]">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-[#1F3128]">Comercial finalizado</h3>
-                    <p className="mt-1 text-sm text-[#607368]">
-                      Ventas del día listas para imprimir desde recepción.
-                    </p>
+                <div className="rounded-[28px] border border-[#D6E8DA] bg-white/90 p-5 shadow-[0_16px_36px_rgba(95,125,102,0.08)]">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-[#1F3128]">Comercial finalizado</h3>
+                      <p className="mt-1 text-sm text-[#607368]">
+                        Ventas del día listas para imprimir desde recepción.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="rounded-full bg-[#EEF7F1] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+                        {commercialPendingPrintCases.length}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={imprimirManifiestoDelDia}
+                        className="rounded-full border border-[#D6E8DA] bg-white px-3 py-2 text-xs font-semibold text-[#365F49] transition hover:border-[#BDD7C5] hover:bg-[#F5FBF7]"
+                      >
+                        Imprimir manifiesto
+                      </button>
+                    </div>
                   </div>
-                  <span className="rounded-full bg-[#EEF7F1] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
-                    {commercialPendingPrintCases.length}
-                  </span>
-                </div>
 
                 <div className="mt-4 space-y-3">
                   {commercialPendingPrintCases.length === 0 ? (
