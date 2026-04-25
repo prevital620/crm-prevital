@@ -191,6 +191,7 @@ type SourceUserOption = {
   employee_code: string | null;
   role_name: string;
   role_code: string;
+  is_active: boolean;
 };
 
 type CommercialClinicalFlags = {
@@ -1143,18 +1144,20 @@ function RecepcionContent() {
   const [savingCommercialIntake, setSavingCommercialIntake] = useState(false);
   const [commercialSearch, setCommercialSearch] = useState("");
   const [sourceUsers, setSourceUsers] = useState<SourceUserOption[]>([]);
+  const [manifestDate, setManifestDate] = useState(hoyISO());
   const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
   const [lastCommercialPrintData, setLastCommercialPrintData] =
     useState<Parameters<typeof printReceptionRecord>[0] | null>(null);
   const [commercialForm, setCommercialForm] = useState({
-    customer_name: "",
-    phone: "",
-    city: "",
-    documento: "",
-    fuente: "",
-    fuente_detalle: "",
-    fuente_usuario_id: "",
-    observaciones: "",
+      customer_name: "",
+      phone: "",
+      city: "",
+      documento: "",
+      fuente: "",
+      fuente_detalle: "",
+      fuente_usuario_id: "",
+      fuente_usuario_codigo: "",
+      observaciones: "",
     acompanante_nombre: "",
     acompanante_parentesco: "",
     tiene_eps: "si",
@@ -1297,23 +1300,54 @@ function RecepcionContent() {
     normalizedCommercialSource === "opc" || normalizedCommercialSource === "tmk";
   const availableSourceUsers = useMemo(() => {
     if (normalizedCommercialSource === "opc") {
-      return sourceUsers.filter((item) =>
-        ["promotor_opc", "supervisor_opc"].includes(item.role_code)
+      return sourceUsers.filter(
+        (item) => item.is_active && ["promotor_opc", "supervisor_opc"].includes(item.role_code)
       );
     }
 
     if (normalizedCommercialSource === "tmk") {
-      return sourceUsers.filter((item) =>
-        ["tmk", "confirmador", "supervisor_call_center"].includes(item.role_code)
+      return sourceUsers.filter(
+        (item) =>
+          item.is_active &&
+          ["tmk", "confirmador", "supervisor_call_center"].includes(item.role_code)
       );
     }
 
     return [];
   }, [normalizedCommercialSource, sourceUsers]);
+  const sourceUserByCode = useMemo(
+    () =>
+      new Map(
+        availableSourceUsers
+          .filter((item) => item.employee_code)
+          .map((item) => [String(item.employee_code).toUpperCase(), item])
+      ),
+    [availableSourceUsers]
+  );
   const selectedSourceUser = useMemo(
     () => sourceUsers.find((item) => item.id === commercialForm.fuente_usuario_id) || null,
     [sourceUsers, commercialForm.fuente_usuario_id]
   );
+  const selectedSourceUserLabel = selectedSourceUser
+    ? [selectedSourceUser.employee_code, selectedSourceUser.full_name].filter(Boolean).join(" · ")
+    : "";
+  useEffect(() => {
+    if (!sourceNeedsUserSelection) return;
+    const code = commercialForm.fuente_usuario_codigo.trim().toUpperCase();
+    if (!code) return;
+    const matchedUser = sourceUserByCode.get(code);
+    if (!matchedUser) return;
+    if (matchedUser.id === commercialForm.fuente_usuario_id) return;
+    setCommercialForm((prev) => ({
+      ...prev,
+      fuente_usuario_id: matchedUser.id,
+    }));
+  }, [
+    commercialForm.fuente_usuario_codigo,
+    commercialForm.fuente_usuario_id,
+    sourceNeedsUserSelection,
+    sourceUserByCode,
+  ]);
   const occupationNeedsDetail = shouldAskOccupationDetail(commercialForm.ocupacion);
 
   useEffect(() => {
@@ -1680,7 +1714,8 @@ function RecepcionContent() {
               profiles!user_roles_user_id_fkey (
                 id,
                 full_name,
-                employee_code
+                employee_code,
+                is_active
               ),
               roles!user_roles_role_id_fkey (
                 name,
@@ -1708,20 +1743,22 @@ function RecepcionContent() {
           const roleCode = row.roles?.code || "";
           const id = row.profiles?.id || row.user_id;
           if (!id) return;
+          const isActive = row.profiles?.is_active !== false;
           const normalizedRow = {
             id,
             full_name: row.profiles?.full_name || "Sin nombre",
             employee_code: row.profiles?.employee_code || "",
             role_name: row.roles?.name || "",
             role_code: roleCode,
+            is_active: isActive,
           };
 
-        if (
-          ["promotor_opc", "supervisor_opc", "tmk", "confirmador", "supervisor_call_center"].includes(roleCode) &&
-          !sourceUserMap.has(id)
-        ) {
-          sourceUserMap.set(id, normalizedRow);
-        }
+          if (
+            ["promotor_opc", "supervisor_opc", "tmk", "confirmador", "supervisor_call_center"].includes(roleCode) &&
+            !sourceUserMap.has(id)
+          ) {
+            sourceUserMap.set(id, normalizedRow);
+          }
 
         if (
           ["nutricionista", "medico_general", "medico", "fisioterapeuta"].includes(roleCode) &&
@@ -2450,7 +2487,7 @@ function RecepcionContent() {
 
   const manifestRows = useMemo(() => {
     return commercialCases
-      .filter((item) => isSameLocalDay(item.created_at, fechaFiltro))
+      .filter((item) => isSameLocalDay(item.created_at, manifestDate))
       .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
       .map((item) => {
         const tmk = item.call_user_id ? sourceUserById.get(item.call_user_id) : undefined;
@@ -2475,7 +2512,7 @@ function RecepcionContent() {
           observaciones: buildManifestObservation(item),
         };
       });
-  }, [commercialCases, fechaFiltro, sourceUserById]);
+  }, [commercialCases, manifestDate, sourceUserById]);
 
   const selectedNutritionInventoryItem = useMemo(() => {
     if (nutritionDeliveryProductId) {
@@ -2616,7 +2653,7 @@ function RecepcionContent() {
 
     function imprimirManifiestoDelDia() {
       printDailyManifest({
-        fecha: fechaFiltro,
+        fecha: manifestDate,
         generatedAt: new Date().toLocaleString("es-CO"),
         rows: manifestRows,
       });
@@ -3153,6 +3190,7 @@ function RecepcionContent() {
       fuente: "",
       fuente_detalle: "",
       fuente_usuario_id: "",
+      fuente_usuario_codigo: "",
       observaciones: "",
       acompanante_nombre: "",
       acompanante_parentesco: "",
@@ -3208,7 +3246,7 @@ function buildCommercialPrintData() {
       sourceDetailLabel: commercialSourceDetailMeta?.label || null,
       sourceDetail:
         (sourceNeedsUserSelection
-          ? selectedSourceUser?.full_name
+          ? selectedSourceUserLabel
           : commercialForm.referido_por) || "No aplica",
       hasEps: commercialForm.tiene_eps === "si" ? "S" : "No",
       affiliation: commercialForm.afiliacion || "Sin definir",
@@ -3403,9 +3441,9 @@ function imprimirRegistroComercial() {
       const ocupacionLabel = traducirOcupacionComercial(commercialForm.ocupacion, commercialForm.ocupacion_otro);
       const fuenteLabel = traducirFuenteManual(commercialForm.fuente);
       const fuenteDetalleLabel = commercialSourceDetailMeta?.noteLabel || "Detalle fuente";
-      const fuenteDetalleValor = sourceNeedsUserSelection
-        ? selectedSourceUser?.full_name || ""
-        : commercialForm.referido_por.trim();
+        const fuenteDetalleValor = sourceNeedsUserSelection
+          ? selectedSourceUserLabel || ""
+          : commercialForm.referido_por.trim();
       const commissionSourceType =
         normalizedCommercialSource === "opc"
           ? "opc"
@@ -3644,14 +3682,15 @@ function imprimirRegistroComercial() {
     setFechaFiltro(item.appointment_date);
     setBusquedaAgenda(item.patient_name || item.phone || "");
     setCommercialForm({
-      customer_name: item.patient_name || "",
-      phone: item.phone || "",
-      city: item.city || "",
-      documento: "",
-      fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
-      fuente_detalle: "",
-      fuente_usuario_id: "",
-      observaciones: limpiarFuenteManualDeNotas(item.notes),
+        customer_name: item.patient_name || "",
+        phone: item.phone || "",
+        city: item.city || "",
+        documento: "",
+        fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
+        fuente_detalle: "",
+        fuente_usuario_id: "",
+        fuente_usuario_codigo: "",
+        observaciones: limpiarFuenteManualDeNotas(item.notes),
       acompanante_nombre: "",
       acompanante_parentesco: "",
       tiene_eps: "si",
@@ -4342,22 +4381,40 @@ function imprimirRegistroComercial() {
                 </p>
               </div>
 
-              <div className="grid min-w-[240px] gap-3 rounded-[26px] border border-[#D6E8DA] bg-white/80 p-4 shadow-sm md:grid-cols-2">
-                <div>
-                  <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6A8376]">
-                    Total
-                  </p>
-                  <p className="mt-2 text-3xl font-bold text-[#1F3128]">
+                <div className="grid min-w-[240px] gap-3 rounded-[26px] border border-[#D6E8DA] bg-white/80 p-4 shadow-sm md:grid-cols-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6A8376]">
+                      Total
+                    </p>
+                    <p className="mt-2 text-3xl font-bold text-[#1F3128]">
                     {receptionLiveSummary.total}
                   </p>
                 </div>
-                <div className="space-y-2 text-sm text-[#4F6F5B]">
-                  <p>Comercial: {receptionLiveSummary.commercial}</p>
-                  <p>Nutrición: {receptionLiveSummary.nutrition}</p>
-                  <p>Fisioterapia: {receptionLiveSummary.physiotherapy}</p>
+                  <div className="space-y-2 text-sm text-[#4F6F5B]">
+                    <p>Comercial: {receptionLiveSummary.commercial}</p>
+                    <p>Nutrición: {receptionLiveSummary.nutrition}</p>
+                    <p>Fisioterapia: {receptionLiveSummary.physiotherapy}</p>
+                  </div>
+                  <div className="space-y-3 rounded-[22px] border border-[#D6E8DA] bg-[#FCFEFC] p-3">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">
+                      Manifiesto
+                    </p>
+                    <input
+                      type="date"
+                      value={manifestDate}
+                      onChange={(e) => setManifestDate(e.target.value)}
+                      className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-3 py-2 text-sm text-[#1F3128] outline-none transition focus:border-[#86B09A] focus:ring-2 focus:ring-[#DFF1E5]"
+                    />
+                    <button
+                      type="button"
+                      onClick={imprimirManifiestoDelDia}
+                      className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-3 py-2 text-sm font-semibold text-[#365F49] transition hover:border-[#BDD7C5] hover:bg-[#F5FBF7]"
+                    >
+                      Imprimir manifiesto
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
 
             <div className="mt-6 grid gap-4 xl:grid-cols-3">
                 <div className="rounded-[28px] border border-[#D6E8DA] bg-white/90 p-5 shadow-[0_16px_36px_rgba(95,125,102,0.08)]">
@@ -4368,19 +4425,10 @@ function imprimirRegistroComercial() {
                         Ventas del día listas para imprimir desde recepción.
                       </p>
                     </div>
-                    <div className="flex items-center gap-2">
                       <span className="rounded-full bg-[#EEF7F1] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
                         {commercialPendingPrintCases.length}
                       </span>
-                      <button
-                        type="button"
-                        onClick={imprimirManifiestoDelDia}
-                        className="rounded-full border border-[#D6E8DA] bg-white px-3 py-2 text-xs font-semibold text-[#365F49] transition hover:border-[#BDD7C5] hover:bg-[#F5FBF7]"
-                      >
-                        Imprimir manifiesto
-                      </button>
                     </div>
-                  </div>
 
                 <div className="mt-4 space-y-3">
                   {commercialPendingPrintCases.length === 0 ? (
@@ -4773,6 +4821,7 @@ function imprimirRegistroComercial() {
                             ...prev,
                             fuente: normalizarFuenteManual(e.target.value),
                             fuente_usuario_id: "",
+                            fuente_usuario_codigo: "",
                             referido_por: "",
                           }))
                         }
@@ -4787,31 +4836,52 @@ function imprimirRegistroComercial() {
                     }
                   />
                   {commercialSourceDetailMeta ? (
-                    <Field
-                      label={commercialSourceDetailMeta.label}
-                      input={
-                        sourceNeedsUserSelection ? (
-                          <select
-                            className={inputClass}
-                            value={commercialForm.fuente_usuario_id}
-                            onChange={(e) =>
-                              setCommercialForm((prev) => ({
-                                ...prev,
-                                fuente_usuario_id: e.target.value,
-                              }))
-                            }
-                          >
-                            <option value="">Selecciona usuario</option>
-                            {availableSourceUsers.map((item) => (
-                              <option key={item.id} value={item.id}>
-                                {item.full_name}  {item.role_name || item.role_code}
-                              </option>
-                            ))}
-                          </select>
-                        ) : (
-                          <input
-                            className={inputClass}
-                            placeholder={commercialSourceDetailMeta.placeholder}
+                      <Field
+                        label={commercialSourceDetailMeta.label}
+                        input={
+                          sourceNeedsUserSelection ? (
+                            <div className="space-y-3">
+                              <input
+                                className={inputClass}
+                                placeholder="Código interno, ej: TM1234"
+                                value={commercialForm.fuente_usuario_codigo}
+                                onChange={(e) =>
+                                  setCommercialForm((prev) => ({
+                                    ...prev,
+                                    fuente_usuario_codigo: e.target.value.toUpperCase(),
+                                  }))
+                                }
+                              />
+                              <select
+                                className={inputClass}
+                                value={commercialForm.fuente_usuario_id}
+                                onChange={(e) => {
+                                  const selectedId = e.target.value;
+                                  const matched = availableSourceUsers.find((item) => item.id === selectedId) || null;
+                                  setCommercialForm((prev) => ({
+                                    ...prev,
+                                    fuente_usuario_id: selectedId,
+                                    fuente_usuario_codigo: matched?.employee_code || prev.fuente_usuario_codigo,
+                                  }));
+                                }}
+                              >
+                                <option value="">Selecciona usuario</option>
+                                {availableSourceUsers.map((item) => (
+                                  <option key={item.id} value={item.id}>
+                                    {[item.employee_code, item.full_name, item.role_name || item.role_code]
+                                      .filter(Boolean)
+                                      .join(" · ")}
+                                  </option>
+                                ))}
+                              </select>
+                              <p className="text-xs text-slate-500">
+                                Solo aparecen usuarios activos. Puedes escribir el código para autoseleccionar.
+                              </p>
+                            </div>
+                          ) : (
+                            <input
+                              className={inputClass}
+                              placeholder={commercialSourceDetailMeta.placeholder}
                             value={commercialForm.referido_por}
                             onChange={(e) => setCommercialForm((prev) => ({ ...prev, referido_por: e.target.value }))}
                           />
