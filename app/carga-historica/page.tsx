@@ -52,6 +52,14 @@ type DeliveryLog = {
   created_at: string;
 };
 
+type HistoricalClinicalFlags = {
+  hipertenso_descalifica: boolean;
+  diabetico_descalifica: boolean;
+  cirugias_descalifica: boolean;
+  medicamentos_descalifica: boolean;
+  enfermedades_descalifica: boolean;
+};
+
 type HistoricalForm = {
   customer_name: string;
   document: string;
@@ -67,6 +75,22 @@ type HistoricalForm = {
   lead_time: string;
   lead_notes: string;
   was_client: boolean;
+  edad: string;
+  tiene_eps: string;
+  afiliacion: string;
+  trae_cedula: string;
+  celular_inteligente: string;
+  ocupacion: string;
+  ocupacion_otro: string;
+  hipertenso: string;
+  diabetico: string;
+  cirugias: string;
+  cirugias_cual: string;
+  medicamentos: string;
+  medicamentos_cual: string;
+  enfermedades: string;
+  enfermedades_cual: string;
+  clinical_flags: HistoricalClinicalFlags;
   create_appointment: boolean;
   appointment_date: string;
   appointment_time: string;
@@ -161,6 +185,37 @@ const paymentOptions = [
   { value: "medipay", label: "MediPay" },
 ];
 
+const affiliationOptions = [
+  { value: "", label: "Selecciona" },
+  { value: "cotizante", label: "Cotizante" },
+  { value: "beneficiario", label: "Beneficiario" },
+  { value: "subsidiado", label: "Subsidiado" },
+  { value: "particular", label: "Particular" },
+];
+
+const commercialOccupationOptions = [
+  { value: "empleado", label: "Empleado" },
+  { value: "independiente", label: "Independiente" },
+  { value: "pensionado", label: "Pensionado" },
+  { value: "otro", label: "Otro" },
+  { value: "desempleado", label: "Desempleado" },
+  { value: "estudiante", label: "Estudiante" },
+  { value: "empleado_salud", label: "Empleado de salud" },
+] as const;
+
+const commercialOccupationDisqualifyingValues = new Set<string>([
+  "desempleado",
+  "estudiante",
+  "empleado_salud",
+]);
+
+const commercialOccupationOtherDisqualifyingTerms = [
+  "desempleado",
+  "estudiante",
+  "empleado de la salud",
+  "salud",
+];
+
 function hoyISO() {
   const today = new Date();
   const year = today.getFullYear();
@@ -221,6 +276,117 @@ function formatMoneyPreview(value: number) {
   });
 }
 
+function emptyHistoricalClinicalFlags(): HistoricalClinicalFlags {
+  return {
+    hipertenso_descalifica: false,
+    diabetico_descalifica: false,
+    cirugias_descalifica: false,
+    medicamentos_descalifica: false,
+    enfermedades_descalifica: false,
+  };
+}
+
+function shouldAskOccupationDetail(ocupacion: string) {
+  return ["empleado", "independiente", "otro"].includes(ocupacion);
+}
+
+function getOccupationDetailLabel(ocupacion: string) {
+  if (ocupacion === "empleado") return "¿Cuál empleo?";
+  if (ocupacion === "independiente") return "¿Cuál actividad independiente?";
+  return "¿Cuál ocupación?";
+}
+
+function traducirOcupacionHistorica(ocupacion: string, ocupacionOtro: string) {
+  const detalle = ocupacionOtro.trim();
+  const map: Record<string, string> = {
+    empleado: "Empleado",
+    independiente: "Independiente",
+    pensionado: "Pensionado",
+    desempleado: "Desempleado",
+    estudiante: "Estudiante",
+    empleado_salud: "Empleado de salud",
+    otro: detalle || "Otro",
+  };
+  return map[ocupacion] || detalle || "Sin definir";
+}
+
+function calcularClasificacionHistorica(values: {
+  edad: string;
+  tiene_eps: string;
+  afiliacion: string;
+  trae_cedula: string;
+  celular_inteligente: string;
+  ocupacion: string;
+  ocupacion_otro?: string;
+  hipertenso: string;
+  diabetico: string;
+  cirugias: string;
+  medicamentos: string;
+  enfermedades: string;
+  clinical_flags: HistoricalClinicalFlags;
+}) {
+  const motivos: string[] = [];
+  const edad = Number(values.edad || "0");
+  const ocupacionOtroNormalizada = (values.ocupacion_otro || "")
+    .trim()
+    .toLowerCase();
+  const ocupacionDescalificante =
+    commercialOccupationDisqualifyingValues.has(values.ocupacion) ||
+    (shouldAskOccupationDetail(values.ocupacion) &&
+      commercialOccupationOtherDisqualifyingTerms.some((term) =>
+        ocupacionOtroNormalizada.includes(term)
+      ));
+
+  if (!edad || Number.isNaN(edad) || edad < 40 || edad > 69) {
+    motivos.push("edad fuera del rango de 40 a 69 años");
+  }
+  if (values.tiene_eps !== "si") motivos.push("no tiene EPS");
+  if (values.afiliacion !== "cotizante") motivos.push("no es cotizante");
+  if (values.trae_cedula !== "si") motivos.push("no asiste con cédula");
+  if (values.celular_inteligente !== "si") {
+    motivos.push("no tiene celular inteligente");
+  }
+  if (ocupacionDescalificante) motivos.push("ocupación descalificante");
+  if (
+    values.hipertenso === "si" &&
+    values.clinical_flags.hipertenso_descalifica
+  ) {
+    motivos.push("hipertensión descalificante");
+  }
+  if (
+    values.diabetico === "si" &&
+    values.clinical_flags.diabetico_descalifica
+  ) {
+    motivos.push("diabetes descalificante");
+  }
+  if (
+    values.cirugias === "si" &&
+    values.clinical_flags.cirugias_descalifica
+  ) {
+    motivos.push("cirugía descalificante");
+  }
+  if (
+    values.medicamentos === "si" &&
+    values.clinical_flags.medicamentos_descalifica
+  ) {
+    motivos.push("medicamento descalificante");
+  }
+  if (
+    values.enfermedades === "si" &&
+    values.clinical_flags.enfermedades_descalifica
+  ) {
+    motivos.push("enfermedad descalificante");
+  }
+
+  return {
+    clasificacion: motivos.length === 0 ? "Q" : "No Q",
+    motivo:
+      motivos.length === 0
+        ? "Q inicial: cumple todos los criterios base."
+        : `No Q por ${motivos.join(", ")}.`,
+  };
+}
+
 function formatRoleUserLabel(user: RoleUserOption) {
   const roleLabel = user.role_name || user.role_code;
   return user.employee_code
@@ -244,6 +410,22 @@ function initialForm(): HistoricalForm {
     lead_time: "08:00",
     lead_notes: "",
     was_client: false,
+    edad: "",
+    tiene_eps: "si",
+    afiliacion: "",
+    trae_cedula: "si",
+    celular_inteligente: "si",
+    ocupacion: "",
+    ocupacion_otro: "",
+    hipertenso: "no",
+    diabetico: "no",
+    cirugias: "no",
+    cirugias_cual: "",
+    medicamentos: "no",
+    medicamentos_cual: "",
+    enfermedades: "no",
+    enfermedades_cual: "",
+    clinical_flags: emptyHistoricalClinicalFlags(),
     create_appointment: true,
     appointment_date: hoyISO(),
     appointment_time: "08:00",
@@ -495,6 +677,11 @@ export default function CargaHistoricaPage() {
     [commercialUsers, form.assigned_commercial_user_id]
   );
 
+  const occupationNeedsDetail = useMemo(
+    () => shouldAskOccupationDetail(form.ocupacion),
+    [form.ocupacion]
+  );
+
   const calculatedVolume = useMemo(
     () => numberFromString(form.volume_amount),
     [form.volume_amount]
@@ -518,6 +705,26 @@ export default function CargaHistoricaPage() {
     commissionSourceOptions.find((item) => item.value === form.commission_source)
       ?.label || form.commission_source;
 
+  const historicalClassification = useMemo(
+    () =>
+      calcularClasificacionHistorica({
+        edad: form.edad,
+        tiene_eps: form.tiene_eps,
+        afiliacion: form.afiliacion,
+        trae_cedula: form.trae_cedula,
+        celular_inteligente: form.celular_inteligente,
+        ocupacion: form.ocupacion,
+        ocupacion_otro: form.ocupacion_otro,
+        hipertenso: form.hipertenso,
+        diabetico: form.diabetico,
+        cirugias: form.cirugias,
+        medicamentos: form.medicamentos,
+        enfermedades: form.enfermedades,
+        clinical_flags: form.clinical_flags,
+      }),
+    [form]
+  );
+
   function setValue<K extends keyof HistoricalForm>(
     key: K,
     value: HistoricalForm[K]
@@ -528,7 +735,11 @@ export default function CargaHistoricaPage() {
     }));
   }
 
-  async function createOrFindCustomerUser() {
+  async function createOrFindCustomerUser(params: {
+    occupationLabel: string;
+    classificationInitial: string;
+    classificationFinal: string;
+  }) {
     const trimmedDocument = form.document.trim();
     const trimmedPhone = form.phone.trim();
     const trimmedName = form.customer_name.trim();
@@ -554,6 +765,18 @@ export default function CargaHistoricaPage() {
     if (error) throw error;
 
     if (existing && existing.length > 0) {
+      await supabase
+        .from("users")
+        .update({
+          nombre: trimmedName,
+          documento: trimmedDocument || null,
+          telefono: trimmedPhone || null,
+          ciudad: form.city.trim() || null,
+          ocupacion: params.occupationLabel || null,
+          clasificacion_inicial: params.classificationInitial,
+          clasificacion_final: params.classificationFinal,
+        })
+        .eq("id", existing[0].id);
       return existing[0].id as string;
     }
 
@@ -565,10 +788,12 @@ export default function CargaHistoricaPage() {
           documento: trimmedDocument || null,
           telefono: trimmedPhone || null,
           ciudad: form.city.trim() || null,
-          ocupacion: "historico",
+          ocupacion: params.occupationLabel || null,
           estado_actual: form.nutrition_history_pending
             ? "historia clinica pendiente"
             : "cliente historico",
+          clasificacion_inicial: params.classificationInitial,
+          clasificacion_final: params.classificationFinal,
         },
       ])
       .select("id")
@@ -682,6 +907,25 @@ export default function CargaHistoricaPage() {
         throw new Error("Debes escribir el telefono.");
       }
 
+      if (form.was_client) {
+        if (!form.edad.trim()) {
+          throw new Error("Debes escribir la edad para clasificar el cliente.");
+        }
+        if (!form.afiliacion) {
+          throw new Error(
+            "Debes seleccionar la afiliacion para clasificar el cliente."
+          );
+        }
+        if (!form.ocupacion) {
+          throw new Error("Debes seleccionar la ocupacion para clasificar el cliente.");
+        }
+        if (occupationNeedsDetail && !form.ocupacion_otro.trim()) {
+          throw new Error(
+            `Debes completar ${getOccupationDetailLabel(form.ocupacion).toLowerCase()}.`
+          );
+        }
+      }
+
       if (
         ["opc", "tmk"].includes(form.commission_source) &&
         !form.source_user_id
@@ -717,12 +961,31 @@ export default function CargaHistoricaPage() {
       const grossBonusBase = volumeNumber || 0;
       const hayVenta =
         form.create_sale && (volumeNumber > 0 || Boolean(form.purchased_service));
+      const occupationLabel = traducirOcupacionHistorica(
+        form.ocupacion,
+        form.ocupacion_otro
+      );
+      const classificationInitial = form.was_client
+        ? historicalClassification.clasificacion
+        : "No Q";
+      const classificationFinal =
+        form.was_client && hayVenta ? "Q" : classificationInitial;
+      const classificationReason =
+        form.was_client &&
+        hayVenta &&
+        historicalClassification.clasificacion !== "Q"
+          ? `${historicalClassification.motivo} Venta historica: pasa a Q final por compra.`
+          : historicalClassification.motivo;
 
       let leadId: string | null = null;
       let appointmentId: string | null = null;
 
       if (form.was_client) {
-        await createOrFindCustomerUser();
+        await createOrFindCustomerUser({
+          occupationLabel,
+          classificationInitial,
+          classificationFinal,
+        });
       }
 
       const leadCreatedByUserId = form.source_user_id || currentUserId;
@@ -730,6 +993,12 @@ export default function CargaHistoricaPage() {
         form.commission_source === "tmk" ? form.source_user_id || null : null;
       const leadNotes = buildHistoricalNotes([
         "Registro historico cargado por super user.",
+        form.was_client ? `Clasificacion inicial: ${classificationInitial}` : "",
+        form.was_client ? `Motivo clasificacion: ${classificationReason}` : "",
+        form.was_client && occupationLabel ? `Ocupacion: ${occupationLabel}` : "",
+        form.was_client ? `Edad: ${form.edad}` : "",
+        form.was_client ? `Tiene EPS: ${form.tiene_eps === "si" ? "Si" : "No"}` : "",
+        form.was_client && form.afiliacion ? `Afiliacion: ${form.afiliacion}` : "",
         form.lead_notes,
       ]);
 
@@ -762,6 +1031,8 @@ export default function CargaHistoricaPage() {
         const appointmentNotes = buildHistoricalNotes([
           "Registro historico.",
           form.appointment_notes,
+          form.was_client ? `Clasificacion inicial: ${classificationInitial}` : "",
+          form.was_client ? `Motivo clasificacion: ${classificationReason}` : "",
           form.nutrition_history_pending
             ? "Historia clinica de nutricion pendiente por completar."
             : "",
@@ -836,6 +1107,7 @@ export default function CargaHistoricaPage() {
               commercial_notes: buildHistoricalNotes([
                 historicalSummary,
                 commercialNotes,
+                form.was_client ? `Clasificacion final: ${classificationFinal}` : "",
               ]),
               sale_result: hayVenta ? "venta_historica" : null,
               purchased_service: form.purchased_service || null,
@@ -846,6 +1118,7 @@ export default function CargaHistoricaPage() {
               volume_amount: volumeNumber || null,
               closing_notes: buildHistoricalNotes([
                 form.commercial_notes,
+                form.was_client ? `Clasificacion final: ${classificationFinal}` : "",
                 form.nutrition_history_pending
                   ? "Pendiente historia clinica nutricion."
                   : "",
@@ -1281,8 +1554,365 @@ export default function CargaHistoricaPage() {
               title="Nutricion completa despues"
               description="Marca este switch si nutricion debe llenar la historia clinica luego desde su propio modulo."
               onChange={(checked) => setValue("nutrition_history_pending", checked)}
-            />
+              />
           </section>
+
+          {form.was_client ? (
+            <section className={cardClass}>
+              <SectionTitle
+                eyebrow="Clasificacion"
+                title="Q o No Q"
+                description="Completa los criterios base para clasificar historicamente al cliente. Si hubo venta, la clasificacion final pasara automaticamente a Q."
+              />
+
+              <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-4">
+                <Field
+                  label="Edad"
+                  input={
+                    <input
+                      className={inputClass}
+                      value={form.edad}
+                      onChange={(e) => setValue("edad", e.target.value)}
+                      placeholder="Ej: 52"
+                    />
+                  }
+                />
+                <Field
+                  label="Tiene EPS"
+                  input={
+                    <select
+                      className={inputClass}
+                      value={form.tiene_eps}
+                      onChange={(e) => setValue("tiene_eps", e.target.value)}
+                    >
+                      <option value="si">Si</option>
+                      <option value="no">No</option>
+                    </select>
+                  }
+                />
+                <Field
+                  label="Afiliacion"
+                  input={
+                    <select
+                      className={inputClass}
+                      value={form.afiliacion}
+                      onChange={(e) => setValue("afiliacion", e.target.value)}
+                    >
+                      {affiliationOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  }
+                />
+                <Field
+                  label="Trae cedula"
+                  input={
+                    <select
+                      className={inputClass}
+                      value={form.trae_cedula}
+                      onChange={(e) => setValue("trae_cedula", e.target.value)}
+                    >
+                      <option value="si">Si</option>
+                      <option value="no">No</option>
+                    </select>
+                  }
+                />
+                <Field
+                  label="Celular inteligente"
+                  input={
+                    <select
+                      className={inputClass}
+                      value={form.celular_inteligente}
+                      onChange={(e) =>
+                        setValue("celular_inteligente", e.target.value)
+                      }
+                    >
+                      <option value="si">Si</option>
+                      <option value="no">No</option>
+                    </select>
+                  }
+                />
+                <Field
+                  label="Ocupacion"
+                  input={
+                    <select
+                      className={inputClass}
+                      value={form.ocupacion}
+                      onChange={(e) => setValue("ocupacion", e.target.value)}
+                    >
+                      <option value="">Selecciona</option>
+                      {commercialOccupationOptions.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                  }
+                />
+                {occupationNeedsDetail ? (
+                  <Field
+                    label={getOccupationDetailLabel(form.ocupacion)}
+                    input={
+                      <input
+                        className={inputClass}
+                        value={form.ocupacion_otro}
+                        onChange={(e) =>
+                          setValue("ocupacion_otro", e.target.value)
+                        }
+                        placeholder="Escribe el detalle"
+                      />
+                    }
+                  />
+                ) : null}
+              </div>
+
+              <div className="mt-6 rounded-[26px] border border-[#D7E8DC] bg-[#F6FBF7] p-5">
+                <div className="flex flex-wrap items-center gap-3">
+                  <p className="text-sm font-medium text-[#365243]">
+                    Clasificacion inicial
+                  </p>
+                  <span
+                    className={`rounded-full px-3 py-1 text-xs font-semibold ${
+                      historicalClassification.clasificacion === "Q"
+                        ? "bg-[#DDF3E6] text-[#266042]"
+                        : "bg-[#FFF0D8] text-[#8A5B12]"
+                    }`}
+                  >
+                    {historicalClassification.clasificacion}
+                  </span>
+                  {form.create_sale ? (
+                    <span className="rounded-full bg-[#E8F2EA] px-3 py-1 text-xs text-[#4F6F5B]">
+                      Si hubo venta, la clasificacion final quedara en Q
+                    </span>
+                  ) : null}
+                </div>
+                <p className="mt-3 text-sm leading-6 text-[#5C7568]">
+                  {form.create_sale &&
+                  historicalClassification.clasificacion !== "Q"
+                    ? `${historicalClassification.motivo} Venta historica: pasa a Q final por compra.`
+                    : historicalClassification.motivo}
+                </p>
+              </div>
+
+              <div className="mt-6 rounded-[26px] border border-[#D7E8DC] bg-white/95 p-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div>
+                    <h3 className="text-base font-semibold text-[#24312A]">
+                      Antecedentes basicos
+                    </h3>
+                    <p className="mt-2 text-sm leading-6 text-[#5C7568]">
+                      Marca si existe el antecedente y si descalifica para la
+                      clasificacion inicial.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setForm((prev) => ({
+                        ...prev,
+                        hipertenso: "no",
+                        diabetico: "no",
+                        cirugias: "no",
+                        cirugias_cual: "",
+                        medicamentos: "no",
+                        medicamentos_cual: "",
+                        enfermedades: "no",
+                        enfermedades_cual: "",
+                        clinical_flags: emptyHistoricalClinicalFlags(),
+                      }))
+                    }
+                    className="rounded-full border border-[#CFE4D8] px-4 py-2 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  >
+                    Limpiar antecedentes
+                  </button>
+                </div>
+
+                <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+                  <div className="rounded-[22px] border border-[#D7E8DC] bg-[#FAFDFC] p-4">
+                    <p className="text-sm font-semibold text-[#24312A]">Hipertension</p>
+                    <div className="mt-3 space-y-3">
+                      <select
+                        className={inputClass}
+                        value={form.hipertenso}
+                        onChange={(e) => setValue("hipertenso", e.target.value)}
+                      >
+                        <option value="no">No</option>
+                        <option value="si">Si</option>
+                      </select>
+                      <label className="flex items-center gap-2 text-sm text-[#4F6F5B]">
+                        <input
+                          type="checkbox"
+                          checked={form.clinical_flags.hipertenso_descalifica}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                hipertenso_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        Descalifica
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-[#D7E8DC] bg-[#FAFDFC] p-4">
+                    <p className="text-sm font-semibold text-[#24312A]">Diabetes</p>
+                    <div className="mt-3 space-y-3">
+                      <select
+                        className={inputClass}
+                        value={form.diabetico}
+                        onChange={(e) => setValue("diabetico", e.target.value)}
+                      >
+                        <option value="no">No</option>
+                        <option value="si">Si</option>
+                      </select>
+                      <label className="flex items-center gap-2 text-sm text-[#4F6F5B]">
+                        <input
+                          type="checkbox"
+                          checked={form.clinical_flags.diabetico_descalifica}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                diabetico_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        Descalifica
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-[#D7E8DC] bg-[#FAFDFC] p-4">
+                    <p className="text-sm font-semibold text-[#24312A]">Cirugias</p>
+                    <div className="mt-3 space-y-3">
+                      <select
+                        className={inputClass}
+                        value={form.cirugias}
+                        onChange={(e) => setValue("cirugias", e.target.value)}
+                      >
+                        <option value="no">No</option>
+                        <option value="si">Si</option>
+                      </select>
+                      {form.cirugias === "si" ? (
+                        <input
+                          className={inputClass}
+                          value={form.cirugias_cual}
+                          onChange={(e) => setValue("cirugias_cual", e.target.value)}
+                          placeholder="Cual o cuales"
+                        />
+                      ) : null}
+                      <label className="flex items-center gap-2 text-sm text-[#4F6F5B]">
+                        <input
+                          type="checkbox"
+                          checked={form.clinical_flags.cirugias_descalifica}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                cirugias_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        Descalifica
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-[#D7E8DC] bg-[#FAFDFC] p-4">
+                    <p className="text-sm font-semibold text-[#24312A]">Medicamentos</p>
+                    <div className="mt-3 space-y-3">
+                      <select
+                        className={inputClass}
+                        value={form.medicamentos}
+                        onChange={(e) => setValue("medicamentos", e.target.value)}
+                      >
+                        <option value="no">No</option>
+                        <option value="si">Si</option>
+                      </select>
+                      {form.medicamentos === "si" ? (
+                        <input
+                          className={inputClass}
+                          value={form.medicamentos_cual}
+                          onChange={(e) =>
+                            setValue("medicamentos_cual", e.target.value)
+                          }
+                          placeholder="Cual o cuales"
+                        />
+                      ) : null}
+                      <label className="flex items-center gap-2 text-sm text-[#4F6F5B]">
+                        <input
+                          type="checkbox"
+                          checked={form.clinical_flags.medicamentos_descalifica}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                medicamentos_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        Descalifica
+                      </label>
+                    </div>
+                  </div>
+
+                  <div className="rounded-[22px] border border-[#D7E8DC] bg-[#FAFDFC] p-4 md:col-span-2 xl:col-span-2">
+                    <p className="text-sm font-semibold text-[#24312A]">
+                      Enfermedades o antecedentes relevantes
+                    </p>
+                    <div className="mt-3 space-y-3">
+                      <select
+                        className={inputClass}
+                        value={form.enfermedades}
+                        onChange={(e) => setValue("enfermedades", e.target.value)}
+                      >
+                        <option value="no">No</option>
+                        <option value="si">Si</option>
+                      </select>
+                      {form.enfermedades === "si" ? (
+                        <textarea
+                          className={`${inputClass} min-h-[120px] resize-y`}
+                          value={form.enfermedades_cual}
+                          onChange={(e) =>
+                            setValue("enfermedades_cual", e.target.value)
+                          }
+                          placeholder="Describe los antecedentes relevantes"
+                        />
+                      ) : null}
+                      <label className="flex items-center gap-2 text-sm text-[#4F6F5B]">
+                        <input
+                          type="checkbox"
+                          checked={form.clinical_flags.enfermedades_descalifica}
+                          onChange={(e) =>
+                            setForm((prev) => ({
+                              ...prev,
+                              clinical_flags: {
+                                ...prev.clinical_flags,
+                                enfermedades_descalifica: e.target.checked,
+                              },
+                            }))
+                          }
+                        />
+                        Descalifica
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          ) : null}
 
           {form.create_appointment ? (
             <section className={cardClass}>
