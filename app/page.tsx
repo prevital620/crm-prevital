@@ -141,18 +141,6 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "fisioterapeuta"],
   },
   {
-    title: "Historia clínica",
-    subtitle: "Buscar pacientes y revisar encuentros clínicos autorizados.",
-    href: "/consulta-clinica",
-    roles: [
-      "nutricionista",
-      "fisioterapeuta",
-      "medico_general",
-      "coordinador_clinico",
-      "auditor_clinico",
-    ],
-  },
-  {
     title: "Comercial",
     subtitle: "Gestionar seguimiento y cierre comercial.",
     href: "/comercial",
