@@ -477,10 +477,32 @@ function formatManifestTime(value: string | null | undefined) {
   });
 }
 
-function buildManifestObservation(item: CommercialCaseRow) {
+function buildManifestObservation(item: CommercialCaseRow, hasSale: boolean) {
+  const receptionObservation =
+    getReceptionSummaryValue(item, "Observaciones recepción") || "";
+  const classificationReason =
+    getReceptionSummaryValue(item, "Motivo clasificación") || "";
+  const initialClassification =
+    getReceptionSummaryValue(item, "Clasificación inicial") || "";
+  const isInitialNoQ = normalizeText(initialClassification) === "no q";
+
+  if (hasSale) {
+    const finalQualificationNote =
+      isInitialNoQ && classificationReason
+        ? `Inicial: ${classificationReason} Final: Q por venta.`
+        : "Q por venta.";
+
+    return (
+      [receptionObservation, finalQualificationNote].filter(Boolean).join(" ") ||
+      item.sales_assessment ||
+      item.closing_notes ||
+      finalQualificationNote
+    );
+  }
+
   return (
-    getReceptionSummaryValue(item, "Observaciones recepción") ||
-    getReceptionSummaryValue(item, "Motivo clasificación") ||
+    receptionObservation ||
+    classificationReason ||
     item.sales_assessment ||
     item.closing_notes ||
     ""
@@ -2509,7 +2531,7 @@ function RecepcionContent() {
           formaPago: hasSale
             ? paymentMethodSummaryComercial(item.payment_method, item.credit_provider)
             : "",
-          observaciones: buildManifestObservation(item),
+          observaciones: buildManifestObservation(item, hasSale),
         };
       });
   }, [commercialCases, manifestDate, sourceUserById]);
