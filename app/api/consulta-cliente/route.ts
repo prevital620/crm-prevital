@@ -24,6 +24,12 @@ type ProfileContext = {
   team_key: CommercialTeamKey | null;
 };
 
+type DepartmentRelation =
+  | { name: string | null }
+  | Array<{ name: string | null }>
+  | null
+  | undefined;
+
 type CommercialCaseRow = {
   id: string;
   lead_id: string | null;
@@ -171,6 +177,16 @@ function unique<T>(items: T[]) {
   return Array.from(new Set(items));
 }
 
+function normalizeDepartmentNames(departments: DepartmentRelation) {
+  const list = Array.isArray(departments)
+    ? departments
+    : departments && typeof departments === "object"
+      ? [departments]
+      : [];
+
+  return list.map((item) => item?.name || "").filter(Boolean);
+}
+
 function customerRefFromData(data: {
   leadId?: string | null;
   phone?: string | null;
@@ -225,7 +241,7 @@ function buildProfileContexts(
     full_name: string | null;
     job_title: string | null;
     is_active: boolean | null;
-    departments?: { name: string | null }[] | null;
+    departments?: DepartmentRelation;
   }>,
   roleRows: Array<{
     user_id: string;
@@ -247,9 +263,7 @@ function buildProfileContexts(
     const roles = roleMap.get(profile.id) || [];
     const roleCodes = unique(roles.map((role) => role.code).filter(Boolean) as string[]);
     const roleNames = unique(roles.map((role) => role.name).filter(Boolean) as string[]);
-    const departmentNames = (profile.departments || [])
-      .map((item) => item?.name || "")
-      .filter(Boolean);
+    const departmentNames = normalizeDepartmentNames(profile.departments);
 
     return {
       id: profile.id,
@@ -575,7 +589,7 @@ export async function GET(request: Request) {
         full_name: string | null;
         job_title: string | null;
         is_active: boolean | null;
-        departments?: { name: string | null }[] | null;
+        departments?: DepartmentRelation;
       }>,
       ((roleRowsResult.data as Array<{
         user_id: string;
@@ -888,4 +902,3 @@ export async function GET(request: Request) {
     );
   }
 }
-
