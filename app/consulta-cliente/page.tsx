@@ -17,6 +17,7 @@ import {
   PrevitalCardContent,
   PrevitalCardHeader,
 } from "@/components/ui/prevital-card";
+import { parseDeliveryRecommendation } from "@/lib/appointments/receptionDelivery";
 import { getCurrentUserRole, normalizeRoleCode } from "@/lib/auth";
 import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
 import type {
@@ -24,6 +25,7 @@ import type {
   CustomerConsultResponse,
   CustomerConsultSummary,
 } from "@/lib/customers/types";
+import printSalesSupport from "@/lib/print/templates/printSalesSupport";
 import { supabase } from "@/lib/supabase";
 
 const ALLOWED_ROLES = [
@@ -56,6 +58,79 @@ function formatMoney(value: number | null | undefined) {
   }).format(value || 0);
 }
 
+function normalizeSummaryLabel(value: string) {
+  return value
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .toLowerCase()
+    .trim();
+}
+
+function getReceptionSummaryValue(summary: string | null | undefined, label: string) {
+  if (!summary?.trim()) return "";
+  const target = normalizeSummaryLabel(label);
+  const line = summary
+    .split("\n")
+    .map((item) => item.trim())
+    .find((item) => {
+      const [lineLabel] = item.split(":");
+      return normalizeSummaryLabel(lineLabel || "") === target;
+    });
+
+  return line?.split(":").slice(1).join(":").trim() || "";
+}
+
+function serviceLabel(value: string | null | undefined) {
+  const map: Record<string, string> = {
+    valoracion: "Valoración",
+    nutricion: "Nutrición",
+    fisioterapia: "Fisioterapia",
+    detox: "Detox",
+    sueroterapia: "Sueroterapia",
+    tratamiento_integral: "Tratamiento integral",
+  };
+
+  const key = String(value || "").trim().toLowerCase();
+  return map[key] || value || "";
+}
+
+function isWellnessService(serviceType: string | null | undefined) {
+  const value = String(serviceType || "").trim().toLowerCase();
+  return value === "detox" || value === "sueroterapia";
+}
+
+function isHealthService(serviceType: string | null | undefined) {
+  const value = String(serviceType || "").trim().toLowerCase();
+  if (!value) return false;
+  if (value === "tratamiento_integral") return false;
+  return !isWellnessService(value);
+}
+
+function uniqueNonEmpty(values: string[]) {
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean)));
+}
+
+function buildPaymentMethodSummary(paymentMethod: string | null | undefined) {
+  const value = String(paymentMethod || "").trim().toLowerCase();
+  if (!value) return "Sin definir";
+  if (["addi", "welly", "medipay", "sumaspay"].includes(value)) {
+    const label = value === "sumaspay" ? "Sumaspay" : value.charAt(0).toUpperCase() + value.slice(1);
+    return `Créditos - ${label}`;
+  }
+
+  const map: Record<string, string> = {
+    efectivo: "Efectivo",
+    transferencia: "Transferencia",
+    tarjeta: "Tarjeta",
+    cuotas: "Cuotas",
+    creditos: "Créditos",
+    credito: "Crédito",
+    contado: "Contado",
+  };
+
+  return map[value] || paymentMethod || "Sin definir";
+}
+
 export default function ConsultaClientePage() {
   const router = useRouter();
 
@@ -86,6 +161,91 @@ export default function ConsultaClientePage() {
       closingNotes: primaryCase.closing_notes,
     };
   }, [detail]);
+
+  function printSupportFromCase(caseItem: CustomerConsultDetail["commercial_cases"][number]) {
+    if (!detail) return;
+
+    const parsed = parseStoredCommercialNotes(caseItem.commercial_notes);
+    const receptionSummary = parsed.receptionSummary;
+    const documentNumber = getReceptionSummaryValue(receptionSummary, "Documento");
+    const eps =
+      getReceptionSummaryValue(receptionSummary, "Afiliación") ||
+      getReceptionSummaryValue(receptionSummary, "EPS");
+    const address = getReceptionSummaryValue(receptionSummary, "Dirección");
+    const birthDate =
+      getReceptionSummaryValue(receptionSummary, "Fecha nacimiento") ||
+      getReceptionSummaryValue(receptionSummary, "F. Nacimiento");
+    const validity = getReceptionSummaryValue(receptionSummary, "Vigencia");
+
+    const nutraceuticals = uniqueNonEmpty(
+      detail.appointments.flatMap((appointment) => {
+        const recommendation = parseDeliveryRecommendation(appointment.notes, "nutricion");
+        if (!recommendation?.productName) return [];
+        return [
+          `${recommendation.productName}${recommendation.quantity > 1 ? ` x${recommendation.quantity}` : ""}`,
+        ];
+      })
+    );
+
+    const appointmentHealthServices = detail.appointments
+      .filter((appointment) => isHealthService(appointment.service))
+      .map((appointment) => serviceLabel(appointment.service));
+    const appointmentWellnessServices = detail.appointments
+      .filter((appointment) => isWellnessService(appointment.service))
+      .map((appointment) => serviceLabel(appointment.service));
+
+    const purchasedServiceLabel = serviceLabel(caseItem.purchased_service);
+    const healthServices = uniqueNonEmpty([
+      ...appointmentHealthServices,
+      ...(isHealthService(caseItem.purchased_service) ? [purchasedServiceLabel] : []),
+    ]);
+    const wellnessServices = uniqueNonEmpty([
+      ...appointmentWellnessServices,
+      ...(isWellnessService(caseItem.purchased_service) ? [purchasedServiceLabel] : []),
+    ]);
+
+    const totalAmount = Number(caseItem.volume_amount || caseItem.sale_value || 0);
+    const hasWellness =
+      wellnessServices.length > 0 || isWellnessService(caseItem.purchased_service);
+    const hasHealth = healthServices.length > 0 || isHealthService(caseItem.purchased_service);
+    const supportDate = caseItem.created_at ? caseItem.created_at.slice(0, 10) : "";
+    const supportTime = new Date(caseItem.created_at).toLocaleTimeString("es-CO", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    printSalesSupport({
+      supportCode: caseItem.id.slice(0, 6).toUpperCase(),
+      documentDate: supportDate,
+      documentTime: supportTime,
+      analystName: caseItem.commercial_name || "",
+      preparedBy: caseItem.commercial_name || "",
+      managerName: caseItem.assigned_by_name || "",
+      internalNumber: caseItem.id.slice(-6).toUpperCase(),
+      customerName: detail.identity.full_name,
+      documentNumber,
+      phone: detail.identity.phone,
+      city: detail.identity.city,
+      birthDate,
+      eps,
+      address,
+      nutraceuticals,
+      healthServices,
+      wellnessServices,
+      orderingRequired: nutraceuticals.length > 0 ? "Sí" : "No",
+      prescriberName: detail.appointments.some((appointment) => appointment.service === "nutricion")
+        ? "Nutrición"
+        : "",
+      sessionsUnits:
+        detail.appointments.length > 0 ? String(detail.appointments.length) : "",
+      validity,
+      healthServicesAmount: hasHealth && !hasWellness ? totalAmount : null,
+      wellnessServicesAmount: hasWellness && !hasHealth ? totalAmount : null,
+      totalAmount,
+      paymentMethod: buildPaymentMethodSummary(caseItem.payment_method),
+    });
+  }
 
   async function ensureAccess() {
     try {
@@ -484,6 +644,14 @@ export default function ConsultaClientePage() {
                                 {caseItem.status || "Sin estado"}
                               </PrevitalBadge>
                             </div>
+                          </div>
+                          <div className="mt-4 flex flex-wrap gap-3">
+                            <PrevitalButton
+                              variant="secondary"
+                              onClick={() => printSupportFromCase(caseItem)}
+                            >
+                              Imprimir soporte de venta
+                            </PrevitalButton>
                           </div>
                         </div>
                       ))}
