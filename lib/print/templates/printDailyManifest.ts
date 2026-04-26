@@ -17,6 +17,7 @@ type ManifestRow = {
 type DailyManifestPrintData = {
   fecha: string;
   generatedAt: string;
+  shiftLabel?: string;
   rows: ManifestRow[];
 };
 
@@ -25,8 +26,9 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
     data.rows.length > 0
       ? data.rows
           .map(
-            (row) => `
+            (row, index) => `
               <tr>
+                <td>${index + 1}</td>
                 <td>${escapeHtml(row.horaLlegada || "-")}</td>
                 <td>${escapeHtml(row.horaSalida || "-")}</td>
                 <td>${escapeHtml(row.nombreCompleto || "Sin nombre")}</td>
@@ -42,7 +44,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           .join("")
       : `
         <tr>
-          <td colspan="9" style="text-align:center; color:#607368;">No hay registros para esta fecha.</td>
+          <td colspan="10" style="text-align:center; color:#607368;">No hay registros para esta fecha y jornada.</td>
         </tr>
       `;
 
@@ -59,12 +61,12 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
       <div class="page">
         <div class="header">
           <div class="brand">
-            <span class="pill">Recepción</span>
+            <span class="pill">Recepcion</span>
             <h1>Manifiesto diario</h1>
-            <p>Registro operativo del día en orden de llegada</p>
+            <p>Registro operativo del dia en orden de llegada</p>
           </div>
           <div>
-            <div class="item-label">Fecha de impresión</div>
+            <div class="item-label">Fecha de impresion</div>
             <div class="item-value">${escapeHtml(data.generatedAt)}</div>
           </div>
         </div>
@@ -76,6 +78,10 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
               <div class="item-value">${escapeHtml(data.fecha)}</div>
             </div>
             <div>
+              <div class="item-label">Jornada</div>
+              <div class="item-value">${escapeHtml(data.shiftLabel || "Todas")}</div>
+            </div>
+            <div>
               <div class="item-label">Total registros</div>
               <div class="item-value">${escapeHtml(String(data.rows.length))}</div>
             </div>
@@ -83,16 +89,17 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
         </div>
 
         <div class="box">
-          <h2>Clientes del día</h2>
+          <h2>Clientes del dia</h2>
           <table>
             <thead>
               <tr>
+                <th>#</th>
                 <th>Hora llegada</th>
                 <th>Hora salida</th>
                 <th>Nombre completo</th>
-                <th>Código TMK</th>
-                <th>Código OPC</th>
-                <th>Calificación</th>
+                <th>Codigo TMK</th>
+                <th>Codigo OPC</th>
+                <th>Calificacion</th>
                 <th>Valor venta</th>
                 <th>Forma de pago</th>
                 <th>Observaciones</th>
@@ -110,7 +117,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
   `;
 
   openPrintWindow({
-    title: "Manifiesto diario",
+    title: `Manifiesto diario${data.shiftLabel ? ` ${data.shiftLabel}` : ""}`,
     html,
   });
 }

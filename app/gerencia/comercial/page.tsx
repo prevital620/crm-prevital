@@ -441,7 +441,9 @@ export default function GerenciaComercialPage() {
               }
 
               if (user.id === currentUserId) return true;
-              if (detectedTeam) return user.team_key === detectedTeam;
+              if (detectedTeam) {
+                return user.role_code === "comercial" && (user.team_key === detectedTeam || user.team_key === null);
+              }
               return user.role_code === "comercial";
             });
 

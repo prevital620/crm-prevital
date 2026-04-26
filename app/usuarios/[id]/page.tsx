@@ -395,7 +395,7 @@ export default function EditarUsuarioPage() {
                   <option value="PM">Equipo PM</option>
                 </select>
                 <p className="mt-2 text-xs text-[#607368]">
-                  Esto te permite separar gerentes y comerciales en los filtros de gerencia comercial.
+                    Si queda sin equipo AM/PM, el comercial podra aparecer para ambos gerentes y el caso sumara a la jornada del gerente que lo asigne.
                 </p>
               </div>
             ) : null}
