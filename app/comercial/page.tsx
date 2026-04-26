@@ -15,7 +15,6 @@ import {
   getLeadSourceLabel,
   normalizeCommercialCaseLeadSource,
 } from "@/lib/lead-source";
-import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import { hoyISO, dateToLocalISO, isSameLocalDay } from "@/lib/datetime/dateHelpers";
 import { formatDate, formatDateOnly } from "@/lib/datetime/dateFormat";
 import { traducirEstadoComercial, commercialStatusClass } from "@/lib/status/commercialStatus";
@@ -26,6 +25,7 @@ import {
   DEFAULT_DAILY_CAPACITY,
   getDurationOptions,
 } from "@/lib/agenda/agendaDurations";
+import { parseDeliveryRecommendation } from "@/lib/appointments/receptionDelivery";
 import {
   buildSlotAvailability,
   formatSlotAvailabilityLabel,
@@ -46,6 +46,7 @@ import {
   parseStoredCommercialNotes,
 } from "@/lib/commercial/notes";
 import { repairMojibake } from "@/lib/text/repairMojibake";
+import printSalesSupport from "@/lib/print/templates/printSalesSupport";
 
 type CommercialCase = {
   id: string;
@@ -346,6 +347,39 @@ function getReceptionSummary(item: CommercialCase) {
     .filter(Boolean);
 }
 
+function normalizeSummaryLabel(label: string) {
+  return label
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function getReceptionSummaryValue(summary: string[], label: string) {
+  const normalizedLabel = normalizeSummaryLabel(label);
+  const line = summary.find((entry) => {
+    const [rawLabel] = entry.split(":");
+    return normalizeSummaryLabel(rawLabel || "") === normalizedLabel;
+  });
+  return line?.split(":").slice(1).join(":").trim() || "";
+}
+
+function isWellnessService(serviceType: string | null | undefined) {
+  const normalized = (serviceType || "").trim().toLowerCase();
+  return normalized === "detox" || normalized === "sueroterapia";
+}
+
+function isHealthService(serviceType: string | null | undefined) {
+  const normalized = (serviceType || "").trim().toLowerCase();
+  if (!normalized) return false;
+  if (normalized === "tratamiento_integral") return false;
+  return !isWellnessService(normalized);
+}
+
+function uniqueNonEmpty(values: string[]) {
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean)));
+}
+
 function parsePortfolioDetails(text: string | null | undefined): PortfolioFields {
   const source = text || "";
   const installments = source.match(/Número de cuotas:\s*([^\n]+)/i)?.[1]?.trim() || "";
@@ -508,6 +542,7 @@ export default function ComercialPage() {
   const [currentTeamKey, setCurrentTeamKey] = useState<CommercialTeamKey | null>(null);
 
   const [cases, setCases] = useState<CommercialCase[]>([]);
+  const [profiles, setProfiles] = useState<ProfileOption[]>([]);
   const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
   const [appointments, setAppointments] = useState<AppointmentScheduleRow[]>([]);
   const [agendaDaySettings, setAgendaDaySettings] = useState<Record<string, AgendaDaySetting>>({});
@@ -559,6 +594,12 @@ export default function ComercialPage() {
     () => cases.find((item) => item.id === editingCaseId) || null,
     [cases, editingCaseId]
   );
+
+  const profileMap = useMemo(() => {
+    const nextMap = new Map<string, ProfileOption>();
+    profiles.forEach((item) => nextMap.set(item.id, item));
+    return nextMap;
+  }, [profiles]);
 
   const currentReceptionSummary = useMemo(
     () => (currentCase ? getReceptionSummary(currentCase) : []),
@@ -903,6 +944,8 @@ export default function ComercialPage() {
           };
         })
         .filter((item) => item.role_code);
+
+      setProfiles(profiles);
 
       const profileMap = new Map<string, ProfileOption>();
       profiles.forEach((item) => {
@@ -1267,38 +1310,109 @@ export default function ComercialPage() {
     if (!currentCase) return;
 
     const allFollowUps = getPrimaryFollowUp(form, nextAppointments);
+    const receptionDocument = getReceptionSummaryValue(currentReceptionSummary, "Documento");
+    const receptionEps =
+      getReceptionSummaryValue(currentReceptionSummary, "Afiliación") ||
+      getReceptionSummaryValue(currentReceptionSummary, "EPS");
+    const receptionAddress = getReceptionSummaryValue(currentReceptionSummary, "Dirección");
+    const receptionBirthDate =
+      getReceptionSummaryValue(currentReceptionSummary, "Fecha nacimiento") ||
+      getReceptionSummaryValue(currentReceptionSummary, "F. Nacimiento");
+    const receptionValidity = getReceptionSummaryValue(currentReceptionSummary, "Vigencia");
 
-      printPlanInstructions({
-        customerName: currentCase.customer_name,
-        phone: currentCase.phone,
-        city: currentCase.city,
-        commercialDate: formatDate(currentCase.created_at),
-        serviceName: serviceLabel(form.purchased_service),
-        paymentMethod: buildPaymentMethodSummary(form.payment_method, form.credit_provider),
-        volumeAmount: calculatedVolume,
-      cashAmount: calculatedCash,
-      portfolioAmount: calculatedPortfolio,
-      nextStep:
-        allFollowUps.length > 1
-          ? `${allFollowUps.length} citas agendadas`
-          : nextStepLabel(allFollowUps[0]?.service_type || form.next_step_type),
-      receptionSummary: currentReceptionSummary,
-      assessment: form.sales_assessment,
-      proposal: form.proposal_text,
-      closingNotes: form.closing_notes,
-      nextAppointmentDate: allFollowUps[0]?.appointment_date || form.next_appointment_date || null,
-      nextAppointmentTime: allFollowUps[0]?.appointment_time || form.next_appointment_time || null,
-      nextNotes: allFollowUps[0]?.notes || form.next_notes,
-      nextAppointments: allFollowUps.map((item) => ({
-        serviceName: nextStepLabel(item.service_type),
-        appointmentDate: item.appointment_date,
-        appointmentTime: item.appointment_time,
-        specialistName:
-          specialists.find((specialist) => specialist.id === item.specialist_user_id)?.full_name ||
-          null,
-        notes: item.notes,
-      })),
-      installmentPlan,
+    const serviceEntries = allFollowUps.map((item) => ({
+      code: item.service_type,
+      label: nextStepLabel(item.service_type),
+      specialistName:
+        specialists.find((specialist) => specialist.id === item.specialist_user_id)?.full_name ||
+        "",
+      notes: item.notes || "",
+    }));
+
+    if (form.purchased_service && serviceEntries.length === 0) {
+      serviceEntries.push({
+        code: form.purchased_service,
+        label: serviceLabel(form.purchased_service),
+        specialistName: "",
+        notes: form.next_notes || "",
+      });
+    }
+
+    const nutraceuticals = uniqueNonEmpty(
+      serviceEntries.flatMap((item) => {
+        const recommendation = parseDeliveryRecommendation(item.notes, "nutricion");
+        if (!recommendation?.productName) return [];
+        return [
+          `${recommendation.productName}${recommendation.quantity > 1 ? ` x${recommendation.quantity}` : ""}`,
+        ];
+      })
+    );
+
+    const healthServices = uniqueNonEmpty(
+      serviceEntries
+        .filter((item) => isHealthService(item.code))
+        .map((item) =>
+          item.specialistName ? `${item.label} - ${item.specialistName}` : item.label
+        )
+    );
+
+    const wellnessServices = uniqueNonEmpty(
+      serviceEntries
+        .filter((item) => isWellnessService(item.code))
+        .map((item) =>
+          item.specialistName ? `${item.label} - ${item.specialistName}` : item.label
+        )
+    );
+
+    const hasWellness = wellnessServices.length > 0 || isWellnessService(form.purchased_service);
+    const hasHealth = healthServices.length > 0 || isHealthService(form.purchased_service);
+    const totalAmount = calculatedVolume || Number(currentCase.volume_amount || currentCase.sale_value || 0);
+
+    const analystName =
+      (currentCase.assigned_commercial_user_id
+        ? profileMap.get(currentCase.assigned_commercial_user_id)?.full_name
+        : null) ||
+      (currentUserId ? profileMap.get(currentUserId)?.full_name : null) ||
+      "";
+    const managerName = currentCase.assigned_by_user_id
+      ? profileMap.get(currentCase.assigned_by_user_id)?.full_name || ""
+      : "";
+
+    const createdAt = new Date(currentCase.created_at);
+    const supportDate = formatDateOnly(currentCase.closed_at || currentCase.created_at);
+    const supportTime = createdAt.toLocaleTimeString("es-CO", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    printSalesSupport({
+      supportCode: currentCase.id.slice(0, 6).toUpperCase(),
+      documentDate: supportDate,
+      documentTime: supportTime,
+      analystName,
+      preparedBy: analystName,
+      managerName,
+      internalNumber: currentCase.id.slice(-6).toUpperCase(),
+      customerName: currentCase.customer_name,
+      documentNumber: receptionDocument,
+      phone: currentCase.phone,
+      city: currentCase.city,
+      birthDate: receptionBirthDate,
+      eps: receptionEps,
+      address: receptionAddress,
+      nutraceuticals,
+      healthServices,
+      wellnessServices,
+      orderingRequired: nutraceuticals.length > 0 ? "Sí" : "No",
+      prescriberName:
+        serviceEntries.find((item) => item.code === "nutricion")?.specialistName || "",
+      sessionsUnits: serviceEntries.length > 0 ? String(serviceEntries.length) : "",
+      validity: receptionValidity,
+      healthServicesAmount: hasHealth && !hasWellness ? totalAmount : null,
+      wellnessServicesAmount: hasWellness && !hasHealth ? totalAmount : null,
+      totalAmount,
+      paymentMethod: buildPaymentMethodSummary(form.payment_method, form.credit_provider),
     });
   }
 
@@ -2464,7 +2578,7 @@ const updatePayload: any = {
                     disabled={!canPrintPlan}
                     className="rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-4 text-base font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7] disabled:cursor-not-allowed disabled:opacity-50"
                   >
-                    Imprimir instrucciones del plan
+                    Imprimir soporte de venta
                   </button>
                 </div>
 

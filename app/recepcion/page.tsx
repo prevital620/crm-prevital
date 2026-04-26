@@ -15,12 +15,13 @@ import {
   parseDeliveryRecommendation,
 } from "@/lib/appointments/receptionDelivery";
 import printAppointment from "@/lib/print/templates/printAppointment";
-import printPlanInstructions from "@/lib/print/templates/printPlanInstructions";
 import printNutritionSummary from "@/lib/print/templates/printNutritionSummary";
 import printPhysiotherapySummary from "@/lib/print/templates/printPhysiotherapySummary";
 import printReceptionRecord from "@/lib/print/templates/printReceptionRecord";
 import printDailyManifest from "@/lib/print/templates/printDailyManifest";
+import printSalesSupport from "@/lib/print/templates/printSalesSupport";
 import { normalizeCommercialCaseLeadSource } from "@/lib/lead-source";
+import { formatDateOnly } from "@/lib/datetime/dateFormat";
 import {
   buildStoredCommercialNotes,
   parseStoredCommercialNotes,
@@ -467,6 +468,22 @@ function getReceptionSummaryValue(item: CommercialCaseRow, label: string) {
   return line?.split(":").slice(1).join(":").trim() || "";
 }
 
+function isCommercialWellnessService(serviceType: string | null | undefined) {
+  const value = (serviceType || "").trim().toLowerCase();
+  return value === "detox" || value === "sueroterapia";
+}
+
+function isCommercialHealthService(serviceType: string | null | undefined) {
+  const value = (serviceType || "").trim().toLowerCase();
+  if (!value) return false;
+  if (value === "tratamiento_integral") return false;
+  return !isCommercialWellnessService(value);
+}
+
+function uniqueCommercialItems(values: string[]) {
+  return Array.from(new Set(values.map((item) => item.trim()).filter(Boolean)));
+}
+
 function formatManifestTime(value: string | null | undefined) {
   if (!value) return "";
   const date = new Date(value);
@@ -509,42 +526,6 @@ function buildManifestObservation(item: CommercialCaseRow, hasSale: boolean) {
   );
 }
 
-function numberFromMoneyText(value: string | number | null | undefined) {
-  if (typeof value === "number") return value;
-  const raw = String(value || "").replace(/[^\\d]/g, "");
-  return raw ? Number(raw) : 0;
-}
-
-function parsePortfolioDetails(text: string | null | undefined): PortfolioFields {
-  const source = text || "";
-  const installments = source.match(/N[u]mero de cuotas:\\s*([^\\n]+)/i)?.[1]?.trim() || "";
-  const installmentValue = source.match(/Valor de la cuota:\\s*([^\\n]+)/i)?.[1]?.trim() || "";
-  const firstDate = source.match(/Fecha primera cuota:\\s*([^\\n]+)/i)?.[1]?.trim() || "";
-
-  return {
-    installments_count: installments,
-    installment_value: installmentValue,
-    first_installment_date: firstDate,
-  };
-}
-
-function stripPortfolioDetails(text: string | null | undefined) {
-  return (text || "")
-    .split("\\n")
-    .map((line) => line.trimEnd())
-    .filter(
-      (line) =>
-        !/^Detalle cartera:/i.test(line) &&
-        !/^N[u]mero de cuotas:/i.test(line) &&
-        !/^Valor de la cuota:/i.test(line) &&
-        !/^Fecha primera cuota:/i.test(line) &&
-        !/^Plan de cuotas:/i.test(line) &&
-        !/^\\d+\\.\\s*\\d{4}-\\d{2}-\\d{2}\\s*[-]\\s*\\$/i.test(line)
-    )
-    .join("\\n")
-    .trim();
-}
-
 function addMonthsKeepingDay(isoDate: string, monthOffset: number) {
   const [y, m, d] = isoDate.split("-").map(Number);
   const base = new Date(y, m - 1 + monthOffset, 1);
@@ -555,15 +536,6 @@ function addMonthsKeepingDay(isoDate: string, monthOffset: number) {
   const mm = String(result.getMonth() + 1).padStart(2, "0");
   const dd = String(result.getDate()).padStart(2, "0");
   return `${yy}-${mm}-${dd}`;
-}
-
-function buildInstallmentPlan(firstDate: string, count: number, value: number): InstallmentPlanItem[] {
-  if (!firstDate || !count || count < 1 || !value) return [];
-  return Array.from({ length: count }).map((_, index) => ({
-    number: index + 1,
-    date: addMonthsKeepingDay(firstDate, index),
-    value,
-  }));
 }
 
 function hasCommercialSale(item: CommercialCaseRow) {
@@ -2633,36 +2605,98 @@ function RecepcionContent() {
       setError("");
       setMensaje("");
 
-      const portfolio = parsePortfolioDetails(item.closing_notes);
-      const installmentsCount = Number(portfolio.installments_count || "0");
-      const installmentValue = numberFromMoneyText(portfolio.installment_value);
-      const installmentPlan = buildInstallmentPlan(
-        portfolio.first_installment_date,
-        installmentsCount,
-        installmentValue
+      const documentNumber = getReceptionSummaryValue(item, "Documento");
+      const eps =
+        getReceptionSummaryValue(item, "Afiliación") ||
+        getReceptionSummaryValue(item, "EPS");
+      const address = getReceptionSummaryValue(item, "Dirección");
+      const birthDate =
+        getReceptionSummaryValue(item, "Fecha nacimiento") ||
+        getReceptionSummaryValue(item, "F. Nacimiento");
+      const validity = getReceptionSummaryValue(item, "Vigencia");
+
+      let analystName = "";
+      let managerName = "";
+      if (item.assigned_commercial_user_id || item.assigned_by_user_id) {
+        const profileIds = [item.assigned_commercial_user_id, item.assigned_by_user_id].filter(Boolean);
+        const { data: profileData, error: profileError } = await supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", profileIds);
+
+        if (profileError) throw profileError;
+        const profileMap = new Map<string, string>();
+        ((profileData as { id: string; full_name: string | null }[] | null) || []).forEach((row) => {
+          profileMap.set(row.id, row.full_name || "");
+        });
+        analystName = item.assigned_commercial_user_id
+          ? profileMap.get(item.assigned_commercial_user_id) || ""
+          : "";
+        managerName = item.assigned_by_user_id
+          ? profileMap.get(item.assigned_by_user_id) || ""
+          : "";
+      }
+
+      const nutraceuticalRecommendation =
+        item.next_step_type === "nutricion"
+          ? parseDeliveryRecommendation(item.next_notes, "nutricion")
+          : null;
+
+      const nutraceuticals = nutraceuticalRecommendation?.productName
+        ? [
+            `${nutraceuticalRecommendation.productName}${nutraceuticalRecommendation.quantity > 1 ? ` x${nutraceuticalRecommendation.quantity}` : ""}`,
+          ]
+        : [];
+
+      const healthServices = uniqueCommercialItems(
+        [item.purchased_service, item.next_step_type]
+          .filter((serviceType) => isCommercialHealthService(serviceType))
+          .map((serviceType) => serviceLabelComercial(serviceType))
+      );
+      const wellnessServices = uniqueCommercialItems(
+        [item.purchased_service, item.next_step_type]
+          .filter((serviceType) => isCommercialWellnessService(serviceType))
+          .map((serviceType) => serviceLabelComercial(serviceType))
       );
 
-        printPlanInstructions({
-          customerName: item.customer_name,
-          phone: item.phone,
-          city: item.city,
-          commercialDate: item.closed_at || item.created_at,
-          serviceName: serviceLabelComercial(item.purchased_service),
-          paymentMethod: paymentMethodSummaryComercial(item.payment_method, item.credit_provider),
-          volumeAmount: Number(item.volume_amount || item.sale_value || 0),
-          cashAmount: Number(item.cash_amount || 0),
-          portfolioAmount: Number(item.portfolio_amount || 0),
-        nextStep: nextStepLabelComercial(item.next_step_type),
-        receptionSummary: getCommercialReceptionSummary(item),
-        assessment: item.sales_assessment,
-        proposal: item.proposal_text,
-        closingNotes: stripPortfolioDetails(item.closing_notes),
-        nextAppointmentDate: item.next_appointment_date,
-        nextAppointmentTime: item.next_appointment_time
-          ? formatHora(item.next_appointment_time)
-          : null,
-        nextNotes: item.next_notes,
-        installmentPlan,
+      const totalAmount = Number(item.volume_amount || item.sale_value || 0);
+      const hasWellness = wellnessServices.length > 0 || isCommercialWellnessService(item.purchased_service);
+      const hasHealth = healthServices.length > 0 || isCommercialHealthService(item.purchased_service);
+      const createdAt = new Date(item.closed_at || item.created_at);
+
+      printSalesSupport({
+        supportCode: item.id.slice(0, 6).toUpperCase(),
+        documentDate: item.closed_at ? formatDateOnly(item.closed_at) : formatDateOnly(item.created_at),
+        documentTime: createdAt.toLocaleTimeString("es-CO", {
+          hour: "2-digit",
+          minute: "2-digit",
+          hour12: false,
+        }),
+        analystName,
+        preparedBy: analystName,
+        managerName,
+        internalNumber: item.id.slice(-6).toUpperCase(),
+        customerName: item.customer_name,
+        documentNumber,
+        phone: item.phone,
+        city: item.city,
+        birthDate,
+        eps,
+        address,
+        nutraceuticals,
+        healthServices,
+        wellnessServices,
+        orderingRequired: nutraceuticals.length > 0 ? "Sí" : "No",
+        prescriberName: item.next_step_type === "nutricion" ? "Nutrición" : "",
+        sessionsUnits:
+          [item.purchased_service, item.next_step_type].filter(Boolean).length > 0
+            ? String([item.purchased_service, item.next_step_type].filter(Boolean).length)
+            : "",
+        validity,
+        healthServicesAmount: hasHealth && !hasWellness ? totalAmount : null,
+        wellnessServicesAmount: hasWellness && !hasHealth ? totalAmount : null,
+        totalAmount,
+        paymentMethod: paymentMethodSummaryComercial(item.payment_method, item.credit_provider),
       });
 
       setMensaje("Documento comercial listo para impresion.");
@@ -4476,7 +4510,7 @@ function imprimirRegistroComercial() {
                         >
                           {queueActionId === `commercial-${item.id}`
                             ? "Preparando..."
-                            : "Imprimir plan y cita"}
+                            : "Imprimir soporte de venta"}
                         </button>
                       </div>
                     ))
