@@ -2522,6 +2522,32 @@ function RecepcionContent() {
         });
   }, [commercialCases, manifestDate, manifestShift, sourceUserById]);
 
+  const manifestSummary = useMemo(() => {
+    let totalQ = 0;
+    let totalNoQ = 0;
+    let totalVentas = 0;
+    let totalCaja = 0;
+
+    manifestRows.forEach((row) => {
+      const qualification = normalizeText(row.calificacion);
+      if (qualification === "q") totalQ += 1;
+      if (qualification === "no q") totalNoQ += 1;
+
+      const saleValue = Number(String(row.valorVenta || "").replace(/\./g, "").replace(/,/g, "."));
+      if (saleValue > 0) {
+        totalVentas += 1;
+        totalCaja += saleValue;
+      }
+    });
+
+    return {
+      totalQ,
+      totalNoQ,
+      totalVentas,
+      totalCaja: `$${totalCaja.toLocaleString("es-CO")}`,
+    };
+  }, [manifestRows]);
+
   const selectedNutritionInventoryItem = useMemo(() => {
     if (nutritionDeliveryProductId) {
       return inventoryItems.find((item) => item.id === nutritionDeliveryProductId) || null;
@@ -2726,6 +2752,10 @@ function RecepcionContent() {
         fecha: manifestDate,
         generatedAt: new Date().toLocaleString("es-CO"),
         shiftLabel: manifestShiftLabel(manifestShift),
+        totalQ: manifestSummary.totalQ,
+        totalNoQ: manifestSummary.totalNoQ,
+        totalVentas: manifestSummary.totalVentas,
+        totalCaja: manifestSummary.totalCaja,
         rows: manifestRows,
       });
     }

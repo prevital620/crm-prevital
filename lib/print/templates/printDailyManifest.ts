@@ -18,6 +18,10 @@ type DailyManifestPrintData = {
   fecha: string;
   generatedAt: string;
   shiftLabel?: string;
+  totalQ: number;
+  totalNoQ: number;
+  totalVentas: number;
+  totalCaja: string;
   rows: ManifestRow[];
 };
 
@@ -110,6 +114,22 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
               <div>
                 <div class="item-label">Total registros</div>
                 <div class="item-value">${escapeHtml(String(data.rows.length))}</div>
+              </div>
+              <div>
+                <div class="item-label">Q</div>
+                <div class="item-value">${escapeHtml(String(data.totalQ))}</div>
+              </div>
+              <div>
+                <div class="item-label">No Q</div>
+                <div class="item-value">${escapeHtml(String(data.totalNoQ))}</div>
+              </div>
+              <div>
+                <div class="item-label">Ventas</div>
+                <div class="item-value">${escapeHtml(String(data.totalVentas))}</div>
+              </div>
+              <div>
+                <div class="item-label">Caja total</div>
+                <div class="item-value">${escapeHtml(data.totalCaja)}</div>
               </div>
             </div>
           </div>
