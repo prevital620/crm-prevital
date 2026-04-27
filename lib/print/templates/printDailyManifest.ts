@@ -38,7 +38,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           .map(
             (row, index) => `
               <tr>
-                <td>${index + 1}</td>
+                <td class="numeric">${index + 1}</td>
                 <td>${escapeHtml(row.horaLlegada || "-")}</td>
                 <td>${escapeHtml(row.horaSalida || "-")}</td>
                 <td>${escapeHtml(row.nombreCompleto || "Sin nombre")}</td>
@@ -46,7 +46,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                 <td>${escapeHtml(row.codigoTMK || "-")}</td>
                 <td>${escapeHtml(row.codigoOPC || "-")}</td>
                 <td>${escapeHtml(row.calificacion || "Sin definir")}</td>
-                <td>${escapeHtml(row.valorVenta || "-")}</td>
+                <td class="numeric">${escapeHtml(row.valorVenta || "-")}</td>
                 <td>${escapeHtml(row.formaPago || "-")}</td>
                 <td>${escapeHtml(row.observaciones || "-")}</td>
               </tr>
@@ -63,7 +63,42 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
     <head>
       ${sharedPrintStyles}
       <style>
-        .page { position: relative; overflow: hidden; }
+        @page { size: landscape; margin: 10mm; }
+        body { background: #fff; }
+        .page {
+          position: relative;
+          overflow: hidden;
+          max-width: none;
+          width: 100%;
+          padding: 18px 18px 24px;
+        }
+        .header {
+          gap: 14px;
+          padding-bottom: 12px;
+          margin-bottom: 14px;
+        }
+        .brand h1 { font-size: 24px; }
+        .brand p { font-size: 12px; }
+        .box {
+          padding: 12px 14px;
+          margin-bottom: 12px;
+        }
+        .box h2 {
+          margin-bottom: 8px;
+          font-size: 16px;
+        }
+        .grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+          gap: 8px 14px;
+        }
+        .item-label {
+          font-size: 10px;
+          margin-bottom: 2px;
+        }
+        .item-value {
+          font-size: 13px;
+          line-height: 1.25;
+        }
         .watermark {
           position: absolute;
           inset: 0;
@@ -74,15 +109,35 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           z-index: 0;
         }
         .watermark img {
-          width: 520px;
-          max-width: 72%;
-          opacity: 0.07;
+          width: 460px;
+          max-width: 62%;
+          opacity: 0.055;
           object-fit: contain;
         }
         .page-content { position: relative; z-index: 1; }
-        table { width: 100%; border-collapse: collapse; font-size: 11px; }
-        th, td { border: 1px solid #d9e9de; padding: 8px; text-align: left; vertical-align: top; }
-        th { background: #eef7f1; color: #4f6f5b; text-transform: uppercase; letter-spacing: 0.08em; font-size: 10px; }
+        table {
+          width: 100%;
+          border-collapse: collapse;
+          table-layout: fixed;
+          font-size: 9px;
+        }
+        th, td {
+          border: 1px solid #d9e9de;
+          padding: 5px 4px;
+          text-align: left;
+          vertical-align: top;
+          word-break: break-word;
+          overflow-wrap: anywhere;
+          line-height: 1.2;
+        }
+        th {
+          background: #eef7f1;
+          color: #4f6f5b;
+          text-transform: uppercase;
+          letter-spacing: 0.05em;
+          font-size: 8px;
+        }
+        td.numeric, th.numeric { text-align: right; }
       </style>
     </head>
     <body>
@@ -139,9 +194,22 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           <div class="box">
             <h2>Clientes del periodo</h2>
             <table>
+              <colgroup>
+                <col style="width:4%">
+                <col style="width:7%">
+                <col style="width:7%">
+                <col style="width:16%">
+                <col style="width:14%">
+                <col style="width:7%">
+                <col style="width:7%">
+                <col style="width:8%">
+                <col style="width:9%">
+                <col style="width:10%">
+                <col style="width:11%">
+              </colgroup>
               <thead>
                 <tr>
-                  <th>#</th>
+                  <th class="numeric">#</th>
                   <th>Hora llegada</th>
                   <th>Hora salida</th>
                   <th>Nombre completo</th>
@@ -149,7 +217,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                   <th>Codigo TMK</th>
                   <th>Codigo OPC</th>
                   <th>Calificacion</th>
-                  <th>Valor venta</th>
+                  <th class="numeric">Valor venta</th>
                   <th>Forma de pago</th>
                   <th>Observaciones</th>
                 </tr>
