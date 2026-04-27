@@ -155,6 +155,7 @@ type InventoryMovement = {
 
 type CommercialCaseRow = {
   id: string;
+  reception_code: string | null;
   support_code: string | null;
   lead_id: string | null;
   appointment_id: string | null;
@@ -1684,6 +1685,7 @@ function RecepcionContent() {
           .from("commercial_cases")
           .select(`
             id,
+            reception_code,
             support_code,
             lead_id,
             appointment_id,
@@ -3338,13 +3340,14 @@ function traducirOcupacionComercial(ocupacion: string, ocupacionOtro: string) {
   return map[ocupacion] || detalle || "Sin definir";
 }
 
-function buildCommercialPrintData() {
+function buildCommercialPrintData(receptionCode?: string | null) {
     const ocupacion = traducirOcupacionComercial(
       commercialForm.ocupacion,
       commercialForm.ocupacion_otro
     );
 
     return {
+      radicado: receptionCode || null,
       customerName: commercialForm.customer_name || "Sin nombre",
       phone: commercialForm.phone || "Sin teléfono",
       city: commercialForm.city || "Sin ciudad",
@@ -3681,7 +3684,9 @@ function imprimirRegistroComercial() {
         }
       }
 
-      const { error: insertError } = await supabase.from("commercial_cases").insert([
+      const { data: insertedCase, error: insertError } = await supabase
+        .from("commercial_cases")
+        .insert([
         {
           lead_id: appointmentContext?.lead_id || null,
           appointment_id: appointmentContext?.id || null,
@@ -3706,11 +3711,15 @@ function imprimirRegistroComercial() {
           updated_by_user_id: currentUserId,
           sale_result: null,
         },
-      ]);
+        ])
+        .select("reception_code")
+        .single();
 
       if (insertError) throw insertError;
 
-      setLastCommercialPrintData(buildCommercialPrintData());
+      setLastCommercialPrintData(
+        buildCommercialPrintData(insertedCase?.reception_code || null)
+      );
       resetCommercialForm({ preserveLastPrintData: true });
       setActiveSection("comercial");
       setMensaje(

@@ -32,6 +32,7 @@ type DepartmentRelation =
 
 type CommercialCaseRow = {
   id: string;
+  reception_code: string | null;
   support_code: string | null;
   lead_id: string | null;
   appointment_id: string | null;
@@ -510,6 +511,7 @@ function buildCustomerDetail(params: {
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
         .map((caseRow) => ({
           id: caseRow.id,
+          reception_code: caseRow.reception_code,
           support_code: caseRow.support_code,
           created_at: caseRow.created_at,
         status: caseRow.status,
@@ -615,6 +617,7 @@ export async function GET(request: Request) {
         .select(
           `
         id,
+        reception_code,
         support_code,
         lead_id,
         appointment_id,

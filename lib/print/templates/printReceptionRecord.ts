@@ -2,6 +2,7 @@ import escapeHtml from "../escapeHtml";
 import openPrintWindow from "../openPrintWindow";
 
 type ReceptionRecordPrintData = {
+  radicado?: string | null;
   customerName: string;
   phone?: string | null;
   city?: string | null;
@@ -239,7 +240,7 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
             </div>
             <div class="code-box">
               <div class="code-head">RADICADO</div>
-              <div class="code-body">Pendiente</div>
+              <div class="code-body">${escapeHtml(data.radicado || "Pendiente")}</div>
             </div>
           </div>
 

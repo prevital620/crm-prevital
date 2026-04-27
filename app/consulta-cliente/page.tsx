@@ -302,6 +302,7 @@ export default function ConsultaClientePage() {
       ]) || "No aplica";
 
     printReceptionRecord({
+      radicado: caseItem.reception_code || null,
       customerName: detail.identity.full_name,
       phone: detail.identity.phone || null,
       city:
