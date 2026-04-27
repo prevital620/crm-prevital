@@ -37,6 +37,11 @@ const ALLOWED_ROLES = [
   "gerencia_comercial",
   "gerente",
   "gerente_comercial",
+  "nutricionista",
+  "fisioterapeuta",
+  "medico_general",
+  "coordinador_clinico",
+  "auditor_clinico",
 ] as const;
 
 function formatDateTime(value: string | null | undefined) {

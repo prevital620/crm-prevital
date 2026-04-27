@@ -126,6 +126,11 @@ const quickActions: QuickAction[] = [
       "gerencia_comercial",
       "gerente",
       "gerente_comercial",
+      "nutricionista",
+      "fisioterapeuta",
+      "medico_general",
+      "coordinador_clinico",
+      "auditor_clinico",
     ],
   },
   {

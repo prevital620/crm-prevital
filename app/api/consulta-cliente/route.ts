@@ -310,6 +310,12 @@ function resolveAccessibleCommercialIds(
     .map((profile) => profile.id);
 }
 
+const clinicalSelfRoleCodes = new Set([
+  "nutricionista",
+  "fisioterapeuta",
+  "medico_general",
+]);
+
 function matchesPhoneDigits(value: string | null | undefined, digits: string) {
   return normalizeDigits(value) === digits;
 }
@@ -606,11 +612,70 @@ export async function GET(request: Request) {
     );
 
     const profileMap = new Map(profiles.map((profile) => [profile.id, profile]));
+    const isClinicalSelfScope =
+      currentSession.scope === "self" &&
+      clinicalSelfRoleCodes.has(currentSession.effectiveRole || "");
     const accessibleCommercialIds = resolveAccessibleCommercialIds(
       currentSession.scope,
       currentSession.user.id,
       profiles
     );
+
+    let appointmentRows: AppointmentRow[] = [];
+    let specialistAppointmentIds: string[] = [];
+    let specialistLeadIds: string[] = [];
+
+    if (isClinicalSelfScope) {
+      let specialistAppointmentsQuery = supabaseAdmin
+        .from("appointments")
+        .select(
+          `
+          id,
+          lead_id,
+          patient_name,
+          phone,
+          city,
+          appointment_date,
+          appointment_time,
+          status,
+          service_type,
+          notes,
+          specialist_user_id
+        `
+        )
+        .eq("specialist_user_id", currentSession.user.id)
+        .order("appointment_date", { ascending: false })
+        .limit(searchTerm ? 120 : 60);
+
+      if (searchTerm) {
+        const normalizedDigits = normalizeDigits(searchTerm);
+        const terms = [
+          `patient_name.ilike.%${searchTerm}%`,
+          `city.ilike.%${searchTerm}%`,
+        ];
+
+        if (normalizedDigits) {
+          terms.push(`phone.ilike.%${normalizedDigits}%`);
+        }
+
+        specialistAppointmentsQuery = specialistAppointmentsQuery.or(terms.join(","));
+      }
+
+      const { data: specialistAppointments, error: specialistAppointmentsError } =
+        await specialistAppointmentsQuery;
+
+      if (specialistAppointmentsError) {
+        throw specialistAppointmentsError;
+      }
+
+      appointmentRows = (specialistAppointments || []) as AppointmentRow[];
+      specialistAppointmentIds = unique(
+        appointmentRows.map((item) => item.id).filter(Boolean)
+      );
+      specialistLeadIds = unique(
+        appointmentRows.map((item) => item.lead_id).filter(Boolean) as string[]
+      );
+    }
 
     let casesQuery = supabaseAdmin
       .from("commercial_cases")
@@ -647,7 +712,25 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .limit(searchTerm ? 120 : 60);
 
-    if (accessibleCommercialIds && currentSession.scope !== "full") {
+    if (isClinicalSelfScope) {
+      if (specialistAppointmentIds.length === 0 && specialistLeadIds.length === 0) {
+        return NextResponse.json({
+          items: [] as CustomerSummary[],
+          detail: null,
+          scope: currentSession.scope,
+        });
+      }
+
+      if (specialistAppointmentIds.length > 0 && specialistLeadIds.length > 0) {
+        casesQuery = casesQuery.or(
+          `appointment_id.in.(${specialistAppointmentIds.join(",")}),lead_id.in.(${specialistLeadIds.join(",")})`
+        );
+      } else if (specialistAppointmentIds.length > 0) {
+        casesQuery = casesQuery.in("appointment_id", specialistAppointmentIds);
+      } else {
+        casesQuery = casesQuery.in("lead_id", specialistLeadIds);
+      }
+    } else if (accessibleCommercialIds && currentSession.scope !== "full") {
       if (accessibleCommercialIds.length === 0) {
         return NextResponse.json({
           items: [] as CustomerSummary[],
@@ -686,7 +769,6 @@ export async function GET(request: Request) {
     );
 
     let leadRows: LeadRow[] = [];
-    let appointmentRows: AppointmentRow[] = [];
 
     if (currentSession.scope === "full") {
       const [leadResult, appointmentResult] = await Promise.all([
@@ -775,6 +857,32 @@ export async function GET(request: Request) {
 
       leadRows = (leadResult.data || []) as LeadRow[];
       appointmentRows = (appointmentResult.data || []) as AppointmentRow[];
+    } else if (isClinicalSelfScope) {
+      if (specialistLeadIds.length > 0) {
+        const { data, error } = await supabaseAdmin
+          .from("leads")
+          .select(
+            `
+            id,
+            first_name,
+            last_name,
+            full_name,
+            phone,
+            city,
+            interest_service,
+            capture_location,
+            source,
+            status,
+            created_at,
+            created_by_user_id,
+            assigned_to_user_id
+          `
+          )
+          .in("id", specialistLeadIds);
+
+        if (error) throw error;
+        leadRows = (data || []) as LeadRow[];
+      }
     } else {
       if (caseLeadIds.length > 0) {
         const { data, error } = await supabaseAdmin

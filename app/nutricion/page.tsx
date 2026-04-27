@@ -37,6 +37,12 @@ const quickCards = [
     href: "/consulta-clinica",
     icon: FolderSearch,
   },
+  {
+    title: "Consulta cliente",
+    description: "Revisar trazabilidad operativa y citas del paciente sin salir del módulo.",
+    href: "/consulta-cliente",
+    icon: FolderSearch,
+  },
 ];
 
 export default function NutricionHomePage() {
@@ -95,7 +101,7 @@ export default function NutricionHomePage() {
               </div>
             </div>
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            <div className="grid gap-3 sm:grid-cols-4">
               <Link
                 href="/crm"
                 className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
@@ -113,6 +119,12 @@ export default function NutricionHomePage() {
                 className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
               >
                 Historia clínica
+              </Link>
+              <Link
+                href="/consulta-cliente"
+                className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+              >
+                Consulta cliente
               </Link>
             </div>
           </div>

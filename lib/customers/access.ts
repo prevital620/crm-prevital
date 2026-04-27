@@ -6,6 +6,8 @@ export const CUSTOMER_CONSULT_FULL_ROLES = [
   "super_user",
   "administrador",
   "recepcion",
+  "coordinador_clinico",
+  "auditor_clinico",
 ] as const;
 
 export const CUSTOMER_CONSULT_TEAM_ROLES = [
@@ -14,7 +16,12 @@ export const CUSTOMER_CONSULT_TEAM_ROLES = [
   "gerente",
 ] as const;
 
-export const CUSTOMER_CONSULT_SELF_ROLES = ["comercial"] as const;
+export const CUSTOMER_CONSULT_SELF_ROLES = [
+  "comercial",
+  "nutricionista",
+  "fisioterapeuta",
+  "medico_general",
+] as const;
 
 export const CUSTOMER_CONSULT_ALLOWED_ROLES = [
   ...CUSTOMER_CONSULT_FULL_ROLES,
@@ -152,4 +159,3 @@ export function canUseCustomerConsult(
 ) {
   return Boolean(context && context.scope !== "none");
 }
-
