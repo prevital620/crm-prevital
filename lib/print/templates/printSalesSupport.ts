@@ -56,15 +56,22 @@ function renderTaxValue(value: number | null | undefined) {
 
 const styles = `
   <style>
+    @page {
+      size: letter portrait;
+      margin: 8mm;
+    }
     * { box-sizing: border-box; }
     body { margin: 0; background: white; color: #111; font-family: Arial, Helvetica, sans-serif; }
     .page {
       position: relative;
       overflow: hidden;
-      width: 980px;
+      width: 100%;
+      max-width: 7.5in;
+      min-height: 10.25in;
       margin: 0 auto;
-      padding: 22px 26px 28px;
+      padding: 0.34in 0.32in 0.36in;
       page-break-after: always;
+      break-after: page;
     }
     .page:last-child { page-break-after: auto; }
     .page-content {
@@ -81,33 +88,33 @@ const styles = `
       z-index: 0;
     }
     .watermark img {
-      width: 520px;
-      max-width: 70%;
-      opacity: 0.075;
+      width: 420px;
+      max-width: 68%;
+      opacity: 0.07;
       object-fit: contain;
     }
     .top-row {
       display: grid;
-      grid-template-columns: 1fr 280px;
-      gap: 18px;
+      grid-template-columns: minmax(0, 1fr) 2.2in;
+      gap: 10px;
       align-items: start;
-      margin-bottom: 14px;
+      margin-bottom: 8px;
     }
     .brand-wrap {
       display: grid;
-      grid-template-columns: 110px 1fr;
-      gap: 14px;
+      grid-template-columns: 0.82in 1fr;
+      gap: 10px;
       align-items: center;
     }
     .logo-box {
-      width: 96px;
-      height: 96px;
+      width: 0.74in;
+      height: 0.74in;
       border: 1px solid #c8c8c8;
       background: rgba(255, 255, 255, 0.9);
       display: flex;
       align-items: center;
       justify-content: center;
-      padding: 8px;
+      padding: 6px;
     }
     .logo-box img {
       max-width: 100%;
@@ -116,41 +123,42 @@ const styles = `
     }
     .company h1 {
       margin: 0 0 4px;
-      font-size: 24px;
+      font-size: 14pt;
       line-height: 1.15;
     }
     .company p {
-      margin: 2px 0;
-      font-size: 13px;
+      margin: 1px 0;
+      font-size: 8pt;
+      line-height: 1.25;
     }
     .support-box {
       border: 2px solid #2b2b2b;
       background: #1f1f1f;
       color: white;
-      padding: 10px 14px;
-      min-height: 96px;
+      padding: 8px 10px;
+      min-height: 0.95in;
     }
     .support-box h2 {
       margin: 0;
       text-align: center;
-      font-size: 15px;
+      font-size: 10pt;
       line-height: 1.2;
     }
     .support-box .code-label {
-      margin-top: 8px;
+      margin-top: 6px;
       text-align: center;
-      font-size: 13px;
+      font-size: 8pt;
     }
     .support-box .code-row {
-      margin-top: 6px;
+      margin-top: 5px;
       display: grid;
-      grid-template-columns: 42px 1fr;
+      grid-template-columns: 34px 1fr;
       border: 1px solid #ececec;
       background: white;
       color: black;
-      min-height: 38px;
+      min-height: 28px;
       align-items: center;
-      font-size: 14px;
+      font-size: 9pt;
       font-weight: 700;
     }
     .support-box .code-prefix {
@@ -163,73 +171,74 @@ const styles = `
       background: #f6f6f6;
     }
     .support-box .code-value {
-      padding: 0 10px;
-      letter-spacing: 1px;
+      padding: 0 8px;
+      letter-spacing: 0.7px;
     }
     .section-title {
-      margin-top: 10px;
+      margin-top: 7px;
       background: #2b2b2b;
       color: white;
-      padding: 5px 10px;
-      font-size: 15px;
+      padding: 4px 8px;
+      font-size: 9.5pt;
       font-weight: 700;
       text-transform: uppercase;
     }
     table.form-table {
       width: 100%;
       border-collapse: collapse;
-      margin-bottom: 10px;
+      margin-bottom: 7px;
     }
     .form-table td,
     .form-table th {
       border: 1px solid #808080;
-      padding: 6px 8px;
-      font-size: 13px;
+      padding: 4px 6px;
+      font-size: 8pt;
       vertical-align: middle;
+      line-height: 1.2;
     }
     .label-cell {
-      width: 130px;
+      width: 84px;
       font-weight: 700;
       background: #fafafa;
     }
     .value-cell {
-      min-height: 30px;
+      min-height: 20px;
       font-weight: 500;
     }
     .dark-head th {
       background: #434343;
       color: white;
       text-align: center;
-      font-size: 13px;
-      padding-top: 8px;
-      padding-bottom: 8px;
+      font-size: 8.5pt;
+      padding-top: 5px;
+      padding-bottom: 5px;
     }
     .dark-head small {
       display: block;
-      font-size: 11px;
+      font-size: 6.75pt;
       font-weight: 400;
-      margin-top: 3px;
+      margin-top: 2px;
       color: #f0f0f0;
     }
     .numbered-cell {
       vertical-align: top;
-      height: 120px;
+      height: 86px;
     }
     .numbered-line {
       display: grid;
-      grid-template-columns: 16px 1fr;
-      gap: 8px;
-      min-height: 22px;
+      grid-template-columns: 12px 1fr;
+      gap: 5px;
+      min-height: 17px;
       border-bottom: 1px solid #9b9b9b;
       align-items: end;
-      margin-bottom: 4px;
+      margin-bottom: 2px;
       padding-bottom: 1px;
     }
     .line-index {
-      font-size: 13px;
+      font-size: 8pt;
     }
     .line-text {
-      font-size: 13px;
+      font-size: 8pt;
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -237,16 +246,17 @@ const styles = `
     .tiny-row {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px;
-      margin-top: 8px;
-      font-size: 12px;
+      gap: 8px;
+      margin-top: 5px;
+      font-size: 7.5pt;
     }
-    .tiny-row div { min-height: 18px; }
+    .tiny-row div { min-height: 14px; }
     .totals-table td,
     .totals-table th {
       border: 1px solid #808080;
-      padding: 7px 8px;
-      font-size: 13px;
+      padding: 4px 6px;
+      font-size: 8pt;
+      line-height: 1.2;
     }
     .totals-table th {
       background: #2b2b2b;
@@ -255,64 +265,65 @@ const styles = `
     }
     .payment-row {
       border: 1px solid #808080;
-      padding: 8px 10px;
-      font-size: 13px;
-      margin-bottom: 10px;
+      padding: 6px 8px;
+      font-size: 8pt;
+      margin-bottom: 7px;
     }
     .legal-box {
       border: 1px solid #808080;
-      padding: 8px 10px;
-      font-size: 12px;
-      line-height: 1.4;
+      padding: 6px 8px;
+      font-size: 7.25pt;
+      line-height: 1.28;
       background: rgba(255, 255, 255, 0.9);
     }
     .legal-grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
-      gap: 14px;
+      gap: 10px;
     }
     .page-header-small {
       display: flex;
       justify-content: space-between;
-      font-size: 11px;
-      margin-bottom: 10px;
+      font-size: 7pt;
+      margin-bottom: 6px;
     }
     .clauses p {
-      margin: 0 0 7px;
-      font-size: 12px;
-      line-height: 1.42;
+      margin: 0 0 4px;
+      font-size: 7.4pt;
+      line-height: 1.28;
     }
     .checks p {
-      margin: 0 0 6px;
-      font-size: 12px;
-      line-height: 1.4;
+      margin: 0 0 4px;
+      font-size: 7.4pt;
+      line-height: 1.28;
     }
     .signature-grid {
       width: 100%;
       border-collapse: collapse;
-      margin-top: 8px;
+      margin-top: 6px;
     }
     .signature-grid td {
       border: 1px solid #808080;
-      padding: 8px;
+      padding: 6px;
       vertical-align: top;
-      font-size: 12px;
-      min-height: 84px;
+      font-size: 7.5pt;
+      min-height: 64px;
+      line-height: 1.25;
       background: rgba(255, 255, 255, 0.92);
     }
     .box-title {
       font-weight: 700;
-      margin-bottom: 6px;
+      margin-bottom: 4px;
       text-transform: uppercase;
     }
     .fingerprint {
-      height: 78px;
+      height: 54px;
       border: 1px solid #bdbdbd;
       display: flex;
       align-items: center;
       justify-content: center;
       color: #6b7280;
-      font-size: 11px;
+      font-size: 7pt;
       text-align: center;
       background: #fafafa;
     }
