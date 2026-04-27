@@ -239,7 +239,7 @@ export default function ConsultaClientePage() {
     });
 
     printSalesSupport({
-      supportCode: caseItem.support_code || caseItem.id.slice(0, 6).toUpperCase(),
+      supportCode: caseItem.support_code || "Pendiente",
       documentDate: supportDate,
       documentTime: supportTime,
       analystName: caseItem.commercial_name || "",

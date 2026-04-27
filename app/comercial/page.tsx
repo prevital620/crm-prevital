@@ -1390,7 +1390,7 @@ export default function ComercialPage() {
     });
 
     printSalesSupport({
-      supportCode: currentCase.support_code || currentCase.id.slice(0, 6).toUpperCase(),
+      supportCode: currentCase.support_code || "Pendiente",
       documentDate: supportDate,
       documentTime: supportTime,
       analystName,

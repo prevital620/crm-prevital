@@ -2711,7 +2711,7 @@ function RecepcionContent() {
       const createdAt = new Date(item.closed_at || item.created_at);
 
       printSalesSupport({
-        supportCode: item.support_code || item.id.slice(0, 6).toUpperCase(),
+        supportCode: item.support_code || "Pendiente",
         documentDate: item.closed_at ? formatDateOnly(item.closed_at) : formatDateOnly(item.created_at),
         documentTime: createdAt.toLocaleTimeString("es-CO", {
           hour: "2-digit",
