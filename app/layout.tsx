@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "CRM Prevital",
-  description: "Sistema interno de gestión para Prevital Medicina Preventiva",
+  title: "Prevital Odontología | Medellín",
+  description:
+    "Atención odontológica profesional en Medellín. Agenda tu cita en Prevital Odontología.",
   manifest: "/manifest.json",
   icons: {
     icon: [
@@ -24,9 +25,7 @@ export const metadata: Metadata = {
       { url: "/icon-192.png", sizes: "192x192", type: "image/png" },
       { url: "/icon-512.png", sizes: "512x512", type: "image/png" },
     ],
-    apple: [
-      { url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" },
-    ],
+    apple: [{ url: "/apple-touch-icon.png", sizes: "180x180", type: "image/png" }],
   },
 };
 
