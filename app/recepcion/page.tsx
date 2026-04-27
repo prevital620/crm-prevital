@@ -2668,10 +2668,12 @@ function RecepcionContent() {
         })}
       </div>
 
-      <div className="grid gap-3 rounded-[20px] border border-[#DCEBE1] bg-white p-4 md:grid-cols-4">
-        <div>
+      <div className="grid grid-cols-2 gap-2 rounded-[20px] border border-[#DCEBE1] bg-white p-3">
+        <div className="col-span-2">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Periodo</p>
-          <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestPeriodLabel}</p>
+          <p className="mt-1 break-words text-sm font-semibold leading-5 text-[#1F3128]">
+            {manifestPeriodLabel}
+          </p>
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Q</p>
@@ -2680,6 +2682,10 @@ function RecepcionContent() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">No Q</p>
           <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalNoQ}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Ventas</p>
+          <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalVentas}</p>
         </div>
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Caja</p>
@@ -4629,37 +4635,64 @@ function imprimirRegistroComercial() {
 
         {!isLimitedReceptionForCall && !isEmbeddedCommercialCreationView ? (
           <section className="mb-6 overflow-hidden rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(243,251,246,0.98)_58%,_rgba(231,244,236,0.96)_100%)] p-6 shadow-[0_24px_58px_rgba(95,125,102,0.14)]">
-            <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-              <div>
-                <p className="inline-flex rounded-full border border-[#D7EADF] bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5F7D66] shadow-sm">
-                  Recepción en vivo
-                </p>
-                <h2 className="mt-3 text-2xl font-bold text-[#1F3128]">
-                  Pendientes de impresión y entrega
-                </h2>
-                <p className="mt-2 max-w-3xl text-sm leading-6 text-[#607368]">
-                  Esta bandeja se actualiza automáticamente cuando comercial finaliza una venta o
-                  cuando nutrición y fisioterapia dejan un paciente pendiente para recepción.
-                </p>
-              </div>
+            <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_360px] xl:items-start">
+              <div className="space-y-5">
+                <div>
+                  <p className="inline-flex rounded-full border border-[#D7EADF] bg-white/80 px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.24em] text-[#5F7D66] shadow-sm">
+                    Recepción en vivo
+                  </p>
+                  <h2 className="mt-3 text-2xl font-bold text-[#1F3128]">
+                    Pendientes de impresión y entrega
+                  </h2>
+                  <p className="mt-2 max-w-3xl text-sm leading-6 text-[#607368]">
+                    Esta bandeja se actualiza automáticamente cuando comercial finaliza una venta o
+                    cuando nutrición y fisioterapia dejan un paciente pendiente para recepción.
+                  </p>
+                </div>
 
-                <div className="grid min-w-[240px] gap-3 rounded-[26px] border border-[#D6E8DA] bg-white/80 p-4 shadow-sm md:grid-cols-3">
-                  <div>
+                <div className="grid gap-3 lg:grid-cols-[220px_minmax(0,1fr)]">
+                  <div className="rounded-[24px] border border-[#D6E8DA] bg-white/85 p-4 shadow-sm">
                     <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#6A8376]">
                       Total
                     </p>
                     <p className="mt-2 text-3xl font-bold text-[#1F3128]">
-                    {receptionLiveSummary.total}
-                  </p>
-                </div>
-                  <div className="space-y-2 text-sm text-[#4F6F5B]">
-                    <p>Comercial: {receptionLiveSummary.commercial}</p>
-                    <p>Nutrición: {receptionLiveSummary.nutrition}</p>
-                    <p>Fisioterapia: {receptionLiveSummary.physiotherapy}</p>
+                      {receptionLiveSummary.total}
+                    </p>
                   </div>
-                  {manifestPanel}
+
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div className="rounded-[24px] border border-[#D6E8DA] bg-white/85 p-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">
+                        Comercial
+                      </p>
+                      <p className="mt-2 text-2xl font-bold text-[#1F3128]">
+                        {receptionLiveSummary.commercial}
+                      </p>
+                    </div>
+                    <div className="rounded-[24px] border border-[#D6E8DA] bg-white/85 p-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">
+                        Nutrición
+                      </p>
+                      <p className="mt-2 text-2xl font-bold text-[#1F3128]">
+                        {receptionLiveSummary.nutrition}
+                      </p>
+                    </div>
+                    <div className="rounded-[24px] border border-[#D6E8DA] bg-white/85 p-4 shadow-sm">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">
+                        Fisioterapia
+                      </p>
+                      <p className="mt-2 text-2xl font-bold text-[#1F3128]">
+                        {receptionLiveSummary.physiotherapy}
+                      </p>
+                    </div>
+                  </div>
                 </div>
               </div>
+
+              <div className="xl:justify-self-end xl:w-full xl:max-w-[360px]">
+                {manifestPanel}
+              </div>
+            </div>
 
             <div className="mt-6 grid gap-4 xl:grid-cols-3">
                 <div className="rounded-[28px] border border-[#D6E8DA] bg-white/90 p-5 shadow-[0_16px_36px_rgba(95,125,102,0.08)]">
