@@ -25,6 +25,20 @@ type CommissionGroupOption = {
   code: string;
 };
 
+type CommercialTeamValue = "" | "AM" | "PM";
+
+function stripCommercialTeamSuffix(value: string) {
+  return value.replace(/\s+(AM|PM)$/i, "").trim();
+}
+
+function isCommercialAccessRole(code: string) {
+  return (
+    code === "comercial" ||
+    code === "gerente_comercial" ||
+    code === "gerencia_comercial"
+  );
+}
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -44,6 +58,8 @@ export default function NuevoUsuarioPage() {
   const [availableCommissionGroups, setAvailableCommissionGroups] = useState<
     CommissionGroupOption[]
   >([]);
+  const [selectedCommercialTeam, setSelectedCommercialTeam] =
+    useState<CommercialTeamValue>("");
 
   const [form, setForm] = useState({
     full_name: "",
@@ -120,6 +136,11 @@ export default function NuevoUsuarioPage() {
     [roles, selectedRoleIds]
   );
 
+  const hasCommercialAccess = useMemo(
+    () => selectedRoles.some((role) => isCommercialAccessRole(role.code)),
+    [selectedRoles]
+  );
+
   const needsCommissionGroup = useMemo(
     () => selectedRoles.some((role) => roleNeedsCommissionGroup(role.code)),
     [selectedRoles]
@@ -139,6 +160,12 @@ export default function NuevoUsuarioPage() {
       setForm((current) => ({ ...current, commission_group_code: "" }));
     }
   }, [form.commission_group_code, showCommissionGroupField]);
+
+  useEffect(() => {
+    if (!hasCommercialAccess && selectedCommercialTeam) {
+      setSelectedCommercialTeam("");
+    }
+  }, [hasCommercialAccess, selectedCommercialTeam]);
 
   useEffect(() => {
     const employeeCode = form.employee_code.trim().toUpperCase();
@@ -190,6 +217,10 @@ export default function NuevoUsuarioPage() {
         },
         body: JSON.stringify({
           ...form,
+          job_title:
+            selectedCommercialTeam && hasCommercialAccess
+              ? `${stripCommercialTeamSuffix(form.job_title.trim())} ${selectedCommercialTeam}`.trim()
+              : stripCommercialTeamSuffix(form.job_title.trim()),
           employee_code: form.employee_code.trim().toUpperCase(),
           commission_group_code: form.commission_group_code.trim().toUpperCase(),
           role_ids: selectedRoleIds,
@@ -387,6 +418,32 @@ export default function NuevoUsuarioPage() {
               value={form.job_title}
               onChange={(e) => setForm({ ...form, job_title: e.target.value })}
             />
+
+            {hasCommercialAccess ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">
+                  Equipo comercial
+                </p>
+                <select
+                  className={inputClass}
+                  value={selectedCommercialTeam}
+                  onChange={(e) =>
+                    setSelectedCommercialTeam(
+                      (e.target.value as CommercialTeamValue) || ""
+                    )
+                  }
+                >
+                  <option value="">Sin equipo AM/PM</option>
+                  <option value="AM">Equipo AM</option>
+                  <option value="PM">Equipo PM</option>
+                </select>
+                <p className="mt-2 text-xs text-[#607368]">
+                  Si queda sin equipo AM/PM, el comercial podra aparecer para
+                  ambos gerentes y el caso sumara a la jornada del gerente que
+                  lo asigne.
+                </p>
+              </div>
+            ) : null}
 
             <select
               className={inputClass}
