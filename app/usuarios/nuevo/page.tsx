@@ -5,10 +5,7 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
-import {
-  jobTitleSuggestsCommissionGroup,
-  roleNeedsCommissionGroup,
-} from "@/lib/commissions/group-assignment";
+import { roleNeedsCommissionGroup } from "@/lib/commissions/group-assignment";
 
 type Department = {
   id: string;
@@ -37,24 +34,6 @@ function isCommercialAccessRole(code: string) {
     code === "gerente_comercial" ||
     code === "gerencia_comercial"
   );
-}
-
-function normalizeUiHint(value: string | null | undefined) {
-  return String(value || "")
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .trim()
-    .toUpperCase();
-}
-
-function departmentSuggestsCommercialTeam(name: string | null | undefined) {
-  const normalized = normalizeUiHint(name);
-  return normalized.includes("COMERCIAL");
-}
-
-function departmentSuggestsCommissionGroup(name: string | null | undefined) {
-  const normalized = normalizeUiHint(name);
-  return normalized.includes("CALL CENTER") || normalized.includes("OPC");
 }
 
 const panelClass =
@@ -154,18 +133,9 @@ export default function NuevoUsuarioPage() {
     [roles, selectedRoleIds]
   );
 
-  const selectedDepartmentName = useMemo(
-    () =>
-      departments.find((department) => department.id === form.department_id)?.name ||
-      "",
-    [departments, form.department_id]
-  );
-
   const hasCommercialAccess = useMemo(
-    () =>
-      selectedRoles.some((role) => isCommercialAccessRole(role.code)) ||
-      departmentSuggestsCommercialTeam(selectedDepartmentName),
-    [selectedDepartmentName, selectedRoles]
+    () => selectedRoles.some((role) => isCommercialAccessRole(role.code)),
+    [selectedRoles]
   );
 
   const needsCommissionGroup = useMemo(
@@ -173,19 +143,7 @@ export default function NuevoUsuarioPage() {
     [selectedRoles]
   );
 
-  const showCommissionGroupField = useMemo(
-    () =>
-      needsCommissionGroup ||
-      departmentSuggestsCommissionGroup(selectedDepartmentName) ||
-      jobTitleSuggestsCommissionGroup(form.job_title) ||
-      Boolean(form.commission_group_code),
-    [
-      form.commission_group_code,
-      form.job_title,
-      needsCommissionGroup,
-      selectedDepartmentName,
-    ]
-  );
+  const showCommissionGroupField = needsCommissionGroup;
 
   useEffect(() => {
     if (showCommissionGroupField) return;
@@ -402,48 +360,17 @@ export default function NuevoUsuarioPage() {
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
 
-            {showCommissionGroupField ? (
-              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
-                <p className="mb-2 text-sm font-medium text-[#24312A]">
-                  Grupo de comision
-                </p>
-
-                <select
-                  className={inputClass}
-                  value={form.commission_group_code || ""}
-                  onChange={(e) =>
-                    setForm((current) => ({
-                      ...current,
-                      commission_group_code: e.target.value,
-                    }))
-                  }
-                >
-                  <option value="">Selecciona un grupo</option>
-                  {availableCommissionGroups.map((group) => (
-                    <option key={group.code} value={group.code}>
-                      Grupo {group.code}
-                    </option>
-                  ))}
-                </select>
-
-                <p className="mt-2 text-xs text-[#607368]">
-                  Primero creas el grupo en `Usuarios y roles` y luego aqui lo
-                  escoges, igual que AM/PM en comercial.
-                </p>
-              </div>
-            ) : (
-              <input
-                className={inputClass}
-                placeholder="Codigo interno opcional (Ej: OP1234)"
-                value={form.employee_code}
-                onChange={(e) =>
-                  setForm({
-                    ...form,
-                    employee_code: e.target.value.toUpperCase(),
-                  })
-                }
-              />
-            )}
+            <input
+              className={inputClass}
+              placeholder="Codigo interno opcional (Ej: OP1234)"
+              value={form.employee_code}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  employee_code: e.target.value.toUpperCase(),
+                })
+              }
+            />
 
             <input
               className={inputClass}
@@ -451,32 +378,6 @@ export default function NuevoUsuarioPage() {
               value={form.job_title}
               onChange={(e) => setForm({ ...form, job_title: e.target.value })}
             />
-
-            {hasCommercialAccess ? (
-              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
-                <p className="mb-2 text-sm font-medium text-[#24312A]">
-                  Equipo comercial
-                </p>
-                <select
-                  className={inputClass}
-                  value={selectedCommercialTeam}
-                  onChange={(e) =>
-                    setSelectedCommercialTeam(
-                      (e.target.value as CommercialTeamValue) || ""
-                    )
-                  }
-                >
-                  <option value="">Sin equipo AM/PM</option>
-                  <option value="AM">Equipo AM</option>
-                  <option value="PM">Equipo PM</option>
-                </select>
-                <p className="mt-2 text-xs text-[#607368]">
-                  Si queda sin equipo AM/PM, el comercial podra aparecer para
-                  ambos gerentes y el caso sumara a la jornada del gerente que
-                  lo asigne.
-                </p>
-              </div>
-            ) : null}
 
             <select
               className={inputClass}
@@ -539,6 +440,62 @@ export default function NuevoUsuarioPage() {
                 ejemplo Comercial y Fisioterapia.
               </p>
             </div>
+
+            {hasCommercialAccess ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">
+                  Equipo comercial
+                </p>
+                <select
+                  className={inputClass}
+                  value={selectedCommercialTeam}
+                  onChange={(e) =>
+                    setSelectedCommercialTeam(
+                      (e.target.value as CommercialTeamValue) || ""
+                    )
+                  }
+                >
+                  <option value="">Sin equipo AM/PM</option>
+                  <option value="AM">Equipo AM</option>
+                  <option value="PM">Equipo PM</option>
+                </select>
+                <p className="mt-2 text-xs text-[#607368]">
+                  Este bloque depende solo del checkbox de Comercial o Gerente
+                  Comercial.
+                </p>
+              </div>
+            ) : null}
+
+            {showCommissionGroupField ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">
+                  Grupo de comision
+                </p>
+
+                <select
+                  className={inputClass}
+                  value={form.commission_group_code || ""}
+                  onChange={(e) =>
+                    setForm((current) => ({
+                      ...current,
+                      commission_group_code: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Selecciona un grupo</option>
+                  {availableCommissionGroups.map((group) => (
+                    <option key={group.code} value={group.code}>
+                      Grupo {group.code}
+                    </option>
+                  ))}
+                </select>
+
+                <p className="mt-2 text-xs text-[#607368]">
+                  Este bloque depende solo del checkbox de OPC, TMK,
+                  Confirmador o sus supervisores.
+                </p>
+              </div>
+            ) : null}
 
             {false ? (
               <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
