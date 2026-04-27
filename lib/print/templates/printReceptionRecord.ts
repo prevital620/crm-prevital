@@ -198,9 +198,9 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
         }
         .line {
           border-top: 1px solid #111827;
-          padding-top: 2px;
+          padding-top: 3px;
           font-size: 7px;
-          min-height: 12px;
+          min-height: 32px;
         }
         .fuente {
           font-size: 7px;
