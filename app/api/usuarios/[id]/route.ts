@@ -10,6 +10,7 @@ import {
   getCommissionGroupCodeValidationError,
   resolveCommissionGroupCode,
 } from "@/lib/commissions/group-code";
+import { roleNeedsCommissionGroup } from "@/lib/commissions/group-assignment";
 
 type UserUpdatePayload = {
   full_name?: string;
@@ -161,6 +162,47 @@ function parseUserUpdatePayload(body: unknown): UserUpdatePayload {
   return result;
 }
 
+async function getEffectiveRoleCodes(userId: string, nextRoleIds?: string[]) {
+  if (nextRoleIds) {
+    const { data, error } = await supabaseAdmin
+      .from("roles")
+      .select("code")
+      .in("id", nextRoleIds);
+
+    if (error) throw error;
+    return ((data as Array<{ code: string | null }> | null) || [])
+      .map((item) => String(item.code || "").trim())
+      .filter(Boolean);
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from("user_roles")
+    .select(`
+      roles (
+        code
+      )
+    `)
+    .eq("user_id", userId);
+
+  if (error) throw error;
+  return (((data as Array<{ roles: { code: string | null } | Array<{ code: string | null }> | null }> | null) || [])
+    .map((item) => (Array.isArray(item.roles) ? item.roles[0] : item.roles))
+    .map((role) => String(role?.code || "").trim())
+    .filter(Boolean));
+}
+
+async function commissionGroupExists(code: string) {
+  const { data, error } = await supabaseAdmin
+    .from("commission_groups")
+    .select("code")
+    .eq("code", code)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data?.code);
+}
+
 export async function PATCH(
   request: Request,
   context: { params: Promise<{ id: string }> }
@@ -191,6 +233,36 @@ export async function PATCH(
     if ("full_name" in payload && !payload.full_name) {
       return NextResponse.json(
         { error: "El nombre completo es obligatorio." },
+        { status: 400 }
+      );
+    }
+
+    const resolvedGroupCode =
+      resolveCommissionGroupCode({
+        commissionGroupCode: payload.commission_group_code,
+        employeeCode: payload.employee_code,
+      }) || null;
+    const effectiveRoleCodes = await getEffectiveRoleCodes(id, payload.role_ids);
+    const requiresCommissionGroup = effectiveRoleCodes.some((code) =>
+      roleNeedsCommissionGroup(code)
+    );
+
+    if (requiresCommissionGroup && !resolvedGroupCode) {
+      return NextResponse.json(
+        {
+          error:
+            "Debes seleccionar un grupo de comision para OPC, TMK, confirmador o supervisores relacionados.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (resolvedGroupCode && !(await commissionGroupExists(resolvedGroupCode))) {
+      return NextResponse.json(
+        {
+          error:
+            "El grupo de comision no existe todavia. Crealo primero y luego seleccionarlo en el usuario.",
+        },
         { status: 400 }
       );
     }
@@ -231,11 +303,7 @@ export async function PATCH(
         return NextResponse.json({ error: groupCodeError }, { status: 400 });
       }
 
-      profileUpdate.commission_group_code =
-        resolveCommissionGroupCode({
-          commissionGroupCode: payload.commission_group_code,
-          employeeCode: payload.employee_code,
-        }) || null;
+      profileUpdate.commission_group_code = resolvedGroupCode;
     }
 
     if ("job_title" in payload) {

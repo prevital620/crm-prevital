@@ -19,6 +19,10 @@ type Role = {
   code: string;
 };
 
+type CommissionGroupOption = {
+  code: string;
+};
+
 type UserData = {
   id: string;
   full_name: string;
@@ -64,8 +68,11 @@ export default function EditarUsuarioPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
-  const [availableCommissionGroups, setAvailableCommissionGroups] = useState<string[]>([]);
+  const [availableCommissionGroups, setAvailableCommissionGroups] = useState<
+    CommissionGroupOption[]
+  >([]);
   const [creatingCommissionGroup, setCreatingCommissionGroup] = useState(false);
+  const [savingCommissionGroup, setSavingCommissionGroup] = useState(false);
   const [selectedCommercialTeam, setSelectedCommercialTeam] = useState<CommercialTeamValue>("");
   const [form, setForm] = useState({
     full_name: "",
@@ -102,7 +109,7 @@ export default function EditarUsuarioPage() {
         departmentsResult,
         rolesResult,
         userRoleResult,
-        commissionGroupsResult,
+        commissionGroupsResponse,
       ] = await Promise.all([
         supabase
           .from("profiles")
@@ -114,17 +121,19 @@ export default function EditarUsuarioPage() {
         supabase.from("departments").select("id, name").order("name", { ascending: true }),
         supabase.from("roles").select("id, name, code").order("name", { ascending: true }),
         supabase.from("user_roles").select("role_id").eq("user_id", userId),
-        supabase
-          .from("profiles")
-          .select("commission_group_code")
-          .not("commission_group_code", "is", null),
+        fetch("/api/commission-groups"),
       ]);
 
       if (userResult.error) throw userResult.error;
       if (departmentsResult.error) throw departmentsResult.error;
       if (rolesResult.error) throw rolesResult.error;
       if (userRoleResult.error) throw userRoleResult.error;
-      if (commissionGroupsResult.error) throw commissionGroupsResult.error;
+      const commissionGroupsResult = await commissionGroupsResponse.json();
+      if (!commissionGroupsResponse.ok) {
+        throw new Error(
+          commissionGroupsResult.error || "No se pudieron cargar los grupos de comision."
+        );
+      }
 
       const user = userResult.data as UserData;
       const currentRoleIds =
@@ -135,13 +144,9 @@ export default function EditarUsuarioPage() {
       setDepartments((departmentsResult.data as Department[]) || []);
       setRoles((rolesResult.data as Role[]) || []);
       setAvailableCommissionGroups(
-        Array.from(
-          new Set(
-            ((commissionGroupsResult.data as Array<{ commission_group_code: string | null }> | null) || [])
-              .map((item) => String(item.commission_group_code || "").trim().toUpperCase())
-              .filter(Boolean)
-          )
-        ).sort((a, b) => a.localeCompare(b, "es"))
+        ((commissionGroupsResult.groups as CommissionGroupOption[] | undefined) || []).sort(
+          (a, b) => a.code.localeCompare(b.code, "es")
+        )
       );
       setSelectedRoleIds(currentRoleIds);
       setSelectedCommercialTeam(inferCommercialTeam(user.job_title));
@@ -218,6 +223,53 @@ export default function EditarUsuarioPage() {
     form.employee_code,
     needsCommissionGroup,
   ]);
+
+  async function crearGrupoComision() {
+    const code = form.commission_group_code.trim().toUpperCase();
+
+    if (!code) {
+      setError("Escribe el codigo del grupo que quieres crear. Ej: CB.");
+      return;
+    }
+
+    try {
+      setSavingCommissionGroup(true);
+      setError("");
+      setMensaje("");
+
+      const response = await fetch("/api/commission-groups", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo crear el grupo.");
+      }
+
+      setAvailableCommissionGroups((current) => {
+        const next = [...current];
+        if (!next.some((item) => item.code === result.code)) {
+          next.push({ code: result.code });
+        }
+        return next.sort((a, b) => a.code.localeCompare(b.code, "es"));
+      });
+      setForm((current) => ({
+        ...current,
+        commission_group_code: result.code,
+      }));
+      setCreatingCommissionGroup(false);
+      setMensaje(`Grupo ${result.code} guardado correctamente.`);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo crear el grupo.");
+    } finally {
+      setSavingCommissionGroup(false);
+    }
+  }
 
   async function guardarCambios(e: React.FormEvent) {
     e.preventDefault();
@@ -444,79 +496,6 @@ export default function EditarUsuarioPage() {
               }
             />
 
-            {needsCommissionGroup ? (
-              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
-                <p className="mb-2 text-sm font-medium text-[#24312A]">Grupo de comisión</p>
-
-                {!creatingCommissionGroup ? (
-                  <select
-                    className={inputClass}
-                    value={form.commission_group_code || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === "__new__") {
-                        setCreatingCommissionGroup(true);
-                        setForm((current) => ({
-                          ...current,
-                          commission_group_code: "",
-                        }));
-                        return;
-                      }
-
-                      setForm((current) => ({
-                        ...current,
-                        commission_group_code: value,
-                      }));
-                    }}
-                  >
-                    <option value="">Selecciona un grupo</option>
-                    {availableCommissionGroups.map((groupCode) => (
-                      <option key={groupCode} value={groupCode}>
-                        Grupo {groupCode}
-                      </option>
-                    ))}
-                    <option value="__new__">Crear grupo nuevo</option>
-                  </select>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                    <input
-                      className={inputClass}
-                      placeholder="Nuevo grupo (Ej: CB)"
-                      maxLength={2}
-                      value={form.commission_group_code}
-                      onChange={(e) =>
-                        setForm((current) => ({
-                          ...current,
-                          commission_group_code: e.target.value.toUpperCase(),
-                        }))
-                      }
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => setCreatingCommissionGroup(false)}
-                      className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
-                    >
-                      Usar existente
-                    </button>
-                  </div>
-                )}
-
-                <p className="mt-2 text-xs text-[#607368]">
-                  Pon el mismo grupo en el supervisor y en todos los `TMK`,
-                  `OPC` o confirmadores que pertenezcan a ese equipo.
-                </p>
-              </div>
-            ) : null}
-
-            {needsCommissionGroup ? (
-              <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
-                Para OPC, TMK y sus supervisores, este grupo define a quién le
-                suma la comisión. Si el usuario tiene código interno, las 2
-                primeras letras deben coincidir con este grupo.
-              </div>
-            ) : null}
-
             <input
               className={inputClass}
               placeholder="Cargo"
@@ -597,6 +576,96 @@ export default function EditarUsuarioPage() {
                 Puedes aprobar varios accesos al mismo usuario, por ejemplo Comercial y Fisioterapia.
               </p>
             </div>
+
+            {needsCommissionGroup ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">Grupo de comisión</p>
+
+                {!creatingCommissionGroup ? (
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <select
+                      className={inputClass}
+                      value={form.commission_group_code || ""}
+                      onChange={(e) =>
+                        setForm((current) => ({
+                          ...current,
+                          commission_group_code: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Selecciona un grupo</option>
+                      {availableCommissionGroups.map((group) => (
+                        <option key={group.code} value={group.code}>
+                          Grupo {group.code}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatingCommissionGroup(true);
+                        setError("");
+                        setMensaje("");
+                      }}
+                      className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                    >
+                      Crear grupo
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+                    <input
+                      className={inputClass}
+                      placeholder="Nuevo grupo (Ej: CB)"
+                      maxLength={2}
+                      value={form.commission_group_code}
+                      onChange={(e) =>
+                        setForm((current) => ({
+                          ...current,
+                          commission_group_code: e.target.value.toUpperCase(),
+                        }))
+                      }
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => void crearGrupoComision()}
+                      disabled={savingCommissionGroup}
+                      className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
+                    >
+                      {savingCommissionGroup ? "Guardando..." : "Guardar grupo"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatingCommissionGroup(false);
+                        setError("");
+                        setMensaje("");
+                      }}
+                      className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                    >
+                      Escoger existente
+                    </button>
+                  </div>
+                )}
+
+                <p className="mt-2 text-xs text-[#607368]">
+                  Primero creas el grupo (`CB`, `AV`, `BG`), luego lo escoges
+                  para el supervisor y para todos los `TMK`, `OPC` o
+                  confirmadores de ese equipo.
+                </p>
+              </div>
+            ) : null}
+
+            {needsCommissionGroup ? (
+              <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
+                Para OPC, TMK y sus supervisores, este grupo define a quién le
+                suma la comisión. Si el usuario tiene código interno, las 2
+                primeras letras deben coincidir con este grupo.
+              </div>
+            ) : null}
 
             <label className="flex items-center gap-3 rounded-[24px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 text-sm text-[#32453A] shadow-inner">
               <input

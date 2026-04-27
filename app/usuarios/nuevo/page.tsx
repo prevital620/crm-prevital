@@ -18,6 +18,10 @@ type Role = {
   code: string;
 };
 
+type CommissionGroupOption = {
+  code: string;
+};
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -34,8 +38,11 @@ export default function NuevoUsuarioPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
-  const [availableCommissionGroups, setAvailableCommissionGroups] = useState<string[]>([]);
+  const [availableCommissionGroups, setAvailableCommissionGroups] = useState<
+    CommissionGroupOption[]
+  >([]);
   const [creatingCommissionGroup, setCreatingCommissionGroup] = useState(false);
+  const [savingCommissionGroup, setSavingCommissionGroup] = useState(false);
 
   const [form, setForm] = useState({
     full_name: "",
@@ -63,13 +70,10 @@ export default function NuevoUsuarioPage() {
 
       setAuthorized(true);
 
-      const [departmentsResult, rolesResult, commissionGroupsResult] = await Promise.all([
+      const [departmentsResult, rolesResult, commissionGroupsResponse] = await Promise.all([
         supabase.from("departments").select("id, name").order("name"),
         supabase.from("roles").select("id, name, code").order("name"),
-        supabase
-          .from("profiles")
-          .select("commission_group_code")
-          .not("commission_group_code", "is", null),
+        fetch("/api/commission-groups"),
       ]);
 
       if (departmentsResult.error) {
@@ -84,7 +88,9 @@ export default function NuevoUsuarioPage() {
         return;
       }
 
-      if (commissionGroupsResult.error) {
+      const commissionGroupsResult = await commissionGroupsResponse.json();
+
+      if (!commissionGroupsResponse.ok) {
         setError("No se pudieron cargar los grupos de comision.");
         setLoadingData(false);
         return;
@@ -93,13 +99,9 @@ export default function NuevoUsuarioPage() {
       setDepartments(departmentsResult.data || []);
       setRoles(rolesResult.data || []);
       setAvailableCommissionGroups(
-        Array.from(
-          new Set(
-            ((commissionGroupsResult.data as Array<{ commission_group_code: string | null }> | null) || [])
-              .map((item) => String(item.commission_group_code || "").trim().toUpperCase())
-              .filter(Boolean)
-          )
-        ).sort((a, b) => a.localeCompare(b, "es"))
+        ((commissionGroupsResult.groups as CommissionGroupOption[] | undefined) || []).sort(
+          (a, b) => a.code.localeCompare(b.code, "es")
+        )
       );
       setLoadingData(false);
     } catch (err: any) {
@@ -153,6 +155,53 @@ export default function NuevoUsuarioPage() {
     form.employee_code,
     needsCommissionGroup,
   ]);
+
+  async function crearGrupoComision() {
+    const code = form.commission_group_code.trim().toUpperCase();
+
+    if (!code) {
+      setError("Escribe el codigo del grupo que quieres crear. Ej: CB.");
+      return;
+    }
+
+    try {
+      setSavingCommissionGroup(true);
+      setError("");
+      setMensaje("");
+
+      const response = await fetch("/api/commission-groups", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo crear el grupo.");
+      }
+
+      setAvailableCommissionGroups((current) => {
+        const next = [...current];
+        if (!next.some((item) => item.code === result.code)) {
+          next.push({ code: result.code });
+        }
+        return next.sort((a, b) => a.code.localeCompare(b.code, "es"));
+      });
+      setForm((current) => ({
+        ...current,
+        commission_group_code: result.code,
+      }));
+      setCreatingCommissionGroup(false);
+      setMensaje(`Grupo ${result.code} guardado correctamente.`);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo crear el grupo.");
+    } finally {
+      setSavingCommissionGroup(false);
+    }
+  }
 
   async function crearUsuario(e: React.FormEvent) {
     e.preventDefault();
@@ -345,71 +394,6 @@ export default function NuevoUsuarioPage() {
               }
             />
 
-            {needsCommissionGroup ? (
-              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
-                <p className="mb-2 text-sm font-medium text-[#24312A]">Grupo de comisión</p>
-
-                {!creatingCommissionGroup ? (
-                  <select
-                    className={inputClass}
-                    value={form.commission_group_code || ""}
-                    onChange={(e) => {
-                      const value = e.target.value;
-                      if (value === "__new__") {
-                        setCreatingCommissionGroup(true);
-                        setForm((current) => ({
-                          ...current,
-                          commission_group_code: "",
-                        }));
-                        return;
-                      }
-
-                      setForm((current) => ({
-                        ...current,
-                        commission_group_code: value,
-                      }));
-                    }}
-                  >
-                    <option value="">Selecciona un grupo</option>
-                    {availableCommissionGroups.map((groupCode) => (
-                      <option key={groupCode} value={groupCode}>
-                        Grupo {groupCode}
-                      </option>
-                    ))}
-                    <option value="__new__">Crear grupo nuevo</option>
-                  </select>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                    <input
-                      className={inputClass}
-                      placeholder="Nuevo grupo (Ej: CB)"
-                      maxLength={2}
-                      value={form.commission_group_code}
-                      onChange={(e) =>
-                        setForm((current) => ({
-                          ...current,
-                          commission_group_code: e.target.value.toUpperCase(),
-                        }))
-                      }
-                    />
-
-                    <button
-                      type="button"
-                      onClick={() => setCreatingCommissionGroup(false)}
-                      className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
-                    >
-                      Usar existente
-                    </button>
-                  </div>
-                )}
-
-                <p className="mt-2 text-xs text-[#607368]">
-                  Asigna aquí el grupo del supervisor y luego usa el mismo grupo
-                  para los `TMK`, `OPC` o confirmadores de ese equipo.
-                </p>
-              </div>
-            ) : null}
-
             <input
               className={inputClass}
               placeholder="Cargo"
@@ -478,6 +462,88 @@ export default function NuevoUsuarioPage() {
                 ejemplo Comercial y Fisioterapia.
               </p>
             </div>
+
+            {needsCommissionGroup ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">Grupo de comisión</p>
+
+                {!creatingCommissionGroup ? (
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <select
+                      className={inputClass}
+                      value={form.commission_group_code || ""}
+                      onChange={(e) =>
+                        setForm((current) => ({
+                          ...current,
+                          commission_group_code: e.target.value,
+                        }))
+                      }
+                    >
+                      <option value="">Selecciona un grupo</option>
+                      {availableCommissionGroups.map((group) => (
+                        <option key={group.code} value={group.code}>
+                          Grupo {group.code}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatingCommissionGroup(true);
+                        setError("");
+                        setMensaje("");
+                      }}
+                      className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                    >
+                      Crear grupo
+                    </button>
+                  </div>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto_auto]">
+                    <input
+                      className={inputClass}
+                      placeholder="Nuevo grupo (Ej: CB)"
+                      maxLength={2}
+                      value={form.commission_group_code}
+                      onChange={(e) =>
+                        setForm((current) => ({
+                          ...current,
+                          commission_group_code: e.target.value.toUpperCase(),
+                        }))
+                      }
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => void crearGrupoComision()}
+                      disabled={savingCommissionGroup}
+                      className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
+                    >
+                      {savingCommissionGroup ? "Guardando..." : "Guardar grupo"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCreatingCommissionGroup(false);
+                        setError("");
+                        setMensaje("");
+                      }}
+                      className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                    >
+                      Escoger existente
+                    </button>
+                  </div>
+                )}
+
+                <p className="mt-2 text-xs text-[#607368]">
+                  Primero creas el grupo (`CB`, `AV`, `BG`), luego lo escoges
+                  para el supervisor y para todos los `TMK`, `OPC` o
+                  confirmadores de ese equipo.
+                </p>
+              </div>
+            ) : null}
 
             <button
               type="submit"

@@ -10,6 +10,31 @@ import {
   getCommissionGroupCodeValidationError,
   resolveCommissionGroupCode,
 } from "@/lib/commissions/group-code";
+import { roleNeedsCommissionGroup } from "@/lib/commissions/group-assignment";
+
+async function getRoleCodes(roleIds: string[]) {
+  const { data, error } = await supabaseAdmin
+    .from("roles")
+    .select("code")
+    .in("id", roleIds);
+
+  if (error) throw error;
+  return ((data as Array<{ code: string | null }> | null) || [])
+    .map((item) => String(item.code || "").trim())
+    .filter(Boolean);
+}
+
+async function commissionGroupExists(code: string) {
+  const { data, error } = await supabaseAdmin
+    .from("commission_groups")
+    .select("code")
+    .eq("code", code)
+    .eq("is_active", true)
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data?.code);
+}
 
 export async function POST(request: Request) {
   try {
@@ -42,7 +67,7 @@ export async function POST(request: Request) {
           .map((item: unknown) => String(item || "").trim())
           .filter(Boolean)
       : [];
-    const selectedRoleIds = Array.from(
+    const selectedRoleIds: string[] = Array.from(
       new Set(role_ids.length > 0 ? role_ids : role_id ? [role_id] : [])
     );
 
@@ -83,6 +108,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: groupCodeError }, { status: 400 });
     }
 
+    const resolvedGroupCode =
+      resolveCommissionGroupCode({
+        commissionGroupCode: commission_group_code,
+        employeeCode: employee_code,
+      }) || null;
+    const selectedRoleCodes = await getRoleCodes(selectedRoleIds);
+    const requiresCommissionGroup = selectedRoleCodes.some((code) =>
+      roleNeedsCommissionGroup(code)
+    );
+
+    if (requiresCommissionGroup && !resolvedGroupCode) {
+      return NextResponse.json(
+        {
+          error:
+            "Debes seleccionar un grupo de comision para OPC, TMK, confirmador o supervisores relacionados.",
+        },
+        { status: 400 }
+      );
+    }
+
+    if (resolvedGroupCode && !(await commissionGroupExists(resolvedGroupCode))) {
+      return NextResponse.json(
+        {
+          error:
+            "El grupo de comision no existe todavia. Crealo primero y luego seleccionarlo en el usuario.",
+        },
+        { status: 400 }
+      );
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return NextResponse.json(
@@ -119,11 +174,7 @@ export async function POST(request: Request) {
           full_name,
           phone: phone || null,
           employee_code: employee_code || null,
-          commission_group_code:
-            resolveCommissionGroupCode({
-              commissionGroupCode: commission_group_code,
-              employeeCode: employee_code,
-            }) || null,
+          commission_group_code: resolvedGroupCode,
           job_title: job_title || null,
           department_id: department_id || null,
           is_active: true,
