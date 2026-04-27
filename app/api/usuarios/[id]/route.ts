@@ -232,6 +232,23 @@ export async function PATCH(
     const body = await request.json();
     const payload = parseUserUpdatePayload(body);
 
+    const { data: currentProfile, error: currentProfileError } = await supabaseAdmin
+      .from("profiles")
+      .select("employee_code, commission_group_code")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (currentProfileError) {
+      return NextResponse.json(
+        {
+          error:
+            currentProfileError.message ||
+            "No se pudo cargar el perfil actual del usuario.",
+        },
+        { status: 400 }
+      );
+    }
+
     if ("full_name" in payload && !payload.full_name) {
       return NextResponse.json(
         { error: "El nombre completo es obligatorio." },
@@ -239,15 +256,27 @@ export async function PATCH(
       );
     }
 
+    const effectiveEmployeeCode =
+      "employee_code" in payload
+        ? payload.employee_code ?? null
+        : String(currentProfile?.employee_code || "").trim().toUpperCase() || null;
+
+    const effectiveCommissionGroupCode =
+      "commission_group_code" in payload
+        ? payload.commission_group_code ?? null
+        : String(currentProfile?.commission_group_code || "")
+            .trim()
+            .toUpperCase() || null;
+
     const resolvedEmployeeCode =
       resolveEmployeeCode({
-        commissionGroupCode: payload.commission_group_code,
-        employeeCode: payload.employee_code,
+        commissionGroupCode: effectiveCommissionGroupCode,
+        employeeCode: effectiveEmployeeCode,
       }) || null;
 
     const resolvedGroupCode =
       resolveCommissionGroupCode({
-        commissionGroupCode: payload.commission_group_code,
+        commissionGroupCode: effectiveCommissionGroupCode,
         employeeCode: resolvedEmployeeCode,
       }) || null;
     const effectiveRoleCodes = await getEffectiveRoleCodes(id, payload.role_ids);
@@ -287,8 +316,8 @@ export async function PATCH(
 
     if ("employee_code" in payload) {
       const employeeCodeError = getEmployeeCodeValidationError({
-        commissionGroupCode: payload.commission_group_code,
-        employeeCode: payload.employee_code,
+        commissionGroupCode: effectiveCommissionGroupCode,
+        employeeCode: effectiveEmployeeCode,
       });
 
       if (employeeCodeError) {
@@ -303,7 +332,7 @@ export async function PATCH(
 
     if ("commission_group_code" in payload || "employee_code" in payload) {
       const groupCodeError = getCommissionGroupCodeValidationError({
-        commissionGroupCode: payload.commission_group_code,
+        commissionGroupCode: effectiveCommissionGroupCode,
         employeeCode: resolvedEmployeeCode,
       });
 
@@ -335,6 +364,23 @@ export async function PATCH(
       if (profileError) {
         return NextResponse.json(
           { error: profileError.message || "No se pudo actualizar el perfil." },
+          { status: 400 }
+        );
+      }
+    }
+
+    if ("is_active" in payload) {
+      const { error: authUpdateError } = await supabaseAdmin.auth.admin.updateUserById(id, {
+        ban_duration: payload.is_active ? "none" : "876000h",
+      });
+
+      if (authUpdateError && !isAuthUserMissingError(authUpdateError)) {
+        return NextResponse.json(
+          {
+            error:
+              authUpdateError.message ||
+              "No se pudo actualizar el acceso de autenticacion del usuario.",
+          },
           { status: 400 }
         );
       }

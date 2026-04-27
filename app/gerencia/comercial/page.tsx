@@ -38,6 +38,7 @@ type CommercialUser = {
   role_name: string;
   role_code: string;
   job_title: string | null;
+  is_active: boolean;
   departments: { name: string | null }[] | null;
   team_key: CommercialTeamKey | null;
 };
@@ -344,6 +345,7 @@ export default function GerenciaComercialPage() {
             id,
             full_name,
             job_title,
+            is_active,
             departments (
               name
             ),
@@ -375,6 +377,7 @@ export default function GerenciaComercialPage() {
             role_name: primaryRole?.name || "",
             role_code: primaryRole?.code || "",
             job_title: row.job_title || null,
+            is_active: row.is_active !== false,
             departments,
             team_key: getResolvedTeamKey({
               full_name: row.full_name || null,
@@ -386,7 +389,7 @@ export default function GerenciaComercialPage() {
             }),
           } as CommercialUser;
         })
-        .filter((user) => visibleTeamRoleCodes.includes(user.role_code));
+        .filter((user) => visibleTeamRoleCodes.includes(user.role_code) && user.is_active);
 
       const dedupedMap = new Map<string, CommercialUser>();
       users.forEach((user) => {
@@ -410,6 +413,7 @@ export default function GerenciaComercialPage() {
           role_name: currentRoleName || "Gerencia comercial",
           role_code: currentRoleCode,
           job_title: currentProfile?.job_title || null,
+          is_active: currentProfile?.is_active !== false,
           departments: currentDepartments,
           team_key: getResolvedTeamKey({
             full_name: currentProfile?.full_name || null,
