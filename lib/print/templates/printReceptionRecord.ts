@@ -196,11 +196,16 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
           gap: 8px;
           align-items: end;
         }
-        .line {
-          border-top: 1px solid #111827;
-          padding-top: 4px;
+        .signature-field {
           font-size: 7px;
-          min-height: 52px;
+        }
+        .signature-rule {
+          margin-top: 28px;
+          border-top: 1px solid #111827;
+          min-height: 1px;
+        }
+        .signature-label {
+          margin-top: 4px;
         }
         .fuente {
           font-size: 7px;
@@ -312,9 +317,18 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
           </div>
 
           <div class="sign-row">
-            <div class="line">FIRMA</div>
-            <div class="line">CC: ${escapeHtml(data.document || "")}</div>
-            <div class="line">TEL: ${escapeHtml(data.phone || "")}</div>
+            <div class="signature-field">
+              <div class="signature-rule"></div>
+              <div class="signature-label">FIRMA</div>
+            </div>
+            <div class="signature-field">
+              <div class="signature-rule"></div>
+              <div class="signature-label">CC: ${escapeHtml(data.document || "")}</div>
+            </div>
+            <div class="signature-field">
+              <div class="signature-rule"></div>
+              <div class="signature-label">TEL: ${escapeHtml(data.phone || "")}</div>
+            </div>
           </div>
         </div>
       </div>
