@@ -6,6 +6,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   ArrowRight,
   BadgeCheck,
+  CheckCircle2,
   Clock3,
   HeartPulse,
   MapPin,
@@ -21,7 +22,6 @@ const whatsappHref =
 
 const heroImageSrc = "/images/odontologia-hero.jpg";
 const smileImageSrc = "/images/sonrisa-prevital.jpg";
-const clinicImageSrc = "/images/clinica-prevital.jpg";
 
 function publicImageExists(src: string) {
   return existsSync(join(process.cwd(), "public", src.replace(/^\//, "")));
@@ -29,10 +29,9 @@ function publicImageExists(src: string) {
 
 const heroImageAvailable = publicImageExists(heroImageSrc);
 const smileImageAvailable = publicImageExists(smileImageSrc);
-const clinicImageAvailable = publicImageExists(clinicImageSrc);
 
 const primaryCtaClass =
-  "inline-flex items-center justify-center gap-2 rounded-2xl border border-[#A7C6B1] bg-[linear-gradient(135deg,_#DCEEDF_0%,_#BED8C6_100%)] px-6 py-4 text-sm font-semibold text-[#1E3229] shadow-[0_14px_30px_rgba(126,159,135,0.18)] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(135deg,_#D2E8D7_0%,_#B0CFBA_100%)]";
+  "inline-flex items-center justify-center gap-2 rounded-2xl border border-[#A8C7B2] bg-[linear-gradient(135deg,_#E4F1E7_0%,_#C6DDCC_100%)] px-6 py-4 text-sm font-semibold text-[#1E3229] shadow-[0_14px_28px_rgba(126,159,135,0.16)] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(135deg,_#DAECDF_0%,_#B8D2C0_100%)]";
 
 const navigationItems = [
   { label: "Inicio", href: "#inicio" },
@@ -49,7 +48,7 @@ const services: Array<{
   {
     title: "Valoración odontológica",
     description:
-      "Revisamos tu caso con un diagnóstico claro y orientación precisa sobre el tratamiento más adecuado.",
+      "Revisamos tu caso con diagnóstico claro y orientación precisa sobre el tratamiento más adecuado.",
     icon: Stethoscope,
   },
   {
@@ -84,7 +83,7 @@ const services: Array<{
   },
 ];
 
-const experienceCards: Array<{
+const detailBenefits: Array<{
   title: string;
   description: string;
   icon: LucideIcon;
@@ -102,11 +101,17 @@ const experienceCards: Array<{
     icon: HeartPulse,
   },
   {
-    title: "Plan de tratamiento personalizado",
+    title: "Plan personalizado",
     description:
       "Cada propuesta se adapta a tus necesidades, prioridades y objetivos para tu sonrisa.",
     icon: BadgeCheck,
   },
+];
+
+const trustBullets = [
+  "Atención profesional en Medellín",
+  "Acompañamiento personalizado",
+  "Agenda directa por WhatsApp",
 ];
 
 const contactItems: Array<{
@@ -168,155 +173,49 @@ function SectionHeading({
   );
 }
 
-function ImagePanel({
+function CleanImageBlock({
   src,
   alt,
   available,
-  badge,
-  title,
-  description,
-  priority = false,
   className = "",
 }: {
   src: string;
   alt: string;
   available: boolean;
-  badge: string;
-  title: string;
-  description: string;
-  priority?: boolean;
   className?: string;
 }) {
   return (
     <div
-      className={`relative overflow-hidden rounded-[2rem] border border-[#D7E6DB] bg-[linear-gradient(160deg,_#FFFDF8_0%,_#F3F8F4_52%,_#EBF3EE_100%)] ${className}`}
+      className={`relative overflow-hidden rounded-[2.25rem] border border-[#D7E6DB] bg-[linear-gradient(160deg,_#FFFFFF_0%,_#F4F8F4_55%,_#FDF8F0_100%)] shadow-[0_22px_55px_rgba(95,125,102,0.12)] ${className}`}
     >
       {available ? (
-        <>
-          <Image
-            src={src}
-            alt={alt}
-            fill
-            priority={priority}
-            className="object-cover"
-            sizes="(min-width: 1280px) 30vw, (min-width: 768px) 45vw, 100vw"
-          />
-          <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(20,35,28,0.08)_0%,rgba(20,35,28,0.48)_100%)]" />
-          <div className="absolute inset-x-4 top-4">
-            <span className="inline-flex rounded-full border border-white/30 bg-white/15 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-white backdrop-blur">
-              {badge}
-            </span>
-          </div>
-          <div className="absolute inset-x-4 bottom-4 rounded-[1.5rem] border border-white/20 bg-white/12 p-4 text-white backdrop-blur-md">
-            <h3 className="text-lg font-semibold">{title}</h3>
-            <p className="mt-2 text-sm leading-6 text-white/85">{description}</p>
-          </div>
-        </>
+        <Image
+          src={src}
+          alt={alt}
+          fill
+          className="object-cover"
+          sizes="(min-width: 1280px) 44vw, (min-width: 1024px) 48vw, 100vw"
+          priority
+        />
       ) : (
-        <div className="relative flex h-full min-h-[320px] flex-col justify-between p-6">
-          <div className="absolute -left-10 top-8 h-28 w-28 rounded-full bg-[#D6EADC] blur-2xl" />
-          <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-[#E8EBCF] blur-2xl" />
-          <div className="relative">
-            <span className="inline-flex rounded-full border border-white/70 bg-white/85 px-3 py-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-[#64806D] shadow-sm">
-              {badge}
-            </span>
-            <div className="mt-6 rounded-[1.8rem] border border-white/70 bg-white/82 p-5 shadow-[0_12px_28px_rgba(95,125,102,0.08)]">
-              <div className="flex items-center gap-4">
-                <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#ECF6F0] text-[#5E846A]">
-                  <SmilePlus className="h-8 w-8" />
-                </div>
-                <div>
-                  <h3 className="text-lg font-semibold text-[#1E3229]">{title}</h3>
-                  <p className="mt-2 text-sm leading-6 text-[#586C60]">{description}</p>
-                </div>
+        <div className="relative flex h-full min-h-[320px] items-center justify-center p-8">
+          <div className="absolute -left-10 top-8 h-28 w-28 rounded-full bg-[#DCEEE1] blur-2xl" />
+          <div className="absolute right-0 top-0 h-32 w-32 rounded-full bg-[#ECE9CF] blur-2xl" />
+          <div className="relative rounded-[2rem] border border-white/70 bg-white/88 p-8 shadow-[0_14px_32px_rgba(95,125,102,0.08)]">
+            <div className="flex items-center gap-4">
+              <div className="flex h-16 w-16 items-center justify-center rounded-[1.4rem] bg-[#EAF5ED] text-[#5E846A]">
+                <SmilePlus className="h-8 w-8" />
+              </div>
+              <div>
+                <p className="text-lg font-semibold text-[#1E3229]">Imagen pendiente</p>
+                <p className="mt-2 text-sm leading-6 text-[#586C60]">
+                  Sube una foto real en <span className="font-semibold">{src}</span> y aparecerá aquí automáticamente.
+                </p>
               </div>
             </div>
-          </div>
-
-          <div className="relative mt-6 rounded-[1.4rem] border border-dashed border-[#BFD6C6] bg-white/75 px-4 py-3 text-xs text-[#607368]">
-            Placeholder listo para usar con <span className="font-semibold">{src}</span>
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function HeroVisual() {
-  return (
-    <div className="relative">
-      <div className="absolute -left-6 top-12 h-28 w-28 rounded-full bg-[#D8EBDD] blur-3xl" />
-      <div className="absolute -right-6 bottom-16 h-28 w-28 rounded-full bg-[#ECE6CB] blur-3xl" />
-
-      <div className="relative rounded-[2.6rem] border border-[#D7E6DB] bg-white/88 p-4 shadow-[0_24px_60px_rgba(95,125,102,0.14)] md:p-5">
-        <div className="grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-          <ImagePanel
-            src={heroImageSrc}
-            alt="Imagen odontológica de Prevital"
-            available={heroImageAvailable}
-            badge="Atención odontológica"
-            title="Cuidado profesional para tu sonrisa"
-            description="Un espacio visual listo para mostrar la imagen principal del servicio odontológico."
-            priority
-            className="min-h-[420px]"
-          />
-
-          <div className="grid gap-4">
-            <div className="rounded-[2rem] border border-[#D7E6DB] bg-[linear-gradient(160deg,_#FFF9F0_0%,_#F3F8F4_100%)] p-5 shadow-[0_12px_28px_rgba(95,125,102,0.08)]">
-              <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#6A8774]">
-                Prevital Odontología
-              </p>
-              <h3 className="mt-3 text-2xl font-semibold text-[#1E3229]">
-                Diseño limpio, cálido y confiable para pacientes.
-              </h3>
-              <p className="mt-3 text-sm leading-7 text-[#566A5E]">
-                Una presentación clara, profesional y enfocada en facilitar el agendamiento desde campañas o búsquedas directas.
-              </p>
-            </div>
-
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="rounded-[1.7rem] border border-[#D7E6DB] bg-white p-5 shadow-[0_12px_28px_rgba(95,125,102,0.07)]">
-                <div className="mb-3 inline-flex rounded-2xl bg-[#EEF7F1] p-3 text-[#5E846A]">
-                  <MapPin className="h-5 w-5" />
-                </div>
-                <p className="text-sm font-semibold text-[#1E3229]">Medellín</p>
-                <p className="mt-2 text-sm leading-6 text-[#586C60]">
-                  Atención odontológica en una experiencia cercana y ordenada.
-                </p>
-              </div>
-
-              <div className="rounded-[1.7rem] border border-[#D7E6DB] bg-[linear-gradient(160deg,_#EEF6F0_0%,_#DDEDDD_100%)] p-5 shadow-[0_16px_30px_rgba(95,125,102,0.10)]">
-                <div className="mb-3 inline-flex rounded-2xl bg-white p-3 text-[#5E846A]">
-                  <Clock3 className="h-5 w-5" />
-                </div>
-                <p className="text-sm font-semibold text-[#1E3229]">Horario de atención</p>
-                <p className="mt-2 text-sm leading-6 text-[#586C60]">
-                  Lunes a viernes de 8:00 a.m. a 5:00 p.m.
-                </p>
-              </div>
-            </div>
-
-            <div className="rounded-[2rem] border border-[#D7E6DB] bg-white p-5 shadow-[0_12px_28px_rgba(95,125,102,0.07)]">
-              <div className="flex items-start gap-4">
-                <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.3rem] bg-[#EDF6F0] text-[#5E846A]">
-                  <MessageCircle className="h-7 w-7" />
-                </div>
-                <div>
-                  <p className="text-sm font-semibold uppercase tracking-[0.18em] text-[#6A8774]">
-                    Agendamiento directo
-                  </p>
-                  <p className="mt-2 text-lg font-semibold text-[#1E3229]">
-                    Escríbenos por WhatsApp para programar tu cita.
-                  </p>
-                  <p className="mt-2 text-sm leading-6 text-[#586C60]">
-                    CTA preparado para pacientes, sin pasos innecesarios y sin enlaces internos visibles.
-                  </p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
     </div>
   );
 }
@@ -325,14 +224,14 @@ export default function LandingPage() {
   return (
     <main
       id="inicio"
-      className="min-h-screen bg-[radial-gradient(circle_at_top,_#EEF7F1_0%,_#FAFBF8_42%,_#FFF8EF_100%)] text-[#1E3229]"
+      className="min-h-screen bg-[radial-gradient(circle_at_top,_#EEF7F1_0%,_#FCFCF8_42%,_#FFF8EF_100%)] text-[#1E3229]"
     >
       <section className="relative overflow-hidden px-4 pb-14 pt-5 sm:px-6 lg:px-8">
-        <div className="pointer-events-none absolute left-0 top-0 h-72 w-72 rounded-full bg-[#D9ECE0]/65 blur-3xl" />
-        <div className="pointer-events-none absolute right-0 top-24 h-80 w-80 rounded-full bg-[#ECE8D0]/40 blur-3xl" />
+        <div className="pointer-events-none absolute left-0 top-0 h-72 w-72 rounded-full bg-[#D9ECE0]/60 blur-3xl" />
+        <div className="pointer-events-none absolute right-0 top-24 h-80 w-80 rounded-full bg-[#ECE8D0]/35 blur-3xl" />
 
         <div className="relative mx-auto max-w-7xl">
-          <header className="sticky top-4 z-20 rounded-[2rem] border border-[#D7E6DB] bg-white/86 px-5 py-4 shadow-[0_18px_45px_rgba(95,125,102,0.10)] backdrop-blur">
+          <header className="sticky top-4 z-20 rounded-[2rem] border border-[#D7E6DB] bg-white/88 px-5 py-4 shadow-[0_18px_42px_rgba(95,125,102,0.10)] backdrop-blur">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
               <div className="flex items-center gap-4">
                 <div className="relative h-14 w-14 overflow-hidden rounded-2xl border border-[#D7E6DB] bg-white shadow-sm">
@@ -376,7 +275,7 @@ export default function LandingPage() {
                   href={whatsappHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center rounded-full border border-[#A7C6B1] bg-[linear-gradient(135deg,_#DCEEDF_0%,_#BED8C6_100%)] px-5 py-3 text-sm font-semibold text-[#1E3229] shadow-[0_12px_24px_rgba(126,159,135,0.18)] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(135deg,_#D2E8D7_0%,_#B0CFBA_100%)]"
+                  className="inline-flex items-center justify-center rounded-full border border-[#A8C7B2] bg-[linear-gradient(135deg,_#E4F1E7_0%,_#C6DDCC_100%)] px-5 py-3 text-sm font-semibold text-[#1E3229] shadow-[0_12px_24px_rgba(126,159,135,0.14)] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(135deg,_#DAECDF_0%,_#B8D2C0_100%)]"
                 >
                   Agenda tu cita
                 </a>
@@ -384,9 +283,9 @@ export default function LandingPage() {
             </div>
           </header>
 
-          <div className="mt-8 grid gap-8 lg:grid-cols-[0.92fr_1.08fr] lg:items-center">
-            <div className="relative overflow-hidden rounded-[2.7rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_rgba(255,255,255,0.98)_0%,_rgba(244,249,245,0.98)_55%,_rgba(255,249,241,0.98)_100%)] p-8 shadow-[0_24px_60px_rgba(95,125,102,0.12)] md:p-10 lg:p-12">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#D7E6DB] bg-white px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#5E7C68] shadow-sm">
+          <div className="mt-8 grid gap-10 lg:grid-cols-[0.9fr_1.1fr] lg:items-center">
+            <div className="rounded-[2.6rem] border border-[#D7E6DB] bg-white/92 p-8 shadow-[0_22px_55px_rgba(95,125,102,0.10)] md:p-10 lg:p-12">
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#D7E6DB] bg-[#FBFDFB] px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-[#5E7C68] shadow-sm">
                 <Sparkles className="h-4 w-4" />
                 Clínica odontológica
               </div>
@@ -411,29 +310,48 @@ export default function LandingPage() {
                 </a>
                 <a
                   href="#servicios"
-                  className="inline-flex items-center justify-center rounded-2xl border border-[#D0E2D5] bg-white px-6 py-4 text-sm font-semibold text-[#4A6155] transition hover:-translate-y-0.5 hover:bg-[#F4FAF6]"
+                  className="inline-flex items-center justify-center rounded-2xl border border-[#D1E2D6] bg-white px-6 py-4 text-sm font-semibold text-[#4A6155] transition hover:-translate-y-0.5 hover:bg-[#F4FAF6]"
                 >
                   Ver servicios
                 </a>
               </div>
 
-              <div className="mt-10 grid gap-3 sm:grid-cols-3">
-                {contactItems.map(({ label, value, icon: Icon }) => (
-                  <div
-                    key={label}
-                    className="rounded-[1.5rem] border border-[#D7E6DB] bg-white/92 p-4 shadow-[0_12px_28px_rgba(95,125,102,0.07)]"
-                  >
-                    <div className="mb-3 inline-flex rounded-2xl bg-[#EEF7F1] p-2 text-[#5E846A]">
-                      <Icon className="h-5 w-5" />
+              <div className="mt-10 grid gap-3">
+                <div className="flex flex-wrap gap-3">
+                  {trustBullets.map((bullet) => (
+                    <div
+                      key={bullet}
+                      className="inline-flex items-center gap-2 rounded-full border border-[#D7E6DB] bg-[#F8FBF9] px-4 py-2 text-sm text-[#51675A]"
+                    >
+                      <CheckCircle2 className="h-4 w-4 text-[#6A8774]" />
+                      {bullet}
                     </div>
-                    <p className="text-sm font-semibold text-[#1E3229]">{label}</p>
-                    <p className="mt-2 text-sm leading-6 text-[#586C60]">{value}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
+
+                <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                  {contactItems.map(({ label, value, icon: Icon }) => (
+                    <div
+                      key={label}
+                      className="rounded-[1.5rem] border border-[#D7E6DB] bg-[#FBFDFB] p-4 shadow-[0_10px_24px_rgba(95,125,102,0.05)]"
+                    >
+                      <div className="mb-3 inline-flex rounded-2xl bg-[#EEF7F1] p-2 text-[#5E846A]">
+                        <Icon className="h-5 w-5" />
+                      </div>
+                      <p className="text-sm font-semibold text-[#1E3229]">{label}</p>
+                      <p className="mt-2 text-sm leading-6 text-[#586C60]">{value}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
 
-            <HeroVisual />
+            <CleanImageBlock
+              src={heroImageSrc}
+              alt="Imagen principal de atención odontológica en Prevital"
+              available={heroImageAvailable}
+              className="min-h-[440px]"
+            />
           </div>
         </div>
       </section>
@@ -442,7 +360,7 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl">
           <SectionHeading
             eyebrow="Servicios"
-            title="Servicios diseñados para cuidar tu sonrisa con claridad y confianza"
+            title="Servicios pensados para cuidar tu sonrisa con claridad y confianza"
             description="Una presentación ordenada, elegante y enfocada en pacientes que buscan atención odontológica confiable en Medellín."
             align="center"
           />
@@ -451,7 +369,7 @@ export default function LandingPage() {
             {services.map(({ title, description, icon: Icon }) => (
               <article
                 key={title}
-                className="group overflow-hidden rounded-[2rem] border border-[#D7E6DB] bg-white shadow-[0_18px_42px_rgba(95,125,102,0.08)] transition hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(95,125,102,0.12)]"
+                className="overflow-hidden rounded-[2rem] border border-[#D7E6DB] bg-white shadow-[0_18px_42px_rgba(95,125,102,0.07)] transition hover:-translate-y-1 hover:shadow-[0_24px_48px_rgba(95,125,102,0.10)]"
               >
                 <div className="h-1.5 w-full bg-[linear-gradient(90deg,_#A8CDBD_0%,_#7E9F87_55%,_#5F7C68_100%)]" />
                 <div className="p-6">
@@ -468,20 +386,20 @@ export default function LandingPage() {
       </section>
 
       <section id="experiencia" className="scroll-mt-24 px-4 py-14 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl rounded-[2.8rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_rgba(255,255,255,0.98)_0%,_rgba(245,250,246,0.98)_62%,_rgba(255,248,239,0.96)_100%)] p-8 shadow-[0_24px_65px_rgba(95,125,102,0.12)] md:p-10">
-          <div className="grid gap-8 xl:grid-cols-[0.92fr_1.08fr] xl:items-start">
+        <div className="mx-auto max-w-7xl rounded-[2.8rem] border border-[#D7E6DB] bg-white/94 p-8 shadow-[0_24px_60px_rgba(95,125,102,0.10)] md:p-10">
+          <div className="grid gap-8 xl:grid-cols-[1.02fr_0.98fr] xl:items-center">
             <div>
               <SectionHeading
                 eyebrow="Experiencia"
-                title="Una experiencia pensada para tu tranquilidad"
+                title="Cuidamos tu sonrisa en cada detalle"
                 description="Te acompañamos desde la valoración inicial hasta la elección del tratamiento más adecuado para tu sonrisa."
               />
 
               <div className="mt-8 grid gap-4">
-                {experienceCards.map(({ title, description, icon: Icon }) => (
+                {detailBenefits.map(({ title, description, icon: Icon }) => (
                   <div
                     key={title}
-                    className="rounded-[1.8rem] border border-[#D7E6DB] bg-white/94 p-5 shadow-[0_12px_28px_rgba(95,125,102,0.08)]"
+                    className="rounded-[1.8rem] border border-[#D7E6DB] bg-[#FBFDFB] p-5 shadow-[0_10px_24px_rgba(95,125,102,0.05)]"
                   >
                     <div className="flex items-start gap-4">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#EEF7F1] text-[#5E846A]">
@@ -497,33 +415,18 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="grid gap-5 lg:grid-cols-2">
-              <ImagePanel
-                src={smileImageSrc}
-                alt="Referencia visual de sonrisa para Prevital"
-                available={smileImageAvailable}
-                badge="Sonrisa Prevital"
-                title="Cuidado estético y funcional"
-                description="Espacio listo para una imagen real de sonrisa o detalle clínico sin usar resultados inventados."
-                priority
-                className="min-h-[340px]"
-              />
-              <ImagePanel
-                src={clinicImageSrc}
-                alt="Referencia visual de clínica Prevital"
-                available={clinicImageAvailable}
-                badge="Ambiente clínico"
-                title="Espacio cómodo y confiable"
-                description="Preparado para una fotografía real del consultorio o del entorno de atención."
-                className="min-h-[340px]"
-              />
-            </div>
+            <CleanImageBlock
+              src={smileImageSrc}
+              alt="Imagen real de sonrisa para la landing de Prevital"
+              available={smileImageAvailable}
+              className="min-h-[420px]"
+            />
           </div>
         </div>
       </section>
 
       <section className="px-4 py-14 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.7rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_#FFF8EF_0%,_#F1F7F3_52%,_#E2F0E6_100%)] shadow-[0_24px_65px_rgba(95,125,102,0.12)]">
+        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.7rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_#FFF8EF_0%,_#F2F8F4_52%,_#E7F1EA_100%)] shadow-[0_22px_55px_rgba(95,125,102,0.10)]">
           <div className="grid gap-8 px-8 py-10 md:px-10 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6A8774]">
@@ -553,18 +456,18 @@ export default function LandingPage() {
       <section id="contacto" className="scroll-mt-24 px-4 pb-12 pt-14 sm:px-6 lg:px-8">
         <div className="mx-auto max-w-7xl">
           <div className="grid gap-6 lg:grid-cols-[0.95fr_1.05fr]">
-            <div className="rounded-[2.5rem] border border-[#D7E6DB] bg-white/94 p-8 shadow-[0_22px_60px_rgba(95,125,102,0.10)] md:p-10">
+            <div className="rounded-[2.5rem] border border-[#D7E6DB] bg-white/94 p-8 shadow-[0_22px_55px_rgba(95,125,102,0.08)] md:p-10">
               <SectionHeading
                 eyebrow="Contacto"
                 title="Información clara para que agendes fácilmente"
-                description="Una landing enfocada en pacientes, campañas y personas que buscan atención odontológica profesional en Medellín."
+                description="Una landing enfocada en pacientes y personas que buscan atención odontológica profesional en Medellín."
               />
 
               <div className="mt-8 grid gap-4">
                 {contactItems.map(({ label, value, icon: Icon }) => (
                   <div
                     key={label}
-                    className="rounded-[1.8rem] border border-[#D7E6DB] bg-[#FBFDFB] p-5 shadow-[0_12px_28px_rgba(95,125,102,0.06)]"
+                    className="rounded-[1.8rem] border border-[#D7E6DB] bg-[#FBFDFB] p-5 shadow-[0_10px_24px_rgba(95,125,102,0.05)]"
                   >
                     <div className="flex items-start gap-4">
                       <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-[#EEF7F1] text-[#5E846A]">
@@ -580,7 +483,7 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="rounded-[2.5rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_#FFF8EF_0%,_#F3F8F4_100%)] p-8 shadow-[0_22px_60px_rgba(95,125,102,0.10)] md:p-10">
+            <div className="rounded-[2.5rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_#FFFFFF_0%,_#F7FBF8_48%,_#FFF8EF_100%)] p-8 shadow-[0_22px_55px_rgba(95,125,102,0.08)] md:p-10">
               <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6A8774]">
                 Contacto directo
               </p>
@@ -591,7 +494,7 @@ export default function LandingPage() {
                 Hemos preparado esta experiencia para que el siguiente paso sea claro: escribir, recibir orientación y programar tu cita odontológica.
               </p>
 
-              <div className="mt-8 rounded-[2rem] border border-[#D7E6DB] bg-white/94 p-6 shadow-[0_12px_28px_rgba(95,125,102,0.07)]">
+              <div className="mt-8 rounded-[2rem] border border-[#D7E6DB] bg-white p-6 shadow-[0_10px_24px_rgba(95,125,102,0.05)]">
                 <div className="flex items-start gap-4">
                   <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.3rem] bg-[#EAF5ED] text-[#5E846A]">
                     <MessageCircle className="h-7 w-7" />
@@ -623,7 +526,7 @@ export default function LandingPage() {
       </section>
 
       <footer className="px-4 pb-16 pt-8 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl rounded-[2.6rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_#FFFFFF_0%,_#F5FAF6_55%,_#FFF8EF_100%)] px-8 py-10 text-[#1E3229] shadow-[0_24px_60px_rgba(95,125,102,0.10)] md:px-10">
+        <div className="mx-auto max-w-7xl rounded-[2.6rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_#FFFFFF_0%,_#F5FAF6_55%,_#FFF8EF_100%)] px-8 py-10 text-[#1E3229] shadow-[0_22px_50px_rgba(95,125,102,0.08)] md:px-10">
           <div className="grid gap-8 md:grid-cols-[1.2fr_0.9fr_0.9fr]">
             <div>
               <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#6A8774]">
