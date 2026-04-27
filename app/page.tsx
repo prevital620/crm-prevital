@@ -31,6 +31,9 @@ const heroImageAvailable = publicImageExists(heroImageSrc);
 const smileImageAvailable = publicImageExists(smileImageSrc);
 const clinicImageAvailable = publicImageExists(clinicImageSrc);
 
+const primaryCtaClass =
+  "inline-flex items-center justify-center gap-2 rounded-2xl border border-[#A7C6B1] bg-[linear-gradient(135deg,_#DCEEDF_0%,_#BED8C6_100%)] px-6 py-4 text-sm font-semibold text-[#1E3229] shadow-[0_14px_30px_rgba(126,159,135,0.18)] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(135deg,_#D2E8D7_0%,_#B0CFBA_100%)]";
+
 const navigationItems = [
   { label: "Inicio", href: "#inicio" },
   { label: "Servicios", href: "#servicios" },
@@ -282,12 +285,12 @@ function HeroVisual() {
                 </p>
               </div>
 
-              <div className="rounded-[1.7rem] border border-[#D7E6DB] bg-[#203128] p-5 text-white shadow-[0_16px_30px_rgba(32,49,40,0.16)]">
-                <div className="mb-3 inline-flex rounded-2xl bg-white/12 p-3 text-white">
+              <div className="rounded-[1.7rem] border border-[#D7E6DB] bg-[linear-gradient(160deg,_#EEF6F0_0%,_#DDEDDD_100%)] p-5 shadow-[0_16px_30px_rgba(95,125,102,0.10)]">
+                <div className="mb-3 inline-flex rounded-2xl bg-white p-3 text-[#5E846A]">
                   <Clock3 className="h-5 w-5" />
                 </div>
-                <p className="text-sm font-semibold text-white">Horario de atención</p>
-                <p className="mt-2 text-sm leading-6 text-white/82">
+                <p className="text-sm font-semibold text-[#1E3229]">Horario de atención</p>
+                <p className="mt-2 text-sm leading-6 text-[#586C60]">
                   Lunes a viernes de 8:00 a.m. a 5:00 p.m.
                 </p>
               </div>
@@ -373,7 +376,7 @@ export default function LandingPage() {
                   href={whatsappHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center rounded-full bg-[#203128] px-5 py-3 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#18251e]"
+                  className="inline-flex items-center justify-center rounded-full border border-[#A7C6B1] bg-[linear-gradient(135deg,_#DCEEDF_0%,_#BED8C6_100%)] px-5 py-3 text-sm font-semibold text-[#1E3229] shadow-[0_12px_24px_rgba(126,159,135,0.18)] transition hover:-translate-y-0.5 hover:bg-[linear-gradient(135deg,_#D2E8D7_0%,_#B0CFBA_100%)]"
                 >
                   Agenda tu cita
                 </a>
@@ -401,7 +404,7 @@ export default function LandingPage() {
                   href={whatsappHref}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center justify-center gap-2 rounded-2xl bg-[#203128] px-6 py-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#18251e]"
+                  className={primaryCtaClass}
                 >
                   Agenda tu cita
                   <ArrowRight className="h-4 w-4" />
@@ -520,16 +523,16 @@ export default function LandingPage() {
       </section>
 
       <section className="px-4 py-14 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.7rem] border border-[#D7E6DB] bg-[#203128] shadow-[0_24px_65px_rgba(32,49,40,0.18)]">
+        <div className="mx-auto max-w-7xl overflow-hidden rounded-[2.7rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_#FFF8EF_0%,_#F1F7F3_52%,_#E2F0E6_100%)] shadow-[0_24px_65px_rgba(95,125,102,0.12)]">
           <div className="grid gap-8 px-8 py-10 md:px-10 lg:grid-cols-[1fr_auto] lg:items-center">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#B7D0C0]">
+              <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6A8774]">
                 Agenda tu cita
               </p>
-              <h2 className="mt-3 text-3xl font-bold tracking-tight text-white md:text-4xl">
+              <h2 className="mt-3 text-3xl font-bold tracking-tight text-[#1E3229] md:text-4xl">
                 Estamos listos para ayudarte a programar tu atención odontológica
               </h2>
-              <p className="mt-4 max-w-3xl text-base leading-8 text-white/82 md:text-lg">
+              <p className="mt-4 max-w-3xl text-base leading-8 text-[#55695D] md:text-lg">
                 Escríbenos por WhatsApp y nuestro equipo te ayudará a programar tu atención de forma clara, rápida y cercana.
               </p>
             </div>
@@ -538,7 +541,7 @@ export default function LandingPage() {
               href={whatsappHref}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center justify-center gap-2 rounded-2xl bg-white px-6 py-4 text-sm font-semibold text-[#203128] transition hover:-translate-y-0.5 hover:bg-[#F5FBF7]"
+              className={primaryCtaClass}
             >
               <MessageCircle className="h-5 w-5" />
               Agenda tu cita
@@ -590,7 +593,7 @@ export default function LandingPage() {
 
               <div className="mt-8 rounded-[2rem] border border-[#D7E6DB] bg-white/94 p-6 shadow-[0_12px_28px_rgba(95,125,102,0.07)]">
                 <div className="flex items-start gap-4">
-                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.3rem] bg-[#203128] text-white">
+                  <div className="flex h-14 w-14 shrink-0 items-center justify-center rounded-[1.3rem] bg-[#EAF5ED] text-[#5E846A]">
                     <MessageCircle className="h-7 w-7" />
                   </div>
                   <div>
@@ -609,7 +612,7 @@ export default function LandingPage() {
                 href={whatsappHref}
                 target="_blank"
                 rel="noreferrer"
-                className="mt-8 inline-flex items-center justify-center gap-2 rounded-2xl bg-[#203128] px-6 py-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#18251e]"
+                className={`mt-8 ${primaryCtaClass}`}
               >
                 <MessageCircle className="h-5 w-5" />
                 Agenda tu cita
@@ -620,21 +623,21 @@ export default function LandingPage() {
       </section>
 
       <footer className="px-4 pb-16 pt-8 sm:px-6 lg:px-8">
-        <div className="mx-auto max-w-7xl rounded-[2.6rem] border border-[#D7E6DB] bg-[#1E3229] px-8 py-10 text-white shadow-[0_24px_60px_rgba(32,49,40,0.18)] md:px-10">
+        <div className="mx-auto max-w-7xl rounded-[2.6rem] border border-[#D7E6DB] bg-[linear-gradient(145deg,_#FFFFFF_0%,_#F5FAF6_55%,_#FFF8EF_100%)] px-8 py-10 text-[#1E3229] shadow-[0_24px_60px_rgba(95,125,102,0.10)] md:px-10">
           <div className="grid gap-8 md:grid-cols-[1.2fr_0.9fr_0.9fr]">
             <div>
-              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#B7D0C0]">
+              <p className="text-sm font-semibold uppercase tracking-[0.24em] text-[#6A8774]">
                 Prevital Odontología
               </p>
               <h2 className="mt-3 text-2xl font-bold">Atención odontológica en Medellín</h2>
-              <p className="mt-4 max-w-md text-sm leading-7 text-white/76">
+              <p className="mt-4 max-w-md text-sm leading-7 text-[#586C60]">
                 Landing pública pensada para pacientes que buscan una experiencia odontológica profesional, cálida y confiable.
               </p>
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-white">Servicios</h3>
-              <ul className="mt-4 space-y-3 text-sm text-white/76">
+              <h3 className="text-lg font-semibold text-[#1E3229]">Servicios</h3>
+              <ul className="mt-4 space-y-3 text-sm text-[#586C60]">
                 {services.map((service) => (
                   <li key={service.title}>{service.title}</li>
                 ))}
@@ -642,8 +645,8 @@ export default function LandingPage() {
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold text-white">Contacto</h3>
-              <ul className="mt-4 space-y-3 text-sm text-white/76">
+              <h3 className="text-lg font-semibold text-[#1E3229]">Contacto</h3>
+              <ul className="mt-4 space-y-3 text-sm text-[#586C60]">
                 <li>Medellín</li>
                 <li>Lunes a viernes 8:00 a.m. - 5:00 p.m.</li>
                 <li>WhatsApp 3004937787</li>
