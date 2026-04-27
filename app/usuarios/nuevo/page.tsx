@@ -2,9 +2,10 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
+import { roleNeedsCommissionGroup } from "@/lib/commissions/group-assignment";
 
 type Department = {
   id: string;
@@ -33,6 +34,8 @@ export default function NuevoUsuarioPage() {
   const [departments, setDepartments] = useState<Department[]>([]);
   const [roles, setRoles] = useState<Role[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
+  const [availableCommissionGroups, setAvailableCommissionGroups] = useState<string[]>([]);
+  const [creatingCommissionGroup, setCreatingCommissionGroup] = useState(false);
 
   const [form, setForm] = useState({
     full_name: "",
@@ -60,9 +63,13 @@ export default function NuevoUsuarioPage() {
 
       setAuthorized(true);
 
-      const [departmentsResult, rolesResult] = await Promise.all([
+      const [departmentsResult, rolesResult, commissionGroupsResult] = await Promise.all([
         supabase.from("departments").select("id, name").order("name"),
         supabase.from("roles").select("id, name, code").order("name"),
+        supabase
+          .from("profiles")
+          .select("commission_group_code")
+          .not("commission_group_code", "is", null),
       ]);
 
       if (departmentsResult.error) {
@@ -77,8 +84,23 @@ export default function NuevoUsuarioPage() {
         return;
       }
 
+      if (commissionGroupsResult.error) {
+        setError("No se pudieron cargar los grupos de comision.");
+        setLoadingData(false);
+        return;
+      }
+
       setDepartments(departmentsResult.data || []);
       setRoles(rolesResult.data || []);
+      setAvailableCommissionGroups(
+        Array.from(
+          new Set(
+            ((commissionGroupsResult.data as Array<{ commission_group_code: string | null }> | null) || [])
+              .map((item) => String(item.commission_group_code || "").trim().toUpperCase())
+              .filter(Boolean)
+          )
+        ).sort((a, b) => a.localeCompare(b, "es"))
+      );
       setLoadingData(false);
     } catch (err: any) {
       setError(err?.message || "No se pudo validar el acceso.");
@@ -89,6 +111,48 @@ export default function NuevoUsuarioPage() {
   useEffect(() => {
     cargarDatos();
   }, []);
+
+  const selectedRoles = useMemo(
+    () => roles.filter((role) => selectedRoleIds.includes(role.id)),
+    [roles, selectedRoleIds]
+  );
+
+  const needsCommissionGroup = useMemo(
+    () => selectedRoles.some((role) => roleNeedsCommissionGroup(role.code)),
+    [selectedRoles]
+  );
+
+  useEffect(() => {
+    if (needsCommissionGroup) return;
+    if (form.commission_group_code) {
+      setForm((current) => ({ ...current, commission_group_code: "" }));
+    }
+    if (creatingCommissionGroup) {
+      setCreatingCommissionGroup(false);
+    }
+  }, [creatingCommissionGroup, form.commission_group_code, needsCommissionGroup]);
+
+  useEffect(() => {
+    const employeeCode = form.employee_code.trim().toUpperCase();
+    if (!needsCommissionGroup) return;
+    if (creatingCommissionGroup) return;
+    if (form.commission_group_code) return;
+    const match = employeeCode.match(/^([A-Z]{2})\d{4}$/);
+    if (!match) return;
+
+    setForm((current) => {
+      if (current.commission_group_code) return current;
+      return {
+        ...current,
+        commission_group_code: match[1],
+      };
+    });
+  }, [
+    creatingCommissionGroup,
+    form.commission_group_code,
+    form.employee_code,
+    needsCommissionGroup,
+  ]);
 
   async function crearUsuario(e: React.FormEvent) {
     e.preventDefault();
@@ -147,6 +211,7 @@ export default function NuevoUsuarioPage() {
         job_title: "",
         department_id: "",
       });
+      setCreatingCommissionGroup(false);
       setSelectedRoleIds([]);
     } catch (err: any) {
       setError(err?.message || "Ocurrio un error inesperado.");
@@ -280,18 +345,70 @@ export default function NuevoUsuarioPage() {
               }
             />
 
-            <input
-              className={inputClass}
-              placeholder="Grupo de comision (Ej: CB, AV)"
-              maxLength={2}
-              value={form.commission_group_code}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  commission_group_code: e.target.value.toUpperCase(),
-                })
-              }
-            />
+            {needsCommissionGroup ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">Grupo de comisión</p>
+
+                {!creatingCommissionGroup ? (
+                  <select
+                    className={inputClass}
+                    value={form.commission_group_code || ""}
+                    onChange={(e) => {
+                      const value = e.target.value;
+                      if (value === "__new__") {
+                        setCreatingCommissionGroup(true);
+                        setForm((current) => ({
+                          ...current,
+                          commission_group_code: "",
+                        }));
+                        return;
+                      }
+
+                      setForm((current) => ({
+                        ...current,
+                        commission_group_code: value,
+                      }));
+                    }}
+                  >
+                    <option value="">Selecciona un grupo</option>
+                    {availableCommissionGroups.map((groupCode) => (
+                      <option key={groupCode} value={groupCode}>
+                        Grupo {groupCode}
+                      </option>
+                    ))}
+                    <option value="__new__">Crear grupo nuevo</option>
+                  </select>
+                ) : (
+                  <div className="grid gap-3 md:grid-cols-[1fr_auto]">
+                    <input
+                      className={inputClass}
+                      placeholder="Nuevo grupo (Ej: CB)"
+                      maxLength={2}
+                      value={form.commission_group_code}
+                      onChange={(e) =>
+                        setForm((current) => ({
+                          ...current,
+                          commission_group_code: e.target.value.toUpperCase(),
+                        }))
+                      }
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() => setCreatingCommissionGroup(false)}
+                      className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                    >
+                      Usar existente
+                    </button>
+                  </div>
+                )}
+
+                <p className="mt-2 text-xs text-[#607368]">
+                  Asigna aquí el grupo del supervisor y luego usa el mismo grupo
+                  para los `TMK`, `OPC` o confirmadores de ese equipo.
+                </p>
+              </div>
+            ) : null}
 
             <input
               className={inputClass}
@@ -370,11 +487,13 @@ export default function NuevoUsuarioPage() {
               {loading ? "Creando usuario..." : "Crear usuario"}
             </button>
 
-            <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
-              Si el usuario tiene código interno, las 2 primeras letras deben
-              coincidir con el grupo de comisión. Ejemplo: `CB1234` pertenece
-              al grupo `CB`.
-            </div>
+            {needsCommissionGroup ? (
+              <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
+                Si el usuario tiene código interno, las 2 primeras letras deben
+                coincidir con el grupo de comisión. Ejemplo: `CB1234`
+                pertenece al grupo `CB`.
+              </div>
+            ) : null}
 
             <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
               El cambio de correo y el borrado real del usuario requieren la
