@@ -71,8 +71,9 @@ function getReceptionSummaryValue(summary: string | null | undefined, label: str
   if (!summary?.trim()) return "";
   const target = normalizeSummaryLabel(label);
   const line = summary
-    .split("\n")
+    .split(/\n|\|/g)
     .map((item) => item.trim())
+    .filter(Boolean)
     .find((item) => {
       const [lineLabel] = item.split(":");
       return normalizeSummaryLabel(lineLabel || "") === target;
@@ -307,6 +308,7 @@ export default function ConsultaClientePage() {
         null,
       document:
         getReceptionSummaryValueFromLabels(receptionSummary, ["Documento", "C.C. / NIT"]) || null,
+      analystName: caseItem.assigned_by_name || caseItem.commercial_name || null,
       source,
       sourceDetail,
       hasEps: mapYesNoFromSummary(
