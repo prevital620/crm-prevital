@@ -6,7 +6,7 @@ import { Monitor, Smartphone, Share2, Download, Apple } from "lucide-react";
 
 export default function InstallPage() {
   const crmLink =
-    typeof window !== "undefined" ? window.location.origin : "[LINK DEL CRM]";
+    typeof window !== "undefined" ? `${window.location.origin}/crm` : "[LINK DEL CRM]";
 
   const shareText = `Hola. Para usar el CRM Prevital como app, abre este enlace:
 
@@ -54,7 +54,7 @@ Abre en Chrome o Edge y selecciona la opción "Instalar app" cuando aparezca.`;
 
               <div className="mt-5 flex flex-wrap gap-3">
                 <Link
-                  href="/"
+                  href="/crm"
                   className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#4F6F5B]"
                 >
                   Abrir CRM

@@ -341,7 +341,7 @@ export default function ConsultaClinicaPage() {
               <p className="font-semibold">No tienes permiso para consultar historias clínicas.</p>
               <p>{scopeLabel}</p>
               <div>
-                <PrevitalButton variant="secondary" onClick={() => router.push("/")}>
+                <PrevitalButton variant="secondary" onClick={() => router.push("/crm")}>
                   Volver a inicio
                 </PrevitalButton>
               </div>
@@ -420,7 +420,7 @@ export default function ConsultaClinicaPage() {
             >
               Actualizar
             </PrevitalButton>
-            <PrevitalButton variant="secondary" onClick={() => router.push("/")}>
+            <PrevitalButton variant="secondary" onClick={() => router.push("/crm")}>
               Inicio
             </PrevitalButton>
           </div>

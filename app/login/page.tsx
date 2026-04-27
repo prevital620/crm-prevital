@@ -61,7 +61,7 @@ export default function LoginPage() {
         return;
       }
 
-      router.push("/");
+      router.push("/crm");
     }
 
     checkSession();
@@ -112,7 +112,7 @@ export default function LoginPage() {
       if (profile?.must_change_password) {
         router.push("/cambiar-clave");
       } else {
-        router.push("/");
+        router.push("/crm");
       }
 
       router.refresh();

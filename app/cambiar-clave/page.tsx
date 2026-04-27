@@ -85,7 +85,7 @@ export default function CambiarClavePage() {
       setMensaje("Contraseña actualizada correctamente.");
 
       setTimeout(() => {
-        router.push("/");
+        router.push("/crm");
         router.refresh();
       }, 1200);
     } catch (err: any) {

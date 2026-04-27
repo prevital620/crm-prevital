@@ -817,7 +817,7 @@ export default function ComercialAjustesPage() {
             </p>
             <div className="mt-4">
               <Link
-                href="/"
+                href="/crm"
                 className="inline-flex rounded-full border border-[#CFE4D8] bg-white px-5 py-3 text-sm font-semibold text-[#365243] shadow-sm"
               >
                 Volver al inicio
@@ -854,7 +854,7 @@ export default function ComercialAjustesPage() {
               </p>
               <div className="mt-6 flex flex-wrap gap-3">
                 <Link
-                  href="/"
+                  href="/crm"
                   className="inline-flex rounded-full border border-[#CFE4D8] bg-white px-5 py-3 text-sm font-semibold text-[#365243] shadow-sm transition hover:border-[#7FA287]"
                 >
                   Inicio

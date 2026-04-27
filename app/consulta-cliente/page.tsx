@@ -370,7 +370,7 @@ export default function ConsultaClientePage() {
       );
 
       if (!allowed) {
-        router.push("/");
+        router.push("/crm");
         return;
       }
 
@@ -507,7 +507,7 @@ export default function ConsultaClientePage() {
             >
               Actualizar
             </PrevitalButton>
-            <PrevitalButton variant="secondary" onClick={() => router.push("/")}>
+            <PrevitalButton variant="secondary" onClick={() => router.push("/crm")}>
               Inicio
             </PrevitalButton>
           </div>
