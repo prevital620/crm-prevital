@@ -190,7 +190,7 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
           padding: 2px 0 0;
         }
         .sign-row {
-          margin-top: 5px;
+          margin-top: 8px;
           display: grid;
           grid-template-columns: 1.5fr 1fr 1fr;
           gap: 8px;
@@ -198,9 +198,9 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
         }
         .line {
           border-top: 1px solid #111827;
-          padding-top: 3px;
+          padding-top: 4px;
           font-size: 7px;
-          min-height: 32px;
+          min-height: 52px;
         }
         .fuente {
           font-size: 7px;
