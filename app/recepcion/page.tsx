@@ -155,6 +155,7 @@ type InventoryMovement = {
 
 type CommercialCaseRow = {
   id: string;
+  support_code: string | null;
   lead_id: string | null;
   appointment_id: string | null;
   customer_name: string;
@@ -1160,6 +1161,7 @@ function RecepcionContent() {
       phone: "",
       city: "",
       documento: "",
+      correo: "",
       fuente: "",
       fuente_detalle: "",
       fuente_usuario_id: "",
@@ -1682,6 +1684,7 @@ function RecepcionContent() {
           .from("commercial_cases")
           .select(`
             id,
+            support_code,
             lead_id,
             appointment_id,
             call_user_id,
@@ -2646,6 +2649,7 @@ function RecepcionContent() {
       setMensaje("");
 
       const documentNumber = getReceptionSummaryValue(item, "Documento");
+      const email = getReceptionSummaryValue(item, "Correo");
       const eps =
         getReceptionSummaryValue(item, "Afiliación") ||
         getReceptionSummaryValue(item, "EPS");
@@ -2705,7 +2709,7 @@ function RecepcionContent() {
       const createdAt = new Date(item.closed_at || item.created_at);
 
       printSalesSupport({
-        supportCode: item.id.slice(0, 6).toUpperCase(),
+        supportCode: item.support_code || item.id.slice(0, 6).toUpperCase(),
         documentDate: item.closed_at ? formatDateOnly(item.closed_at) : formatDateOnly(item.created_at),
         documentTime: createdAt.toLocaleTimeString("es-CO", {
           hour: "2-digit",
@@ -2719,6 +2723,7 @@ function RecepcionContent() {
         customerName: item.customer_name,
         documentNumber,
         phone: item.phone,
+        email,
         city: item.city,
         birthDate,
         eps,
@@ -3288,6 +3293,7 @@ function RecepcionContent() {
       phone: "",
       city: "",
       documento: "",
+      correo: "",
       fuente: "",
       fuente_detalle: "",
       fuente_usuario_id: "",
@@ -3614,10 +3620,11 @@ function imprimirRegistroComercial() {
         .filter(Boolean)
         .join(", ");
 
-      const notesParts = [
-        fuenteLabel ? `Fuente: ${fuenteLabel}` : "",
-        commercialForm.documento ? `Documento: ${commercialForm.documento}` : "",
-        `Clasificación inicial: ${clasificacion}`,
+    const notesParts = [
+      fuenteLabel ? `Fuente: ${fuenteLabel}` : "",
+      commercialForm.documento ? `Documento: ${commercialForm.documento}` : "",
+      commercialForm.correo ? `Correo: ${commercialForm.correo}` : "",
+      `Clasificación inicial: ${clasificacion}`,
         commercialForm.clasificacion_motivo
           ? `Motivo clasificación: ${commercialForm.clasificacion_motivo}`
           : "",
@@ -3787,6 +3794,7 @@ function imprimirRegistroComercial() {
         phone: item.phone || "",
         city: item.city || "",
         documento: "",
+        correo: "",
         fuente: item.lead_id ? "lead_existente" : extraerFuenteManualDesdeNotas(item.notes),
         fuente_detalle: "",
         fuente_usuario_id: "",
@@ -4928,6 +4936,17 @@ function imprimirRegistroComercial() {
                             : "Si la cédula ya existe, se completarán nombre, teléfono y ciudad."}
                         </p>
                       </div>
+                    }
+                  />
+                  <Field
+                    label="Correo"
+                    input={
+                      <input
+                        className={inputClass}
+                        type="email"
+                        value={commercialForm.correo}
+                        onChange={(e) => setCommercialForm((prev) => ({ ...prev, correo: e.target.value }))}
+                      />
                     }
                   />
                   <Field

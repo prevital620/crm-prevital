@@ -36,6 +36,7 @@ export type CustomerConsultAppointment = {
 
 export type CustomerConsultCommercialCase = {
   id: string;
+  support_code: string | null;
   created_at: string;
   status: string | null;
   sale_result: string | null;

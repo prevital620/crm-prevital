@@ -32,6 +32,7 @@ type DepartmentRelation =
 
 type CommercialCaseRow = {
   id: string;
+  support_code: string | null;
   lead_id: string | null;
   appointment_id: string | null;
   customer_name: string;
@@ -127,8 +128,9 @@ type CustomerDetail = {
     notes: string | null;
   }>;
   commercial_cases: Array<{
-    id: string;
-    created_at: string;
+      id: string;
+      support_code: string | null;
+      created_at: string;
     status: string | null;
     sale_result: string | null;
     purchased_service: string | null;
@@ -506,9 +508,10 @@ function buildCustomerDetail(params: {
     commercial_cases: params.cases
       .slice()
       .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-      .map((caseRow) => ({
-        id: caseRow.id,
-        created_at: caseRow.created_at,
+        .map((caseRow) => ({
+          id: caseRow.id,
+          support_code: caseRow.support_code,
+          created_at: caseRow.created_at,
         status: caseRow.status,
         sale_result: caseRow.sale_result,
         purchased_service: caseRow.purchased_service,
@@ -609,9 +612,10 @@ export async function GET(request: Request) {
 
     let casesQuery = supabaseAdmin
       .from("commercial_cases")
-      .select(
-        `
+        .select(
+          `
         id,
+        support_code,
         lead_id,
         appointment_id,
         customer_name,

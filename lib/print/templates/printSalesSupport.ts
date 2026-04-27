@@ -188,6 +188,13 @@ const styles = `
       border-collapse: collapse;
       margin-bottom: 7px;
     }
+    .id-table {
+      table-layout: fixed;
+    }
+    .id-table col.left-label { width: 12%; }
+    .id-table col.left-value { width: 36%; }
+    .id-table col.right-label { width: 12%; }
+    .id-table col.right-value { width: 40%; }
     .form-table td,
     .form-table th {
       border: 1px solid #808080;
@@ -204,6 +211,11 @@ const styles = `
     .value-cell {
       min-height: 20px;
       font-weight: 500;
+      overflow-wrap: anywhere;
+      word-break: break-word;
+    }
+    .id-table .value-cell {
+      font-size: 7.6pt;
     }
     .dark-head th {
       background: #434343;
@@ -394,7 +406,13 @@ export default function printSalesSupport(data: SaleSupportPrintData) {
           </table>
 
           <div class="section-title">2. Identificación del usuario</div>
-          <table class="form-table">
+          <table class="form-table id-table">
+            <colgroup>
+              <col class="left-label" />
+              <col class="left-value" />
+              <col class="right-label" />
+              <col class="right-value" />
+            </colgroup>
             <tr>
               <td class="label-cell">Nombre completo:</td>
               <td class="value-cell">${escapeHtml(data.customerName)}</td>

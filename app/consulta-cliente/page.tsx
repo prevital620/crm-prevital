@@ -190,6 +190,7 @@ export default function ConsultaClientePage() {
     const parsed = parseStoredCommercialNotes(caseItem.commercial_notes);
     const receptionSummary = parsed.receptionSummary;
     const documentNumber = getReceptionSummaryValue(receptionSummary, "Documento");
+    const email = getReceptionSummaryValue(receptionSummary, "Correo");
     const eps =
       getReceptionSummaryValue(receptionSummary, "Afiliación") ||
       getReceptionSummaryValue(receptionSummary, "EPS");
@@ -238,7 +239,7 @@ export default function ConsultaClientePage() {
     });
 
     printSalesSupport({
-      supportCode: caseItem.id.slice(0, 6).toUpperCase(),
+      supportCode: caseItem.support_code || caseItem.id.slice(0, 6).toUpperCase(),
       documentDate: supportDate,
       documentTime: supportTime,
       analystName: caseItem.commercial_name || "",
@@ -248,6 +249,7 @@ export default function ConsultaClientePage() {
       customerName: detail.identity.full_name,
       documentNumber,
       phone: detail.identity.phone,
+      email,
       city: detail.identity.city,
       birthDate,
       eps,

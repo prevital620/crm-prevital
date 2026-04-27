@@ -50,6 +50,7 @@ import printSalesSupport from "@/lib/print/templates/printSalesSupport";
 
 type CommercialCase = {
   id: string;
+  support_code: string | null;
   lead_id: string | null;
   appointment_id: string | null;
   customer_name: string;
@@ -838,6 +839,7 @@ export default function ComercialPage() {
           .from("commercial_cases")
           .select(`
             id,
+            support_code,
             lead_id,
             appointment_id,
             customer_name,
@@ -1311,6 +1313,7 @@ export default function ComercialPage() {
 
     const allFollowUps = getPrimaryFollowUp(form, nextAppointments);
     const receptionDocument = getReceptionSummaryValue(currentReceptionSummary, "Documento");
+    const receptionEmail = getReceptionSummaryValue(currentReceptionSummary, "Correo");
     const receptionEps =
       getReceptionSummaryValue(currentReceptionSummary, "Afiliación") ||
       getReceptionSummaryValue(currentReceptionSummary, "EPS");
@@ -1387,7 +1390,7 @@ export default function ComercialPage() {
     });
 
     printSalesSupport({
-      supportCode: currentCase.id.slice(0, 6).toUpperCase(),
+      supportCode: currentCase.support_code || currentCase.id.slice(0, 6).toUpperCase(),
       documentDate: supportDate,
       documentTime: supportTime,
       analystName,
@@ -1397,6 +1400,7 @@ export default function ComercialPage() {
       customerName: currentCase.customer_name,
       documentNumber: receptionDocument,
       phone: currentCase.phone,
+      email: receptionEmail,
       city: currentCase.city,
       birthDate: receptionBirthDate,
       eps: receptionEps,
@@ -1456,6 +1460,7 @@ export default function ComercialPage() {
         ])
         .select(`
           id,
+          support_code,
           lead_id,
           appointment_id,
           customer_name,
