@@ -11,6 +11,7 @@ import {
   getCommercialTeamLabel,
   type CommercialTeamKey,
 } from "@/lib/commercial/team";
+import { resolveCommissionGroupCode } from "@/lib/commissions/group-code";
 
 type AdminCommercialCase = {
   id: string;
@@ -37,6 +38,8 @@ type AdminCommercialCase = {
 type ProfileOption = {
   id: string;
   full_name: string;
+  employee_code?: string | null;
+  commission_group_code?: string | null;
   job_title: string | null;
   is_active: boolean | null;
   department_id?: string | null;
@@ -77,6 +80,7 @@ type CollaboratorOption = {
   name: string;
   area: string;
   teamKey: CommercialTeamKey | null;
+  groupCode: string | null;
   isActive: boolean;
 };
 
@@ -500,7 +504,7 @@ export default function AdminComisionesPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("profiles")
-          .select("id, full_name, job_title, is_active, department_id")
+          .select("id, full_name, employee_code, commission_group_code, job_title, is_active, department_id")
           .order("full_name", { ascending: true }),
         supabase.from("departments").select("id, name"),
         supabase.from("user_roles").select(`
@@ -651,6 +655,10 @@ export default function AdminComisionesPage() {
           getPrimaryProfileRole(profile)?.name || getPrimaryProfileRole(profile)?.code || "",
         departments: getProfileDepartments(profile).map((name) => ({ name })),
       }),
+      groupCode: resolveCommissionGroupCode({
+        commissionGroupCode: profile.commission_group_code,
+        employeeCode: profile.employee_code,
+      }),
       isActive: profile.is_active !== false,
     }));
   }, [profiles]);
@@ -787,6 +795,16 @@ export default function AdminComisionesPage() {
     return map;
   }, [supervisorOpcOptions]);
 
+  const supervisorOpcByGroup = useMemo(() => {
+    const map = new Map<string, CollaboratorOption>();
+    supervisorOpcOptions.forEach((item) => {
+      if (item.groupCode && !map.has(item.groupCode)) {
+        map.set(item.groupCode, item);
+      }
+    });
+    return map;
+  }, [supervisorOpcOptions]);
+
   const supervisorCallByTeam = useMemo(() => {
     const map = new Map<string, CollaboratorOption>();
     supervisorCallOptions.forEach((item) => {
@@ -797,10 +815,21 @@ export default function AdminComisionesPage() {
     return map;
   }, [supervisorCallOptions]);
 
+  const supervisorCallByGroup = useMemo(() => {
+    const map = new Map<string, CollaboratorOption>();
+    supervisorCallOptions.forEach((item) => {
+      if (item.groupCode && !map.has(item.groupCode)) {
+        map.set(item.groupCode, item);
+      }
+    });
+    return map;
+  }, [supervisorCallOptions]);
+
   const fallbackSupervisorOpc =
     supervisorOpcOptions.length === 1 ? supervisorOpcOptions[0] : null;
   const fallbackSupervisorCall =
     supervisorCallOptions.length === 1 ? supervisorCallOptions[0] : null;
+  const resolvedCurrentGroupCode = currentCollaborator?.groupCode || null;
   const resolvedCurrentTeamKey = useMemo(() => {
     if (currentCollaborator?.teamKey) return currentCollaborator.teamKey;
 
@@ -854,15 +883,34 @@ export default function AdminComisionesPage() {
   }, [visibleCollaboratorOptions]);
 
   const teamScopedCollaboratorOptions = useMemo(() => {
-    if (!isTeamScopedRole || !resolvedCurrentTeamKey) return [];
+    const hasSupervisorScope =
+      currentRoleCode === "supervisor_opc" || currentRoleCode === "supervisor_call_center"
+        ? Boolean(resolvedCurrentGroupCode || resolvedCurrentTeamKey)
+        : Boolean(resolvedCurrentTeamKey);
+
+    if (!isTeamScopedRole || !hasSupervisorScope) return [];
 
     if (currentRoleCode === "supervisor_opc") {
+      if (resolvedCurrentGroupCode) {
+        return visibleCollaboratorOptions.filter(
+          (item) => item.area === "OPC" && item.groupCode === resolvedCurrentGroupCode
+        );
+      }
+
       return visibleCollaboratorOptions.filter(
         (item) => item.area === "OPC" && item.teamKey === resolvedCurrentTeamKey
       );
     }
 
     if (currentRoleCode === "supervisor_call_center") {
+      if (resolvedCurrentGroupCode) {
+        return visibleCollaboratorOptions.filter(
+          (item) =>
+            ["TMK", "Call center"].includes(item.area) &&
+            item.groupCode === resolvedCurrentGroupCode
+        );
+      }
+
       return visibleCollaboratorOptions.filter(
         (item) =>
           ["TMK", "Call center"].includes(item.area) &&
@@ -877,7 +925,13 @@ export default function AdminComisionesPage() {
     }
 
     return [];
-  }, [resolvedCurrentTeamKey, currentRoleCode, isTeamScopedRole, visibleCollaboratorOptions]);
+  }, [
+    resolvedCurrentGroupCode,
+    resolvedCurrentTeamKey,
+    currentRoleCode,
+    isTeamScopedRole,
+    visibleCollaboratorOptions,
+  ]);
 
   const filteredCollaboratorOptions = useMemo(() => {
     if (isTeamScopedRole) {
@@ -912,9 +966,15 @@ export default function AdminComisionesPage() {
       const commercialProfile = item.assigned_commercial_user_id
         ? profileMap.get(item.assigned_commercial_user_id)
         : null;
-      const opcProfile = item.opc_user_id ? profileMap.get(item.opc_user_id) : null;
-      const callProfile = item.call_user_id ? profileMap.get(item.call_user_id) : null;
-      const collaboratorName = commercialProfile?.full_name || "";
+        const opcProfile = item.opc_user_id ? profileMap.get(item.opc_user_id) : null;
+        const callProfile = item.call_user_id ? profileMap.get(item.call_user_id) : null;
+        const opcGroupCode = item.opc_user_id
+          ? collaboratorOptionMap.get(item.opc_user_id)?.groupCode || null
+          : null;
+        const callGroupCode = item.call_user_id
+          ? collaboratorOptionMap.get(item.call_user_id)?.groupCode || null
+          : null;
+        const collaboratorName = commercialProfile?.full_name || "";
       const collaboratorArea = getCollaboratorArea(commercialProfile);
       const collaboratorTeam = inferCommercialTeam({
         full_name: commercialProfile?.full_name,
@@ -944,7 +1004,9 @@ export default function AdminComisionesPage() {
               : currentRoleCode === "supervisor_opc"
                 ? Boolean(
                     (
-                        (opcProfile
+                        (opcGroupCode
+                          ? supervisorOpcByGroup.get(opcGroupCode)
+                          : opcProfile
                         ? supervisorOpcByTeam.get(
                             inferCommercialTeam({
                               full_name: opcProfile.full_name,
@@ -964,7 +1026,9 @@ export default function AdminComisionesPage() {
                 : currentRoleCode === "supervisor_call_center"
                   ? Boolean(
                       (
-                        (callProfile
+                        (callGroupCode
+                          ? supervisorCallByGroup.get(callGroupCode)
+                          : callProfile
                           ? supervisorCallByTeam.get(
                               inferCommercialTeam({
                                 full_name: callProfile.full_name,
@@ -1082,6 +1146,8 @@ export default function AdminComisionesPage() {
     search,
     supervisorOpcByTeam,
     supervisorCallByTeam,
+    supervisorOpcByGroup,
+    supervisorCallByGroup,
     fallbackSupervisorOpc,
     fallbackSupervisorCall,
     isAdminView,
@@ -1106,7 +1172,9 @@ export default function AdminComisionesPage() {
       if (item.opc_user_id) {
         const opc = collaboratorOptionMap.get(item.opc_user_id);
         const supervisorOpc =
-          (opc?.teamKey ? supervisorOpcByTeam.get(opc.teamKey) : null) || fallbackSupervisorOpc;
+          (opc?.groupCode ? supervisorOpcByGroup.get(opc.groupCode) : null) ||
+          (opc?.teamKey ? supervisorOpcByTeam.get(opc.teamKey) : null) ||
+          fallbackSupervisorOpc;
 
         if (supervisorOpc) {
           const fixedCommission = isQ
@@ -1145,7 +1213,9 @@ export default function AdminComisionesPage() {
       if (item.call_user_id) {
         const call = collaboratorOptionMap.get(item.call_user_id);
         const supervisorCall =
-          (call?.teamKey ? supervisorCallByTeam.get(call.teamKey) : null) || fallbackSupervisorCall;
+          (call?.groupCode ? supervisorCallByGroup.get(call.groupCode) : null) ||
+          (call?.teamKey ? supervisorCallByTeam.get(call.teamKey) : null) ||
+          fallbackSupervisorCall;
 
         if (supervisorCall) {
           const isBase = sourceType === "base";
@@ -1263,6 +1333,8 @@ export default function AdminComisionesPage() {
     effectiveCollaboratorFilter,
     supervisorOpcByTeam,
     supervisorCallByTeam,
+    supervisorOpcByGroup,
+    supervisorCallByGroup,
     fallbackSupervisorOpc,
     fallbackSupervisorCall,
   ]);

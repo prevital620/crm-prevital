@@ -6,11 +6,16 @@ import {
   isAuthUserMissingError,
   requireSuperUser,
 } from "@/lib/server/user-security";
+import {
+  getCommissionGroupCodeValidationError,
+  resolveCommissionGroupCode,
+} from "@/lib/commissions/group-code";
 
 type UserUpdatePayload = {
   full_name?: string;
   phone?: string | null;
   employee_code?: string | null;
+  commission_group_code?: string | null;
   job_title?: string | null;
   department_id?: string | null;
   is_active?: boolean;
@@ -130,6 +135,13 @@ function parseUserUpdatePayload(body: unknown): UserUpdatePayload {
     result.employee_code = normalizedCode || null;
   }
 
+  if ("commission_group_code" in payload) {
+    const normalizedGroupCode = String(payload.commission_group_code ?? "")
+      .trim()
+      .toUpperCase();
+    result.commission_group_code = normalizedGroupCode || null;
+  }
+
   if ("job_title" in payload) {
     result.job_title = normalizeOptionalText(payload.job_title);
   }
@@ -207,6 +219,23 @@ export async function PATCH(
       }
 
       profileUpdate.employee_code = payload.employee_code ?? null;
+    }
+
+    if ("commission_group_code" in payload || "employee_code" in payload) {
+      const groupCodeError = getCommissionGroupCodeValidationError({
+        commissionGroupCode: payload.commission_group_code,
+        employeeCode: payload.employee_code,
+      });
+
+      if (groupCodeError) {
+        return NextResponse.json({ error: groupCodeError }, { status: 400 });
+      }
+
+      profileUpdate.commission_group_code =
+        resolveCommissionGroupCode({
+          commissionGroupCode: payload.commission_group_code,
+          employeeCode: payload.employee_code,
+        }) || null;
     }
 
     if ("job_title" in payload) {

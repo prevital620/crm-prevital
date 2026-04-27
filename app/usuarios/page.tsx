@@ -10,6 +10,7 @@ type UserRow = {
   id: string;
   full_name: string;
   employee_code: string | null;
+  commission_group_code: string | null;
   email: string | null;
   phone: string | null;
   job_title: string | null;
@@ -229,6 +230,7 @@ Correo de acceso: ${user.email}`
       return (
         (user.full_name || "").toLowerCase().includes(q) ||
         (user.employee_code || "").toLowerCase().includes(q) ||
+        (user.commission_group_code || "").toLowerCase().includes(q) ||
         (user.email || "").toLowerCase().includes(q) ||
         (user.phone || "").toLowerCase().includes(q) ||
         (user.job_title || "").toLowerCase().includes(q) ||
@@ -397,6 +399,12 @@ Correo de acceso: ${user.email}`
                             {user.employee_code ? (
                               <span className="inline-flex rounded-full border border-[#CFE4D8] bg-[#F4FBF6] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
                                 {user.employee_code}
+                              </span>
+                            ) : null}
+
+                            {user.commission_group_code ? (
+                              <span className="inline-flex rounded-full border border-[#D7EADF] bg-white px-3 py-1 text-xs font-semibold text-[#365243]">
+                                Grupo {user.commission_group_code}
                               </span>
                             ) : null}
 

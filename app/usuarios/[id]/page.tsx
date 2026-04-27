@@ -22,6 +22,7 @@ type UserData = {
   id: string;
   full_name: string;
   employee_code: string | null;
+  commission_group_code: string | null;
   phone: string | null;
   job_title: string | null;
   department_id: string | null;
@@ -66,6 +67,7 @@ export default function EditarUsuarioPage() {
   const [form, setForm] = useState({
     full_name: "",
     employee_code: "",
+    commission_group_code: "",
     phone: "",
     job_title: "",
     department_id: "",
@@ -96,7 +98,7 @@ export default function EditarUsuarioPage() {
         supabase
           .from("profiles")
           .select(
-            "id, full_name, employee_code, phone, job_title, department_id, is_active, created_at"
+            "id, full_name, employee_code, commission_group_code, phone, job_title, department_id, is_active, created_at"
           )
           .eq("id", userId)
           .single(),
@@ -123,6 +125,7 @@ export default function EditarUsuarioPage() {
       setForm({
         full_name: user.full_name || "",
         employee_code: user.employee_code || "",
+        commission_group_code: user.commission_group_code || "",
         phone: user.phone || "",
         job_title: stripCommercialTeamSuffix(user.job_title || ""),
         department_id: user.department_id || "",
@@ -175,6 +178,8 @@ export default function EditarUsuarioPage() {
               : stripCommercialTeamSuffix(form.job_title.trim()) || null,
           full_name: form.full_name.trim(),
           employee_code: form.employee_code.trim().toUpperCase() || null,
+          commission_group_code:
+            form.commission_group_code.trim().toUpperCase() || null,
           phone: form.phone.trim() || null,
           department_id: form.department_id || null,
           is_active: form.is_active,
@@ -372,6 +377,25 @@ export default function EditarUsuarioPage() {
                 setForm({ ...form, employee_code: e.target.value.toUpperCase() })
               }
             />
+
+            <input
+              className={inputClass}
+              placeholder="Grupo de comision (Ej: CB, AV)"
+              maxLength={2}
+              value={form.commission_group_code}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  commission_group_code: e.target.value.toUpperCase(),
+                })
+              }
+            />
+
+            <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
+              Para OPC, TMK y sus supervisores, este grupo define a quién le
+              suma la comisión. Si el usuario tiene código interno, las 2
+              primeras letras deben coincidir con este grupo.
+            </div>
 
             <input
               className={inputClass}

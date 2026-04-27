@@ -6,6 +6,10 @@ import {
   getTemporaryUserPassword,
   requireSuperUser,
 } from "@/lib/server/user-security";
+import {
+  getCommissionGroupCodeValidationError,
+  resolveCommissionGroupCode,
+} from "@/lib/commissions/group-code";
 
 export async function POST(request: Request) {
   try {
@@ -25,6 +29,9 @@ export async function POST(request: Request) {
     const email = String(body?.email || "").trim().toLowerCase();
     const phone = String(body?.phone || "").trim();
     const employee_code = String(body?.employee_code || "")
+      .trim()
+      .toUpperCase();
+    const commission_group_code = String(body?.commission_group_code || "")
       .trim()
       .toUpperCase();
     const job_title = String(body?.job_title || "").trim();
@@ -67,6 +74,15 @@ export async function POST(request: Request) {
       );
     }
 
+    const groupCodeError = getCommissionGroupCodeValidationError({
+      commissionGroupCode: commission_group_code,
+      employeeCode: employee_code,
+    });
+
+    if (groupCodeError) {
+      return NextResponse.json({ error: groupCodeError }, { status: 400 });
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return NextResponse.json(
@@ -103,6 +119,11 @@ export async function POST(request: Request) {
           full_name,
           phone: phone || null,
           employee_code: employee_code || null,
+          commission_group_code:
+            resolveCommissionGroupCode({
+              commissionGroupCode: commission_group_code,
+              employeeCode: employee_code,
+            }) || null,
           job_title: job_title || null,
           department_id: department_id || null,
           is_active: true,
@@ -171,6 +192,7 @@ export async function GET() {
         full_name,
         phone,
         employee_code,
+        commission_group_code,
         job_title,
         is_active,
         created_at,

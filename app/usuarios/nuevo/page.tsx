@@ -39,6 +39,7 @@ export default function NuevoUsuarioPage() {
     email: "",
     phone: "",
     employee_code: "",
+    commission_group_code: "",
     job_title: "",
     department_id: "",
   });
@@ -120,6 +121,7 @@ export default function NuevoUsuarioPage() {
         body: JSON.stringify({
           ...form,
           employee_code: form.employee_code.trim().toUpperCase(),
+          commission_group_code: form.commission_group_code.trim().toUpperCase(),
           role_ids: selectedRoleIds,
         }),
       });
@@ -141,6 +143,7 @@ export default function NuevoUsuarioPage() {
         email: "",
         phone: "",
         employee_code: "",
+        commission_group_code: "",
         job_title: "",
         department_id: "",
       });
@@ -279,6 +282,19 @@ export default function NuevoUsuarioPage() {
 
             <input
               className={inputClass}
+              placeholder="Grupo de comision (Ej: CB, AV)"
+              maxLength={2}
+              value={form.commission_group_code}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  commission_group_code: e.target.value.toUpperCase(),
+                })
+              }
+            />
+
+            <input
+              className={inputClass}
               placeholder="Cargo"
               value={form.job_title}
               onChange={(e) => setForm({ ...form, job_title: e.target.value })}
@@ -353,6 +369,12 @@ export default function NuevoUsuarioPage() {
             >
               {loading ? "Creando usuario..." : "Crear usuario"}
             </button>
+
+            <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
+              Si el usuario tiene código interno, las 2 primeras letras deben
+              coincidir con el grupo de comisión. Ejemplo: `CB1234` pertenece
+              al grupo `CB`.
+            </div>
 
             <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
               El cambio de correo y el borrado real del usuario requieren la
