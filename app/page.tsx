@@ -1,24 +1,23 @@
 import Image from "next/image";
-import Link from "next/link";
-import { ArrowRight, HeartPulse, ShieldCheck, Sparkles, Stethoscope } from "lucide-react";
+import { HeartPulse, ShieldCheck, Sparkles, Stethoscope } from "lucide-react";
 
 const featureCards = [
   {
     title: "Odontologia preventiva",
     description:
-      "Acompañamos tu salud oral con evaluaciones oportunas, educación y seguimiento enfocado en prevención.",
+      "Acompanamos tu salud oral con evaluaciones oportunas, educacion clara y seguimiento enfocado en prevencion.",
     icon: ShieldCheck,
   },
   {
     title: "Atencion integral",
     description:
-      "Unificamos experiencia clínica, servicio humano y procesos organizados para que tu atención sea clara y confiable.",
+      "Unificamos experiencia clinica, servicio humano y orientacion profesional para que tu atencion sea confiable y cercana.",
     icon: Stethoscope,
   },
   {
-    title: "Experiencia cercana",
+    title: "Experiencia tranquila",
     description:
-      "Diseñamos una experiencia simple, cálida y profesional desde el primer contacto con Prevital.",
+      "Queremos que desde el primer contacto sientas confianza, orden y acompanamiento real para cuidar tu sonrisa.",
     icon: HeartPulse,
   },
 ];
@@ -53,19 +52,8 @@ export default function LandingPage() {
               </div>
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <Link
-                href="/login"
-                className="inline-flex items-center justify-center rounded-2xl border border-[#D6E8DA] bg-white px-5 py-3 text-sm font-semibold text-[#4F6F5B] transition hover:-translate-y-0.5 hover:bg-[#F5FBF7]"
-              >
-                Ingreso equipo
-              </Link>
-              <Link
-                href="/crm"
-                className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
-              >
-                Abrir CRM
-              </Link>
+            <div className="rounded-2xl border border-[#D6E8DA] bg-[#F4FAF6] px-5 py-3 text-sm font-medium text-[#4F6F5B]">
+              Agenda una valoracion odontologica con un equipo cercano, claro y profesional.
             </div>
           </header>
 
@@ -77,27 +65,26 @@ export default function LandingPage() {
               </div>
 
               <h2 className="max-w-2xl text-4xl font-bold tracking-tight text-[#203128] md:text-6xl">
-                Una landing clara para pacientes, con el CRM protegido en <span className="text-[#5F7D66]">/crm</span>.
+                Cuidamos tu sonrisa con una experiencia odontologica humana, preventiva y confiable.
               </h2>
 
               <p className="mt-6 max-w-2xl text-base leading-8 text-[#50655A] md:text-lg">
-                Prevital Odontologia combina atención humana, prevención y orden operativo. Desde aquí
-                puedes presentar tu marca al público mientras el sistema interno sigue funcionando de forma
-                independiente para tu equipo.
+                En Prevital Odontologia acompanamos a cada paciente con orientacion clara, atencion humana
+                y seguimiento oportuno para que cuidar tu salud oral se sienta simple, seguro y cercano.
               </p>
 
               <div className="mt-8 flex flex-wrap gap-4">
-                <Link
-                  href="/login"
-                  className="inline-flex items-center justify-center rounded-2xl bg-[#203128] px-6 py-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#16231c]"
-                >
-                  Ingresar al equipo
-                </Link>
                 <a
                   href="#servicios"
+                  className="inline-flex items-center justify-center rounded-2xl bg-[#203128] px-6 py-4 text-sm font-semibold text-white transition hover:-translate-y-0.5 hover:bg-[#16231c]"
+                >
+                  Conoce nuestro enfoque
+                </a>
+                <a
+                  href="#contacto"
                   className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/90 px-6 py-4 text-sm font-semibold text-[#4F6F5B] transition hover:-translate-y-0.5 hover:bg-[#F5FBF7]"
                 >
-                  Ver enfoque
+                  Quiero agendar
                 </a>
               </div>
             </div>
@@ -117,28 +104,20 @@ export default function LandingPage() {
 
               <div className="relative space-y-5">
                 <div className="rounded-3xl border border-[#D6E8DA] bg-[#F7FCF8] p-5">
-                  <p className="text-sm font-semibold text-[#24312A]">Ruta pública</p>
+                  <p className="text-sm font-semibold text-[#24312A]">Prevencion con proposito</p>
                   <p className="mt-2 text-sm leading-6 text-[#5B6E63]">
-                    La página principal ahora puede hablarle al paciente, mostrar la marca y crecer como
-                    vitrina digital del negocio.
+                    Queremos ayudarte a detectar a tiempo, resolver con claridad y acompanarte con un
+                    plan de cuidado oral sostenible.
                   </p>
                 </div>
 
                 <div className="rounded-3xl border border-[#D6E8DA] bg-[#F7FCF8] p-5">
-                  <p className="text-sm font-semibold text-[#24312A]">Ruta privada</p>
+                  <p className="text-sm font-semibold text-[#24312A]">Atencion cercana</p>
                   <p className="mt-2 text-sm leading-6 text-[#5B6E63]">
-                    El CRM queda aislado en <span className="font-semibold text-[#4F6F5B]">/crm</span>, manteniendo
-                    Supabase, autenticación y módulos internos sin cambiar su lógica de negocio.
+                    Escuchamos tu caso, resolvemos dudas y te orientamos para que agendar tu valoracion
+                    odontologica sea un proceso facil desde el primer contacto.
                   </p>
                 </div>
-
-                <Link
-                  href="/crm"
-                  className="inline-flex items-center gap-2 text-sm font-semibold text-[#4F6F5B] transition hover:text-[#365243]"
-                >
-                  Ir al sistema interno
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
               </div>
             </aside>
           </div>
@@ -149,10 +128,10 @@ export default function LandingPage() {
         <div className="mx-auto max-w-7xl">
           <div className="mb-6">
             <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6D8F77]">
-              Base inicial de la landing
+              Servicios y experiencia
             </p>
             <h3 className="mt-2 text-3xl font-bold text-[#203128] md:text-4xl">
-              Una estructura simple y lista para crecer
+              Un espacio pensado para pacientes que quieren agendar con confianza
             </h3>
           </div>
 
@@ -169,6 +148,42 @@ export default function LandingPage() {
                 <p className="mt-3 text-sm leading-7 text-[#5B6E63]">{description}</p>
               </article>
             ))}
+          </div>
+        </div>
+      </section>
+
+      <section id="contacto" className="px-6 pb-14 md:px-10 md:pb-20">
+        <div className="mx-auto max-w-7xl rounded-[2.25rem] border border-[#D6E8DA] bg-[linear-gradient(135deg,_rgba(255,255,255,0.97)_0%,_rgba(240,249,244,0.95)_100%)] p-8 shadow-[0_24px_60px_rgba(95,125,102,0.12)] md:p-10">
+          <p className="text-sm font-semibold uppercase tracking-[0.22em] text-[#6D8F77]">
+            Agenda tu cita
+          </p>
+          <h3 className="mt-3 text-3xl font-bold text-[#203128] md:text-4xl">
+            Da el primer paso hacia una atencion odontologica mas preventiva
+          </h3>
+          <p className="mt-4 max-w-3xl text-base leading-8 text-[#50655A]">
+            Si estas buscando una valoracion, seguimiento o una orientacion inicial, en Prevital
+            Odontologia estaremos listos para atenderte y ayudarte a agendar.
+          </p>
+
+          <div className="mt-8 grid gap-4 md:grid-cols-3">
+            <div className="rounded-3xl border border-[#D6E8DA] bg-white/92 p-5">
+              <p className="text-sm font-semibold text-[#24312A]">WhatsApp</p>
+              <p className="mt-2 text-sm leading-6 text-[#5B6E63]">
+                Reemplaza este bloque por el numero real o por el enlace directo de atencion.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-[#D6E8DA] bg-white/92 p-5">
+              <p className="text-sm font-semibold text-[#24312A]">Telefono</p>
+              <p className="mt-2 text-sm leading-6 text-[#5B6E63]">
+                Publica aqui la linea principal para agendamiento y orientacion de pacientes.
+              </p>
+            </div>
+            <div className="rounded-3xl border border-[#D6E8DA] bg-white/92 p-5">
+              <p className="text-sm font-semibold text-[#24312A]">Ubicacion</p>
+              <p className="mt-2 text-sm leading-6 text-[#5B6E63]">
+                Puedes mostrar sede, horarios y referencias utiles para facilitar la llegada.
+              </p>
+            </div>
           </div>
         </div>
       </section>
