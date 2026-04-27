@@ -18,6 +18,7 @@ type CommercialCaseRow = {
   customer_name: string;
   phone: string | null;
   city: string | null;
+  assigned_commercial_user_id: string | null;
   call_user_id: string | null;
   opc_user_id: string | null;
   status: string;
@@ -273,6 +274,7 @@ export default function ManifiestosPage() {
               customer_name,
               phone,
               city,
+              assigned_commercial_user_id,
               call_user_id,
               opc_user_id,
               status,
@@ -318,7 +320,16 @@ export default function ManifiestosPage() {
           const id = row.profiles?.id || row.user_id;
           if (!id) return;
 
-          if (!["promotor_opc", "supervisor_opc", "tmk", "confirmador", "supervisor_call_center"].includes(roleCode)) {
+          if (
+            ![
+              "promotor_opc",
+              "supervisor_opc",
+              "tmk",
+              "confirmador",
+              "supervisor_call_center",
+              "comercial",
+            ].includes(roleCode)
+          ) {
             return;
           }
 
@@ -381,6 +392,9 @@ export default function ManifiestosPage() {
       .map((item) => {
         const tmk = item.call_user_id ? sourceUserById.get(item.call_user_id) : undefined;
         const opc = item.opc_user_id ? sourceUserById.get(item.opc_user_id) : undefined;
+        const analyst = item.assigned_commercial_user_id
+          ? sourceUserById.get(item.assigned_commercial_user_id)
+          : undefined;
         const saleAmount = Number(item.volume_amount || item.sale_value || 0);
         const hasSale = saleAmount > 0 && hasCommercialSale(item);
 
@@ -388,6 +402,7 @@ export default function ManifiestosPage() {
           horaLlegada: formatManifestTime(item.created_at),
           horaSalida: formatManifestTime(item.closed_at),
           nombreCompleto: item.customer_name || "Sin nombre",
+          analista: analyst?.full_name || "",
           codigoTMK: tmk?.employee_code || "",
           codigoOPC: opc?.employee_code || "",
           calificacion:

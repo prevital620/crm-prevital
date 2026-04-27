@@ -6,6 +6,7 @@ type ManifestRow = {
   horaLlegada: string;
   horaSalida: string;
   nombreCompleto: string;
+  analista: string;
   codigoTMK: string;
   codigoOPC: string;
   calificacion: string;
@@ -41,6 +42,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                 <td>${escapeHtml(row.horaLlegada || "-")}</td>
                 <td>${escapeHtml(row.horaSalida || "-")}</td>
                 <td>${escapeHtml(row.nombreCompleto || "Sin nombre")}</td>
+                <td>${escapeHtml(row.analista || "-")}</td>
                 <td>${escapeHtml(row.codigoTMK || "-")}</td>
                 <td>${escapeHtml(row.codigoOPC || "-")}</td>
                 <td>${escapeHtml(row.calificacion || "Sin definir")}</td>
@@ -53,7 +55,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           .join("")
       : `
         <tr>
-          <td colspan="10" style="text-align:center; color:#607368;">No hay registros para este periodo y jornada.</td>
+          <td colspan="11" style="text-align:center; color:#607368;">No hay registros para este periodo y jornada.</td>
         </tr>
       `;
 
@@ -143,6 +145,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                   <th>Hora llegada</th>
                   <th>Hora salida</th>
                   <th>Nombre completo</th>
+                  <th>Analista</th>
                   <th>Codigo TMK</th>
                   <th>Codigo OPC</th>
                   <th>Calificacion</th>

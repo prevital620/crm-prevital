@@ -1801,7 +1801,14 @@ function RecepcionContent() {
           };
 
           if (
-            ["promotor_opc", "supervisor_opc", "tmk", "confirmador", "supervisor_call_center"].includes(roleCode) &&
+            [
+              "promotor_opc",
+              "supervisor_opc",
+              "tmk",
+              "confirmador",
+              "supervisor_call_center",
+              "comercial",
+            ].includes(roleCode) &&
             !sourceUserMap.has(id)
           ) {
             sourceUserMap.set(id, normalizedRow);
@@ -2548,6 +2555,9 @@ function RecepcionContent() {
       .map((item) => {
         const tmk = item.call_user_id ? sourceUserById.get(item.call_user_id) : undefined;
         const opc = item.opc_user_id ? sourceUserById.get(item.opc_user_id) : undefined;
+        const analyst = item.assigned_commercial_user_id
+          ? sourceUserById.get(item.assigned_commercial_user_id)
+          : undefined;
         const saleAmount = Number(item.volume_amount || item.sale_value || 0);
         const hasSale = saleAmount > 0 && hasCommercialSale(item);
 
@@ -2555,6 +2565,7 @@ function RecepcionContent() {
           horaLlegada: formatManifestTime(item.created_at),
           horaSalida: formatManifestTime(item.closed_at),
           nombreCompleto: item.customer_name || "Sin nombre",
+          analista: analyst?.full_name || "",
           codigoTMK: tmk?.employee_code || "",
           codigoOPC: opc?.employee_code || "",
           calificacion:
