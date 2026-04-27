@@ -38,7 +38,7 @@ export async function proxy(request: NextRequest) {
   }
 
   if (pathname === "/login") {
-    const destination = sessionState.mustChangePassword ? "/cambiar-clave" : "/";
+    const destination = sessionState.mustChangePassword ? "/cambiar-clave" : "/crm";
 
     return copyResponseState(
       response,
@@ -56,7 +56,7 @@ export async function proxy(request: NextRequest) {
   if (!sessionState.mustChangePassword && pathname === "/cambiar-clave") {
     return copyResponseState(
       response,
-      NextResponse.redirect(new URL("/", request.url))
+      NextResponse.redirect(new URL("/crm", request.url))
     );
   }
 
