@@ -431,6 +431,11 @@ export default function GerenciaComercialPage() {
           ? null
           : dedupedMap.get(currentUserId || "")?.team_key || null;
       setCurrentTeamKey(detectedTeam);
+      const managerWithoutDetectedTeam = Boolean(
+        currentRoleCode &&
+          gerenciaRoleCodes.includes(currentRoleCode) &&
+          !detectedTeam
+      );
 
       const visibleUsers =
         currentRoleCode === "super_user"
@@ -459,6 +464,14 @@ export default function GerenciaComercialPage() {
 
               if (detectedTeam) {
                 return caseTeam === detectedTeam;
+              }
+
+              if (managerWithoutDetectedTeam) {
+                return (
+                  item.status === "pendiente_asignacion_comercial" ||
+                  item.assigned_by_user_id === currentUserId ||
+                  item.assigned_commercial_user_id === currentUserId
+                );
               }
 
               return (
@@ -499,8 +512,18 @@ export default function GerenciaComercialPage() {
 
     return cases.filter((item) => {
       const referenceDate = dateToLocalISO(getCaseReferenceDate(item));
-      const matchesDateFrom = dateFrom ? (referenceDate || "") >= dateFrom : true;
-      const matchesDateTo = dateTo ? (referenceDate || "") <= dateTo : true;
+      const ignoresDateWindow =
+        item.status === "pendiente_asignacion_comercial";
+      const matchesDateFrom = ignoresDateWindow
+        ? true
+        : dateFrom
+          ? (referenceDate || "") >= dateFrom
+          : true;
+      const matchesDateTo = ignoresDateWindow
+        ? true
+        : dateTo
+          ? (referenceDate || "") <= dateTo
+          : true;
       const matchesCommercial = commercialFilter
         ? item.assigned_commercial_user_id === commercialFilter
         : true;
