@@ -44,11 +44,7 @@ export default function RootLayout({
       className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col">
-        <PWARegister
-          scope="/"
-          scriptUrl="/public-sw.js"
-          disabledOnPrefixes={["/crm"]}
-        />
+        <PWARegister scope="/crm" scriptUrl="/crm-sw.js" />
         {children}
       </body>
     </html>

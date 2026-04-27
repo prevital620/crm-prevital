@@ -1,12 +1,12 @@
 {
-  "id": "/",
-  "name": "Prevital Odontología",
-  "short_name": "Prevital",
-  "description": "Atención odontológica profesional en Medellín. Agenda tu cita en Prevital Odontología.",
-  "start_url": "/",
-  "scope": "/",
+  "id": "/crm",
+  "name": "CRM Prevital",
+  "short_name": "Prevital CRM",
+  "description": "Sistema interno de gestión para Prevital.",
+  "start_url": "/crm",
+  "scope": "/crm",
   "display": "standalone",
-  "background_color": "#FFF8EE",
+  "background_color": "#F8F7F4",
   "theme_color": "#5F7D66",
   "icons": [
     {

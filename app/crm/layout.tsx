@@ -1,5 +1,4 @@
 import type { Metadata } from "next";
-import PWARegister from "@/components/pwa-register";
 
 export const metadata: Metadata = {
   title: "CRM Prevital",
@@ -12,10 +11,5 @@ export default function CrmLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <>
-      <PWARegister scope="/crm" scriptUrl="/crm-sw.js" />
-      {children}
-    </>
-  );
+  return children;
 }

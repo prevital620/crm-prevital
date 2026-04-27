@@ -45,7 +45,7 @@ Abre en Chrome o Edge y selecciona la opción "Instalar app" cuando aparezca.`;
                 CRM Prevital
               </p>
               <h1 className="mt-2 text-3xl font-bold text-[#24312A] md:text-4xl">
-                Instala la app en tu celular o computador
+                Instala la app del CRM en tu celular o computador
               </h1>
               <p className="mt-4 text-sm leading-7 text-slate-600 md:text-base">
                 El CRM Prevital se puede instalar como aplicación desde el navegador.
@@ -57,7 +57,7 @@ Abre en Chrome o Edge y selecciona la opción "Instalar app" cuando aparezca.`;
                   href="/crm"
                   className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#4F6F5B]"
                 >
-                  Abrir CRM
+                  Abrir CRM en /crm
                 </Link>
 
                 <button
