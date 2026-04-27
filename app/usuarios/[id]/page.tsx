@@ -58,6 +58,23 @@ function isCommercialAccessRole(code: string) {
   return code === "comercial" || code === "gerente_comercial" || code === "gerencia_comercial";
 }
 
+function normalizeUiHint(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+function departmentSuggestsCommercialTeam(name: string | null | undefined) {
+  return normalizeUiHint(name).includes("COMERCIAL");
+}
+
+function departmentSuggestsCommissionGroup(name: string | null | undefined) {
+  const normalized = normalizeUiHint(name);
+  return normalized.includes("CALL CENTER") || normalized.includes("OPC");
+}
+
 export default function EditarUsuarioPage() {
   const params = useParams();
   const userId = params?.id as string;
@@ -172,13 +189,16 @@ export default function EditarUsuarioPage() {
     cargarUsuario();
   }, [userId]);
 
-  const hasCommercialAccess = roles
-    .filter((role) => selectedRoleIds.includes(role.id))
-    .some((role) => isCommercialAccessRole(role.code));
-
   const selectedRoles = useMemo(
     () => roles.filter((role) => selectedRoleIds.includes(role.id)),
     [roles, selectedRoleIds]
+  );
+
+  const selectedDepartmentName = useMemo(
+    () =>
+      departments.find((department) => department.id === form.department_id)?.name ||
+      "",
+    [departments, form.department_id]
   );
 
   const needsCommissionGroup = useMemo(
@@ -189,11 +209,23 @@ export default function EditarUsuarioPage() {
   const showCommissionGroupField = useMemo(
     () =>
       needsCommissionGroup ||
+      departmentSuggestsCommissionGroup(selectedDepartmentName) ||
       jobTitleSuggestsCommissionGroup(form.job_title) ||
       Boolean(form.commission_group_code),
-    [form.commission_group_code, form.job_title, needsCommissionGroup]
+    [
+      form.commission_group_code,
+      form.job_title,
+      needsCommissionGroup,
+      selectedDepartmentName,
+    ]
   );
 
+  const hasCommercialAccess = useMemo(
+    () =>
+      selectedRoles.some((role) => isCommercialAccessRole(role.code)) ||
+      departmentSuggestsCommercialTeam(selectedDepartmentName),
+    [selectedDepartmentName, selectedRoles]
+  );
   useEffect(() => {
     if (!hasCommercialAccess && selectedCommercialTeam) {
       setSelectedCommercialTeam("");

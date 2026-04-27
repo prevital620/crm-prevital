@@ -39,6 +39,24 @@ function isCommercialAccessRole(code: string) {
   );
 }
 
+function normalizeUiHint(value: string | null | undefined) {
+  return String(value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toUpperCase();
+}
+
+function departmentSuggestsCommercialTeam(name: string | null | undefined) {
+  const normalized = normalizeUiHint(name);
+  return normalized.includes("COMERCIAL");
+}
+
+function departmentSuggestsCommissionGroup(name: string | null | undefined) {
+  const normalized = normalizeUiHint(name);
+  return normalized.includes("CALL CENTER") || normalized.includes("OPC");
+}
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -136,9 +154,18 @@ export default function NuevoUsuarioPage() {
     [roles, selectedRoleIds]
   );
 
+  const selectedDepartmentName = useMemo(
+    () =>
+      departments.find((department) => department.id === form.department_id)?.name ||
+      "",
+    [departments, form.department_id]
+  );
+
   const hasCommercialAccess = useMemo(
-    () => selectedRoles.some((role) => isCommercialAccessRole(role.code)),
-    [selectedRoles]
+    () =>
+      selectedRoles.some((role) => isCommercialAccessRole(role.code)) ||
+      departmentSuggestsCommercialTeam(selectedDepartmentName),
+    [selectedDepartmentName, selectedRoles]
   );
 
   const needsCommissionGroup = useMemo(
@@ -149,9 +176,15 @@ export default function NuevoUsuarioPage() {
   const showCommissionGroupField = useMemo(
     () =>
       needsCommissionGroup ||
+      departmentSuggestsCommissionGroup(selectedDepartmentName) ||
       jobTitleSuggestsCommissionGroup(form.job_title) ||
       Boolean(form.commission_group_code),
-    [form.commission_group_code, form.job_title, needsCommissionGroup]
+    [
+      form.commission_group_code,
+      form.job_title,
+      needsCommissionGroup,
+      selectedDepartmentName,
+    ]
   );
 
   useEffect(() => {
