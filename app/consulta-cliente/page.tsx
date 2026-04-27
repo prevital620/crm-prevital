@@ -25,6 +25,7 @@ import type {
   CustomerConsultResponse,
   CustomerConsultSummary,
 } from "@/lib/customers/types";
+import printReceptionRecord from "@/lib/print/templates/printReceptionRecord";
 import printSalesSupport from "@/lib/print/templates/printSalesSupport";
 import { supabase } from "@/lib/supabase";
 
@@ -80,6 +81,18 @@ function getReceptionSummaryValue(summary: string | null | undefined, label: str
   return line?.split(":").slice(1).join(":").trim() || "";
 }
 
+function getReceptionSummaryValueFromLabels(
+  summary: string | null | undefined,
+  labels: string[]
+) {
+  for (const label of labels) {
+    const value = getReceptionSummaryValue(summary, label);
+    if (value) return value;
+  }
+
+  return "";
+}
+
 function serviceLabel(value: string | null | undefined) {
   const map: Record<string, string> = {
     valoracion: "Valoración",
@@ -129,6 +142,14 @@ function buildPaymentMethodSummary(paymentMethod: string | null | undefined) {
   };
 
   return map[value] || paymentMethod || "Sin definir";
+}
+
+function mapYesNoFromSummary(value: string | null | undefined) {
+  const normalized = normalizeSummaryLabel(value || "");
+  if (!normalized) return "";
+  if (normalized === "si" || normalized === "s") return "Si";
+  if (normalized === "no") return "No";
+  return value || "";
 }
 
 export default function ConsultaClientePage() {
@@ -244,6 +265,77 @@ export default function ConsultaClientePage() {
       wellnessServicesAmount: hasWellness && !hasHealth ? totalAmount : null,
       totalAmount,
       paymentMethod: buildPaymentMethodSummary(caseItem.payment_method),
+    });
+  }
+
+  function printReceptionFromCase(caseItem: CustomerConsultDetail["commercial_cases"][number]) {
+    if (!detail) return;
+
+    const parsed = parseStoredCommercialNotes(caseItem.commercial_notes);
+    const receptionSummary = parsed.receptionSummary;
+
+    if (!receptionSummary?.trim()) {
+      setErrorMessage("Este caso no tiene resumen de recepción guardado para imprimir el registro.");
+      return;
+    }
+
+    const source =
+      getReceptionSummaryValue(receptionSummary, "Fuente") ||
+      caseItem.commission_source_type ||
+      caseItem.lead_source_type ||
+      detail.lead?.source ||
+      "Sin fuente";
+
+    const sourceDetail =
+      getReceptionSummaryValueFromLabels(receptionSummary, [
+        "Detalle OPC",
+        "Detalle TMK",
+        "Detalle red",
+        "Referido por",
+        "Detalle lugar",
+        "Detalle evento",
+        "Detalle cliente directo",
+        "Detalle fuente",
+      ]) || "No aplica";
+
+    printReceptionRecord({
+      customerName: detail.identity.full_name,
+      phone: detail.identity.phone || null,
+      city:
+        getReceptionSummaryValueFromLabels(receptionSummary, ["Ciudad", "Vive en"]) ||
+        detail.identity.city ||
+        null,
+      document:
+        getReceptionSummaryValueFromLabels(receptionSummary, ["Documento", "C.C. / NIT"]) || null,
+      source,
+      sourceDetail,
+      hasEps: mapYesNoFromSummary(
+        getReceptionSummaryValueFromLabels(receptionSummary, ["Tiene EPS", "EPS"])
+      ),
+      affiliation:
+        getReceptionSummaryValueFromLabels(receptionSummary, ["Afiliación", "EPS"]) || null,
+      age: getReceptionSummaryValue(receptionSummary, "Edad") || null,
+      bringsId: mapYesNoFromSummary(getReceptionSummaryValue(receptionSummary, "Trae cédula")),
+      smartphone: mapYesNoFromSummary(
+        getReceptionSummaryValue(receptionSummary, "Celular inteligente")
+      ),
+      occupation: getReceptionSummaryValue(receptionSummary, "Ocupación") || null,
+      hasDetoxTime: mapYesNoFromSummary(
+        getReceptionSummaryValue(receptionSummary, "Tiempo disponible para terapia detox 30 min")
+      ),
+      hypertension: mapYesNoFromSummary(getReceptionSummaryValue(receptionSummary, "Hipertenso")),
+      diabetes: mapYesNoFromSummary(getReceptionSummaryValue(receptionSummary, "Diabético")),
+      surgeries: mapYesNoFromSummary(getReceptionSummaryValue(receptionSummary, "Cirugías")),
+      surgeriesDetail: getReceptionSummaryValue(receptionSummary, "Cirugías cuáles") || null,
+      medications: mapYesNoFromSummary(getReceptionSummaryValue(receptionSummary, "Medicamentos")),
+      medicationsDetail: getReceptionSummaryValue(receptionSummary, "Medicamentos cuáles") || null,
+      diseases: mapYesNoFromSummary(getReceptionSummaryValue(receptionSummary, "Enfermedades")),
+      diseasesDetail: getReceptionSummaryValue(receptionSummary, "Enfermedades cuáles") || null,
+      companionName: getReceptionSummaryValue(receptionSummary, "Acompañante") || null,
+      companionRelationship:
+        getReceptionSummaryValue(receptionSummary, "Acompañante parentesco") || null,
+      observations:
+        getReceptionSummaryValue(receptionSummary, "Observaciones recepción") || null,
     });
   }
 
@@ -651,6 +743,12 @@ export default function ConsultaClientePage() {
                               onClick={() => printSupportFromCase(caseItem)}
                             >
                               Imprimir soporte de venta
+                            </PrevitalButton>
+                            <PrevitalButton
+                              variant="secondary"
+                              onClick={() => printReceptionFromCase(caseItem)}
+                            >
+                              Imprimir registro de recepción
                             </PrevitalButton>
                           </div>
                         </div>
