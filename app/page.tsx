@@ -20,8 +20,8 @@ import {
 const whatsappHref =
   "https://wa.me/573004937787?text=Hola%2C%20quiero%20agendar%20una%20cita%20odontol%C3%B3gica%20en%20Prevital";
 
-const heroImageSrc = "/images/odontologia-hero.jpg";
-const smileImageSrc = "/images/sonrisa-prevital.jpg";
+const heroImageSrc = "/images/hero.jpg";
+const smileImageSrc = "/images/sonrisa.jpg";
 
 function publicImageExists(src: string) {
   return existsSync(join(process.cwd(), "public", src.replace(/^\//, "")));
