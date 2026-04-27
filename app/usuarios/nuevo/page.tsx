@@ -338,25 +338,6 @@ export default function NuevoUsuarioPage() {
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
 
-            <input
-              className={inputClass}
-              placeholder="Codigo interno opcional (Ej: OP1234)"
-              value={form.employee_code}
-              onChange={(e) =>
-                setForm({
-                  ...form,
-                  employee_code: e.target.value.toUpperCase(),
-                })
-              }
-            />
-
-            <input
-              className={inputClass}
-              placeholder="Cargo"
-              value={form.job_title}
-              onChange={(e) => setForm({ ...form, job_title: e.target.value })}
-            />
-
             {showCommissionGroupField ? (
               <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
                 <p className="mb-2 text-sm font-medium text-[#24312A]">
@@ -382,12 +363,30 @@ export default function NuevoUsuarioPage() {
                 </select>
 
                 <p className="mt-2 text-xs text-[#607368]">
-                  Igual que AM/PM en comercial: primero creas el grupo en
-                  `Usuarios y roles`, y aqui solo escoges a cual pertenece el
-                  usuario.
+                  Primero creas el grupo en `Usuarios y roles` y luego aqui lo
+                  escoges, igual que AM/PM en comercial.
                 </p>
               </div>
-            ) : null}
+            ) : (
+              <input
+                className={inputClass}
+                placeholder="Codigo interno opcional (Ej: OP1234)"
+                value={form.employee_code}
+                onChange={(e) =>
+                  setForm({
+                    ...form,
+                    employee_code: e.target.value.toUpperCase(),
+                  })
+                }
+              />
+            )}
+
+            <input
+              className={inputClass}
+              placeholder="Cargo"
+              value={form.job_title}
+              onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+            />
 
             <select
               className={inputClass}

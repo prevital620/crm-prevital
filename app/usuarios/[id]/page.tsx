@@ -443,42 +443,6 @@ export default function EditarUsuarioPage() {
               onChange={(e) => setForm({ ...form, phone: e.target.value })}
             />
 
-            <input
-              className={inputClass}
-              placeholder="Codigo interno opcional (Ej: OP1234)"
-              value={form.employee_code}
-              onChange={(e) =>
-                setForm({ ...form, employee_code: e.target.value.toUpperCase() })
-              }
-            />
-
-            <input
-              className={inputClass}
-              placeholder="Cargo"
-              value={form.job_title}
-              onChange={(e) => setForm({ ...form, job_title: e.target.value })}
-            />
-
-            {hasCommercialAccess ? (
-              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
-                <p className="mb-2 text-sm font-medium text-[#24312A]">Equipo comercial</p>
-                <select
-                  className={inputClass}
-                  value={selectedCommercialTeam}
-                  onChange={(e) =>
-                    setSelectedCommercialTeam((e.target.value as CommercialTeamValue) || "")
-                  }
-                >
-                  <option value="">Sin equipo AM/PM</option>
-                  <option value="AM">Equipo AM</option>
-                  <option value="PM">Equipo PM</option>
-                </select>
-                <p className="mt-2 text-xs text-[#607368]">
-                    Si queda sin equipo AM/PM, el comercial podra aparecer para ambos gerentes y el caso sumara a la jornada del gerente que lo asigne.
-                </p>
-              </div>
-            ) : null}
-
             {showCommissionGroupField ? (
               <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
                 <p className="mb-2 text-sm font-medium text-[#24312A]">
@@ -504,9 +468,44 @@ export default function EditarUsuarioPage() {
                 </select>
 
                 <p className="mt-2 text-xs text-[#607368]">
-                  Igual que AM/PM en comercial: primero creas el grupo en
-                  `Usuarios y roles`, y aqui solo escoges a cual pertenece el
-                  usuario.
+                  Primero creas el grupo en `Usuarios y roles` y luego aqui lo
+                  escoges, igual que AM/PM en comercial.
+                </p>
+              </div>
+            ) : (
+              <input
+                className={inputClass}
+                placeholder="Codigo interno opcional (Ej: OP1234)"
+                value={form.employee_code}
+                onChange={(e) =>
+                  setForm({ ...form, employee_code: e.target.value.toUpperCase() })
+                }
+              />
+            )}
+
+            <input
+              className={inputClass}
+              placeholder="Cargo"
+              value={form.job_title}
+              onChange={(e) => setForm({ ...form, job_title: e.target.value })}
+            />
+
+            {hasCommercialAccess ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">Equipo comercial</p>
+                <select
+                  className={inputClass}
+                  value={selectedCommercialTeam}
+                  onChange={(e) =>
+                    setSelectedCommercialTeam((e.target.value as CommercialTeamValue) || "")
+                  }
+                >
+                  <option value="">Sin equipo AM/PM</option>
+                  <option value="AM">Equipo AM</option>
+                  <option value="PM">Equipo PM</option>
+                </select>
+                <p className="mt-2 text-xs text-[#607368]">
+                    Si queda sin equipo AM/PM, el comercial podra aparecer para ambos gerentes y el caso sumara a la jornada del gerente que lo asigne.
                 </p>
               </div>
             ) : null}
