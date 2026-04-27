@@ -80,14 +80,14 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
       <meta charset="UTF-8" />
       <style>
         * { box-sizing: border-box; }
-        @page { size: 8.5in 5.5in; margin: 8mm; }
+        @page { size: 5.5in 8.5in; margin: 6mm; }
         body { font-family: Arial, Helvetica, sans-serif; color: #111827; margin: 0; background: #fff; }
         .page {
           position: relative;
           width: 100%;
-          max-width: 760px;
+          max-width: 500px;
           margin: 0 auto;
-          padding: 10px 12px 12px;
+          padding: 8px 8px 10px;
           overflow: hidden;
         }
         .watermark {
@@ -100,39 +100,39 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
           z-index: 0;
         }
         .watermark img {
-          width: 360px;
-          max-width: 58%;
+          width: 280px;
+          max-width: 62%;
           opacity: 0.05;
           object-fit: contain;
         }
         .content { position: relative; z-index: 1; }
         .top {
           display: grid;
-          grid-template-columns: 86px 1fr 150px;
-          gap: 10px;
+          grid-template-columns: 64px 1fr 112px;
+          gap: 6px;
           align-items: start;
-          margin-bottom: 8px;
+          margin-bottom: 6px;
         }
         .logo-box {
           border: 1px solid #d0d7d2;
-          min-height: 70px;
+          min-height: 54px;
           display: flex;
           align-items: center;
           justify-content: center;
-          padding: 6px;
+          padding: 4px;
           background: rgba(255,255,255,0.92);
         }
-        .logo-box img { width: 100%; max-width: 58px; object-fit: contain; }
+        .logo-box img { width: 100%; max-width: 42px; object-fit: contain; }
         .company h1 {
           margin: 0;
-          font-size: 12px;
+          font-size: 10px;
           font-weight: 700;
           letter-spacing: 0.02em;
         }
         .company p {
           margin: 2px 0 0;
-          font-size: 8px;
-          line-height: 1.25;
+          font-size: 7px;
+          line-height: 1.15;
         }
         .code-box {
           border: 1px solid #1f2937;
@@ -142,25 +142,25 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
           background: #1f2937;
           color: white;
           text-align: center;
-          font-size: 9px;
+          font-size: 8px;
           font-weight: 700;
-          padding: 6px 6px;
+          padding: 5px 4px;
           line-height: 1.35;
         }
         .code-body {
-          padding: 8px 8px;
+          padding: 6px 6px;
           text-align: center;
-          font-size: 10px;
+          font-size: 8px;
           font-weight: 700;
-          min-height: 28px;
+          min-height: 20px;
         }
         .section-title {
           background: #1f2937;
           color: white;
-          font-size: 9px;
+          font-size: 8px;
           font-weight: 700;
-          padding: 4px 8px;
-          margin-top: 6px;
+          padding: 3px 6px;
+          margin-top: 5px;
         }
         table.form {
           width: 100%;
@@ -170,9 +170,9 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
         }
         table.form td, table.form th {
           border: 1px solid #444;
-          padding: 2px 4px;
+          padding: 2px 3px;
           vertical-align: top;
-          font-size: 8.5px;
+          font-size: 7.5px;
           line-height: 1.2;
         }
         table.form td.label {
@@ -180,36 +180,36 @@ export default function printReceptionRecord(data: ReceptionRecordPrintData) {
           font-weight: 700;
           background: #fafafa;
         }
-        .small { font-size: 8px; }
-        .mark { font-weight: 700; display: inline-block; min-width: 12px; text-align: center; }
+        .small { font-size: 7px; }
+        .mark { font-weight: 700; display: inline-block; min-width: 10px; text-align: center; }
         .legal {
           margin-top: 6px;
-          font-size: 7.5px;
-          line-height: 1.35;
+          font-size: 6.6px;
+          line-height: 1.25;
           background: rgba(255,255,255,0.94);
           padding: 2px 0 0;
         }
         .sign-row {
-          margin-top: 8px;
+          margin-top: 5px;
           display: grid;
           grid-template-columns: 1.5fr 1fr 1fr;
-          gap: 12px;
+          gap: 8px;
           align-items: end;
         }
         .line {
           border-top: 1px solid #111827;
-          padding-top: 4px;
-          font-size: 8px;
-          min-height: 18px;
+          padding-top: 2px;
+          font-size: 7px;
+          min-height: 12px;
         }
         .fuente {
-          font-size: 8px;
+          font-size: 7px;
           line-height: 1.2;
           white-space: pre-wrap;
           word-break: break-word;
         }
         .compact {
-          min-height: 18px;
+          min-height: 14px;
         }
         @media print {
           body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
