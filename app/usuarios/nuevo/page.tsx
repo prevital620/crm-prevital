@@ -5,7 +5,10 @@ import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
-import { roleNeedsCommissionGroup } from "@/lib/commissions/group-assignment";
+import {
+  jobTitleSuggestsCommissionGroup,
+  roleNeedsCommissionGroup,
+} from "@/lib/commissions/group-assignment";
 
 type Department = {
   id: string;
@@ -122,16 +125,24 @@ export default function NuevoUsuarioPage() {
     [selectedRoles]
   );
 
+  const showCommissionGroupField = useMemo(
+    () =>
+      needsCommissionGroup ||
+      jobTitleSuggestsCommissionGroup(form.job_title) ||
+      Boolean(form.commission_group_code),
+    [form.commission_group_code, form.job_title, needsCommissionGroup]
+  );
+
   useEffect(() => {
-    if (needsCommissionGroup) return;
+    if (showCommissionGroupField) return;
     if (form.commission_group_code) {
       setForm((current) => ({ ...current, commission_group_code: "" }));
     }
-  }, [form.commission_group_code, needsCommissionGroup]);
+  }, [form.commission_group_code, showCommissionGroupField]);
 
   useEffect(() => {
     const employeeCode = form.employee_code.trim().toUpperCase();
-    if (!needsCommissionGroup) return;
+    if (!showCommissionGroupField) return;
     if (form.commission_group_code) return;
     const match = employeeCode.match(/^([A-Z]{2})\d{4}$/);
     if (!match) return;
@@ -146,7 +157,7 @@ export default function NuevoUsuarioPage() {
   }, [
     form.commission_group_code,
     form.employee_code,
-    needsCommissionGroup,
+    showCommissionGroupField,
   ]);
 
   async function crearUsuario(e: React.FormEvent) {
@@ -346,6 +357,38 @@ export default function NuevoUsuarioPage() {
               onChange={(e) => setForm({ ...form, job_title: e.target.value })}
             />
 
+            {showCommissionGroupField ? (
+              <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
+                <p className="mb-2 text-sm font-medium text-[#24312A]">
+                  Grupo de comision
+                </p>
+
+                <select
+                  className={inputClass}
+                  value={form.commission_group_code || ""}
+                  onChange={(e) =>
+                    setForm((current) => ({
+                      ...current,
+                      commission_group_code: e.target.value,
+                    }))
+                  }
+                >
+                  <option value="">Selecciona un grupo</option>
+                  {availableCommissionGroups.map((group) => (
+                    <option key={group.code} value={group.code}>
+                      Grupo {group.code}
+                    </option>
+                  ))}
+                </select>
+
+                <p className="mt-2 text-xs text-[#607368]">
+                  Igual que AM/PM en comercial: primero creas el grupo en
+                  `Usuarios y roles`, y aqui solo escoges a cual pertenece el
+                  usuario.
+                </p>
+              </div>
+            ) : null}
+
             <select
               className={inputClass}
               value={form.department_id}
@@ -408,7 +451,7 @@ export default function NuevoUsuarioPage() {
               </p>
             </div>
 
-            {needsCommissionGroup ? (
+            {false ? (
               <div className="rounded-2xl border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner">
                 <p className="mb-2 text-sm font-medium text-[#24312A]">Grupo de comisión</p>
 
@@ -445,7 +488,7 @@ export default function NuevoUsuarioPage() {
               {loading ? "Creando usuario..." : "Crear usuario"}
             </button>
 
-            {needsCommissionGroup ? (
+            {showCommissionGroupField ? (
               <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
                 Si el usuario tiene código interno, las 2 primeras letras deben
                 coincidir con el grupo de comisión. Ejemplo: `CB1234`
