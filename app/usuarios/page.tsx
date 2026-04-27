@@ -24,6 +24,10 @@ type UserRow = {
   }[] | null;
 };
 
+type CommissionGroupOption = {
+  code: string;
+};
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -38,6 +42,9 @@ export default function UsuariosPage() {
   const [authorized, setAuthorized] = useState(false);
   const [search, setSearch] = useState("");
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [commissionGroups, setCommissionGroups] = useState<CommissionGroupOption[]>([]);
+  const [newCommissionGroupCode, setNewCommissionGroupCode] = useState("");
+  const [savingCommissionGroup, setSavingCommissionGroup] = useState(false);
 
   async function cargarUsuarios() {
     try {
@@ -55,14 +62,27 @@ export default function UsuariosPage() {
 
       setAuthorized(true);
 
-      const response = await fetch("/api/usuarios");
-      const result = await response.json();
+      const [usersResponse, groupsResponse] = await Promise.all([
+        fetch("/api/usuarios"),
+        fetch("/api/commission-groups"),
+      ]);
+      const result = await usersResponse.json();
+      const groupsResult = await groupsResponse.json();
 
-      if (!response.ok) {
+      if (!usersResponse.ok) {
         throw new Error(result.error || "No se pudieron cargar los usuarios.");
       }
 
+      if (!groupsResponse.ok) {
+        throw new Error(groupsResult.error || "No se pudieron cargar los grupos de comision.");
+      }
+
       setUsers(((result.users ?? []) as unknown) as UserRow[]);
+      setCommissionGroups(
+        (((groupsResult.groups ?? []) as CommissionGroupOption[]) || []).sort((a, b) =>
+          a.code.localeCompare(b.code, "es")
+        )
+      );
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los usuarios.");
     } finally {
@@ -73,6 +93,51 @@ export default function UsuariosPage() {
   useEffect(() => {
     cargarUsuarios();
   }, []);
+
+  async function crearGrupoComision() {
+    const code = newCommissionGroupCode.trim().toUpperCase();
+
+    if (!code) {
+      setError("Escribe el codigo del grupo que quieres crear. Ej: CB.");
+      setMensaje("");
+      return;
+    }
+
+    try {
+      setSavingCommissionGroup(true);
+      setError("");
+      setMensaje("");
+
+      const response = await fetch("/api/commission-groups", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ code }),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || "No se pudo crear el grupo.");
+      }
+
+      setCommissionGroups((current) => {
+        const next = [...current];
+        if (!next.some((item) => item.code === result.code)) {
+          next.push({ code: result.code });
+        }
+        return next.sort((a, b) => a.code.localeCompare(b.code, "es"));
+      });
+      setNewCommissionGroupCode("");
+      setMensaje(`Grupo ${result.code} guardado correctamente.`);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo crear el grupo.");
+      setMensaje("");
+    } finally {
+      setSavingCommissionGroup(false);
+    }
+  }
 
   async function toggleEstadoUsuario(user: UserRow, nextActive: boolean) {
     try {
@@ -319,6 +384,55 @@ Correo de acceso: ${user.email}`
             <StatCard title="Usuarios" value={String(resumen.total)} />
             <StatCard title="Activos" value={String(resumen.activos)} />
             <StatCard title="Inactivos" value={String(resumen.inactivos)} />
+          </section>
+        ) : null}
+
+        {authorized ? (
+          <section className={panelClass}>
+            <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-[#24312A]">
+                  Grupos de comisión
+                </h2>
+                <p className="mt-1 text-sm text-slate-500">
+                  Crea aquí los grupos `CB`, `AV`, `BG`, etc. Luego podrás escogerlos en cada usuario.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-[220px_auto]">
+              <input
+                className={inputClass}
+                placeholder="Ej: CB"
+                maxLength={2}
+                value={newCommissionGroupCode}
+                onChange={(e) => setNewCommissionGroupCode(e.target.value.toUpperCase())}
+              />
+
+              <button
+                type="button"
+                onClick={() => void crearGrupoComision()}
+                disabled={savingCommissionGroup}
+                className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60 md:justify-self-start"
+              >
+                {savingCommissionGroup ? "Guardando..." : "Crear grupo"}
+              </button>
+            </div>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              {commissionGroups.length === 0 ? (
+                <span className="text-sm text-slate-500">Aún no hay grupos creados.</span>
+              ) : (
+                commissionGroups.map((group) => (
+                  <span
+                    key={group.code}
+                    className="inline-flex rounded-full border border-[#D7EADF] bg-white px-3 py-1 text-sm font-semibold text-[#365243]"
+                  >
+                    {group.code}
+                  </span>
+                ))
+              )}
+            </div>
           </section>
         ) : null}
 
