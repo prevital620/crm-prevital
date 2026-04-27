@@ -12,6 +12,31 @@ export function extractCommissionGroupCodeFromEmployeeCode(
   return match?.[1] || null;
 }
 
+export function resolveEmployeeCode(params: {
+  commissionGroupCode?: string | null;
+  employeeCode?: string | null;
+}) {
+  const normalizedEmployeeCode = String(params.employeeCode || "")
+    .trim()
+    .toUpperCase();
+
+  if (!normalizedEmployeeCode) return null;
+
+  if (/^[A-Z]{2}\d{4}$/.test(normalizedEmployeeCode)) {
+    return normalizedEmployeeCode;
+  }
+
+  const normalizedGroupCode = normalizeCommissionGroupCode(
+    params.commissionGroupCode
+  );
+
+  if (normalizedGroupCode && /^\d{4}$/.test(normalizedEmployeeCode)) {
+    return `${normalizedGroupCode}${normalizedEmployeeCode}`;
+  }
+
+  return null;
+}
+
 export function resolveCommissionGroupCode(params: {
   commissionGroupCode?: string | null;
   employeeCode?: string | null;
@@ -31,7 +56,10 @@ export function getCommissionGroupCodeValidationError(params: {
     return "El grupo de comision debe tener exactamente 2 letras. Ej: CB.";
   }
 
-  const employeePrefix = extractCommissionGroupCodeFromEmployeeCode(params.employeeCode);
+  const resolvedEmployeeCode = resolveEmployeeCode(params);
+  const employeePrefix = extractCommissionGroupCodeFromEmployeeCode(
+    resolvedEmployeeCode
+  );
   const normalizedGroupCode = normalizeCommissionGroupCode(params.commissionGroupCode);
 
   if (employeePrefix && normalizedGroupCode && employeePrefix !== normalizedGroupCode) {
@@ -39,4 +67,21 @@ export function getCommissionGroupCodeValidationError(params: {
   }
 
   return null;
+}
+
+export function getEmployeeCodeValidationError(params: {
+  commissionGroupCode?: string | null;
+  employeeCode?: string | null;
+}) {
+  const rawEmployeeCode = String(params.employeeCode || "").trim().toUpperCase();
+
+  if (!rawEmployeeCode) return null;
+  if (/^[A-Z]{2}\d{4}$/.test(rawEmployeeCode)) return null;
+  if (/^\d{4}$/.test(rawEmployeeCode)) {
+    return normalizeCommissionGroupCode(params.commissionGroupCode)
+      ? null
+      : "Si escribes solo 4 numeros, primero selecciona un grupo de comision.";
+  }
+
+  return "El codigo debe tener 4 numeros o 2 letras y 4 numeros. Ej: 3030 o CB3030.";
 }

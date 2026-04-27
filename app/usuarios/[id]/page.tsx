@@ -436,7 +436,11 @@ export default function EditarUsuarioPage() {
 
             <input
               className={inputClass}
-              placeholder="Codigo interno opcional (Ej: OP1234)"
+              placeholder={
+                showCommissionGroupField
+                  ? "Codigo interno opcional (Ej: 3030 o CB3030)"
+                  : "Codigo interno opcional (Ej: OP1234)"
+              }
               value={form.employee_code}
               onChange={(e) =>
                 setForm({ ...form, employee_code: e.target.value.toUpperCase() })
@@ -557,6 +561,10 @@ export default function EditarUsuarioPage() {
                   Este bloque depende solo del checkbox de OPC, TMK,
                   Confirmador o sus supervisores.
                 </p>
+                <p className="mt-2 text-xs text-[#607368]">
+                  Si ya escogiste el grupo, en el codigo interno puedes escribir
+                  solo los 4 numeros y el sistema completa las 2 letras.
+                </p>
               </div>
             ) : null}
 
@@ -591,9 +599,9 @@ export default function EditarUsuarioPage() {
 
             {showCommissionGroupField ? (
               <div className="rounded-[26px] border border-[#F0D7A1] bg-[linear-gradient(180deg,_rgba(255,251,242,0.98)_0%,_rgba(255,246,224,0.98)_100%)] p-4 text-sm text-[#9A6A17] shadow-[0_16px_32px_rgba(154,106,23,0.08)]">
-                Para OPC, TMK y sus supervisores, este grupo define a quién le
-                suma la comisión. Si el usuario tiene código interno, las 2
-                primeras letras deben coincidir con este grupo.
+                Si el grupo es `CB`, puedes guardar `3030` y el sistema lo
+                convierte en `CB3030`. Si escribes el codigo completo, tambien
+                debe coincidir con el grupo.
               </div>
             ) : null}
 

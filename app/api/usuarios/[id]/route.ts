@@ -7,7 +7,9 @@ import {
   requireSuperUser,
 } from "@/lib/server/user-security";
 import {
+  getEmployeeCodeValidationError,
   getCommissionGroupCodeValidationError,
+  resolveEmployeeCode,
   resolveCommissionGroupCode,
 } from "@/lib/commissions/group-code";
 import { roleNeedsCommissionGroup } from "@/lib/commissions/group-assignment";
@@ -237,10 +239,16 @@ export async function PATCH(
       );
     }
 
+    const resolvedEmployeeCode =
+      resolveEmployeeCode({
+        commissionGroupCode: payload.commission_group_code,
+        employeeCode: payload.employee_code,
+      }) || null;
+
     const resolvedGroupCode =
       resolveCommissionGroupCode({
         commissionGroupCode: payload.commission_group_code,
-        employeeCode: payload.employee_code,
+        employeeCode: resolvedEmployeeCode,
       }) || null;
     const effectiveRoleCodes = await getEffectiveRoleCodes(id, payload.role_ids);
     const requiresCommissionGroup = effectiveRoleCodes.some((code) =>
@@ -278,25 +286,25 @@ export async function PATCH(
     }
 
     if ("employee_code" in payload) {
-      if (
-        payload.employee_code &&
-        !/^[A-Z]{2}\d{4}$/.test(payload.employee_code)
-      ) {
+      const employeeCodeError = getEmployeeCodeValidationError({
+        commissionGroupCode: payload.commission_group_code,
+        employeeCode: payload.employee_code,
+      });
+
+      if (employeeCodeError) {
         return NextResponse.json(
-          {
-            error: "El codigo debe tener 2 letras y 4 numeros. Ej: OP1234.",
-          },
+          { error: employeeCodeError },
           { status: 400 }
         );
       }
 
-      profileUpdate.employee_code = payload.employee_code ?? null;
+      profileUpdate.employee_code = resolvedEmployeeCode;
     }
 
     if ("commission_group_code" in payload || "employee_code" in payload) {
       const groupCodeError = getCommissionGroupCodeValidationError({
         commissionGroupCode: payload.commission_group_code,
-        employeeCode: payload.employee_code,
+        employeeCode: resolvedEmployeeCode,
       });
 
       if (groupCodeError) {

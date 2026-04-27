@@ -7,7 +7,9 @@ import {
   requireSuperUser,
 } from "@/lib/server/user-security";
 import {
+  getEmployeeCodeValidationError,
   getCommissionGroupCodeValidationError,
+  resolveEmployeeCode,
   resolveCommissionGroupCode,
 } from "@/lib/commissions/group-code";
 import { roleNeedsCommissionGroup } from "@/lib/commissions/group-assignment";
@@ -92,16 +94,27 @@ export async function POST(request: Request) {
       );
     }
 
-    if (employee_code && !/^[A-Z]{2}\d{4}$/.test(employee_code)) {
+    const employeeCodeError = getEmployeeCodeValidationError({
+      commissionGroupCode: commission_group_code,
+      employeeCode: employee_code,
+    });
+
+    if (employeeCodeError) {
       return NextResponse.json(
-        { error: "El codigo debe tener 2 letras y 4 numeros. Ej: OP1234." },
+        { error: employeeCodeError },
         { status: 400 }
       );
     }
 
+    const resolvedEmployeeCode =
+      resolveEmployeeCode({
+        commissionGroupCode: commission_group_code,
+        employeeCode: employee_code,
+      }) || null;
+
     const groupCodeError = getCommissionGroupCodeValidationError({
       commissionGroupCode: commission_group_code,
-      employeeCode: employee_code,
+      employeeCode: resolvedEmployeeCode,
     });
 
     if (groupCodeError) {
@@ -111,7 +124,7 @@ export async function POST(request: Request) {
     const resolvedGroupCode =
       resolveCommissionGroupCode({
         commissionGroupCode: commission_group_code,
-        employeeCode: employee_code,
+        employeeCode: resolvedEmployeeCode,
       }) || null;
     const selectedRoleCodes = await getRoleCodes(selectedRoleIds);
     const requiresCommissionGroup = selectedRoleCodes.some((code) =>
@@ -173,7 +186,7 @@ export async function POST(request: Request) {
           id: userId,
           full_name,
           phone: phone || null,
-          employee_code: employee_code || null,
+          employee_code: resolvedEmployeeCode,
           commission_group_code: resolvedGroupCode,
           job_title: job_title || null,
           department_id: department_id || null,
