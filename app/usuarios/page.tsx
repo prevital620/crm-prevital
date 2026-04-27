@@ -392,18 +392,29 @@ Correo de acceso: ${user.email}`
             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
                 <h2 className="text-2xl font-bold text-[#24312A]">
-                  Grupos de comisión
+                  Grupos de comision
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Crea aquí los grupos `CB`, `AV`, `BG`, etc. Luego podrás escogerlos en cada usuario.
+                  Aqui los creas tu misma: `CB`, `AV`, `BG`, etc. Despues los
+                  escoges en los usuarios `OPC`, `TMK`, `Confirmador` y
+                  supervisores.
                 </p>
               </div>
+            </div>
+
+            <div className="mb-4 rounded-[24px] border border-[#D7EADF] bg-[linear-gradient(180deg,_rgba(247,252,248,0.98)_0%,_rgba(238,248,242,0.98)_100%)] p-4 text-sm text-[#496356] shadow-inner">
+              1. Escribe un grupo de 2 letras, por ejemplo `CB`.
+              <br />
+              2. Pulsa `Crear grupo`.
+              <br />
+              3. Luego ve a crear o editar el usuario y escoge ese grupo en
+              `Grupo de comision`.
             </div>
 
             <div className="grid gap-3 md:grid-cols-[220px_auto]">
               <input
                 className={inputClass}
-                placeholder="Ej: CB"
+                placeholder="Grupo de 2 letras. Ej: CB"
                 maxLength={2}
                 value={newCommissionGroupCode}
                 onChange={(e) => setNewCommissionGroupCode(e.target.value.toUpperCase())}
@@ -421,7 +432,7 @@ Correo de acceso: ${user.email}`
 
             <div className="mt-5 flex flex-wrap gap-2">
               {commissionGroups.length === 0 ? (
-                <span className="text-sm text-slate-500">Aún no hay grupos creados.</span>
+                <span className="text-sm text-slate-500">Aun no hay grupos creados.</span>
               ) : (
                 commissionGroups.map((group) => (
                   <span
