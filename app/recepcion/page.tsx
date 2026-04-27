@@ -198,7 +198,7 @@ type SourceUserOption = {
   is_active: boolean;
 };
 
-type ManifestShift = "am" | "pm";
+type ManifestShift = "all" | "am" | "pm";
 
 type CommercialClinicalFlags = {
   hipertenso_descalifica: boolean;
@@ -504,7 +504,29 @@ function inferManifestShift(value: string | null | undefined): ManifestShift | n
   return inferred === "am" || inferred === "pm" ? inferred : null;
 }
 
+function getLocalDateIso(value: string | null | undefined) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isWithinLocalDateRange(
+  value: string | null | undefined,
+  dateFrom: string,
+  dateTo: string
+) {
+  const localDate = getLocalDateIso(value);
+  if (!localDate) return false;
+  return localDate >= dateFrom && localDate <= dateTo;
+}
+
 function manifestShiftLabel(value: ManifestShift) {
+  if (value === "all") return "Todo";
   return value.toUpperCase();
 }
 
@@ -1152,8 +1174,9 @@ function RecepcionContent() {
   const [savingCommercialIntake, setSavingCommercialIntake] = useState(false);
   const [commercialSearch, setCommercialSearch] = useState("");
   const [sourceUsers, setSourceUsers] = useState<SourceUserOption[]>([]);
-  const [manifestDate, setManifestDate] = useState(hoyISO());
-  const [manifestShift, setManifestShift] = useState<ManifestShift>("am");
+  const [manifestDateFrom, setManifestDateFrom] = useState(hoyISO());
+  const [manifestDateTo, setManifestDateTo] = useState(hoyISO());
+  const [manifestShift, setManifestShift] = useState<ManifestShift>("all");
   const [specialists, setSpecialists] = useState<SpecialistOption[]>([]);
   const [lastCommercialPrintData, setLastCommercialPrintData] =
     useState<Parameters<typeof printReceptionRecord>[0] | null>(null);
@@ -1304,6 +1327,18 @@ function RecepcionContent() {
     activeSection !== "comercial" &&
     activeSection !== "nutricion_entregas" &&
     (!isSupervisorCallCenter || isAgendaConfigOnlyView);
+  const normalizedManifestDateRange = useMemo(() => {
+    const start = manifestDateFrom <= manifestDateTo ? manifestDateFrom : manifestDateTo;
+    const end = manifestDateFrom <= manifestDateTo ? manifestDateTo : manifestDateFrom;
+    return { start, end };
+  }, [manifestDateFrom, manifestDateTo]);
+  const manifestPeriodLabel = useMemo(() => {
+    if (normalizedManifestDateRange.start === normalizedManifestDateRange.end) {
+      return normalizedManifestDateRange.start;
+    }
+
+    return `${normalizedManifestDateRange.start} al ${normalizedManifestDateRange.end}`;
+  }, [normalizedManifestDateRange]);
   const commercialSourceDetailMeta = getCommercialSourceDetailMeta(commercialForm.fuente);
   const normalizedCommercialSource = normalizarFuenteManual(commercialForm.fuente);
   const sourceNeedsUserSelection =
@@ -2499,8 +2534,16 @@ function RecepcionContent() {
 
   const manifestRows = useMemo(() => {
     return commercialCases
-      .filter((item) => isSameLocalDay(item.created_at, manifestDate))
-      .filter((item) => inferManifestShift(item.created_at) === manifestShift)
+      .filter((item) =>
+        isWithinLocalDateRange(
+          item.created_at,
+          normalizedManifestDateRange.start,
+          normalizedManifestDateRange.end
+        )
+      )
+      .filter((item) =>
+        manifestShift === "all" ? true : inferManifestShift(item.created_at) === manifestShift
+      )
       .sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
       .map((item) => {
         const tmk = item.call_user_id ? sourceUserById.get(item.call_user_id) : undefined;
@@ -2525,7 +2568,7 @@ function RecepcionContent() {
             observaciones: buildManifestObservation(item, hasSale),
           };
         });
-  }, [commercialCases, manifestDate, manifestShift, sourceUserById]);
+  }, [commercialCases, manifestShift, normalizedManifestDateRange, sourceUserById]);
 
   const manifestSummary = useMemo(() => {
     let totalQ = 0;
@@ -2552,6 +2595,96 @@ function RecepcionContent() {
       totalCaja: `$${totalCaja.toLocaleString("es-CO")}`,
     };
   }, [manifestRows]);
+
+  const manifestPanel = (
+    <div className="space-y-3 rounded-[22px] border border-[#D6E8DA] bg-[#FCFEFC] p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">
+            Manifiestos
+          </p>
+          <p className="mt-1 text-sm text-[#607368]">
+            Filtra por fechas y totaliza toda la gestión del rango elegido.
+          </p>
+        </div>
+        <span className="rounded-full bg-[#EEF7F1] px-3 py-1 text-xs font-semibold text-[#4F6F5B]">
+          {manifestRows.length} registros
+        </span>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-2">
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">
+            Desde
+          </label>
+          <input
+            type="date"
+            value={manifestDateFrom}
+            onChange={(e) => setManifestDateFrom(e.target.value)}
+            className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-3 py-2 text-sm text-[#1F3128] outline-none transition focus:border-[#86B09A] focus:ring-2 focus:ring-[#DFF1E5]"
+          />
+        </div>
+        <div>
+          <label className="mb-1 block text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">
+            Hasta
+          </label>
+          <input
+            type="date"
+            value={manifestDateTo}
+            onChange={(e) => setManifestDateTo(e.target.value)}
+            className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-3 py-2 text-sm text-[#1F3128] outline-none transition focus:border-[#86B09A] focus:ring-2 focus:ring-[#DFF1E5]"
+          />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-3 gap-2">
+        {(["all", "am", "pm"] as ManifestShift[]).map((shift) => {
+          const active = manifestShift === shift;
+          return (
+            <button
+              key={shift}
+              type="button"
+              onClick={() => setManifestShift(shift)}
+              className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
+                active
+                  ? "border-[#6F9480] bg-[#5F7D66] text-white shadow-sm"
+                  : "border-[#D6E8DA] bg-white text-[#365F49] hover:border-[#BDD7C5] hover:bg-[#F5FBF7]"
+              }`}
+            >
+              {manifestShiftLabel(shift)}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="grid gap-3 rounded-[20px] border border-[#DCEBE1] bg-white p-4 md:grid-cols-4">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Periodo</p>
+          <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestPeriodLabel}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Q</p>
+          <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalQ}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">No Q</p>
+          <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalNoQ}</p>
+        </div>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Caja</p>
+          <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalCaja}</p>
+        </div>
+      </div>
+
+      <button
+        type="button"
+        onClick={imprimirManifiestoDelDia}
+        className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-3 py-2 text-sm font-semibold text-[#365F49] transition hover:border-[#BDD7C5] hover:bg-[#F5FBF7]"
+      >
+        {`Imprimir manifiesto ${manifestShiftLabel(manifestShift)}`}
+      </button>
+    </div>
+  );
 
   const selectedNutritionInventoryItem = useMemo(() => {
     if (nutritionDeliveryProductId) {
@@ -2756,7 +2889,7 @@ function RecepcionContent() {
 
     function imprimirManifiestoDelDia() {
       printDailyManifest({
-        fecha: manifestDate,
+        fecha: manifestPeriodLabel,
         generatedAt: new Date().toLocaleString("es-CO"),
         shiftLabel: manifestShiftLabel(manifestShift),
         totalQ: manifestSummary.totalQ,
@@ -4513,43 +4646,7 @@ function imprimirRegistroComercial() {
                     <p>Nutrición: {receptionLiveSummary.nutrition}</p>
                     <p>Fisioterapia: {receptionLiveSummary.physiotherapy}</p>
                   </div>
-                    <div className="space-y-3 rounded-[22px] border border-[#D6E8DA] bg-[#FCFEFC] p-3">
-                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">
-                        Manifiesto
-                      </p>
-                      <input
-                      type="date"
-                      value={manifestDate}
-                        onChange={(e) => setManifestDate(e.target.value)}
-                        className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-3 py-2 text-sm text-[#1F3128] outline-none transition focus:border-[#86B09A] focus:ring-2 focus:ring-[#DFF1E5]"
-                      />
-                      <div className="grid grid-cols-2 gap-2">
-                        {(["am", "pm"] as ManifestShift[]).map((shift) => {
-                          const active = manifestShift === shift;
-                          return (
-                            <button
-                              key={shift}
-                              type="button"
-                              onClick={() => setManifestShift(shift)}
-                              className={`rounded-2xl border px-3 py-2 text-sm font-semibold transition ${
-                                active
-                                  ? "border-[#6F9480] bg-[#5F7D66] text-white shadow-sm"
-                                  : "border-[#D6E8DA] bg-white text-[#365F49] hover:border-[#BDD7C5] hover:bg-[#F5FBF7]"
-                              }`}
-                            >
-                              {manifestShiftLabel(shift)}
-                            </button>
-                          );
-                        })}
-                      </div>
-                      <button
-                        type="button"
-                        onClick={imprimirManifiestoDelDia}
-                        className="w-full rounded-2xl border border-[#D6E8DA] bg-white px-3 py-2 text-sm font-semibold text-[#365F49] transition hover:border-[#BDD7C5] hover:bg-[#F5FBF7]"
-                      >
-                        {`Imprimir manifiesto ${manifestShiftLabel(manifestShift)}`}
-                      </button>
-                    </div>
+                  {manifestPanel}
                 </div>
               </div>
 

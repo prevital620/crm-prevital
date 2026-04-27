@@ -53,7 +53,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           .join("")
       : `
         <tr>
-          <td colspan="10" style="text-align:center; color:#607368;">No hay registros para esta fecha y jornada.</td>
+          <td colspan="10" style="text-align:center; color:#607368;">No hay registros para este periodo y jornada.</td>
         </tr>
       `;
 
@@ -92,8 +92,8 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           <div class="header">
             <div class="brand">
               <span class="pill">Recepcion</span>
-              <h1>Manifiesto diario</h1>
-              <p>Registro operativo del dia en orden de llegada</p>
+              <h1>Manifiesto comercial</h1>
+              <p>Registro operativo del periodo en orden de llegada</p>
             </div>
             <div>
               <div class="item-label">Fecha de impresion</div>
@@ -104,7 +104,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           <div class="box">
             <div class="grid">
               <div>
-                <div class="item-label">Fecha del manifiesto</div>
+                <div class="item-label">Periodo del manifiesto</div>
                 <div class="item-value">${escapeHtml(data.fecha)}</div>
               </div>
               <div>
@@ -135,7 +135,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           </div>
 
           <div class="box">
-            <h2>Clientes del dia</h2>
+            <h2>Clientes del periodo</h2>
             <table>
               <thead>
                 <tr>
@@ -164,7 +164,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
   `;
 
   openPrintWindow({
-    title: `Manifiesto diario${data.shiftLabel ? ` ${data.shiftLabel}` : ""}`,
+    title: `Manifiesto comercial${data.shiftLabel ? ` ${data.shiftLabel}` : ""}`,
     html,
   });
 }

@@ -115,6 +115,19 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "recepcion"],
   },
   {
+    title: "Manifiestos",
+    subtitle: "Consultar e imprimir manifiestos sin abrir recepción completa.",
+    href: "/manifiestos",
+    roles: [
+      "super_user",
+      "administrador",
+      "recepcion",
+      "gerencia_comercial",
+      "supervisor_opc",
+      "supervisor_call_center",
+    ],
+  },
+  {
     title: "Consulta cliente",
     subtitle: "Ver trazabilidad operativa y comercial sin mostrar contenido clínico.",
     href: "/consulta-cliente",
