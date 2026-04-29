@@ -2558,8 +2558,8 @@ function RecepcionContent() {
         const analyst = item.assigned_commercial_user_id
           ? sourceUserById.get(item.assigned_commercial_user_id)
           : undefined;
-        const saleAmount = Number(item.volume_amount || item.sale_value || 0);
-        const hasSale = saleAmount > 0 && hasCommercialSale(item);
+        const hasSale = hasCommercialSale(item);
+        const cashAmount = Number(item.cash_amount || 0);
 
         return {
           horaLlegada: formatManifestTime(item.created_at),
@@ -2572,7 +2572,8 @@ function RecepcionContent() {
             hasSale || normalizeText(item.status) === "finalizado"
               ? "Q"
               : getReceptionSummaryValue(item, "Clasificación inicial") || "Sin definir",
-          valorVenta: hasSale ? saleAmount.toLocaleString("es-CO") : "",
+          valorCaja: hasSale ? cashAmount.toLocaleString("es-CO") : "",
+          ventaRealizada: hasSale,
           formaPago: hasSale
             ? paymentMethodSummaryComercial(item.payment_method, item.credit_provider)
             : "",
@@ -2592,10 +2593,13 @@ function RecepcionContent() {
       if (qualification === "q") totalQ += 1;
       if (qualification === "no q") totalNoQ += 1;
 
-      const saleValue = Number(String(row.valorVenta || "").replace(/\./g, "").replace(/,/g, "."));
-      if (saleValue > 0) {
+      if (row.ventaRealizada) {
         totalVentas += 1;
-        totalCaja += saleValue;
+      }
+
+      const cashValue = Number(String(row.valorCaja || "").replace(/\./g, "").replace(/,/g, "."));
+      if (cashValue > 0) {
+        totalCaja += cashValue;
       }
     });
 

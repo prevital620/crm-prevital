@@ -10,7 +10,7 @@ type ManifestRow = {
   codigoTMK: string;
   codigoOPC: string;
   calificacion: string;
-  valorVenta: string;
+  valorCaja: string;
   formaPago: string;
   observaciones: string;
 };
@@ -46,7 +46,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                 <td>${escapeHtml(row.codigoTMK || "-")}</td>
                 <td>${escapeHtml(row.codigoOPC || "-")}</td>
                 <td>${escapeHtml(row.calificacion || "Sin definir")}</td>
-                <td class="numeric">${escapeHtml(row.valorVenta || "-")}</td>
+                <td class="numeric">${escapeHtml(row.valorCaja || "-")}</td>
                 <td>${escapeHtml(row.formaPago || "-")}</td>
                 <td>${escapeHtml(row.observaciones || "-")}</td>
               </tr>
@@ -217,7 +217,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                   <th>Codigo TMK</th>
                   <th>Codigo OPC</th>
                   <th>Calificacion</th>
-                  <th class="numeric">Valor venta</th>
+                  <th class="numeric">Valor caja</th>
                   <th>Forma de pago</th>
                   <th>Observaciones</th>
                 </tr>
