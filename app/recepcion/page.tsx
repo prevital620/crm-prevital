@@ -22,6 +22,7 @@ import printDailyManifest from "@/lib/print/templates/printDailyManifest";
 import printSalesSupport from "@/lib/print/templates/printSalesSupport";
 import { normalizeCommercialCaseLeadSource } from "@/lib/lead-source";
 import { formatDateOnly } from "@/lib/datetime/dateFormat";
+import { calculateNetCommissionBase } from "@/lib/commercial/commission-base";
 import { inferCommercialTeamFromDate } from "@/lib/commercial/team";
 import {
   buildStoredCommercialNotes,
@@ -179,6 +180,7 @@ type CommercialCaseRow = {
   credit_provider: string | null;
   cash_amount: number | null;
   portfolio_amount: number | null;
+  net_commission_base: number | null;
   volume_amount: number | null;
   closing_notes: string | null;
   next_step_type: string | null;
@@ -1744,6 +1746,7 @@ function RecepcionContent() {
             credit_provider,
             cash_amount,
             portfolio_amount,
+            net_commission_base,
             volume_amount,
             closing_notes,
             next_step_type,
@@ -2560,6 +2563,14 @@ function RecepcionContent() {
           : undefined;
         const hasSale = hasCommercialSale(item);
         const cashAmount = Number(item.cash_amount || 0);
+        const commissionableAmount = Number(
+          item.net_commission_base ??
+            calculateNetCommissionBase({
+              cashAmount,
+              paymentMethod: item.payment_method,
+              creditProvider: item.credit_provider,
+            })
+        );
 
         return {
           horaLlegada: formatManifestTime(item.created_at),
@@ -2573,6 +2584,7 @@ function RecepcionContent() {
               ? "Q"
               : getReceptionSummaryValue(item, "Clasificación inicial") || "Sin definir",
           valorCaja: hasSale ? cashAmount.toLocaleString("es-CO") : "",
+          valorComisionable: hasSale ? commissionableAmount.toLocaleString("es-CO") : "",
           ventaRealizada: hasSale,
           formaPago: hasSale
             ? paymentMethodSummaryComercial(item.payment_method, item.credit_provider)
@@ -2587,6 +2599,7 @@ function RecepcionContent() {
     let totalNoQ = 0;
     let totalVentas = 0;
     let totalCaja = 0;
+    let totalComisionable = 0;
 
     manifestRows.forEach((row) => {
       const qualification = normalizeText(row.calificacion);
@@ -2601,6 +2614,13 @@ function RecepcionContent() {
       if (cashValue > 0) {
         totalCaja += cashValue;
       }
+
+      const commissionableValue = Number(
+        String(row.valorComisionable || "").replace(/\./g, "").replace(/,/g, ".")
+      );
+      if (commissionableValue > 0) {
+        totalComisionable += commissionableValue;
+      }
     });
 
     return {
@@ -2608,6 +2628,7 @@ function RecepcionContent() {
       totalNoQ,
       totalVentas,
       totalCaja: `$${totalCaja.toLocaleString("es-CO")}`,
+      totalComisionable: `$${totalComisionable.toLocaleString("es-CO")}`,
     };
   }, [manifestRows]);
 
@@ -2694,6 +2715,12 @@ function RecepcionContent() {
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Caja</p>
           <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalCaja}</p>
+        </div>
+        <div className="col-span-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Comisionable</p>
+          <p className="mt-1 text-sm font-semibold text-[#1F3128]">
+            {manifestSummary.totalComisionable}
+          </p>
         </div>
       </div>
 
@@ -2917,6 +2944,7 @@ function RecepcionContent() {
         totalNoQ: manifestSummary.totalNoQ,
         totalVentas: manifestSummary.totalVentas,
         totalCaja: manifestSummary.totalCaja,
+        totalComisionable: manifestSummary.totalComisionable,
         rows: manifestRows,
       });
     }

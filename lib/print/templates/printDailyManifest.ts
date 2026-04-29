@@ -11,6 +11,7 @@ type ManifestRow = {
   codigoOPC: string;
   calificacion: string;
   valorCaja: string;
+  valorComisionable: string;
   formaPago: string;
   observaciones: string;
 };
@@ -23,6 +24,7 @@ type DailyManifestPrintData = {
   totalNoQ: number;
   totalVentas: number;
   totalCaja: string;
+  totalComisionable: string;
   rows: ManifestRow[];
 };
 
@@ -47,6 +49,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                 <td>${escapeHtml(row.codigoOPC || "-")}</td>
                 <td>${escapeHtml(row.calificacion || "Sin definir")}</td>
                 <td class="numeric">${escapeHtml(row.valorCaja || "-")}</td>
+                <td class="numeric">${escapeHtml(row.valorComisionable || "-")}</td>
                 <td>${escapeHtml(row.formaPago || "-")}</td>
                 <td>${escapeHtml(row.observaciones || "-")}</td>
               </tr>
@@ -55,7 +58,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           .join("")
       : `
         <tr>
-          <td colspan="11" style="text-align:center; color:#607368;">No hay registros para este periodo y jornada.</td>
+          <td colspan="12" style="text-align:center; color:#607368;">No hay registros para este periodo y jornada.</td>
         </tr>
       `;
 
@@ -188,6 +191,10 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                 <div class="item-label">Caja total</div>
                 <div class="item-value">${escapeHtml(data.totalCaja)}</div>
               </div>
+              <div>
+                <div class="item-label">Total comisionable</div>
+                <div class="item-value">${escapeHtml(data.totalComisionable)}</div>
+              </div>
             </div>
           </div>
 
@@ -195,17 +202,18 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
             <h2>Clientes del periodo</h2>
             <table>
               <colgroup>
-                <col style="width:4%">
-                <col style="width:7%">
-                <col style="width:7%">
-                <col style="width:16%">
+                <col style="width:3%">
+                <col style="width:6%">
+                <col style="width:6%">
                 <col style="width:14%">
-                <col style="width:7%">
+                <col style="width:12%">
+                <col style="width:6%">
+                <col style="width:6%">
                 <col style="width:7%">
                 <col style="width:8%">
                 <col style="width:9%">
                 <col style="width:10%">
-                <col style="width:11%">
+                <col style="width:13%">
               </colgroup>
               <thead>
                 <tr>
@@ -218,6 +226,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                   <th>Codigo OPC</th>
                   <th>Calificacion</th>
                   <th class="numeric">Valor caja</th>
+                  <th class="numeric">Comisionable</th>
                   <th>Forma de pago</th>
                   <th>Observaciones</th>
                 </tr>

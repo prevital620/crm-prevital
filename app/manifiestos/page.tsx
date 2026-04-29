@@ -7,6 +7,7 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import printDailyManifest from "@/lib/print/templates/printDailyManifest";
 import { inferCommercialTeamFromDate } from "@/lib/commercial/team";
+import { calculateNetCommissionBase } from "@/lib/commercial/commission-base";
 import {
   buildStoredCommercialNotes,
   parseStoredCommercialNotes,
@@ -30,6 +31,7 @@ type CommercialCaseRow = {
   payment_method: string | null;
   credit_provider: string | null;
   cash_amount: number | null;
+  net_commission_base: number | null;
   volume_amount: number | null;
   closing_notes: string | null;
   created_at: string;
@@ -287,6 +289,7 @@ export default function ManifiestosPage() {
               payment_method,
               credit_provider,
               cash_amount,
+              net_commission_base,
               volume_amount,
               closing_notes,
               created_at,
@@ -399,6 +402,14 @@ export default function ManifiestosPage() {
           : undefined;
         const hasSale = hasCommercialSale(item);
         const cashAmount = Number(item.cash_amount || 0);
+        const commissionableAmount = Number(
+          item.net_commission_base ??
+            calculateNetCommissionBase({
+              cashAmount,
+              paymentMethod: item.payment_method,
+              creditProvider: item.credit_provider,
+            })
+        );
 
         return {
           horaLlegada: formatManifestTime(item.created_at),
@@ -412,6 +423,7 @@ export default function ManifiestosPage() {
               ? "Q"
               : getReceptionSummaryValue(item, "Clasificación inicial") || "Sin definir",
           valorCaja: hasSale ? cashAmount.toLocaleString("es-CO") : "",
+          valorComisionable: hasSale ? commissionableAmount.toLocaleString("es-CO") : "",
           ventaRealizada: hasSale,
           formaPago: hasSale
             ? paymentMethodSummaryComercial(item.payment_method, item.credit_provider)
@@ -426,6 +438,7 @@ export default function ManifiestosPage() {
     let totalNoQ = 0;
     let totalVentas = 0;
     let totalCaja = 0;
+    let totalComisionable = 0;
 
     manifestRows.forEach((row) => {
       const qualification = normalizeText(row.calificacion);
@@ -440,6 +453,13 @@ export default function ManifiestosPage() {
       if (cashValue > 0) {
         totalCaja += cashValue;
       }
+
+      const commissionableValue = Number(
+        String(row.valorComisionable || "").replace(/\./g, "").replace(/,/g, ".")
+      );
+      if (commissionableValue > 0) {
+        totalComisionable += commissionableValue;
+      }
     });
 
     return {
@@ -447,6 +467,7 @@ export default function ManifiestosPage() {
       totalNoQ,
       totalVentas,
       totalCaja: `$${totalCaja.toLocaleString("es-CO")}`,
+      totalComisionable: `$${totalComisionable.toLocaleString("es-CO")}`,
     };
   }, [manifestRows]);
 
@@ -459,6 +480,7 @@ export default function ManifiestosPage() {
       totalNoQ: manifestSummary.totalNoQ,
       totalVentas: manifestSummary.totalVentas,
       totalCaja: manifestSummary.totalCaja,
+      totalComisionable: manifestSummary.totalComisionable,
       rows: manifestRows,
     });
     setMensaje("Manifiesto listo para impresión.");
@@ -570,7 +592,7 @@ export default function ManifiestosPage() {
             })}
           </div>
 
-          <div className="mt-4 grid gap-3 rounded-[24px] border border-[#DCEBE1] bg-[#FCFEFC] p-4 md:grid-cols-5">
+          <div className="mt-4 grid gap-3 rounded-[24px] border border-[#DCEBE1] bg-[#FCFEFC] p-4 md:grid-cols-4 lg:grid-cols-7">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Periodo</p>
               <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestPeriodLabel}</p>
@@ -588,8 +610,18 @@ export default function ManifiestosPage() {
               <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalNoQ}</p>
             </div>
             <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Ventas</p>
+              <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalVentas}</p>
+            </div>
+            <div>
               <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Caja</p>
               <p className="mt-1 text-sm font-semibold text-[#1F3128]">{manifestSummary.totalCaja}</p>
+            </div>
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#6A8376]">Comisionable</p>
+              <p className="mt-1 text-sm font-semibold text-[#1F3128]">
+                {manifestSummary.totalComisionable}
+              </p>
             </div>
           </div>
 
