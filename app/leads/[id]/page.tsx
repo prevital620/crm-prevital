@@ -6,6 +6,10 @@ import { useParams } from "next/navigation";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import { leadSourceOptions, normalizeLeadSource } from "@/lib/lead-source";
+import {
+  leadBelongsToOperationalGroup,
+  normalizeOperationalGroupCode,
+} from "@/lib/leads/group-routing";
 
 type LeadData = {
   id: string;
@@ -25,6 +29,11 @@ type LeadData = {
   created_at: string;
   created_by_user_id: string;
   assigned_to_user_id: string | null;
+};
+
+type ProfileGroupRow = {
+  id: string;
+  commission_group_code: string | null;
 };
 
 const maritalStatusOptions = [
@@ -179,6 +188,50 @@ export default function EditarLeadPage() {
 
       let allowedView = false;
       let allowedEdit = false;
+      const isAssignedToCurrentUser = lead.assigned_to_user_id === auth.user.id;
+      const isCreatedByCurrentUser = lead.created_by_user_id === auth.user.id;
+      let callCenterGroupAccess = false;
+
+      if (
+        auth.roleCode === "supervisor_call_center" ||
+        auth.roleCode === "confirmador"
+      ) {
+        const profileIds = Array.from(
+          new Set(
+            [auth.user.id, lead.created_by_user_id, lead.assigned_to_user_id].filter(
+              (id): id is string => Boolean(id)
+            )
+          )
+        );
+
+        const { data: profilesData, error: profilesError } = await supabase
+          .from("profiles")
+          .select("id, commission_group_code")
+          .in("id", profileIds);
+
+        if (profilesError) throw profilesError;
+
+        const groupMap: Record<string, string | null> = {};
+        ((profilesData as ProfileGroupRow[]) || []).forEach((profile) => {
+          groupMap[profile.id] = normalizeOperationalGroupCode(profile.commission_group_code);
+        });
+
+        const currentGroupCode = groupMap[auth.user.id];
+
+        callCenterGroupAccess = currentGroupCode
+          ? leadBelongsToOperationalGroup({
+              currentGroupCode,
+              source: lead.source,
+              creatorGroupCode: groupMap[lead.created_by_user_id],
+              assignedUserGroupCode: groupMap[lead.assigned_to_user_id || ""],
+              currentUserId: auth.user.id,
+              leadCreatedByUserId: lead.created_by_user_id,
+              leadAssignedToUserId: lead.assigned_to_user_id,
+            })
+          : auth.roleCode === "supervisor_call_center" ||
+            isAssignedToCurrentUser ||
+            isCreatedByCurrentUser;
+      }
 
       if (auth.roleCode === "super_user") {
         allowedView = true;
@@ -201,16 +254,18 @@ export default function EditarLeadPage() {
       }
 
       if (auth.roleCode === "supervisor_call_center") {
-        allowedView = true;
-        allowedEdit = true;
+        allowedView = callCenterGroupAccess;
+        allowedEdit = callCenterGroupAccess;
       }
 
-      if (auth.roleCode === "confirmador" || auth.roleCode === "tmk") {
-        const isAssignedToUser = lead.assigned_to_user_id === auth.user.id;
-        const isCreatedByUser = lead.created_by_user_id === auth.user.id;
+      if (auth.roleCode === "confirmador") {
+        allowedView = callCenterGroupAccess;
+        allowedEdit = callCenterGroupAccess;
+      }
 
-        allowedView = isAssignedToUser || isCreatedByUser;
-        allowedEdit = isAssignedToUser || isCreatedByUser;
+      if (auth.roleCode === "tmk") {
+        allowedView = isAssignedToCurrentUser || isCreatedByCurrentUser;
+        allowedEdit = isAssignedToCurrentUser || isCreatedByCurrentUser;
       }
 
       if (!allowedView) {

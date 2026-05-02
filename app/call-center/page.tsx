@@ -10,6 +10,10 @@ import SessionBadge from "@/components/session-badge";
 import { getLeadSourceLabel } from "@/lib/lead-source";
 import { dateToLocalISO } from "@/lib/datetime/dateHelpers";
 import { repairMojibake } from "@/lib/text/repairMojibake";
+import {
+  leadBelongsToOperationalGroup,
+  normalizeOperationalGroupCode,
+} from "@/lib/leads/group-routing";
 
 type Lead = {
   id: string;
@@ -35,11 +39,13 @@ type CallCenterUser = {
   is_active: boolean;
   role_name: string;
   role_code: string;
+  commission_group_code: string | null;
 };
 
 type ProfileRow = {
   id: string;
   full_name: string | null;
+  commission_group_code: string | null;
 };
 
 type AppointmentRow = {
@@ -226,6 +232,8 @@ function CallCenterPageContent() {
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [callCenterUsers, setCallCenterUsers] = useState<CallCenterUser[]>([]);
   const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
+  const [creatorGroupCodes, setCreatorGroupCodes] = useState<Record<string, string | null>>({});
+  const [currentCommissionGroupCode, setCurrentCommissionGroupCode] = useState<string | null>(null);
   const [cargando, setCargando] = useState(true);
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
@@ -245,7 +253,8 @@ function CallCenterPageContent() {
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
   const isSupervisorCallCenterView =
     currentRoleCode === "super_user" ||
-    currentRoleCode === "supervisor_call_center";
+    currentRoleCode === "supervisor_call_center" ||
+    currentRoleCode === "confirmador";
   const canSeeAssignmentMeta = currentRoleCode !== "tmk";
 
   async function cargarLeads() {
@@ -285,7 +294,8 @@ function CallCenterPageContent() {
         profiles!user_roles_user_id_fkey (
           id,
           full_name,
-          is_active
+          is_active,
+          commission_group_code
         ),
         roles!user_roles_role_id_fkey (
           name,
@@ -307,6 +317,8 @@ function CallCenterPageContent() {
         is_active: Boolean(row.profiles?.is_active),
         role_name: row.roles?.name || "",
         role_code: row.roles?.code || "",
+        commission_group_code:
+          normalizeOperationalGroupCode(row.profiles?.commission_group_code) || null,
       }))
       .filter((user) =>
         user.is_active &&
@@ -324,6 +336,23 @@ function CallCenterPageContent() {
     return Array.from(uniqueMap.values());
   }
 
+  async function cargarGrupoUsuarioActual() {
+    if (!currentUserId) return null;
+
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("commission_group_code")
+      .eq("id", currentUserId)
+      .maybeSingle();
+
+    if (error) {
+      console.error("Error cargando grupo actual:", error);
+      throw new Error("No se pudo cargar el grupo del usuario actual.");
+    }
+
+    return normalizeOperationalGroupCode((data as { commission_group_code?: string | null } | null)?.commission_group_code);
+  }
+
   async function cargarNombresCreadores(leadsData: Lead[]) {
     const creatorIds = Array.from(
       new Set(
@@ -335,12 +364,13 @@ function CallCenterPageContent() {
 
     if (creatorIds.length === 0) {
       setCreatorNames({});
+      setCreatorGroupCodes({});
       return;
     }
 
     const { data, error } = await supabase
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, commission_group_code")
       .in("id", creatorIds);
 
     if (error) {
@@ -349,11 +379,14 @@ function CallCenterPageContent() {
     }
 
     const map: Record<string, string> = {};
+    const groupMap: Record<string, string | null> = {};
     ((data as ProfileRow[]) || []).forEach((profile) => {
       map[profile.id] = profile.full_name?.trim() || "Sin nombre";
+      groupMap[profile.id] = normalizeOperationalGroupCode(profile.commission_group_code);
     });
 
     setCreatorNames(map);
+    setCreatorGroupCodes(groupMap);
   }
 
   async function cargarTodo() {
@@ -362,15 +395,17 @@ function CallCenterPageContent() {
       setMensaje("");
       setError("");
 
-      const [leadsData, appointmentsData, usersData] = await Promise.all([
+      const [leadsData, appointmentsData, usersData, currentGroupCode] = await Promise.all([
         cargarLeads(),
         cargarCitas(),
         cargarUsuariosCallCenter(),
+        cargarGrupoUsuarioActual(),
       ]);
 
       setLeads(leadsData);
       setAppointments(appointmentsData);
       setCallCenterUsers(usersData);
+      setCurrentCommissionGroupCode(currentGroupCode);
       await cargarNombresCreadores(leadsData);
 
       const assignments: Record<string, string> = {};
@@ -441,14 +476,37 @@ function CallCenterPageContent() {
   }, [searchParams]);
 
   useEffect(() => {
-    if (authorized) {
+    if (authorized && currentUserId) {
       void cargarTodo();
     }
-  }, [authorized]);
+  }, [authorized, currentUserId]);
 
   async function guardarAsignacion(leadId: string) {
     try {
       const assignedUserId = selectedAssignments[leadId] || null;
+      const selectedUser = assignedUserId
+        ? callCenterUsers.find((user) => user.id === assignedUserId)
+        : null;
+
+      if (assignedUserId && currentRoleCode !== "super_user") {
+        if (
+          currentRoleCode !== "supervisor_call_center" &&
+          currentRoleCode !== "confirmador"
+        ) {
+          throw new Error("Tu rol no puede asignar leads.");
+        }
+
+        if (!selectedUser || selectedUser.role_code !== "tmk") {
+          throw new Error("Solo puedes asignar leads a TMK activos.");
+        }
+
+        const currentGroupCode = normalizeOperationalGroupCode(currentCommissionGroupCode);
+        const selectedGroupCode = normalizeOperationalGroupCode(selectedUser.commission_group_code);
+
+        if (currentGroupCode && selectedGroupCode !== currentGroupCode) {
+          throw new Error("Solo puedes asignar leads a TMK de tu mismo grupo.");
+        }
+      }
 
       setSavingLeadId(leadId);
       setMensaje("");
@@ -635,6 +693,54 @@ function CallCenterPageContent() {
     return map;
   }, [appointments]);
 
+  const currentGroupCode = useMemo(
+    () => normalizeOperationalGroupCode(currentCommissionGroupCode),
+    [currentCommissionGroupCode]
+  );
+
+  const callCenterUserById = useMemo(() => {
+    const map = new Map<string, CallCenterUser>();
+    callCenterUsers.forEach((user) => map.set(user.id, user));
+    return map;
+  }, [callCenterUsers]);
+
+  function leadEstaEnGrupoActual(lead: Lead) {
+    if (!currentGroupCode) return true;
+
+    return leadBelongsToOperationalGroup({
+      currentGroupCode,
+      source: lead.source,
+      commissionSourceType: lead.commission_source_type,
+      creatorGroupCode: creatorGroupCodes[lead.created_by_user_id || ""],
+      assignedUserGroupCode:
+        callCenterUserById.get(lead.assigned_to_user_id || "")?.commission_group_code || null,
+      currentUserId,
+      leadCreatedByUserId: lead.created_by_user_id,
+      leadAssignedToUserId: lead.assigned_to_user_id,
+    });
+  }
+
+  function obtenerUsuariosAsignables(lead: Lead) {
+    const base = callCenterUsers.filter(
+      (user) => user.is_active && user.role_code === "tmk"
+    );
+
+    if (currentRoleCode === "super_user" || !currentGroupCode) return base;
+
+    if (
+      currentRoleCode === "supervisor_call_center" ||
+      currentRoleCode === "confirmador"
+    ) {
+      return base.filter(
+        (user) =>
+          normalizeOperationalGroupCode(user.commission_group_code) === currentGroupCode ||
+          user.id === lead.assigned_to_user_id
+      );
+    }
+
+    return [];
+  }
+
   function tieneCitaActiva(lead: Lead) {
     return !!activeAppointmentByLeadId[lead.id];
   }
@@ -700,8 +806,22 @@ function CallCenterPageContent() {
       );
     }
 
+    if (
+      currentRoleCode === "supervisor_call_center" ||
+      currentRoleCode === "confirmador"
+    ) {
+      base = base.filter((lead) => leadEstaEnGrupoActual(lead));
+    }
+
     return base;
-  }, [leads, currentRoleCode, currentUserId]);
+  }, [
+    leads,
+    currentRoleCode,
+    currentUserId,
+    currentGroupCode,
+    creatorGroupCodes,
+    callCenterUserById,
+  ]);
 
   const leadsDelDia = useMemo(() => {
     return leadsBasePorRol.filter((lead) =>
@@ -1181,7 +1301,9 @@ function CallCenterPageContent() {
 
                 const canAssign =
                   currentRoleCode === "super_user" ||
-                  currentRoleCode === "supervisor_call_center";
+                  currentRoleCode === "supervisor_call_center" ||
+                  currentRoleCode === "confirmador";
+                const assignableUsers = obtenerUsuariosAsignables(lead);
 
                 const canChangeStatus =
                   currentRoleCode === "super_user" ||
@@ -1315,9 +1437,10 @@ function CallCenterPageContent() {
                               }
                             >
                               <option value="">Sin asignar</option>
-                              {callCenterUsers.map((user) => (
+                              {assignableUsers.map((user) => (
                                 <option key={user.id} value={user.id}>
                                   {user.full_name} {" \u00B7 "} {user.role_name}
+                                  {user.commission_group_code ? ` · Grupo ${user.commission_group_code}` : ""}
                                 </option>
                               ))}
                             </select>

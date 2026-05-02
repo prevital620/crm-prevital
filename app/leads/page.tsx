@@ -8,6 +8,10 @@ import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 import { getLeadSourceLabel } from "@/lib/lead-source";
 import { dateToLocalISO } from "@/lib/datetime/dateHelpers";
+import {
+  leadBelongsToOperationalGroup,
+  normalizeOperationalGroupCode,
+} from "@/lib/leads/group-routing";
 
 type LeadRow = {
   id: string;
@@ -28,6 +32,7 @@ type LeadRow = {
 type ProfileRow = {
   id: string;
   full_name: string | null;
+  commission_group_code: string | null;
 };
 
 type AppointmentRow = {
@@ -152,6 +157,8 @@ export default function LeadsPage() {
   const [leads, setLeads] = useState<LeadRow[]>([]);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
+  const [profileGroupCodes, setProfileGroupCodes] = useState<Record<string, string | null>>({});
+  const [currentCommissionGroupCode, setCurrentCommissionGroupCode] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState(hoyISO());
@@ -266,25 +273,47 @@ export default function LeadsPage() {
             .filter((id): id is string => Boolean(id))
         )
       );
+      const assignedIds = Array.from(
+        new Set(
+          leadsData
+            .map((lead) => lead.assigned_to_user_id)
+            .filter((id): id is string => Boolean(id))
+        )
+      );
+      const profileIds = Array.from(
+        new Set(
+          [...creatorIds, ...assignedIds, currentUserId].filter(
+            (id): id is string => Boolean(id)
+          )
+        )
+      );
 
-      if (creatorIds.length === 0) {
+      if (profileIds.length === 0) {
         setCreatorNames({});
+        setProfileGroupCodes({});
+        setCurrentCommissionGroupCode(null);
         return;
       }
 
       const { data: profilesData, error: profilesError } = await supabase
         .from("profiles")
-        .select("id, full_name")
-        .in("id", creatorIds);
+        .select("id, full_name, commission_group_code")
+        .in("id", profileIds);
 
       if (profilesError) throw profilesError;
 
       const namesMap: Record<string, string> = {};
+      const groupMap: Record<string, string | null> = {};
       ((profilesData as ProfileRow[]) || []).forEach((profile) => {
-        namesMap[profile.id] = profile.full_name?.trim() || "Sin nombre";
+        if (creatorIds.includes(profile.id)) {
+          namesMap[profile.id] = profile.full_name?.trim() || "Sin nombre";
+        }
+        groupMap[profile.id] = normalizeOperationalGroupCode(profile.commission_group_code);
       });
 
       setCreatorNames(namesMap);
+      setProfileGroupCodes(groupMap);
+      setCurrentCommissionGroupCode(groupMap[currentUserId || ""] || null);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los leads.");
     } finally {
@@ -339,10 +368,10 @@ export default function LeadsPage() {
   }, []);
 
   useEffect(() => {
-    if (authorized) {
+    if (authorized && currentUserId) {
       cargarLeads();
     }
-  }, [authorized]);
+  }, [authorized, currentUserId]);
 
   const activeAppointmentByLeadId = useMemo(() => {
     const map: Record<string, AppointmentRow> = {};
@@ -367,7 +396,30 @@ export default function LeadsPage() {
     if (!roleCode || !currentUserId) return [];
 
     if (roleCode === "super_user") return leads;
-    if (roleCode === "supervisor_call_center") return leads;
+    if (roleCode === "supervisor_call_center" || roleCode === "confirmador") {
+      const currentGroupCode = normalizeOperationalGroupCode(currentCommissionGroupCode);
+
+      if (!currentGroupCode && roleCode === "supervisor_call_center") return leads;
+
+      return leads.filter((lead) => {
+        if (!currentGroupCode) {
+          return (
+            lead.assigned_to_user_id === currentUserId ||
+            lead.created_by_user_id === currentUserId
+          );
+        }
+
+        return leadBelongsToOperationalGroup({
+          currentGroupCode,
+          source: lead.source,
+          creatorGroupCode: profileGroupCodes[lead.created_by_user_id],
+          assignedUserGroupCode: profileGroupCodes[lead.assigned_to_user_id || ""],
+          currentUserId,
+          leadCreatedByUserId: lead.created_by_user_id,
+          leadAssignedToUserId: lead.assigned_to_user_id,
+        });
+      });
+    }
 
     if (roleCode === "supervisor_opc") {
       return leads.filter((lead) => opcVisibleStatuses.includes(getVisibleStatus(lead)));
@@ -381,7 +433,7 @@ export default function LeadsPage() {
       );
     }
 
-    if (roleCode === "confirmador" || roleCode === "tmk") {
+    if (roleCode === "tmk") {
       return leads.filter(
         (lead) =>
           lead.assigned_to_user_id === currentUserId ||
@@ -390,7 +442,14 @@ export default function LeadsPage() {
     }
 
     return [];
-  }, [leads, roleCode, currentUserId, activeAppointmentByLeadId]);
+  }, [
+    leads,
+    roleCode,
+    currentUserId,
+    currentCommissionGroupCode,
+    profileGroupCodes,
+    activeAppointmentByLeadId,
+  ]);
 
   function isPending(lead: LeadRow) {
     const estado = getVisibleStatus(lead);
