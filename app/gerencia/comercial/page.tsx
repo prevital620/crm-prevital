@@ -467,6 +467,10 @@ export default function GerenciaComercialPage() {
               }
 
               if (detectedTeam) {
+                if (item.status === "pendiente_asignacion_comercial") {
+                  return true;
+                }
+
                 return caseTeam === detectedTeam;
               }
 
