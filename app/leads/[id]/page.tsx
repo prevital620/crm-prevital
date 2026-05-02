@@ -222,6 +222,7 @@ export default function EditarLeadPage() {
           ? leadBelongsToOperationalGroup({
               currentGroupCode,
               source: lead.source,
+              createdAt: lead.created_at,
               creatorGroupCode: groupMap[lead.created_by_user_id],
               assignedUserGroupCode: groupMap[lead.assigned_to_user_id || ""],
               currentUserId: auth.user.id,

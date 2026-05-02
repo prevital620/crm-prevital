@@ -412,6 +412,7 @@ export default function LeadsPage() {
         return leadBelongsToOperationalGroup({
           currentGroupCode,
           source: lead.source,
+          createdAt: lead.created_at,
           creatorGroupCode: profileGroupCodes[lead.created_by_user_id],
           assignedUserGroupCode: profileGroupCodes[lead.assigned_to_user_id || ""],
           currentUserId,

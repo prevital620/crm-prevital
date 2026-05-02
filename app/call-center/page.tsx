@@ -711,6 +711,7 @@ function CallCenterPageContent() {
       currentGroupCode,
       source: lead.source,
       commissionSourceType: lead.commission_source_type,
+      createdAt: lead.created_at,
       creatorGroupCode: creatorGroupCodes[lead.created_by_user_id || ""],
       assignedUserGroupCode:
         callCenterUserById.get(lead.assigned_to_user_id || "")?.commission_group_code || null,
