@@ -53,6 +53,7 @@ type QuickFilter =
   | "nuevos"
   | "pendientes"
   | "interesados"
+  | "pendientes_cita"
   | "agendados"
   | "no_asistio"
   | "cerrados";
@@ -175,6 +176,8 @@ export default function LeadsPage() {
 
   const showSupervisorOpcTools =
     roleCode === "supervisor_opc" || roleCode === "super_user";
+  const showTmkSchedulingTools = roleCode === "tmk";
+  const showLeadStatusFilters = showSupervisorOpcTools || showTmkSchedulingTools;
 
   const isSuperUser = roleCode === "super_user";
   const canScheduleFromLeadsList =
@@ -368,6 +371,34 @@ export default function LeadsPage() {
   }, []);
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const requestedFilter = params.get("filter") as QuickFilter | null;
+    const requestedDate = params.get("date");
+    const validFilters = new Set<QuickFilter>([
+      "todos",
+      "nuevos",
+      "pendientes",
+      "interesados",
+      "pendientes_cita",
+      "agendados",
+      "no_asistio",
+      "cerrados",
+    ]);
+
+    if (requestedFilter && validFilters.has(requestedFilter)) {
+      setQuickFilter(requestedFilter);
+    }
+
+    if (requestedDate === "all") {
+      setDateFilter("");
+    } else if (requestedDate === "today") {
+      setDateFilter(hoyISO());
+    } else if (requestedDate) {
+      setDateFilter(requestedDate);
+    }
+  }, []);
+
+  useEffect(() => {
     if (authorized && currentUserId) {
       cargarLeads();
     }
@@ -470,6 +501,10 @@ export default function LeadsPage() {
     return getVisibleStatus(lead) === "agendado";
   }
 
+  function isPendingSchedule(lead: LeadRow) {
+    return !isScheduled(lead) && getVisibleStatus(lead) === "contactado";
+  }
+
   function isNoAsistio(lead: LeadRow) {
     return getVisibleStatus(lead) === "no_asistio";
   }
@@ -493,6 +528,7 @@ export default function LeadsPage() {
       nuevos: delDia.filter((lead) => getVisibleStatus(lead) === "nuevo").length,
       pendientes: delDia.filter((lead) => isPending(lead)).length,
       interesados: delDia.filter((lead) => isInterested(lead)).length,
+      pendientesCita: delDia.filter((lead) => isPendingSchedule(lead)).length,
       agendados: delDia.filter((lead) => isScheduled(lead)).length,
       noAsistio: delDia.filter((lead) => isNoAsistio(lead)).length,
       cerrados: delDia.filter((lead) => isClosed(lead)).length,
@@ -506,7 +542,7 @@ export default function LeadsPage() {
       dateFilter ? soloFecha(lead.created_at) === dateFilter : true
     );
 
-    if (showSupervisorOpcTools) {
+    if (showLeadStatusFilters) {
       if (quickFilter === "nuevos") {
         base = base.filter((lead) => getVisibleStatus(lead) === "nuevo");
       }
@@ -515,6 +551,9 @@ export default function LeadsPage() {
       }
       if (quickFilter === "interesados") {
         base = base.filter((lead) => isInterested(lead));
+      }
+      if (quickFilter === "pendientes_cita") {
+        base = base.filter((lead) => isPendingSchedule(lead));
       }
       if (quickFilter === "agendados") {
         base = base.filter((lead) => isScheduled(lead));
@@ -549,7 +588,7 @@ export default function LeadsPage() {
     dateFilter,
     creatorNames,
     quickFilter,
-    showSupervisorOpcTools,
+    showLeadStatusFilters,
     activeAppointmentByLeadId,
   ]);
 
@@ -754,6 +793,15 @@ export default function LeadsPage() {
           <div className="rounded-2xl border border-[#BFE0CD] bg-[linear-gradient(135deg,_#F1FBF5_0%,_#E8F7EF_100%)] p-4 text-sm text-[#2D6B4A] shadow-sm">
             {successMessage}
           </div>
+        ) : null}
+
+        {showTmkSchedulingTools ? (
+          <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
+            <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
+            <StatCard title="Por agendar" value={resumen.pendientesCita} active={quickFilter === "pendientes_cita"} onClick={() => setQuickFilter("pendientes_cita")} />
+            <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
+          </section>
         ) : null}
 
         {showSupervisorOpcTools ? (

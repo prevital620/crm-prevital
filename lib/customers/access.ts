@@ -18,6 +18,7 @@ export const CUSTOMER_CONSULT_TEAM_ROLES = [
 
 export const CUSTOMER_CONSULT_SELF_ROLES = [
   "comercial",
+  "tmk",
   "nutricionista",
   "fisioterapeuta",
   "medico_general",

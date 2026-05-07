@@ -70,7 +70,7 @@ const quickActions: QuickAction[] = [
     title: "Importar leads",
     subtitle: "Subir plantilla CSV de redes con repetidos ignorados.",
     href: "/leads/importar",
-    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
+    roles: ["super_user", "supervisor_call_center", "confirmador"],
   },
   {
     title: "Crear usuario",
@@ -100,7 +100,13 @@ const quickActions: QuickAction[] = [
     title: "Ver agenda",
     subtitle: "Consultar agenda visible y gestionar citas.",
     href: "/recepcion?view=agenda",
-    roles: ["super_user", "supervisor_call_center", "confirmador", "tmk"],
+    roles: ["super_user", "supervisor_call_center", "confirmador"],
+  },
+  {
+    title: "Agendar nuevo",
+    subtitle: "Ver tus pendientes por agendar y crear citas.",
+    href: "/leads?filter=pendientes_cita&date=all",
+    roles: ["tmk"],
   },
   {
     title: "Configurar cupos",
@@ -139,6 +145,7 @@ const quickActions: QuickAction[] = [
       "gerencia_comercial",
       "gerente",
       "gerente_comercial",
+      "tmk",
       "nutricionista",
       "fisioterapeuta",
       "medico_general",
@@ -441,6 +448,19 @@ export default function HomePage() {
         const order: Record<string, number> = {
           "/leads/nuevo": 1,
           "/leads": 2,
+        };
+        return (order[a.href] ?? 99) - (order[b.href] ?? 99);
+      });
+    }
+
+    if (effectiveRoles.includes("tmk")) {
+      return withCommercialEssentials.sort((a, b) => {
+        const order: Record<string, number> = {
+          "/leads/nuevo": 1,
+          "/leads": 2,
+          "/consulta-cliente": 3,
+          "/leads?filter=pendientes_cita&date=all": 4,
+          "/admin/comisiones": 5,
         };
         return (order[a.href] ?? 99) - (order[b.href] ?? 99);
       });

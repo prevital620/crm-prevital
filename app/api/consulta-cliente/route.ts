@@ -615,6 +615,8 @@ export async function GET(request: Request) {
     const isClinicalSelfScope =
       currentSession.scope === "self" &&
       clinicalSelfRoleCodes.has(currentSession.effectiveRole || "");
+    const isTmkSelfScope =
+      currentSession.scope === "self" && currentSession.effectiveRole === "tmk";
     const accessibleCommercialIds = resolveAccessibleCommercialIds(
       currentSession.scope,
       currentSession.user.id,
@@ -624,6 +626,8 @@ export async function GET(request: Request) {
     let appointmentRows: AppointmentRow[] = [];
     let specialistAppointmentIds: string[] = [];
     let specialistLeadIds: string[] = [];
+    let tmkLeadRows: LeadRow[] = [];
+    let tmkLeadIds: string[] = [];
 
     if (isClinicalSelfScope) {
       let specialistAppointmentsQuery = supabaseAdmin
@@ -677,6 +681,73 @@ export async function GET(request: Request) {
       );
     }
 
+    if (isTmkSelfScope) {
+      const tmkLeadsQuery = supabaseAdmin
+        .from("leads")
+        .select(
+          `
+          id,
+          first_name,
+          last_name,
+          full_name,
+          phone,
+          city,
+          interest_service,
+          capture_location,
+          source,
+          status,
+          created_at,
+          created_by_user_id,
+          assigned_to_user_id
+        `
+        )
+        .or(
+          `assigned_to_user_id.eq.${currentSession.user.id},created_by_user_id.eq.${currentSession.user.id}`
+        )
+        .order("created_at", { ascending: false })
+        .limit(searchTerm ? 500 : 80);
+
+      const { data: ownLeads, error: ownLeadsError } = await tmkLeadsQuery;
+
+      if (ownLeadsError) {
+        throw ownLeadsError;
+      }
+
+      tmkLeadRows = searchTerm
+        ? applySearchFilter((ownLeads || []) as LeadRow[], searchTerm, leadDisplayName)
+        : ((ownLeads || []) as LeadRow[]);
+      tmkLeadIds = unique(tmkLeadRows.map((item) => item.id).filter(Boolean));
+
+      if (tmkLeadIds.length > 0) {
+        const { data: ownAppointments, error: ownAppointmentsError } = await supabaseAdmin
+          .from("appointments")
+          .select(
+            `
+            id,
+            lead_id,
+            patient_name,
+            phone,
+            city,
+            appointment_date,
+            appointment_time,
+            status,
+            service_type,
+            notes,
+            specialist_user_id
+          `
+          )
+          .in("lead_id", tmkLeadIds)
+          .order("appointment_date", { ascending: false })
+          .limit(120);
+
+        if (ownAppointmentsError) {
+          throw ownAppointmentsError;
+        }
+
+        appointmentRows = (ownAppointments || []) as AppointmentRow[];
+      }
+    }
+
     let casesQuery = supabaseAdmin
       .from("commercial_cases")
         .select(
@@ -712,7 +783,17 @@ export async function GET(request: Request) {
       .order("created_at", { ascending: false })
       .limit(searchTerm ? 120 : 60);
 
-    if (isClinicalSelfScope) {
+    if (isTmkSelfScope) {
+      if (tmkLeadIds.length === 0) {
+        return NextResponse.json({
+          items: [] as CustomerSummary[],
+          detail: null,
+          scope: currentSession.scope,
+        });
+      }
+
+      casesQuery = casesQuery.in("lead_id", tmkLeadIds);
+    } else if (isClinicalSelfScope) {
       if (specialistAppointmentIds.length === 0 && specialistLeadIds.length === 0) {
         return NextResponse.json({
           items: [] as CustomerSummary[],
@@ -857,6 +938,8 @@ export async function GET(request: Request) {
 
       leadRows = (leadResult.data || []) as LeadRow[];
       appointmentRows = (appointmentResult.data || []) as AppointmentRow[];
+    } else if (isTmkSelfScope) {
+      leadRows = tmkLeadRows;
     } else if (isClinicalSelfScope) {
       if (specialistLeadIds.length > 0) {
         const { data, error } = await supabaseAdmin
@@ -946,7 +1029,7 @@ export async function GET(request: Request) {
       }
     }
 
-    if (searchTerm && currentSession.scope !== "full") {
+    if (searchTerm && currentSession.scope !== "full" && !isTmkSelfScope) {
       leadRows = applySearchFilter(leadRows, searchTerm, leadDisplayName);
       appointmentRows = applySearchFilter(appointmentRows, searchTerm, (item) => item.patient_name);
     }

@@ -37,6 +37,7 @@ const ALLOWED_ROLES = [
   "gerencia_comercial",
   "gerente",
   "gerente_comercial",
+  "tmk",
   "nutricionista",
   "fisioterapeuta",
   "medico_general",
