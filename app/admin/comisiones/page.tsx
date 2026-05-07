@@ -111,6 +111,7 @@ const allowedRoles = [
   "supervisor_opc",
   "tmk",
   "supervisor_call_center",
+  "confirmador",
   "comercial",
   "gerencia_comercial",
 ];
@@ -182,6 +183,7 @@ function normalizeArea(jobTitle: string | null | undefined) {
   if (!value) return "Sin rol";
   if (value.includes("supervisor") && value.includes("opc")) return "Supervisor OPC";
   if (value.includes("supervisor") && value.includes("call")) return "Supervisor Call";
+  if (value.includes("confirmador")) return "Call center";
   if (value.includes("promotor") || value === "opc" || value.includes(" opc")) return "OPC";
   if (value.includes("call center") || value === "call" || value.includes("call")) return "Call center";
   if (value.includes("tmk")) return "TMK";
@@ -211,6 +213,7 @@ function getCollaboratorArea(profile: ProfileOption | null | undefined) {
   if (roleCode === "supervisor_opc") return "Supervisor OPC";
   if (roleCode === "tmk") return "TMK";
   if (roleCode === "supervisor_call_center") return "Supervisor Call";
+  if (roleCode === "confirmador") return "Call center";
   if (roleCode === "comercial") return "Comercial";
   if (roleCode === "gerencia_comercial" || roleCode === "gerente_comercial") {
     return "Gerencia comercial";
@@ -221,6 +224,7 @@ function getCollaboratorArea(profile: ProfileOption | null | undefined) {
   if (roleName.includes("supervisor opc")) return "Supervisor OPC";
   if (roleName === "tmk") return "TMK";
   if (roleName.includes("supervisor call")) return "Supervisor Call";
+  if (roleName.includes("confirmador")) return "Call center";
   if (roleName.includes("gerencia comercial") || roleName.includes("gerente comercial")) {
     return "Gerencia comercial";
   }
@@ -293,6 +297,7 @@ function getCommissionAreaFromRole(roleCode: string | null | undefined) {
   if (roleCode === "supervisor_opc") return "Supervisor OPC";
   if (roleCode === "tmk") return "TMK";
   if (roleCode === "supervisor_call_center") return "Supervisor Call";
+  if (roleCode === "confirmador") return "Call center";
   if (roleCode === "comercial") return "Comercial";
   if (roleCode === "gerencia_comercial") return "Gerencia comercial";
   return "";
@@ -675,6 +680,7 @@ export default function AdminComisionesPage() {
   const isTeamScopedRole =
     currentRoleCode === "supervisor_opc" ||
     currentRoleCode === "supervisor_call_center" ||
+    currentRoleCode === "confirmador" ||
     currentRoleCode === "gerencia_comercial";
   const canSeeCommercialBonuses =
     isAdminView || currentRoleCode === "comercial" || currentRoleCode === "gerencia_comercial";
@@ -703,7 +709,7 @@ export default function AdminComisionesPage() {
 
   const teamScopedCollaboratorLabel = useMemo(() => {
     if (currentRoleCode === "supervisor_opc") return "OPC";
-    if (currentRoleCode === "supervisor_call_center") return "TMK";
+    if (currentRoleCode === "supervisor_call_center" || currentRoleCode === "confirmador") return "TMK";
     if (currentRoleCode === "gerencia_comercial") return "Comercial";
     return "Colaborador";
   }, [currentRoleCode]);
@@ -712,7 +718,7 @@ export default function AdminComisionesPage() {
     if (currentRoleCode === "supervisor_opc") {
       return "No encontramos OPC activos asignados a tu equipo.";
     }
-    if (currentRoleCode === "supervisor_call_center") {
+    if (currentRoleCode === "supervisor_call_center" || currentRoleCode === "confirmador") {
       return "No encontramos TMK activos asignados a tu equipo.";
     }
     if (currentRoleCode === "gerencia_comercial") {
@@ -841,7 +847,7 @@ export default function AdminComisionesPage() {
       if (fallbackSupervisorOpc?.teamKey) return fallbackSupervisorOpc.teamKey;
     }
 
-    if (currentRoleCode === "supervisor_call_center") {
+    if (currentRoleCode === "supervisor_call_center" || currentRoleCode === "confirmador") {
       const mappedTeam = Array.from(supervisorCallByTeam.entries()).find(
         ([, item]) => item.id === currentUserId
       )?.[0];
@@ -884,7 +890,9 @@ export default function AdminComisionesPage() {
 
   const teamScopedCollaboratorOptions = useMemo(() => {
     const hasSupervisorScope =
-      currentRoleCode === "supervisor_opc" || currentRoleCode === "supervisor_call_center"
+      currentRoleCode === "supervisor_opc" ||
+      currentRoleCode === "supervisor_call_center" ||
+      currentRoleCode === "confirmador"
         ? Boolean(resolvedCurrentGroupCode || resolvedCurrentTeamKey)
         : Boolean(resolvedCurrentTeamKey);
 
@@ -902,7 +910,7 @@ export default function AdminComisionesPage() {
       );
     }
 
-    if (currentRoleCode === "supervisor_call_center") {
+    if (currentRoleCode === "supervisor_call_center" || currentRoleCode === "confirmador") {
       if (resolvedCurrentGroupCode) {
         return visibleCollaboratorOptions.filter(
           (item) =>
@@ -989,6 +997,17 @@ export default function AdminComisionesPage() {
       const callName = item.call_user_id ? profileMap.get(item.call_user_id)?.full_name || "" : "";
       const opcArea = getCollaboratorArea(opcProfile);
       const callArea = getCollaboratorArea(callProfile);
+      const callTeam = callProfile
+        ? inferCommercialTeam({
+            full_name: callProfile.full_name,
+            job_title: callProfile.job_title,
+            role_name:
+              getPrimaryProfileRole(callProfile)?.name ||
+              getPrimaryProfileRole(callProfile)?.code ||
+              "",
+            departments: getProfileDepartments(callProfile).map((name) => ({ name })),
+          })
+        : null;
 
       const collaboratorAreaForFilter = areaFilter || selectedCollaborator?.area || "";
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
@@ -1023,6 +1042,12 @@ export default function AdminComisionesPage() {
                         : null) || fallbackSupervisorOpc
                     )?.id === currentUserId
                   )
+                : currentRoleCode === "confirmador"
+                  ? Boolean(
+                      resolvedCurrentGroupCode
+                        ? callGroupCode === resolvedCurrentGroupCode
+                        : resolvedCurrentTeamKey && callTeam === resolvedCurrentTeamKey
+                    )
                 : currentRoleCode === "supervisor_call_center"
                   ? Boolean(
                       (
@@ -1154,6 +1179,8 @@ export default function AdminComisionesPage() {
     currentRoleCode,
     currentUserId,
     currentCollaborator,
+    resolvedCurrentGroupCode,
+    resolvedCurrentTeamKey,
   ]);
 
   const commissionEntries = useMemo(() => {
@@ -1358,7 +1385,7 @@ export default function AdminComisionesPage() {
       });
     }
 
-    if (currentRoleCode === "supervisor_call_center") {
+    if (currentRoleCode === "supervisor_call_center" || currentRoleCode === "confirmador") {
       return commissionEntries.filter((item) => {
         if (item.commissionKind === "supervisor_call") {
           return item.beneficiaryId === currentUserId;

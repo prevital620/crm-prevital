@@ -131,6 +131,7 @@ const quickActions: QuickAction[] = [
       "gerencia_comercial",
       "supervisor_opc",
       "supervisor_call_center",
+      "confirmador",
     ],
   },
   {
@@ -196,8 +197,8 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "administrador"],
   },
   {
-    title: "Mis comisiones",
-    subtitle: "Ver tu comision en tiempo real segun fechas y cierres reales.",
+    title: "Consultar comisiones",
+    subtitle: "Ver comisiones propias y, si aplica, las del equipo.",
     href: "/admin/comisiones",
     roles: [
       "super_user",
@@ -206,6 +207,7 @@ const quickActions: QuickAction[] = [
       "supervisor_opc",
       "tmk",
       "supervisor_call_center",
+      "confirmador",
       "comercial",
       "gerencia_comercial",
       "gerente_comercial",

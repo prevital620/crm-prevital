@@ -56,6 +56,7 @@ const allowedRoles = [
   "gerencia_comercial",
   "supervisor_opc",
   "supervisor_call_center",
+  "confirmador",
 ];
 
 const commercialPaymentOptions = [
