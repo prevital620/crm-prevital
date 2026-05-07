@@ -33,8 +33,8 @@ export const ACTIVE_APPOINTMENT_STATUSES = [
   "en_atencion",
 ];
 
-export const DEFAULT_SLOT_CAPACITY = 6;
-export const DEFAULT_DAILY_CAPACITY = 60;
+export const DEFAULT_SLOT_CAPACITY = 10;
+export const DEFAULT_DAILY_CAPACITY = 100;
 export const SPECIALIST_SINGLE_CAPACITY = 1;
 export const TREATMENT_DOUBLE_CAPACITY = 2;
 

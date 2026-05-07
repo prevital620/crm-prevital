@@ -1315,12 +1315,10 @@ function RecepcionContent() {
     [specialists]
   );
 
-  const canManageAgendaConfig =
-    currentRoleCode === "super_user" || currentRoleCode === "supervisor_call_center";
+  const canManageAgendaConfig = currentRoleCode === "super_user";
   const isSuperUser = currentRoleCode === "super_user";
   const isSupervisorCallCenter = currentRoleCode === "supervisor_call_center";
-  const isAgendaConfigOnlyView =
-    isSupervisorCallCenter && receptionView === "config";
+  const isAgendaConfigOnlyView = isSuperUser && receptionView === "config";
   const hideLowerAgendaPanelsForSupervisor = isAgendaConfigOnlyView;
   const showAgendaConfigPanel =
     canManageAgendaConfig &&
@@ -4564,7 +4562,7 @@ function imprimirRegistroComercial() {
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 {isLimitedReceptionForCall
                   ? currentRoleCode === "supervisor_call_center"
-                    ? "Desde aquí puedes ver la agenda, crear citas y organizar los cupos sin entrar a los demás módulos de recepción."
+                    ? "Desde aquí puedes ver la agenda y crear citas sin entrar a los demás módulos de recepción."
                     : "Desde aquí puedes crear una cita para tu lead sin entrar al módulo completo de recepción."
                   : "Crear citas, ubicar clientes, registrar llegada y actualizar estado."}
               </p>
