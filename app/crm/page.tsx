@@ -179,6 +179,12 @@ const quickActions: QuickAction[] = [
     roles: ["super_user", "comercial", "gerencia_comercial", "gerente_comercial", "gerente"],
   },
   {
+    title: "Registro de clientes",
+    subtitle: "Registrar clientes desde el formulario de recepcion comercial.",
+    href: "/recepcion?view=comercial",
+    roles: ["super_user", "gerencia_comercial", "gerente_comercial", "gerente"],
+  },
+  {
     title: "Retractos y renegociaciones",
     subtitle: "Preparar ajustes de ventas con impacto financiero y comisional.",
     href: "/comercial/ajustes",
@@ -483,11 +489,12 @@ export default function HomePage() {
       return withCommercialEssentials.sort((a, b) => {
         const order: Record<string, number> = {
           "/consulta-cliente": 1,
-          "/comercial#crear-cliente": 2,
-          "/comercial": 3,
-          "/admin/comisiones": 4,
-          "/fisioterapia": 5,
-          "/nutricion": 6,
+          "/recepcion?view=comercial": 2,
+          "/comercial#crear-cliente": 3,
+          "/comercial": 4,
+          "/admin/comisiones": 5,
+          "/fisioterapia": 6,
+          "/nutricion": 7,
         };
         return (order[a.href] ?? 99) - (order[b.href] ?? 99);
       });

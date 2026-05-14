@@ -286,6 +286,8 @@ const allowedRoles = [
   "recepcion",
   "comercial",
   "gerencia_comercial",
+  "gerente_comercial",
+  "gerente",
   "tmk",
   "confirmador",
   "supervisor_call_center",
@@ -1236,8 +1238,13 @@ function RecepcionContent() {
   const isReadOnlyAgendaForCall =
     currentRoleCode === "tmk" || currentRoleCode === "confirmador";
 
+  const isCommercialManagementRole =
+    currentRoleCode === "gerencia_comercial" ||
+    currentRoleCode === "gerente_comercial" ||
+    currentRoleCode === "gerente";
+
   const isCommercialReceptionOnly =
-    currentRoleCode === "comercial" || currentRoleCode === "gerencia_comercial";
+    currentRoleCode === "comercial" || isCommercialManagementRole;
 
   const isEmbeddedCommercialCreationView =
     receptionView === "comercial" && isCommercialReceptionOnly;
@@ -1248,7 +1255,7 @@ function RecepcionContent() {
     currentRoleCode === "supervisor_call_center";
 
   const commercialBackHref =
-    currentRoleCode === "gerencia_comercial" ? "/gerencia/comercial" : "/comercial";
+    isCommercialManagementRole ? "/gerencia/comercial" : "/comercial";
 
   const serviceOptions = useMemo(() => activeSection === "nutricion_entregas" ? [] : getServiceOptionsBySection(activeSection), [activeSection]);
   const serviceFieldLabel = useMemo(() => activeSection === "nutricion_entregas" ? "Servicio" : getServiceFieldLabel(activeSection), [activeSection]);
@@ -1484,14 +1491,10 @@ function RecepcionContent() {
   }
 
   useEffect(() => {
-    if (
-      receptionView === "comercial" ||
-      currentRoleCode === "comercial" ||
-      currentRoleCode === "gerencia_comercial"
-    ) {
+    if (receptionView === "comercial" || isCommercialReceptionOnly) {
       setActiveSection("comercial");
     }
-  }, [receptionView, currentRoleCode]);
+  }, [receptionView, isCommercialReceptionOnly]);
 
   useEffect(() => {
     if (!lookupFromUrl.trim()) return;
