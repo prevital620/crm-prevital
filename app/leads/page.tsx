@@ -1392,7 +1392,7 @@ export default function LeadsPage() {
                               {savingAvailabilityUserId === item.promoterId
                                 ? "Guardando..."
                                 : item.countsForGoal
-                                  ? "No trabaja hoy"
+                                  ? "Marcar no trabaja hoy"
                                   : "Marcar disponible"}
                             </button>
                           </div>
