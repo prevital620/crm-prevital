@@ -41,6 +41,14 @@ type OpcTeamPromoter = {
   commission_group_code: string | null;
 };
 
+type OpcWorkSessionRow = {
+  id: string;
+  user_id: string;
+  work_date: string;
+  started_at: string;
+  ended_at: string | null;
+};
+
 type AppointmentRow = {
   id: string;
   lead_id: string | null;
@@ -171,6 +179,7 @@ export default function LeadsPage() {
   const [profileGroupCodes, setProfileGroupCodes] = useState<Record<string, string | null>>({});
   const [currentCommissionGroupCode, setCurrentCommissionGroupCode] = useState<string | null>(null);
   const [opcTeamPromoters, setOpcTeamPromoters] = useState<OpcTeamPromoter[]>([]);
+  const [opcWorkSessions, setOpcWorkSessions] = useState<OpcWorkSessionRow[]>([]);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState(hoyISO());
@@ -180,6 +189,7 @@ export default function LeadsPage() {
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [opcReportPromoterId, setOpcReportPromoterId] = useState("todos");
+  const [startingOpcShift, setStartingOpcShift] = useState(false);
 
   const showCreatorColumn =
     roleCode === "super_user" ||
@@ -210,6 +220,60 @@ export default function LeadsPage() {
     roleCode === "supervisor_call_center" ||
     roleCode === "super_user";
   const hideLeadHeroMeta = roleCode === "supervisor_opc";
+  const currentOpcShift = useMemo(() => {
+    if (!currentUserId || !dateFilter) return null;
+    return (
+      opcWorkSessions.find(
+        (item) => item.user_id === currentUserId && item.work_date === dateFilter
+      ) || null
+    );
+  }, [currentUserId, dateFilter, opcWorkSessions]);
+
+  async function cargarJornadasOpc(fecha = dateFilter) {
+    if (!fecha) {
+      setOpcWorkSessions([]);
+      return;
+    }
+
+    const { data, error: sessionsError } = await supabase
+      .from("opc_work_sessions")
+      .select("id, user_id, work_date, started_at, ended_at")
+      .eq("work_date", fecha);
+
+    if (sessionsError) throw sessionsError;
+    setOpcWorkSessions((data as OpcWorkSessionRow[]) || []);
+  }
+
+  async function iniciarJornadaOpc() {
+    if (!currentUserId || !dateFilter || roleCode !== "promotor_opc") return;
+
+    try {
+      setStartingOpcShift(true);
+      setError("");
+      setSuccessMessage("");
+
+      const { error: upsertError } = await supabase
+        .from("opc_work_sessions")
+        .upsert(
+          {
+            user_id: currentUserId,
+            work_date: dateFilter,
+            started_at: new Date().toISOString(),
+            ended_at: null,
+          },
+          { onConflict: "user_id,work_date", ignoreDuplicates: true }
+        );
+
+      if (upsertError) throw upsertError;
+
+      await cargarJornadasOpc(dateFilter);
+      setSuccessMessage("Jornada iniciada. Desde ahora medimos tu ritmo de 5 leads por hora.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo iniciar la jornada OPC.");
+    } finally {
+      setStartingOpcShift(false);
+    }
+  }
 
   async function validarAcceso() {
     try {
@@ -292,6 +356,7 @@ export default function LeadsPage() {
 
       setLeads(leadsData);
       setAppointments(appointmentsData);
+      await cargarJornadasOpc(dateFilter);
 
       const creatorIds = Array.from(
         new Set(
@@ -514,6 +579,13 @@ export default function LeadsPage() {
       cargarLeads();
     }
   }, [authorized, currentUserId, roleCode]);
+
+  useEffect(() => {
+    if (!authorized || !currentUserId || !canViewOpcPromoterReport) return;
+    cargarJornadasOpc(dateFilter).catch((err) => {
+      console.warn("No se pudieron cargar jornadas OPC", err);
+    });
+  }, [authorized, currentUserId, dateFilter, canViewOpcPromoterReport]);
 
   const activeAppointmentByLeadId = useMemo(() => {
     const map: Record<string, AppointmentRow> = {};
@@ -748,6 +820,7 @@ export default function LeadsPage() {
 
     const selectedDateHasGoal = Boolean(dateFilter);
     const isToday = dateFilter === hoyISO();
+    const sessionsByUser = new Map(opcWorkSessions.map((item) => [item.user_id, item]));
     const grouped = new Map<
       string,
       {
@@ -810,24 +883,36 @@ export default function LeadsPage() {
 
     const rows = Array.from(grouped.values())
       .map((item) => {
+        const workSession = sessionsByUser.get(item.promoterId) || null;
         const elapsedHours =
-          selectedDateHasGoal && isToday && item.firstCreatedAt
+          selectedDateHasGoal && workSession
             ? Math.min(
                 OPC_DAILY_WORK_HOURS,
-                Math.max(1, (Date.now() - Date.parse(item.firstCreatedAt)) / 3600000)
+                Math.max(
+                  0,
+                  ((workSession.ended_at
+                    ? Date.parse(workSession.ended_at)
+                    : isToday
+                      ? Date.now()
+                      : Date.parse(workSession.started_at) + OPC_DAILY_WORK_HOURS * 3600000) -
+                    Date.parse(workSession.started_at)) /
+                    3600000
+                )
               )
-            : OPC_DAILY_WORK_HOURS;
+            : 0;
         const expectedSoFar = selectedDateHasGoal
           ? Math.min(OPC_DAILY_LEAD_GOAL, Math.ceil(elapsedHours * OPC_TARGET_LEADS_PER_HOUR))
           : 0;
         const progress = selectedDateHasGoal
           ? Math.min(100, Math.round((item.total / OPC_DAILY_LEAD_GOAL) * 100))
           : 0;
-        const hourlyAverage = item.total / elapsedHours;
+        const hourlyAverage = elapsedHours > 0 ? item.total / elapsedHours : 0;
         const expectedRatio = expectedSoFar > 0 ? item.total / expectedSoFar : 0;
         const status =
           !selectedDateHasGoal
             ? "Selecciona fecha"
+            : !workSession
+              ? "Sin iniciar"
             : item.total >= OPC_DAILY_LEAD_GOAL
               ? "Meta cumplida"
               : item.total >= expectedSoFar
@@ -836,7 +921,7 @@ export default function LeadsPage() {
                   ? "Va muy mal"
                   : "Va quedada";
         const tone =
-          status === "Selecciona fecha"
+          status === "Selecciona fecha" || status === "Sin iniciar"
             ? "neutral"
             : status === "Meta cumplida" || status === "Va bien"
               ? "good"
@@ -851,6 +936,8 @@ export default function LeadsPage() {
           hourlyAverage,
           status,
           tone,
+          workStartedAt: workSession?.started_at || null,
+          elapsedHours,
         };
       })
       .sort((a, b) => b.total - a.total || a.promoterName.localeCompare(b.promoterName));
@@ -860,8 +947,9 @@ export default function LeadsPage() {
         ? rows
         : rows.filter((item) => item.promoterId === opcReportPromoterId);
     const totalLeads = filteredRows.reduce((sum, item) => sum + item.total, 0);
+    const activeRows = filteredRows.filter((item) => item.workStartedAt);
     const totalGoal = selectedDateHasGoal
-      ? filteredRows.length * OPC_DAILY_LEAD_GOAL
+      ? activeRows.length * OPC_DAILY_LEAD_GOAL
       : 0;
     const totalProgress =
       selectedDateHasGoal && totalGoal > 0
@@ -882,6 +970,7 @@ export default function LeadsPage() {
     dateFilter,
     opcReportPromoterId,
     opcTeamPromoters,
+    opcWorkSessions,
     creatorNames,
     activeAppointmentByLeadId,
   ]);
@@ -1089,8 +1178,30 @@ export default function LeadsPage() {
                   {showTeamOpcPromoterReport ? "Leads por promotor" : "Tu estadística del día"}
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-[#51695C]">
-                  Meta diaria: 30 leads por promotor. Jornada: 6 horas. Ritmo esperado: 5 leads por hora.
+                  Meta diaria: 30 leads por promotor. Jornada: 6 horas. Ritmo esperado: 5 leads por hora desde que se inicia la jornada.
                 </p>
+                {roleCode === "promotor_opc" && dateFilter === hoyISO() ? (
+                  <div className="mt-4 flex flex-wrap items-center gap-3">
+                    {currentOpcShift ? (
+                      <span className="inline-flex rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
+                        Jornada iniciada a las{" "}
+                        {new Date(currentOpcShift.started_at).toLocaleTimeString("es-CO", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => void iniciarJornadaOpc()}
+                        disabled={startingOpcShift}
+                        className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
+                      >
+                        {startingOpcShift ? "Iniciando..." : "Iniciar jornada"}
+                      </button>
+                    )}
+                  </div>
+                ) : null}
               </div>
 
               <div className="grid gap-3 rounded-[28px] border border-[#D6E8DA] bg-white/85 p-4 shadow-sm md:grid-cols-2">
@@ -1179,8 +1290,10 @@ export default function LeadsPage() {
                             </h3>
                             <p className="mt-1 text-sm text-[#51695C]">
                               {item.total} leads creados
-                              {opcPromoterReport.selectedDateHasGoal
+                              {opcPromoterReport.selectedDateHasGoal && item.workStartedAt
                                 ? ` · esperado hasta ahora: ${item.expectedSoFar}`
+                                : opcPromoterReport.selectedDateHasGoal
+                                  ? " · jornada sin iniciar"
                                 : ""}
                             </p>
                           </div>
@@ -1199,12 +1312,18 @@ export default function LeadsPage() {
                           />
                         </div>
 
-                        <div className="mt-4 grid gap-3 text-sm text-[#51695C] sm:grid-cols-4">
+                        <div className="mt-4 grid gap-3 text-sm text-[#51695C] sm:grid-cols-5">
                           <p>
                             <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
                               Promedio
                             </span>
-                            {item.hourlyAverage.toFixed(1)}/h
+                            {item.workStartedAt ? `${item.hourlyAverage.toFixed(1)}/h` : "Sin iniciar"}
+                          </p>
+                          <p>
+                            <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
+                              Tiempo
+                            </span>
+                            {item.workStartedAt ? `${item.elapsedHours.toFixed(1)}h` : "0h"}
                           </p>
                           <p>
                             <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
