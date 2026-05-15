@@ -189,6 +189,18 @@ export default function LeadsPage() {
   const showSupervisorOpcTools =
     roleCode === "supervisor_opc" || roleCode === "super_user";
   const showTmkSchedulingTools = roleCode === "tmk";
+  const currentOperationalGroupCode = normalizeOperationalGroupCode(
+    currentCommissionGroupCode
+  );
+  const isCallCenterCzReportRole =
+    (roleCode === "supervisor_call_center" || roleCode === "confirmador") &&
+    currentOperationalGroupCode === "CZ";
+  const canViewOpcPromoterReport =
+    showSupervisorOpcTools ||
+    roleCode === "promotor_opc" ||
+    isCallCenterCzReportRole;
+  const showTeamOpcPromoterReport =
+    showSupervisorOpcTools || isCallCenterCzReportRole;
   const showLeadStatusFilters = showSupervisorOpcTools || showTmkSchedulingTools;
 
   const isSuperUser = roleCode === "super_user";
@@ -393,7 +405,14 @@ export default function LeadsPage() {
         .filter((profile): profile is OpcTeamPromoter & { is_active: boolean } => Boolean(profile))
         .filter((profile) => profile.is_active)
         .filter((profile) => {
-          if (roleCode === "super_user" && !currentGroupCode) return true;
+          if (roleCode === "super_user") return true;
+          if (
+            (roleCode === "supervisor_call_center" || roleCode === "confirmador") &&
+            currentGroupCode === "CZ"
+          ) {
+            return true;
+          }
+          if (roleCode === "promotor_opc") return profile.id === currentUserId;
           return Boolean(currentGroupCode && profile.commission_group_code === currentGroupCode);
         })
         .sort((a, b) =>
@@ -716,7 +735,7 @@ export default function LeadsPage() {
   }, [citasSupervisorOpc, appointmentsDateFilter, appointmentsSearch, showSupervisorOpcTools]);
 
   const opcPromoterReport = useMemo(() => {
-    if (!showSupervisorOpcTools) {
+    if (!canViewOpcPromoterReport) {
       return {
         rows: [],
         filteredRows: [],
@@ -805,6 +824,7 @@ export default function LeadsPage() {
           ? Math.min(100, Math.round((item.total / OPC_DAILY_LEAD_GOAL) * 100))
           : 0;
         const hourlyAverage = item.total / elapsedHours;
+        const expectedRatio = expectedSoFar > 0 ? item.total / expectedSoFar : 0;
         const status =
           !selectedDateHasGoal
             ? "Selecciona fecha"
@@ -812,7 +832,17 @@ export default function LeadsPage() {
               ? "Meta cumplida"
               : item.total >= expectedSoFar
                 ? "Va bien"
-                : "Va quedada";
+                : expectedRatio < 0.5
+                  ? "Va muy mal"
+                  : "Va quedada";
+        const tone =
+          status === "Selecciona fecha"
+            ? "neutral"
+            : status === "Meta cumplida" || status === "Va bien"
+              ? "good"
+              : status === "Va quedada"
+                ? "warning"
+                : "danger";
 
         return {
           ...item,
@@ -820,6 +850,7 @@ export default function LeadsPage() {
           progress,
           hourlyAverage,
           status,
+          tone,
         };
       })
       .sort((a, b) => b.total - a.total || a.promoterName.localeCompare(b.promoterName));
@@ -846,7 +877,7 @@ export default function LeadsPage() {
       selectedDateHasGoal,
     };
   }, [
-    showSupervisorOpcTools,
+    canViewOpcPromoterReport,
     leadsPorRol,
     dateFilter,
     opcReportPromoterId,
@@ -1047,7 +1078,7 @@ export default function LeadsPage() {
           </section>
         ) : null}
 
-        {showSupervisorOpcTools ? (
+        {canViewOpcPromoterReport ? (
           <section className="overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(238,249,242,0.96)_100%)] shadow-[0_24px_60px_rgba(95,125,102,0.14)]">
             <div className="grid gap-5 p-6 xl:grid-cols-[1.1fr_0.9fr]">
               <div>
@@ -1055,7 +1086,7 @@ export default function LeadsPage() {
                   Reporte OPC
                 </p>
                 <h2 className="mt-3 text-2xl font-bold tracking-tight text-[#24312A]">
-                  Leads por promotor
+                  {showTeamOpcPromoterReport ? "Leads por promotor" : "Tu estadística del día"}
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-6 text-[#51695C]">
                   Meta diaria: 30 leads por promotor. Jornada: 6 horas. Ritmo esperado: 5 leads por hora.
@@ -1063,23 +1094,34 @@ export default function LeadsPage() {
               </div>
 
               <div className="grid gap-3 rounded-[28px] border border-[#D6E8DA] bg-white/85 p-4 shadow-sm md:grid-cols-2">
-                <label className="block">
-                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#5F7D66]">
-                    Promotor
-                  </span>
-                  <select
-                    className="w-full rounded-2xl border border-[#CFE4D8] bg-white p-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
-                    value={opcReportPromoterId}
-                    onChange={(e) => setOpcReportPromoterId(e.target.value)}
-                  >
-                    <option value="todos">Todos los promotores</option>
-                    {opcPromoterReport.rows.map((item) => (
-                      <option key={item.promoterId} value={item.promoterId}>
-                        {item.promoterName}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+                {showTeamOpcPromoterReport ? (
+                  <label className="block">
+                    <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#5F7D66]">
+                      Promotor
+                    </span>
+                    <select
+                      className="w-full rounded-2xl border border-[#CFE4D8] bg-white p-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
+                      value={opcReportPromoterId}
+                      onChange={(e) => setOpcReportPromoterId(e.target.value)}
+                    >
+                      <option value="todos">Todos los promotores</option>
+                      {opcPromoterReport.rows.map((item) => (
+                        <option key={item.promoterId} value={item.promoterId}>
+                          {item.promoterName}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ) : (
+                  <div className="rounded-2xl border border-[#E2EFE7] bg-[#F7FCF9] p-4">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5F7D66]">
+                      Vista personal
+                    </p>
+                    <p className="mt-2 text-sm text-[#51695C]">
+                      Solo ves tus leads OPC del día contra tu meta.
+                    </p>
+                  </div>
+                )}
 
                 <div className="rounded-2xl border border-[#E2EFE7] bg-[#F7FCF9] p-4">
                   <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5F7D66]">
@@ -1108,8 +1150,22 @@ export default function LeadsPage() {
               ) : (
                 <div className="grid gap-3 lg:grid-cols-2">
                   {opcPromoterReport.filteredRows.map((item) => {
-                    const isGood = item.status === "Va bien" || item.status === "Meta cumplida";
-                    const isNeutral = item.status === "Selecciona fecha";
+                    const toneClass =
+                      item.tone === "neutral"
+                        ? "border-slate-200 bg-slate-50 text-slate-600"
+                        : item.tone === "good"
+                          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                          : item.tone === "warning"
+                            ? "border-amber-200 bg-amber-50 text-amber-700"
+                            : "border-rose-200 bg-rose-50 text-rose-700";
+                    const progressClass =
+                      item.tone === "good"
+                        ? "bg-[linear-gradient(90deg,_#7ABF93_0%,_#477D5C_100%)]"
+                        : item.tone === "warning"
+                          ? "bg-[linear-gradient(90deg,_#E9B86B_0%,_#B9782D_100%)]"
+                          : item.tone === "danger"
+                            ? "bg-[linear-gradient(90deg,_#F18B8B_0%,_#C24141_100%)]"
+                            : "bg-[linear-gradient(90deg,_#CBD5E1_0%,_#64748B_100%)]";
 
                     return (
                       <article
@@ -1130,13 +1186,7 @@ export default function LeadsPage() {
                           </div>
 
                           <span
-                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
-                              isNeutral
-                                ? "border-slate-200 bg-slate-50 text-slate-600"
-                                : isGood
-                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
-                                  : "border-amber-200 bg-amber-50 text-amber-700"
-                            }`}
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${toneClass}`}
                           >
                             {item.status}
                           </span>
@@ -1144,11 +1194,7 @@ export default function LeadsPage() {
 
                         <div className="mt-4 h-3 overflow-hidden rounded-full bg-[#E5F0E9]">
                           <div
-                            className={`h-full rounded-full ${
-                              isGood
-                                ? "bg-[linear-gradient(90deg,_#7ABF93_0%,_#477D5C_100%)]"
-                                : "bg-[linear-gradient(90deg,_#E9B86B_0%,_#B9782D_100%)]"
-                            }`}
+                            className={`h-full rounded-full ${progressClass}`}
                             style={{ width: `${item.progress}%` }}
                           />
                         </div>
