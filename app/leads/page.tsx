@@ -111,6 +111,10 @@ const OPC_DAILY_LEAD_GOAL = 30;
 const OPC_DAILY_WORK_HOURS = 6;
 const OPC_TARGET_LEADS_PER_HOUR = OPC_DAILY_LEAD_GOAL / OPC_DAILY_WORK_HOURS;
 
+function opcSessionCountsForGoal(session: OpcWorkSessionRow | null | undefined) {
+  return !(session?.is_scheduled === false && session.unavailable_reason === "No trabaja hoy");
+}
+
 function hoyISO() {
   const hoy = new Date();
   const y = hoy.getFullYear();
@@ -918,7 +922,7 @@ export default function LeadsPage() {
         scheduledCount: 0,
         closedCount: 0,
         firstCreatedAt: null,
-        countsForGoal: session?.is_scheduled !== false,
+        countsForGoal: opcSessionCountsForGoal(session),
       });
     });
 
@@ -962,8 +966,9 @@ export default function LeadsPage() {
       .map((item) => {
         const workSession = sessionsByUser.get(item.promoterId) || null;
         const shiftStartedAt = workSession?.shift_started_at || null;
+        const trackingStartedAt = shiftStartedAt || item.firstCreatedAt;
         const elapsedHours =
-          selectedDateHasGoal && shiftStartedAt
+          selectedDateHasGoal && trackingStartedAt
             ? Math.min(
                 OPC_DAILY_WORK_HOURS,
                 Math.max(
@@ -972,8 +977,8 @@ export default function LeadsPage() {
                     ? Date.parse(workSession.ended_at)
                     : isToday
                       ? Date.now()
-                      : Date.parse(shiftStartedAt) + OPC_DAILY_WORK_HOURS * 3600000) -
-                    Date.parse(shiftStartedAt)) /
+                      : Date.parse(trackingStartedAt) + OPC_DAILY_WORK_HOURS * 3600000) -
+                    Date.parse(trackingStartedAt)) /
                     3600000
                 )
               )
@@ -991,8 +996,8 @@ export default function LeadsPage() {
             ? "Selecciona fecha"
             : !item.countsForGoal
               ? "No trabaja hoy"
-            : !shiftStartedAt
-              ? "Sin iniciar"
+            : !trackingStartedAt
+              ? "Va quedada"
             : item.total >= OPC_DAILY_LEAD_GOAL
               ? "Meta cumplida"
               : item.total >= expectedSoFar
@@ -1001,7 +1006,7 @@ export default function LeadsPage() {
                   ? "Va muy mal"
                   : "Va quedada";
         const tone =
-          status === "Selecciona fecha" || status === "Sin iniciar" || status === "No trabaja hoy"
+          status === "Selecciona fecha" || status === "No trabaja hoy"
             ? "neutral"
             : status === "Meta cumplida" || status === "Va bien"
               ? "good"
@@ -1016,7 +1021,8 @@ export default function LeadsPage() {
           hourlyAverage,
           status,
           tone,
-          workStartedAt: shiftStartedAt,
+          workStartedAt: trackingStartedAt,
+          shiftStartedAt,
           elapsedHours,
           countsForGoal: item.countsForGoal,
         };
@@ -1384,7 +1390,9 @@ export default function LeadsPage() {
                         {selectedAvailabilityPromoter &&
                         savingAvailabilityUserId === selectedAvailabilityPromoter.promoterId
                           ? "Guardando..."
-                          : selectedAvailabilityPromoter?.countsForGoal
+                          : !selectedAvailabilityPromoter
+                            ? "Selecciona persona"
+                          : selectedAvailabilityPromoter.countsForGoal
                             ? "No trabaja hoy"
                             : "Activar para hoy"}
                       </button>
@@ -1431,10 +1439,10 @@ export default function LeadsPage() {
                             </h3>
                             <p className="mt-1 text-sm text-[#51695C]">
                               {item.total} leads creados
-                              {opcPromoterReport.selectedDateHasGoal && item.workStartedAt
-                                ? ` · esperado hasta ahora: ${item.expectedSoFar}`
-                                : opcPromoterReport.selectedDateHasGoal
-                                  ? " · jornada sin iniciar"
+                              {opcPromoterReport.selectedDateHasGoal && item.countsForGoal
+                                ? item.workStartedAt
+                                  ? ` · esperado hasta ahora: ${item.expectedSoFar}`
+                                  : " · sin leads todavía"
                                 : ""}
                             </p>
                           </div>
@@ -1458,7 +1466,7 @@ export default function LeadsPage() {
                             <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
                               Promedio
                             </span>
-                            {item.workStartedAt ? `${item.hourlyAverage.toFixed(1)}/h` : "Sin iniciar"}
+                            {item.workStartedAt ? `${item.hourlyAverage.toFixed(1)}/h` : "0/h"}
                           </p>
                           <p>
                             <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
