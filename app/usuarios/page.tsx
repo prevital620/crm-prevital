@@ -28,6 +28,12 @@ type CommissionGroupOption = {
   code: string;
 };
 
+function getUserRoles(user: UserRow) {
+  return (user.user_roles || [])
+    .flatMap((item) => item.roles || [])
+    .filter(Boolean);
+}
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -41,6 +47,8 @@ export default function UsuariosPage() {
   const [mensaje, setMensaje] = useState("");
   const [authorized, setAuthorized] = useState(false);
   const [search, setSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState("todos");
+  const [groupFilter, setGroupFilter] = useState("todos");
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [commissionGroups, setCommissionGroups] = useState<CommissionGroupOption[]>([]);
   const [newCommissionGroupCode, setNewCommissionGroupCode] = useState("");
@@ -277,34 +285,70 @@ Correo de acceso: ${user.email}`
 
   const filteredUsers = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return users;
 
     return users.filter((user) => {
       const department = user.departments?.[0]?.name || "";
-      const roleNames = (user.user_roles || [])
-        .flatMap((item) => item.roles || [])
+      const roles = getUserRoles(user);
+      const roleNames = roles
         .map((role) => role.name || "")
         .filter(Boolean)
         .join(" ");
-      const roleCodes = (user.user_roles || [])
-        .flatMap((item) => item.roles || [])
+      const roleCodes = roles
         .map((role) => role.code || "")
         .filter(Boolean)
-        .join(" ");
-
-      return (
+      const roleCodesText = roleCodes.join(" ");
+      const groupCode = (user.commission_group_code || "").trim().toUpperCase();
+      const matchesRole = roleFilter === "todos" || roleCodes.includes(roleFilter);
+      const matchesGroup =
+        groupFilter === "todos" ||
+        (groupFilter === "sin_grupo" ? !groupCode : groupCode === groupFilter);
+      const matchesSearch =
+        !q ||
         (user.full_name || "").toLowerCase().includes(q) ||
         (user.employee_code || "").toLowerCase().includes(q) ||
-        (user.commission_group_code || "").toLowerCase().includes(q) ||
+        groupCode.toLowerCase().includes(q) ||
         (user.email || "").toLowerCase().includes(q) ||
         (user.phone || "").toLowerCase().includes(q) ||
         (user.job_title || "").toLowerCase().includes(q) ||
         department.toLowerCase().includes(q) ||
         roleNames.toLowerCase().includes(q) ||
-        roleCodes.toLowerCase().includes(q)
-      );
+        roleCodesText.toLowerCase().includes(q);
+
+      return matchesRole && matchesGroup && matchesSearch;
     });
-  }, [users, search]);
+  }, [users, search, roleFilter, groupFilter]);
+
+  const roleOptions = useMemo(() => {
+    const map = new Map<string, string>();
+
+    users.forEach((user) => {
+      getUserRoles(user).forEach((role) => {
+        if (!role.code) return;
+        if (!map.has(role.code)) {
+          map.set(role.code, role.name || role.code);
+        }
+      });
+    });
+
+    return Array.from(map.entries())
+      .map(([code, name]) => ({ code, name }))
+      .sort((a, b) => a.name.localeCompare(b.name, "es"));
+  }, [users]);
+
+  const groupOptions = useMemo(() => {
+    const codes = new Set<string>();
+
+    commissionGroups.forEach((group) => {
+      if (group.code) codes.add(group.code.trim().toUpperCase());
+    });
+
+    users.forEach((user) => {
+      const code = user.commission_group_code?.trim().toUpperCase();
+      if (code) codes.add(code);
+    });
+
+    return Array.from(codes).sort((a, b) => a.localeCompare(b, "es"));
+  }, [commissionGroups, users]);
 
   const resumen = useMemo(() => {
     return {
@@ -471,13 +515,52 @@ Correo de acceso: ${user.email}`
                 </p>
               </div>
 
-              <div className="flex w-full flex-col gap-3 md:w-auto md:flex-row">
+              <div className="grid w-full gap-3 lg:w-auto lg:grid-cols-[220px_200px_280px_auto_auto]">
+                <select
+                  className={inputClass}
+                  value={roleFilter}
+                  onChange={(e) => setRoleFilter(e.target.value)}
+                >
+                  <option value="todos">Todos los roles</option>
+                  {roleOptions.map((role) => (
+                    <option key={role.code} value={role.code}>
+                      {role.name}
+                    </option>
+                  ))}
+                </select>
+
+                <select
+                  className={inputClass}
+                  value={groupFilter}
+                  onChange={(e) => setGroupFilter(e.target.value)}
+                >
+                  <option value="todos">Todos los grupos</option>
+                  <option value="sin_grupo">Sin grupo</option>
+                  {groupOptions.map((code) => (
+                    <option key={code} value={code}>
+                      Grupo {code}
+                    </option>
+                  ))}
+                </select>
+
                 <input
-                  className={`${inputClass} md:min-w-[280px]`}
+                  className={inputClass}
                   placeholder="Buscar por nombre, cargo, teléfono o rol"
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                 />
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setRoleFilter("todos");
+                    setGroupFilter("todos");
+                    setSearch("");
+                  }}
+                  className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                >
+                  Limpiar
+                </button>
 
                 <button
                   onClick={cargarUsuarios}
@@ -488,24 +571,29 @@ Correo de acceso: ${user.email}`
               </div>
             </div>
 
+            {!loading ? (
+              <p className="mb-4 text-sm text-[#607368]">
+                Mostrando {filteredUsers.length} de {users.length} usuarios.
+              </p>
+            ) : null}
+
             {loading ? (
               <div className="rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
                 Cargando usuarios...
               </div>
             ) : filteredUsers.length === 0 ? (
               <div className="rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
-                No hay usuarios que coincidan con la búsqueda.
+                No hay usuarios que coincidan con los filtros.
               </div>
             ) : (
               <div className="space-y-4">
                 {filteredUsers.map((user) => {
                   const firstDepartment = user.departments?.[0];
-                  const roleNames = (user.user_roles || [])
-                    .flatMap((item) => item.roles || [])
+                  const roles = getUserRoles(user);
+                  const roleNames = roles
                     .map((role) => role.name || "")
                     .filter(Boolean);
-                  const roleCodes = (user.user_roles || [])
-                    .flatMap((item) => item.roles || [])
+                  const roleCodes = roles
                     .map((role) => role.code || "")
                     .filter(Boolean);
 
