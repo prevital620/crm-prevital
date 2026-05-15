@@ -3,6 +3,7 @@ create table if not exists public.opc_work_sessions (
   user_id uuid not null references auth.users(id) on delete cascade,
   work_date date not null,
   started_at timestamptz not null default now(),
+  shift_started_at timestamptz null,
   ended_at timestamptz null,
   is_scheduled boolean not null default true,
   unavailable_reason text null,
@@ -16,6 +17,9 @@ add column if not exists is_scheduled boolean not null default true;
 
 alter table public.opc_work_sessions
 add column if not exists unavailable_reason text null;
+
+alter table public.opc_work_sessions
+add column if not exists shift_started_at timestamptz null;
 
 alter table public.opc_work_sessions enable row level security;
 

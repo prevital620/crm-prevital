@@ -46,6 +46,7 @@ type OpcWorkSessionRow = {
   user_id: string;
   work_date: string;
   started_at: string;
+  shift_started_at: string | null;
   ended_at: string | null;
   is_scheduled: boolean | null;
   unavailable_reason: string | null;
@@ -191,6 +192,7 @@ export default function LeadsPage() {
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
   const [opcReportPromoterId, setOpcReportPromoterId] = useState("todos");
+  const [availabilityPromoterId, setAvailabilityPromoterId] = useState("");
   const [startingOpcShift, setStartingOpcShift] = useState(false);
   const [savingAvailabilityUserId, setSavingAvailabilityUserId] = useState<string | null>(null);
 
@@ -228,7 +230,10 @@ export default function LeadsPage() {
     if (!currentUserId || !effectiveLeadDateFilter) return null;
     return (
       opcWorkSessions.find(
-        (item) => item.user_id === currentUserId && item.work_date === effectiveLeadDateFilter
+        (item) =>
+          item.user_id === currentUserId &&
+          item.work_date === effectiveLeadDateFilter &&
+          item.shift_started_at
       ) || null
     );
   }, [currentUserId, effectiveLeadDateFilter, opcWorkSessions]);
@@ -241,7 +246,7 @@ export default function LeadsPage() {
 
     const { data, error: sessionsError } = await supabase
       .from("opc_work_sessions")
-      .select("id, user_id, work_date, started_at, ended_at, is_scheduled, unavailable_reason")
+      .select("id, user_id, work_date, started_at, shift_started_at, ended_at, is_scheduled, unavailable_reason")
       .eq("work_date", fecha);
 
     if (sessionsError) throw sessionsError;
@@ -249,25 +254,27 @@ export default function LeadsPage() {
   }
 
   async function iniciarJornadaOpc() {
-    if (!currentUserId || !dateFilter || roleCode !== "promotor_opc") return;
+    if (!currentUserId || !effectiveLeadDateFilter || roleCode !== "promotor_opc") return;
 
     try {
       setStartingOpcShift(true);
       setError("");
       setSuccessMessage("");
+      const now = new Date().toISOString();
 
       const { error: upsertError } = await supabase
         .from("opc_work_sessions")
         .upsert(
           {
             user_id: currentUserId,
-            work_date: dateFilter,
-            started_at: new Date().toISOString(),
+            work_date: effectiveLeadDateFilter,
+            started_at: now,
+            shift_started_at: now,
             ended_at: null,
             is_scheduled: true,
             unavailable_reason: null,
           },
-          { onConflict: "user_id,work_date", ignoreDuplicates: true }
+          { onConflict: "user_id,work_date" }
         );
 
       if (upsertError) throw upsertError;
@@ -297,6 +304,7 @@ export default function LeadsPage() {
         user_id: promoterId,
         work_date: effectiveLeadDateFilter,
         started_at: existing?.started_at || new Date(`${effectiveLeadDateFilter}T00:00:00`).toISOString(),
+        shift_started_at: isScheduled ? existing?.shift_started_at || null : null,
         ended_at: existing?.ended_at || null,
         is_scheduled: isScheduled,
         unavailable_reason: isScheduled ? null : "No trabaja hoy",
@@ -953,18 +961,19 @@ export default function LeadsPage() {
     const rows = Array.from(grouped.values())
       .map((item) => {
         const workSession = sessionsByUser.get(item.promoterId) || null;
+        const shiftStartedAt = workSession?.shift_started_at || null;
         const elapsedHours =
-          selectedDateHasGoal && workSession
+          selectedDateHasGoal && shiftStartedAt
             ? Math.min(
                 OPC_DAILY_WORK_HOURS,
                 Math.max(
                   0,
-                  ((workSession.ended_at
+                  ((workSession?.ended_at
                     ? Date.parse(workSession.ended_at)
                     : isToday
                       ? Date.now()
-                      : Date.parse(workSession.started_at) + OPC_DAILY_WORK_HOURS * 3600000) -
-                    Date.parse(workSession.started_at)) /
+                      : Date.parse(shiftStartedAt) + OPC_DAILY_WORK_HOURS * 3600000) -
+                    Date.parse(shiftStartedAt)) /
                     3600000
                 )
               )
@@ -982,7 +991,7 @@ export default function LeadsPage() {
             ? "Selecciona fecha"
             : !item.countsForGoal
               ? "No trabaja hoy"
-            : !workSession
+            : !shiftStartedAt
               ? "Sin iniciar"
             : item.total >= OPC_DAILY_LEAD_GOAL
               ? "Meta cumplida"
@@ -1007,7 +1016,7 @@ export default function LeadsPage() {
           hourlyAverage,
           status,
           tone,
-          workStartedAt: workSession?.started_at || null,
+          workStartedAt: shiftStartedAt,
           elapsedHours,
           countsForGoal: item.countsForGoal,
         };
@@ -1046,6 +1055,13 @@ export default function LeadsPage() {
     creatorNames,
     activeAppointmentByLeadId,
   ]);
+
+  const selectedAvailabilityPromoter = useMemo(() => {
+    return (
+      opcPromoterReport.rows.find((item) => item.promoterId === availabilityPromoterId) ||
+      null
+    );
+  }, [availabilityPromoterId, opcPromoterReport.rows]);
 
   function formatDate(dateString: string) {
     try {
@@ -1257,7 +1273,7 @@ export default function LeadsPage() {
                     {currentOpcShift ? (
                       <span className="inline-flex rounded-2xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-semibold text-emerald-700">
                         Jornada iniciada a las{" "}
-                        {new Date(currentOpcShift.started_at).toLocaleTimeString("es-CO", {
+                        {new Date(currentOpcShift.shift_started_at || currentOpcShift.started_at).toLocaleTimeString("es-CO", {
                           hour: "2-digit",
                           minute: "2-digit",
                         })}
@@ -1322,6 +1338,59 @@ export default function LeadsPage() {
                       : "Selecciona una fecha para medir contra la meta diaria."}
                   </p>
                 </div>
+
+                {showTeamOpcPromoterReport ? (
+                  <div className="rounded-2xl border border-[#E2EFE7] bg-[#F7FCF9] p-4 md:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5F7D66]">
+                      Disponibilidad del día
+                    </p>
+                    <p className="mt-1 text-xs text-[#51695C]">
+                      Por defecto todos cuentan para la meta. Usa este control solo si alguien no trabaja hoy.
+                    </p>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto]">
+                      <select
+                        className="w-full rounded-2xl border border-[#CFE4D8] bg-white p-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
+                        value={availabilityPromoterId}
+                        onChange={(e) => setAvailabilityPromoterId(e.target.value)}
+                      >
+                        <option value="">Selecciona promotor</option>
+                        {opcPromoterReport.rows.map((item) => (
+                          <option key={item.promoterId} value={item.promoterId}>
+                            {item.promoterName}
+                            {item.countsForGoal ? "" : " (No trabaja hoy)"}
+                          </option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          selectedAvailabilityPromoter
+                            ? void actualizarDisponibilidadOpc(
+                                selectedAvailabilityPromoter.promoterId,
+                                !selectedAvailabilityPromoter.countsForGoal
+                              )
+                            : undefined
+                        }
+                        disabled={
+                          !selectedAvailabilityPromoter ||
+                          savingAvailabilityUserId === selectedAvailabilityPromoter.promoterId
+                        }
+                        className={`rounded-2xl border px-4 py-3 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-60 ${
+                          selectedAvailabilityPromoter?.countsForGoal
+                            ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                            : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                        }`}
+                      >
+                        {selectedAvailabilityPromoter &&
+                        savingAvailabilityUserId === selectedAvailabilityPromoter.promoterId
+                          ? "Guardando..."
+                          : selectedAvailabilityPromoter?.countsForGoal
+                            ? "No trabaja hoy"
+                            : "Activar para hoy"}
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             </div>
 
@@ -1376,27 +1445,6 @@ export default function LeadsPage() {
                             {item.status}
                           </span>
                         </div>
-
-                        {showTeamOpcPromoterReport ? (
-                          <div className="mt-3 flex flex-wrap gap-2">
-                            <button
-                              type="button"
-                              onClick={() => void actualizarDisponibilidadOpc(item.promoterId, !item.countsForGoal)}
-                              disabled={savingAvailabilityUserId === item.promoterId}
-                              className={`rounded-2xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-60 ${
-                                item.countsForGoal
-                                  ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
-                                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
-                              }`}
-                            >
-                              {savingAvailabilityUserId === item.promoterId
-                                ? "Guardando..."
-                                : item.countsForGoal
-                                  ? "Marcar no trabaja hoy"
-                                  : "Marcar disponible"}
-                            </button>
-                          </div>
-                        ) : null}
 
                         <div className="mt-4 h-3 overflow-hidden rounded-full bg-[#E5F0E9]">
                           <div
