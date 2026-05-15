@@ -35,6 +35,12 @@ type ProfileRow = {
   commission_group_code: string | null;
 };
 
+type OpcTeamPromoter = {
+  id: string;
+  full_name: string | null;
+  commission_group_code: string | null;
+};
+
 type AppointmentRow = {
   id: string;
   lead_id: string | null;
@@ -164,6 +170,7 @@ export default function LeadsPage() {
   const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [profileGroupCodes, setProfileGroupCodes] = useState<Record<string, string | null>>({});
   const [currentCommissionGroupCode, setCurrentCommissionGroupCode] = useState<string | null>(null);
+  const [opcTeamPromoters, setOpcTeamPromoters] = useState<OpcTeamPromoter[]>([]);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState(hoyISO());
@@ -319,9 +326,89 @@ export default function LeadsPage() {
         groupMap[profile.id] = normalizeOperationalGroupCode(profile.commission_group_code);
       });
 
+      const currentGroupCode = groupMap[currentUserId || ""] || null;
+      const { data: promoterRolesData, error: promoterRolesError } = await supabase
+        .from("user_roles")
+        .select(`
+          user_id,
+          profiles!user_roles_user_id_fkey (
+            id,
+            full_name,
+            commission_group_code,
+            is_active
+          ),
+          roles!user_roles_role_id_fkey (
+            code
+          )
+        `);
+
+      if (promoterRolesError) throw promoterRolesError;
+
+      const teamPromoters = (
+        (promoterRolesData as
+          | Array<{
+              user_id: string;
+              profiles:
+                | {
+                    id: string;
+                    full_name: string | null;
+                    commission_group_code: string | null;
+                    is_active: boolean | null;
+                  }
+                | Array<{
+                    id: string;
+                    full_name: string | null;
+                    commission_group_code: string | null;
+                    is_active: boolean | null;
+                  }>
+                | null;
+              roles:
+                | { code: string | null }
+                | Array<{ code: string | null }>
+                | null;
+            }>
+          | null) || []
+      )
+        .filter((item) => {
+          const roles = Array.isArray(item.roles)
+            ? item.roles
+            : item.roles
+              ? [item.roles]
+              : [];
+          return roles.some((role) => role?.code === "promotor_opc");
+        })
+        .map((item) => {
+          const profile = Array.isArray(item.profiles)
+            ? item.profiles[0]
+            : item.profiles;
+          return profile
+            ? {
+                id: profile.id,
+                full_name: profile.full_name,
+                commission_group_code: normalizeOperationalGroupCode(profile.commission_group_code),
+                is_active: Boolean(profile.is_active),
+              }
+            : null;
+        })
+        .filter((profile): profile is OpcTeamPromoter & { is_active: boolean } => Boolean(profile))
+        .filter((profile) => profile.is_active)
+        .filter((profile) => {
+          if (roleCode === "super_user" && !currentGroupCode) return true;
+          return Boolean(currentGroupCode && profile.commission_group_code === currentGroupCode);
+        })
+        .sort((a, b) =>
+          (a.full_name || "Sin nombre").localeCompare(b.full_name || "Sin nombre", "es")
+        );
+
+      teamPromoters.forEach((profile) => {
+        namesMap[profile.id] = profile.full_name?.trim() || "Sin nombre";
+        groupMap[profile.id] = profile.commission_group_code;
+      });
+
       setCreatorNames(namesMap);
       setProfileGroupCodes(groupMap);
-      setCurrentCommissionGroupCode(groupMap[currentUserId || ""] || null);
+      setCurrentCommissionGroupCode(currentGroupCode);
+      setOpcTeamPromoters(teamPromoters);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los leads.");
     } finally {
@@ -407,7 +494,7 @@ export default function LeadsPage() {
     if (authorized && currentUserId) {
       cargarLeads();
     }
-  }, [authorized, currentUserId]);
+  }, [authorized, currentUserId, roleCode]);
 
   const activeAppointmentByLeadId = useMemo(() => {
     const map: Record<string, AppointmentRow> = {};
@@ -624,7 +711,7 @@ export default function LeadsPage() {
         ? nombre.includes(q) || telefono.includes(q)
         : true;
 
-    return fechaOk && busquedaOk;
+      return fechaOk && busquedaOk;
     });
   }, [citasSupervisorOpc, appointmentsDateFilter, appointmentsSearch, showSupervisorOpcTools]);
 
@@ -655,8 +742,26 @@ export default function LeadsPage() {
       }
     >();
 
+    opcTeamPromoters.forEach((promoter) => {
+      grouped.set(promoter.id, {
+        promoterId: promoter.id,
+        promoterName: promoter.full_name?.trim() || "Sin nombre",
+        total: 0,
+        newCount: 0,
+        scheduledCount: 0,
+        closedCount: 0,
+        firstCreatedAt: null,
+      });
+    });
+
+    const teamPromoterIds = new Set(opcTeamPromoters.map((item) => item.id));
+
     leadsPorRol
       .filter((lead) => lead.source === "opc")
+      .filter((lead) => {
+        if (teamPromoterIds.size === 0) return true;
+        return teamPromoterIds.has(lead.created_by_user_id);
+      })
       .filter((lead) => (dateFilter ? soloFecha(lead.created_at) === dateFilter : true))
       .forEach((lead) => {
         const promoterId = lead.created_by_user_id || "sin_promotor";
@@ -745,6 +850,7 @@ export default function LeadsPage() {
     leadsPorRol,
     dateFilter,
     opcReportPromoterId,
+    opcTeamPromoters,
     creatorNames,
     activeAppointmentByLeadId,
   ]);
