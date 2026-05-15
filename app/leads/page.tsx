@@ -47,6 +47,8 @@ type OpcWorkSessionRow = {
   work_date: string;
   started_at: string;
   ended_at: string | null;
+  is_scheduled: boolean | null;
+  unavailable_reason: string | null;
 };
 
 type AppointmentRow = {
@@ -190,6 +192,7 @@ export default function LeadsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [opcReportPromoterId, setOpcReportPromoterId] = useState("todos");
   const [startingOpcShift, setStartingOpcShift] = useState(false);
+  const [savingAvailabilityUserId, setSavingAvailabilityUserId] = useState<string | null>(null);
 
   const showCreatorColumn =
     roleCode === "super_user" ||
@@ -237,7 +240,7 @@ export default function LeadsPage() {
 
     const { data, error: sessionsError } = await supabase
       .from("opc_work_sessions")
-      .select("id, user_id, work_date, started_at, ended_at")
+      .select("id, user_id, work_date, started_at, ended_at, is_scheduled, unavailable_reason")
       .eq("work_date", fecha);
 
     if (sessionsError) throw sessionsError;
@@ -260,6 +263,8 @@ export default function LeadsPage() {
             work_date: dateFilter,
             started_at: new Date().toISOString(),
             ended_at: null,
+            is_scheduled: true,
+            unavailable_reason: null,
           },
           { onConflict: "user_id,work_date", ignoreDuplicates: true }
         );
@@ -272,6 +277,46 @@ export default function LeadsPage() {
       setError(err?.message || "No se pudo iniciar la jornada OPC.");
     } finally {
       setStartingOpcShift(false);
+    }
+  }
+
+  async function actualizarDisponibilidadOpc(promoterId: string, isScheduled: boolean) {
+    if (!dateFilter || !showTeamOpcPromoterReport) return;
+
+    try {
+      setSavingAvailabilityUserId(promoterId);
+      setError("");
+      setSuccessMessage("");
+
+      const existing = opcWorkSessions.find(
+        (item) => item.user_id === promoterId && item.work_date === dateFilter
+      );
+
+      const payload = {
+        user_id: promoterId,
+        work_date: dateFilter,
+        started_at: existing?.started_at || new Date(`${dateFilter}T00:00:00`).toISOString(),
+        ended_at: existing?.ended_at || null,
+        is_scheduled: isScheduled,
+        unavailable_reason: isScheduled ? null : "No trabaja hoy",
+      };
+
+      const { error: availabilityError } = await supabase
+        .from("opc_work_sessions")
+        .upsert(payload, { onConflict: "user_id,work_date" });
+
+      if (availabilityError) throw availabilityError;
+
+      await cargarJornadasOpc(dateFilter);
+      setSuccessMessage(
+        isScheduled
+          ? "Promotor marcado como disponible para la meta del día."
+          : "Promotor marcado como no trabaja hoy; no suma a la meta diaria."
+      );
+    } catch (err: any) {
+      setError(err?.message || "No se pudo actualizar la disponibilidad del promotor.");
+    } finally {
+      setSavingAvailabilityUserId(null);
     }
   }
 
@@ -831,10 +876,12 @@ export default function LeadsPage() {
         scheduledCount: number;
         closedCount: number;
         firstCreatedAt: string | null;
+        countsForGoal: boolean;
       }
     >();
 
     opcTeamPromoters.forEach((promoter) => {
+      const session = sessionsByUser.get(promoter.id);
       grouped.set(promoter.id, {
         promoterId: promoter.id,
         promoterName: promoter.full_name?.trim() || "Sin nombre",
@@ -843,6 +890,7 @@ export default function LeadsPage() {
         scheduledCount: 0,
         closedCount: 0,
         firstCreatedAt: null,
+        countsForGoal: session?.is_scheduled !== false,
       });
     });
 
@@ -867,6 +915,7 @@ export default function LeadsPage() {
             scheduledCount: 0,
             closedCount: 0,
             firstCreatedAt: null,
+            countsForGoal: true,
           };
 
         const status = getVisibleStatus(lead);
@@ -911,6 +960,8 @@ export default function LeadsPage() {
         const status =
           !selectedDateHasGoal
             ? "Selecciona fecha"
+            : !item.countsForGoal
+              ? "No trabaja hoy"
             : !workSession
               ? "Sin iniciar"
             : item.total >= OPC_DAILY_LEAD_GOAL
@@ -921,7 +972,7 @@ export default function LeadsPage() {
                   ? "Va muy mal"
                   : "Va quedada";
         const tone =
-          status === "Selecciona fecha" || status === "Sin iniciar"
+          status === "Selecciona fecha" || status === "Sin iniciar" || status === "No trabaja hoy"
             ? "neutral"
             : status === "Meta cumplida" || status === "Va bien"
               ? "good"
@@ -938,6 +989,7 @@ export default function LeadsPage() {
           tone,
           workStartedAt: workSession?.started_at || null,
           elapsedHours,
+          countsForGoal: item.countsForGoal,
         };
       })
       .sort((a, b) => b.total - a.total || a.promoterName.localeCompare(b.promoterName));
@@ -947,9 +999,9 @@ export default function LeadsPage() {
         ? rows
         : rows.filter((item) => item.promoterId === opcReportPromoterId);
     const totalLeads = filteredRows.reduce((sum, item) => sum + item.total, 0);
-    const activeRows = filteredRows.filter((item) => item.workStartedAt);
+    const goalRows = filteredRows.filter((item) => item.countsForGoal);
     const totalGoal = selectedDateHasGoal
-      ? activeRows.length * OPC_DAILY_LEAD_GOAL
+      ? goalRows.length * OPC_DAILY_LEAD_GOAL
       : 0;
     const totalProgress =
       selectedDateHasGoal && totalGoal > 0
@@ -1304,6 +1356,27 @@ export default function LeadsPage() {
                             {item.status}
                           </span>
                         </div>
+
+                        {showTeamOpcPromoterReport ? (
+                          <div className="mt-3 flex flex-wrap gap-2">
+                            <button
+                              type="button"
+                              onClick={() => void actualizarDisponibilidadOpc(item.promoterId, !item.countsForGoal)}
+                              disabled={savingAvailabilityUserId === item.promoterId}
+                              className={`rounded-2xl border px-3 py-2 text-xs font-semibold transition disabled:opacity-60 ${
+                                item.countsForGoal
+                                  ? "border-rose-200 bg-rose-50 text-rose-700 hover:bg-rose-100"
+                                  : "border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100"
+                              }`}
+                            >
+                              {savingAvailabilityUserId === item.promoterId
+                                ? "Guardando..."
+                                : item.countsForGoal
+                                  ? "No trabaja hoy"
+                                  : "Marcar disponible"}
+                            </button>
+                          </div>
+                        ) : null}
 
                         <div className="mt-4 h-3 overflow-hidden rounded-full bg-[#E5F0E9]">
                           <div
