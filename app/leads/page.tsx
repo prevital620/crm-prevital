@@ -90,6 +90,10 @@ const ACTIVE_APPOINTMENT_STATUSES = [
   "en_atencion",
 ];
 
+const OPC_DAILY_LEAD_GOAL = 30;
+const OPC_DAILY_WORK_HOURS = 6;
+const OPC_TARGET_LEADS_PER_HOUR = OPC_DAILY_LEAD_GOAL / OPC_DAILY_WORK_HOURS;
+
 function hoyISO() {
   const hoy = new Date();
   const y = hoy.getFullYear();
@@ -168,6 +172,7 @@ export default function LeadsPage() {
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
   const [deletingLeadId, setDeletingLeadId] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState("");
+  const [opcReportPromoterId, setOpcReportPromoterId] = useState("todos");
 
   const showCreatorColumn =
     roleCode === "super_user" ||
@@ -619,9 +624,130 @@ export default function LeadsPage() {
         ? nombre.includes(q) || telefono.includes(q)
         : true;
 
-      return fechaOk && busquedaOk;
+    return fechaOk && busquedaOk;
     });
   }, [citasSupervisorOpc, appointmentsDateFilter, appointmentsSearch, showSupervisorOpcTools]);
+
+  const opcPromoterReport = useMemo(() => {
+    if (!showSupervisorOpcTools) {
+      return {
+        rows: [],
+        filteredRows: [],
+        totalLeads: 0,
+        totalGoal: 0,
+        totalProgress: 0,
+        selectedDateHasGoal: Boolean(dateFilter),
+      };
+    }
+
+    const selectedDateHasGoal = Boolean(dateFilter);
+    const isToday = dateFilter === hoyISO();
+    const grouped = new Map<
+      string,
+      {
+        promoterId: string;
+        promoterName: string;
+        total: number;
+        newCount: number;
+        scheduledCount: number;
+        closedCount: number;
+        firstCreatedAt: string | null;
+      }
+    >();
+
+    leadsPorRol
+      .filter((lead) => lead.source === "opc")
+      .filter((lead) => (dateFilter ? soloFecha(lead.created_at) === dateFilter : true))
+      .forEach((lead) => {
+        const promoterId = lead.created_by_user_id || "sin_promotor";
+        const current =
+          grouped.get(promoterId) ||
+          {
+            promoterId,
+            promoterName: getCreatorName(promoterId),
+            total: 0,
+            newCount: 0,
+            scheduledCount: 0,
+            closedCount: 0,
+            firstCreatedAt: null,
+          };
+
+        const status = getVisibleStatus(lead);
+        current.total += 1;
+        if (status === "nuevo") current.newCount += 1;
+        if (status === "agendado") current.scheduledCount += 1;
+        if (isClosed(lead)) current.closedCount += 1;
+        if (!current.firstCreatedAt || Date.parse(lead.created_at) < Date.parse(current.firstCreatedAt)) {
+          current.firstCreatedAt = lead.created_at;
+        }
+
+        grouped.set(promoterId, current);
+      });
+
+    const rows = Array.from(grouped.values())
+      .map((item) => {
+        const elapsedHours =
+          selectedDateHasGoal && isToday && item.firstCreatedAt
+            ? Math.min(
+                OPC_DAILY_WORK_HOURS,
+                Math.max(1, (Date.now() - Date.parse(item.firstCreatedAt)) / 3600000)
+              )
+            : OPC_DAILY_WORK_HOURS;
+        const expectedSoFar = selectedDateHasGoal
+          ? Math.min(OPC_DAILY_LEAD_GOAL, Math.ceil(elapsedHours * OPC_TARGET_LEADS_PER_HOUR))
+          : 0;
+        const progress = selectedDateHasGoal
+          ? Math.min(100, Math.round((item.total / OPC_DAILY_LEAD_GOAL) * 100))
+          : 0;
+        const hourlyAverage = item.total / elapsedHours;
+        const status =
+          !selectedDateHasGoal
+            ? "Selecciona fecha"
+            : item.total >= OPC_DAILY_LEAD_GOAL
+              ? "Meta cumplida"
+              : item.total >= expectedSoFar
+                ? "Va bien"
+                : "Va quedada";
+
+        return {
+          ...item,
+          expectedSoFar,
+          progress,
+          hourlyAverage,
+          status,
+        };
+      })
+      .sort((a, b) => b.total - a.total || a.promoterName.localeCompare(b.promoterName));
+
+    const filteredRows =
+      opcReportPromoterId === "todos"
+        ? rows
+        : rows.filter((item) => item.promoterId === opcReportPromoterId);
+    const totalLeads = filteredRows.reduce((sum, item) => sum + item.total, 0);
+    const totalGoal = selectedDateHasGoal
+      ? filteredRows.length * OPC_DAILY_LEAD_GOAL
+      : 0;
+    const totalProgress =
+      selectedDateHasGoal && totalGoal > 0
+        ? Math.min(100, Math.round((totalLeads / totalGoal) * 100))
+        : 0;
+
+    return {
+      rows,
+      filteredRows,
+      totalLeads,
+      totalGoal,
+      totalProgress,
+      selectedDateHasGoal,
+    };
+  }, [
+    showSupervisorOpcTools,
+    leadsPorRol,
+    dateFilter,
+    opcReportPromoterId,
+    creatorNames,
+    activeAppointmentByLeadId,
+  ]);
 
   function formatDate(dateString: string) {
     try {
@@ -812,6 +938,147 @@ export default function LeadsPage() {
             <StatCard title="Interesados" value={resumen.interesados} active={quickFilter === "interesados"} onClick={() => setQuickFilter("interesados")} />
             <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
             <StatCard title="No asistió" value={resumen.noAsistio} active={quickFilter === "no_asistio"} onClick={() => setQuickFilter("no_asistio")} />
+          </section>
+        ) : null}
+
+        {showSupervisorOpcTools ? (
+          <section className="overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(238,249,242,0.96)_100%)] shadow-[0_24px_60px_rgba(95,125,102,0.14)]">
+            <div className="grid gap-5 p-6 xl:grid-cols-[1.1fr_0.9fr]">
+              <div>
+                <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.24em] text-[#5F7D66] shadow-sm">
+                  Reporte OPC
+                </p>
+                <h2 className="mt-3 text-2xl font-bold tracking-tight text-[#24312A]">
+                  Leads por promotor
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-6 text-[#51695C]">
+                  Meta diaria: 30 leads por promotor. Jornada: 6 horas. Ritmo esperado: 5 leads por hora.
+                </p>
+              </div>
+
+              <div className="grid gap-3 rounded-[28px] border border-[#D6E8DA] bg-white/85 p-4 shadow-sm md:grid-cols-2">
+                <label className="block">
+                  <span className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[#5F7D66]">
+                    Promotor
+                  </span>
+                  <select
+                    className="w-full rounded-2xl border border-[#CFE4D8] bg-white p-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
+                    value={opcReportPromoterId}
+                    onChange={(e) => setOpcReportPromoterId(e.target.value)}
+                  >
+                    <option value="todos">Todos los promotores</option>
+                    {opcPromoterReport.rows.map((item) => (
+                      <option key={item.promoterId} value={item.promoterId}>
+                        {item.promoterName}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="rounded-2xl border border-[#E2EFE7] bg-[#F7FCF9] p-4">
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[#5F7D66]">
+                    Avance del filtro
+                  </p>
+                  <p className="mt-2 text-3xl font-bold text-[#24312A]">
+                    {opcPromoterReport.totalLeads}
+                    <span className="text-base font-semibold text-[#6A7C70]">
+                      {opcPromoterReport.selectedDateHasGoal ? ` / ${opcPromoterReport.totalGoal}` : ""}
+                    </span>
+                  </p>
+                  <p className="mt-1 text-xs text-[#51695C]">
+                    {opcPromoterReport.selectedDateHasGoal
+                      ? `${opcPromoterReport.totalProgress}% de la meta`
+                      : "Selecciona una fecha para medir contra la meta diaria."}
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t border-[#DDEDE4] bg-white/55 p-4 md:p-6">
+              {opcPromoterReport.filteredRows.length === 0 ? (
+                <div className="rounded-3xl border border-dashed border-[#CFE4D8] bg-white/80 p-5 text-sm text-slate-500">
+                  No hay leads OPC para este filtro.
+                </div>
+              ) : (
+                <div className="grid gap-3 lg:grid-cols-2">
+                  {opcPromoterReport.filteredRows.map((item) => {
+                    const isGood = item.status === "Va bien" || item.status === "Meta cumplida";
+                    const isNeutral = item.status === "Selecciona fecha";
+
+                    return (
+                      <article
+                        key={item.promoterId}
+                        className="rounded-[28px] border border-[#D6E8DA] bg-white p-5 shadow-[0_16px_34px_rgba(95,125,102,0.1)]"
+                      >
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div>
+                            <h3 className="text-lg font-bold text-[#24312A]">
+                              {item.promoterName}
+                            </h3>
+                            <p className="mt-1 text-sm text-[#51695C]">
+                              {item.total} leads creados
+                              {opcPromoterReport.selectedDateHasGoal
+                                ? ` · esperado hasta ahora: ${item.expectedSoFar}`
+                                : ""}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ${
+                              isNeutral
+                                ? "border-slate-200 bg-slate-50 text-slate-600"
+                                : isGood
+                                  ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+                                  : "border-amber-200 bg-amber-50 text-amber-700"
+                            }`}
+                          >
+                            {item.status}
+                          </span>
+                        </div>
+
+                        <div className="mt-4 h-3 overflow-hidden rounded-full bg-[#E5F0E9]">
+                          <div
+                            className={`h-full rounded-full ${
+                              isGood
+                                ? "bg-[linear-gradient(90deg,_#7ABF93_0%,_#477D5C_100%)]"
+                                : "bg-[linear-gradient(90deg,_#E9B86B_0%,_#B9782D_100%)]"
+                            }`}
+                            style={{ width: `${item.progress}%` }}
+                          />
+                        </div>
+
+                        <div className="mt-4 grid gap-3 text-sm text-[#51695C] sm:grid-cols-4">
+                          <p>
+                            <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
+                              Promedio
+                            </span>
+                            {item.hourlyAverage.toFixed(1)}/h
+                          </p>
+                          <p>
+                            <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
+                              Nuevos
+                            </span>
+                            {item.newCount}
+                          </p>
+                          <p>
+                            <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
+                              Agendados
+                            </span>
+                            {item.scheduledCount}
+                          </p>
+                          <p>
+                            <span className="block text-xs font-semibold uppercase tracking-[0.14em] text-[#6A7C70]">
+                              Cerrados
+                            </span>
+                            {item.closedCount}
+                          </p>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </section>
         ) : null}
 
