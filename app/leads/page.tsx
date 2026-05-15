@@ -223,14 +223,15 @@ export default function LeadsPage() {
     roleCode === "supervisor_call_center" ||
     roleCode === "super_user";
   const hideLeadHeroMeta = roleCode === "supervisor_opc";
+  const effectiveLeadDateFilter = dateFilter || hoyISO();
   const currentOpcShift = useMemo(() => {
-    if (!currentUserId || !dateFilter) return null;
+    if (!currentUserId || !effectiveLeadDateFilter) return null;
     return (
       opcWorkSessions.find(
-        (item) => item.user_id === currentUserId && item.work_date === dateFilter
+        (item) => item.user_id === currentUserId && item.work_date === effectiveLeadDateFilter
       ) || null
     );
-  }, [currentUserId, dateFilter, opcWorkSessions]);
+  }, [currentUserId, effectiveLeadDateFilter, opcWorkSessions]);
 
   async function cargarJornadasOpc(fecha = dateFilter) {
     if (!fecha) {
@@ -271,7 +272,7 @@ export default function LeadsPage() {
 
       if (upsertError) throw upsertError;
 
-      await cargarJornadasOpc(dateFilter);
+      await cargarJornadasOpc(effectiveLeadDateFilter);
       setSuccessMessage("Jornada iniciada. Desde ahora medimos tu ritmo de 5 leads por hora.");
     } catch (err: any) {
       setError(err?.message || "No se pudo iniciar la jornada OPC.");
@@ -281,7 +282,7 @@ export default function LeadsPage() {
   }
 
   async function actualizarDisponibilidadOpc(promoterId: string, isScheduled: boolean) {
-    if (!dateFilter || !showTeamOpcPromoterReport) return;
+    if (!effectiveLeadDateFilter || !showTeamOpcPromoterReport) return;
 
     try {
       setSavingAvailabilityUserId(promoterId);
@@ -289,13 +290,13 @@ export default function LeadsPage() {
       setSuccessMessage("");
 
       const existing = opcWorkSessions.find(
-        (item) => item.user_id === promoterId && item.work_date === dateFilter
+        (item) => item.user_id === promoterId && item.work_date === effectiveLeadDateFilter
       );
 
       const payload = {
         user_id: promoterId,
-        work_date: dateFilter,
-        started_at: existing?.started_at || new Date(`${dateFilter}T00:00:00`).toISOString(),
+        work_date: effectiveLeadDateFilter,
+        started_at: existing?.started_at || new Date(`${effectiveLeadDateFilter}T00:00:00`).toISOString(),
         ended_at: existing?.ended_at || null,
         is_scheduled: isScheduled,
         unavailable_reason: isScheduled ? null : "No trabaja hoy",
@@ -307,7 +308,7 @@ export default function LeadsPage() {
 
       if (availabilityError) throw availabilityError;
 
-      await cargarJornadasOpc(dateFilter);
+      await cargarJornadasOpc(effectiveLeadDateFilter);
       setSuccessMessage(
         isScheduled
           ? "Promotor marcado como disponible para la meta del día."
@@ -645,9 +646,23 @@ export default function LeadsPage() {
     return map;
   }, [appointments]);
 
-  function getVisibleStatus(lead: LeadRow) {
-    const hasActiveAppointment = !!activeAppointmentByLeadId[lead.id];
-    if (hasActiveAppointment) return "agendado";
+  function getVisibleStatus(lead: LeadRow, appointmentDate?: string) {
+    const activeAppointment = activeAppointmentByLeadId[lead.id];
+    if (
+      activeAppointment &&
+      (!appointmentDate || activeAppointment.appointment_date === appointmentDate)
+    ) {
+      return "agendado";
+    }
+
+    if (
+      appointmentDate &&
+      (lead.status === "agendado" || lead.status === "agendada") &&
+      activeAppointment?.appointment_date !== appointmentDate
+    ) {
+      return "nuevo";
+    }
+
     return lead.status || "nuevo";
   }
 
@@ -711,13 +726,13 @@ export default function LeadsPage() {
     activeAppointmentByLeadId,
   ]);
 
-  function isPending(lead: LeadRow) {
-    const estado = getVisibleStatus(lead);
+  function isPending(lead: LeadRow, appointmentDate?: string) {
+    const estado = getVisibleStatus(lead, appointmentDate);
     return estado === "pendiente_contacto" || estado === "no_responde";
   }
 
-  function isInterested(lead: LeadRow) {
-    const estado = getVisibleStatus(lead);
+  function isInterested(lead: LeadRow, appointmentDate?: string) {
+    const estado = getVisibleStatus(lead, appointmentDate);
     return (
       estado === "interesado" ||
       estado === "contactado" ||
@@ -725,20 +740,20 @@ export default function LeadsPage() {
     );
   }
 
-  function isScheduled(lead: LeadRow) {
-    return getVisibleStatus(lead) === "agendado";
+  function isScheduled(lead: LeadRow, appointmentDate?: string) {
+    return getVisibleStatus(lead, appointmentDate) === "agendado";
   }
 
-  function isPendingSchedule(lead: LeadRow) {
-    return !isScheduled(lead) && getVisibleStatus(lead) === "contactado";
+  function isPendingSchedule(lead: LeadRow, appointmentDate?: string) {
+    return !isScheduled(lead, appointmentDate) && getVisibleStatus(lead, appointmentDate) === "contactado";
   }
 
-  function isNoAsistio(lead: LeadRow) {
-    return getVisibleStatus(lead) === "no_asistio";
+  function isNoAsistio(lead: LeadRow, appointmentDate?: string) {
+    return getVisibleStatus(lead, appointmentDate) === "no_asistio";
   }
 
-  function isClosed(lead: LeadRow) {
-    const estado = getVisibleStatus(lead);
+  function isClosed(lead: LeadRow, appointmentDate?: string) {
+    const estado = getVisibleStatus(lead, appointmentDate);
     return (
       estado === "vendido" ||
       estado === "cerrado" ||
@@ -748,49 +763,51 @@ export default function LeadsPage() {
 
   const resumen = useMemo(() => {
     const delDia = leadsPorRol.filter(
-      (lead) => soloFecha(lead.created_at) === dateFilter
+      (lead) => soloFecha(lead.created_at) === effectiveLeadDateFilter
     );
 
     return {
       total: delDia.length,
-      nuevos: delDia.filter((lead) => getVisibleStatus(lead) === "nuevo").length,
-      pendientes: delDia.filter((lead) => isPending(lead)).length,
-      interesados: delDia.filter((lead) => isInterested(lead)).length,
-      pendientesCita: delDia.filter((lead) => isPendingSchedule(lead)).length,
-      agendados: delDia.filter((lead) => isScheduled(lead)).length,
-      noAsistio: delDia.filter((lead) => isNoAsistio(lead)).length,
-      cerrados: delDia.filter((lead) => isClosed(lead)).length,
+      nuevos: delDia.filter((lead) => getVisibleStatus(lead, effectiveLeadDateFilter) === "nuevo").length,
+      pendientes: delDia.filter((lead) => isPending(lead, effectiveLeadDateFilter)).length,
+      interesados: delDia.filter((lead) => isInterested(lead, effectiveLeadDateFilter)).length,
+      pendientesCita: delDia.filter((lead) => isPendingSchedule(lead, effectiveLeadDateFilter)).length,
+      agendados: delDia.filter((lead) => isScheduled(lead, effectiveLeadDateFilter)).length,
+      noAsistio: delDia.filter((lead) => isNoAsistio(lead, effectiveLeadDateFilter)).length,
+      cerrados: delDia.filter((lead) => isClosed(lead, effectiveLeadDateFilter)).length,
     };
-  }, [leadsPorRol, dateFilter, activeAppointmentByLeadId]);
+  }, [leadsPorRol, effectiveLeadDateFilter, activeAppointmentByLeadId]);
 
   const leadsFiltrados = useMemo(() => {
     const q = search.trim().toLowerCase();
 
     let base = leadsPorRol.filter((lead) =>
-      dateFilter ? soloFecha(lead.created_at) === dateFilter : true
+      showSupervisorOpcTools || canViewOpcPromoterReport || dateFilter
+        ? soloFecha(lead.created_at) === effectiveLeadDateFilter
+        : true
     );
 
     if (showLeadStatusFilters) {
       if (quickFilter === "nuevos") {
-        base = base.filter((lead) => getVisibleStatus(lead) === "nuevo");
+        base = base.filter((lead) => getVisibleStatus(lead, effectiveLeadDateFilter) === "nuevo");
       }
       if (quickFilter === "pendientes") {
-        base = base.filter((lead) => isPending(lead));
+        base = base.filter((lead) => isPending(lead, effectiveLeadDateFilter));
       }
       if (quickFilter === "interesados") {
-        base = base.filter((lead) => isInterested(lead));
+        base = base.filter((lead) => isInterested(lead, effectiveLeadDateFilter));
       }
       if (quickFilter === "pendientes_cita") {
-        base = base.filter((lead) => isPendingSchedule(lead));
+        base = base.filter((lead) => isPendingSchedule(lead, effectiveLeadDateFilter));
       }
       if (quickFilter === "agendados") {
-        base = base.filter((lead) => isScheduled(lead));
+        base = base.filter((lead) => isScheduled(lead, effectiveLeadDateFilter));
       }
       if (quickFilter === "no_asistio") {
-        base = base.filter((lead) => isNoAsistio(lead));
+        base = base.filter((lead) => isNoAsistio(lead, effectiveLeadDateFilter));
       }
       if (quickFilter === "cerrados") {
-        base = base.filter((lead) => isClosed(lead));
+        base = base.filter((lead) => isClosed(lead, effectiveLeadDateFilter));
       }
     }
 
@@ -814,9 +831,12 @@ export default function LeadsPage() {
     leadsPorRol,
     search,
     dateFilter,
+    effectiveLeadDateFilter,
     creatorNames,
     quickFilter,
     showLeadStatusFilters,
+    showSupervisorOpcTools,
+    canViewOpcPromoterReport,
     activeAppointmentByLeadId,
   ]);
 
@@ -863,8 +883,8 @@ export default function LeadsPage() {
       };
     }
 
-    const selectedDateHasGoal = Boolean(dateFilter);
-    const isToday = dateFilter === hoyISO();
+    const selectedDateHasGoal = Boolean(effectiveLeadDateFilter);
+    const isToday = effectiveLeadDateFilter === hoyISO();
     const sessionsByUser = new Map(opcWorkSessions.map((item) => [item.user_id, item]));
     const grouped = new Map<
       string,
@@ -902,7 +922,7 @@ export default function LeadsPage() {
         if (teamPromoterIds.size === 0) return true;
         return teamPromoterIds.has(lead.created_by_user_id);
       })
-      .filter((lead) => (dateFilter ? soloFecha(lead.created_at) === dateFilter : true))
+      .filter((lead) => soloFecha(lead.created_at) === effectiveLeadDateFilter)
       .forEach((lead) => {
         const promoterId = lead.created_by_user_id || "sin_promotor";
         const current =
@@ -918,7 +938,7 @@ export default function LeadsPage() {
             countsForGoal: true,
           };
 
-        const status = getVisibleStatus(lead);
+        const status = getVisibleStatus(lead, effectiveLeadDateFilter);
         current.total += 1;
         if (status === "nuevo") current.newCount += 1;
         if (status === "agendado") current.scheduledCount += 1;
@@ -1019,7 +1039,7 @@ export default function LeadsPage() {
   }, [
     canViewOpcPromoterReport,
     leadsPorRol,
-    dateFilter,
+    effectiveLeadDateFilter,
     opcReportPromoterId,
     opcTeamPromoters,
     opcWorkSessions,
@@ -1476,7 +1496,7 @@ export default function LeadsPage() {
                 <input
                   className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-[#24312A] shadow-sm outline-none transition focus:border-[#A8CDBD] focus:ring-4 focus:ring-[#DDEFE4]"
                   type="date"
-                  value={dateFilter}
+                  value={effectiveLeadDateFilter}
                   onChange={(e) => setDateFilter(e.target.value)}
                 />
 
@@ -1500,7 +1520,12 @@ export default function LeadsPage() {
               ) : (
                 <div className="space-y-3">
                   {leadsFiltrados.map((lead) => {
-                    const estadoVisible = getVisibleStatus(lead);
+                    const estadoVisible = getVisibleStatus(
+                      lead,
+                      showSupervisorOpcTools || canViewOpcPromoterReport
+                        ? effectiveLeadDateFilter
+                        : undefined
+                    );
 
                     return (
                       <div
@@ -1747,7 +1772,12 @@ export default function LeadsPage() {
                   </thead>
                   <tbody>
                     {leadsFiltrados.map((lead) => {
-                      const estadoVisible = getVisibleStatus(lead);
+                      const estadoVisible = getVisibleStatus(
+                        lead,
+                        showSupervisorOpcTools || canViewOpcPromoterReport
+                          ? effectiveLeadDateFilter
+                          : undefined
+                      );
 
                       return (
                         <tr
