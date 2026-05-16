@@ -51,6 +51,7 @@ import {
   formatSlotAvailabilityLabel,
 } from "@/lib/agenda/agendaAvailability";
 import { repairMojibake } from "@/lib/text/repairMojibake";
+import { toSpanishErrorMessage } from "@/lib/errors/spanish";
 
 type LeadOption = {
   id: string;
@@ -4012,8 +4013,8 @@ function imprimirRegistroComercial() {
           : "Ingreso comercial registrado correctamente. La impresión del registro ya quedó habilitada."
       );
       await cargarTodo();
-    } catch (err: any) {
-      setError(err?.message || "No se pudo registrar el ingreso comercial.");
+    } catch (err: unknown) {
+      setError(toSpanishErrorMessage(err, "No se pudo registrar el ingreso comercial."));
     } finally {
       setSavingCommercialIntake(false);
     }
