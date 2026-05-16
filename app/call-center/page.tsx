@@ -71,6 +71,8 @@ type QuickFilter =
   | "no_asistio"
   | "cerrados";
 
+type LeadSourceFilter = "todos" | "opc" | "base";
+
 const statusOptions = [
   { value: "nuevo", label: "Nuevo" },
   { value: "pendiente_contacto", label: "Pendiente" },
@@ -203,6 +205,27 @@ function traducirFuenteComision(value: string | null) {
   return map[value] || value;
 }
 
+function normalizeLeadSourceValue(value: string | null | undefined) {
+  return String(value || "").trim().toLowerCase();
+}
+
+function leadMatchesSourceFilter(lead: Lead, sourceFilter: LeadSourceFilter) {
+  if (sourceFilter === "todos") return true;
+
+  const source = normalizeLeadSourceValue(lead.source);
+  const commissionSource = normalizeLeadSourceValue(lead.commission_source_type);
+
+  if (sourceFilter === "opc") {
+    return source === "opc" || commissionSource === "opc";
+  }
+
+  if (sourceFilter === "base") {
+    return source === "base" || commissionSource === "base";
+  }
+
+  return true;
+}
+
 const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "todos", label: "Todos" },
   { key: "redes", label: "Leads redes" },
@@ -251,11 +274,16 @@ function CallCenterPageContent() {
   const [savingCommissionLeadId, setSavingCommissionLeadId] = useState<string | null>(null);
   const [cancelingAppointmentId, setCancelingAppointmentId] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
+  const [leadSourceFilter, setLeadSourceFilter] = useState<LeadSourceFilter>("todos");
   const isSupervisorCallCenterView =
     currentRoleCode === "super_user" ||
     currentRoleCode === "supervisor_call_center" ||
     currentRoleCode === "confirmador";
   const canSeeAssignmentMeta = currentRoleCode !== "tmk";
+  const showLeadSourceFilter =
+    currentRoleCode === "super_user" ||
+    currentRoleCode === "supervisor_call_center" ||
+    currentRoleCode === "confirmador";
 
   async function cargarLeads() {
     const { data, error } = await supabase
@@ -830,6 +858,13 @@ function CallCenterPageContent() {
     );
   }, [leadsBasePorRol, fechaFiltro]);
 
+  const resumenPorOrigen = useMemo(() => {
+    return {
+      opc: leadsDelDia.filter((lead) => leadMatchesSourceFilter(lead, "opc")).length,
+      base: leadsDelDia.filter((lead) => leadMatchesSourceFilter(lead, "base")).length,
+    };
+  }, [leadsDelDia]);
+
   const leadsUltimos30Dias = useMemo(() => {
     const inicioVentana = restarDiasISO(29);
     const finVentana = hoyISO();
@@ -920,6 +955,10 @@ function CallCenterPageContent() {
       base = base.filter((lead) => esCerrado(lead));
     }
 
+    if (showLeadSourceFilter) {
+      base = base.filter((lead) => leadMatchesSourceFilter(lead, leadSourceFilter));
+    }
+
     if (!q) return base;
 
     return base.filter((lead) => {
@@ -944,6 +983,8 @@ function CallCenterPageContent() {
     leadsUltimos30Dias,
     busqueda,
     quickFilter,
+    leadSourceFilter,
+    showLeadSourceFilter,
     creatorNames,
     callCenterUsers,
     activeAppointmentByLeadId,
@@ -1246,7 +1287,7 @@ function CallCenterPageContent() {
             ))}
           </div>
 
-          <div className="grid gap-3 md:grid-cols-[1fr_auto_auto_1fr]">
+          <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-[1fr_auto_auto_220px_1fr]">
             <input
               className="w-full rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-slate-800 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
               type="date"
@@ -1270,6 +1311,18 @@ function CallCenterPageContent() {
               Todos
             </button>
 
+            {showLeadSourceFilter ? (
+              <select
+                className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-slate-800 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
+                value={leadSourceFilter}
+                onChange={(e) => setLeadSourceFilter(e.target.value as LeadSourceFilter)}
+              >
+                <option value="todos">Todos los origenes</option>
+                <option value="opc">{`OPC (${resumenPorOrigen.opc})`}</option>
+                <option value="base">{`Base (${resumenPorOrigen.base})`}</option>
+              </select>
+            ) : null}
+
             <input
               className="rounded-2xl border border-[#CFE4D8] bg-white/90 p-4 text-slate-800 shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
               placeholder={canSeeAssignmentMeta ? "Buscar por tel\u00E9fono, nombre, creador o asignado" : "Buscar por tel\u00E9fono o nombre"}
@@ -1280,7 +1333,11 @@ function CallCenterPageContent() {
 
           <p className="mt-3 text-xs text-[#5F7D66]">
             {fechaFiltro
-              ? `Mostrando leads del ${fechaFiltro}.`
+              ? `Mostrando leads del ${fechaFiltro}${
+                  showLeadSourceFilter && leadSourceFilter !== "todos"
+                    ? ` con origen ${leadSourceFilter.toUpperCase()}`
+                    : ""
+                }.`
               : "Mostrando todos los leads disponibles para tu rol."}
           </p>
 

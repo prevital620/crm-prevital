@@ -474,6 +474,21 @@ export default function HomePage() {
       });
     }
 
+    if (effectiveRoles.includes("confirmador")) {
+      return withCommercialEssentials.sort((a, b) => {
+        const order: Record<string, number> = {
+          "/call-center": 1,
+          "/leads": 2,
+          "/admin/comisiones": 3,
+          "/manifiestos": 4,
+          "/recepcion?view=agenda": 5,
+          "/leads/nuevo": 6,
+          "/leads/importar": 7,
+        };
+        return (order[a.href] ?? 99) - (order[b.href] ?? 99);
+      });
+    }
+
     if (effectiveRoles.includes("super_user")) {
       return withCommercialEssentials.filter(
         (action) => !["/recepcion?view=agenda", "/recepcion?view=config"].includes(action.href)
