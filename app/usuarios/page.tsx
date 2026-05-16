@@ -28,6 +28,12 @@ type CommissionGroupOption = {
   code: string;
 };
 
+type UserListViewer = {
+  is_super_user: boolean;
+  role_codes: string[];
+  commission_group_code: string | null;
+};
+
 function getUserRoles(user: UserRow) {
   return (user.user_roles || [])
     .flatMap((item) => item.roles || [])
@@ -53,6 +59,7 @@ export default function UsuariosPage() {
   const [commissionGroups, setCommissionGroups] = useState<CommissionGroupOption[]>([]);
   const [newCommissionGroupCode, setNewCommissionGroupCode] = useState("");
   const [savingCommissionGroup, setSavingCommissionGroup] = useState(false);
+  const [viewer, setViewer] = useState<UserListViewer | null>(null);
 
   async function cargarUsuarios() {
     try {
@@ -60,8 +67,13 @@ export default function UsuariosPage() {
       setError("");
 
       const auth = await getCurrentUserRole();
+      const allowedRoleCodes = [
+        "super_user",
+        "supervisor_opc",
+        "supervisor_call_center",
+      ];
 
-      if (auth.roleCode !== "super_user") {
+      if (!auth.roleCode || !allowedRoleCodes.includes(auth.roleCode)) {
         setAuthorized(false);
         setError("No tienes permiso para entrar a este módulo.");
         setLoading(false);
@@ -70,27 +82,40 @@ export default function UsuariosPage() {
 
       setAuthorized(true);
 
-      const [usersResponse, groupsResponse] = await Promise.all([
-        fetch("/api/usuarios"),
-        fetch("/api/commission-groups"),
-      ]);
+      const usersResponse = await fetch("/api/usuarios");
       const result = await usersResponse.json();
-      const groupsResult = await groupsResponse.json();
 
       if (!usersResponse.ok) {
         throw new Error(result.error || "No se pudieron cargar los usuarios.");
       }
 
-      if (!groupsResponse.ok) {
-        throw new Error(groupsResult.error || "No se pudieron cargar los grupos de comision.");
+      const resultViewer = (result.viewer ?? null) as UserListViewer | null;
+      setViewer(
+        resultViewer ?? {
+          is_super_user: auth.roleCode === "super_user",
+          role_codes: auth.roleCode ? [auth.roleCode] : [],
+          commission_group_code: null,
+        }
+      );
+
+      if (resultViewer?.is_super_user || auth.roleCode === "super_user") {
+        const groupsResponse = await fetch("/api/commission-groups");
+        const groupsResult = await groupsResponse.json();
+
+        if (!groupsResponse.ok) {
+          throw new Error(groupsResult.error || "No se pudieron cargar los grupos de comision.");
+        }
+
+        setCommissionGroups(
+          (((groupsResult.groups ?? []) as CommissionGroupOption[]) || []).sort((a, b) =>
+            a.code.localeCompare(b.code, "es")
+          )
+        );
+      } else {
+        setCommissionGroups([]);
       }
 
       setUsers(((result.users ?? []) as unknown) as UserRow[]);
-      setCommissionGroups(
-        (((groupsResult.groups ?? []) as CommissionGroupOption[]) || []).sort((a, b) =>
-          a.code.localeCompare(b.code, "es")
-        )
-      );
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los usuarios.");
     } finally {
@@ -358,6 +383,16 @@ Correo de acceso: ${user.email}`
     };
   }, [users]);
 
+  const canManageAllUsers = Boolean(viewer?.is_super_user);
+  const isSupervisorView = authorized && !canManageAllUsers;
+  const viewerGroupCode = viewer?.commission_group_code || null;
+  const pageBadge = canManageAllUsers ? "Super Usuario" : "Supervisor";
+  const pageDescription = canManageAllUsers
+    ? "Consulta empleados creados en el CRM, editarlos, desactivarlos o eliminarlos cuando sea necesario."
+    : `Consulta el personal de tu grupo${
+        viewerGroupCode ? ` ${viewerGroupCode}` : ""
+      } y habilita o inhabilita su acceso cuando sea necesario.`;
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[radial-gradient(circle_at_top,_#EEFBF4_0%,_#F8FBF7_36%,_#FFFCF8_100%)] p-6 md:p-8">
       <div className="pointer-events-none absolute -left-16 top-0 h-72 w-72 rounded-full bg-[#BFE7D7]/35 blur-3xl" />
@@ -392,11 +427,14 @@ Correo de acceso: ${user.email}`
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Super Usuario</p>
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">{pageBadge}</p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3rem]">
                 Usuarios y roles
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
+                {pageDescription}
+              </p>
+              <p className="hidden">
                 Consulta empleados creados en el CRM, edítalos, desactívalos o elimínalos cuando sea necesario.
               </p>
             </div>
@@ -412,7 +450,7 @@ Correo de acceso: ${user.email}`
               Inicio
             </Link>
 
-            {authorized ? (
+            {authorized && canManageAllUsers ? (
               <Link
                 href="/usuarios/nuevo"
                 className="inline-flex items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105"
@@ -431,7 +469,7 @@ Correo de acceso: ${user.email}`
           </section>
         ) : null}
 
-        {authorized ? (
+        {authorized && canManageAllUsers ? (
           <section className={panelClass}>
             <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
               <div>
@@ -511,7 +549,9 @@ Correo de acceso: ${user.email}`
                   Usuarios registrados
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
-                  Lista general de empleados creados en el sistema.
+                  {isSupervisorView
+                    ? "Solo aparecen usuarios activos e inactivos del personal que puedes administrar en tu grupo."
+                    : "Lista general de empleados creados en el sistema."}
                 </p>
               </div>
 
@@ -533,8 +573,13 @@ Correo de acceso: ${user.email}`
                   className={inputClass}
                   value={groupFilter}
                   onChange={(e) => setGroupFilter(e.target.value)}
+                  disabled={isSupervisorView}
                 >
-                  <option value="todos">Todos los grupos</option>
+                  <option value="todos">
+                    {isSupervisorView && viewerGroupCode
+                      ? `Grupo ${viewerGroupCode}`
+                      : "Todos los grupos"}
+                  </option>
                   <option value="sin_grupo">Sin grupo</option>
                   {groupOptions.map((code) => (
                     <option key={code} value={code}>
@@ -654,7 +699,7 @@ Correo de acceso: ${user.email}`
                           <div className="flex flex-wrap gap-2">
                             <Link
                               href={`/usuarios/${user.id}`}
-                              className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105"
+                              className={`${canManageAllUsers ? "" : "hidden"} rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-2 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105`}
                             >
                               Editar
                             </Link>
@@ -663,7 +708,7 @@ Correo de acceso: ${user.email}`
                               type="button"
                               onClick={() => void restablecerContrasena(user)}
                               disabled={savingUserId === user.id}
-                              className="rounded-2xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-60"
+                              className={`${canManageAllUsers ? "" : "hidden"} rounded-2xl border border-amber-300 bg-white px-4 py-2 text-sm font-medium text-amber-700 transition hover:bg-amber-50 disabled:opacity-60`}
                             >
                               {savingUserId === user.id ? "Procesando..." : "Restablecer contraseña"}
                             </button>
@@ -685,13 +730,18 @@ Correo de acceso: ${user.email}`
                               type="button"
                               onClick={() => void eliminarUsuario(user)}
                               disabled={savingUserId === user.id}
-                              className="rounded-2xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-60"
+                              className={`${canManageAllUsers ? "" : "hidden"} rounded-2xl border border-rose-300 bg-white px-4 py-2 text-sm font-medium text-rose-700 transition hover:bg-rose-50 disabled:opacity-60`}
                             >
                               {savingUserId === user.id ? "Eliminando..." : "Eliminar"}
                             </button>
                           </div>
 
                           <p className="mt-3 text-xs text-[#607368]">
+                            {canManageAllUsers
+                              ? "Puedes editar, restablecer la contraseÃ±a temporal, desactivar o eliminar el acceso por backend."
+                              : "Como supervisor, solo puedes habilitar o inhabilitar el acceso de personal de tu grupo."}
+                          </p>
+                          <p className="hidden">
                             Puedes editar, restablecer la contraseña temporal, desactivar o eliminar el acceso por backend.
                           </p>
                         </div>

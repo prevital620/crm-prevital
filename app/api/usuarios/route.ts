@@ -4,6 +4,7 @@ import { createRouteHandlerSupabaseClient } from "@/lib/server/supabase-server";
 import {
   getErrorMessage,
   getTemporaryUserPassword,
+  requireUserManagementAccess,
   requireSuperUser,
 } from "@/lib/server/user-security";
 import {
@@ -36,6 +37,38 @@ async function commissionGroupExists(code: string) {
 
   if (error) throw error;
   return Boolean(data?.code);
+}
+
+function getProfileRoleCodes(profile: Record<string, unknown>) {
+  return (((profile.user_roles as Array<{ roles?: { code?: string | null } | Array<{ code?: string | null }> | null }> | null) || [])
+    .flatMap((item) => {
+      const roles = item.roles;
+      return Array.isArray(roles) ? roles : roles ? [roles] : [];
+    })
+    .map((role) => String(role.code || "").trim())
+    .filter(Boolean));
+}
+
+function supervisorCanSeeUser(managerRoleCodes: string[], targetRoleCodes: string[]) {
+  if (
+    targetRoleCodes.includes("super_user") ||
+    targetRoleCodes.includes("administrador")
+  ) {
+    return false;
+  }
+
+  if (managerRoleCodes.includes("supervisor_opc")) {
+    return targetRoleCodes.includes("promotor_opc");
+  }
+
+  if (managerRoleCodes.includes("supervisor_call_center")) {
+    return (
+      targetRoleCodes.includes("tmk") ||
+      targetRoleCodes.includes("confirmador")
+    );
+  }
+
+  return false;
 }
 
 export async function POST(request: Request) {
@@ -240,7 +273,7 @@ export async function POST(request: Request) {
 export async function GET() {
   try {
     const supabase = await createRouteHandlerSupabaseClient();
-    const authCheck = await requireSuperUser(supabase);
+    const authCheck = await requireUserManagementAccess(supabase);
 
     if (!authCheck.ok) {
       return NextResponse.json(
@@ -249,7 +282,7 @@ export async function GET() {
       );
     }
 
-    const { data: profiles, error: profilesError } = await supabaseAdmin
+    let profilesQuery = supabaseAdmin
       .from("profiles")
       .select(`
         id,
@@ -269,8 +302,19 @@ export async function GET() {
             code
           )
         )
-      `)
-      .order("created_at", { ascending: false });
+      `);
+
+    if (!authCheck.isSuperUser && authCheck.commissionGroupCode) {
+      profilesQuery = profilesQuery.eq(
+        "commission_group_code",
+        authCheck.commissionGroupCode
+      );
+    }
+
+    const { data: profiles, error: profilesError } = await profilesQuery.order(
+      "created_at",
+      { ascending: false }
+    );
 
     if (profilesError) {
       return NextResponse.json(
@@ -305,8 +349,15 @@ export async function GET() {
       ])
     );
 
-    const result = ((profiles || []) as Array<Record<string, unknown>>).map(
+    const visibleProfiles = ((profiles || []) as Array<Record<string, unknown>>).filter(
       (profile) => {
+        if (authCheck.isSuperUser) return true;
+        if (String(profile.id) === authCheck.user.id) return false;
+        return supervisorCanSeeUser(authCheck.roleCodes, getProfileRoleCodes(profile));
+      }
+    );
+
+    const result = visibleProfiles.map((profile) => {
         const authUser = authById.get(String(profile.id));
 
         return {
@@ -315,12 +366,16 @@ export async function GET() {
           auth_exists: Boolean(authUser),
           last_sign_in_at: authUser?.last_sign_in_at || null,
         };
-      }
-    );
+      });
 
     return NextResponse.json({
       ok: true,
       users: result,
+      viewer: {
+        is_super_user: authCheck.isSuperUser,
+        role_codes: authCheck.roleCodes,
+        commission_group_code: authCheck.commissionGroupCode,
+      },
     });
   } catch (error: unknown) {
     return NextResponse.json(

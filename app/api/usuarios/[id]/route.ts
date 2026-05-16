@@ -4,6 +4,7 @@ import { createRouteHandlerSupabaseClient } from "@/lib/server/supabase-server";
 import {
   getErrorMessage,
   isAuthUserMissingError,
+  requireUserManagementAccess,
   requireSuperUser,
 } from "@/lib/server/user-security";
 import {
@@ -112,6 +113,33 @@ function normalizeOptionalText(value: unknown) {
   return text || null;
 }
 
+function normalizeGroupCode(value: unknown) {
+  const text = String(value ?? "").trim().toUpperCase();
+  return text || null;
+}
+
+function supervisorCanManageUser(managerRoleCodes: string[], targetRoleCodes: string[]) {
+  if (
+    targetRoleCodes.includes("super_user") ||
+    targetRoleCodes.includes("administrador")
+  ) {
+    return false;
+  }
+
+  if (managerRoleCodes.includes("supervisor_opc")) {
+    return targetRoleCodes.includes("promotor_opc");
+  }
+
+  if (managerRoleCodes.includes("supervisor_call_center")) {
+    return (
+      targetRoleCodes.includes("tmk") ||
+      targetRoleCodes.includes("confirmador")
+    );
+  }
+
+  return false;
+}
+
 function parseUserUpdatePayload(body: unknown): UserUpdatePayload {
   const payload = (body ?? {}) as Record<string, unknown>;
 
@@ -211,7 +239,7 @@ export async function PATCH(
 ) {
   try {
     const supabase = await createRouteHandlerSupabaseClient();
-    const authCheck = await requireSuperUser(supabase);
+    const authCheck = await requireUserManagementAccess(supabase);
 
     if (!authCheck.ok) {
       return NextResponse.json(
@@ -230,7 +258,32 @@ export async function PATCH(
     }
 
     const body = await request.json();
+    const bodyRecord = (body ?? {}) as Record<string, unknown>;
+    const bodyKeys = Object.keys(bodyRecord);
     const payload = parseUserUpdatePayload(body);
+
+    if (!authCheck.isSuperUser) {
+      const isOnlyActivationChange =
+        bodyKeys.length === 1 &&
+        Object.prototype.hasOwnProperty.call(bodyRecord, "is_active");
+
+      if (!isOnlyActivationChange) {
+        return NextResponse.json(
+          {
+            error:
+              "Los supervisores solo pueden habilitar o inhabilitar usuarios de su grupo.",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (authCheck.user.id === id) {
+        return NextResponse.json(
+          { error: "No puedes cambiar tu propio estado de acceso." },
+          { status: 403 }
+        );
+      }
+    }
 
     const { data: currentProfile, error: currentProfileError } = await supabaseAdmin
       .from("profiles")
@@ -246,6 +299,13 @@ export async function PATCH(
             "No se pudo cargar el perfil actual del usuario.",
         },
         { status: 400 }
+      );
+    }
+
+    if (!currentProfile) {
+      return NextResponse.json(
+        { error: "No se encontro el perfil del usuario." },
+        { status: 404 }
       );
     }
 
@@ -280,6 +340,31 @@ export async function PATCH(
         employeeCode: resolvedEmployeeCode,
       }) || null;
     const effectiveRoleCodes = await getEffectiveRoleCodes(id, payload.role_ids);
+
+    if (!authCheck.isSuperUser) {
+      const targetGroupCode = normalizeGroupCode(currentProfile.commission_group_code);
+
+      if (!targetGroupCode || targetGroupCode !== authCheck.commissionGroupCode) {
+        return NextResponse.json(
+          {
+            error:
+              "Solo puedes habilitar o inhabilitar usuarios de tu mismo grupo.",
+          },
+          { status: 403 }
+        );
+      }
+
+      if (!supervisorCanManageUser(authCheck.roleCodes, effectiveRoleCodes)) {
+        return NextResponse.json(
+          {
+            error:
+              "Este usuario no pertenece al personal que puedes administrar.",
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const requiresCommissionGroup = effectiveRoleCodes.some((code) =>
       roleNeedsCommissionGroup(code)
     );

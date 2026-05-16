@@ -80,9 +80,9 @@ const quickActions: QuickAction[] = [
   },
   {
     title: "Usuarios y roles",
-    subtitle: "Consultar usuarios creados en el sistema.",
+    subtitle: "Consultar usuarios y administrar personal de tu grupo.",
     href: "/usuarios",
-    roles: ["super_user"],
+    roles: ["super_user", "supervisor_opc", "supervisor_call_center"],
   },
   {
     title: "Carga historica",
