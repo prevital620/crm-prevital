@@ -13,8 +13,8 @@ export const quickActions: QuickAction[] = [
     roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
   },
   {
-    title: "Consultar leads",
-    subtitle: "Revisar leads creados y su estado.",
+    title: "Consulta y reportes",
+    subtitle: "Ver resumen, reportes por promotor y listado de leads.",
     href: "/leads",
     roles: ["super_user", "promotor_opc", "supervisor_opc", "supervisor_call_center", "confirmador", "tmk"],
   },
@@ -49,8 +49,8 @@ export const quickActions: QuickAction[] = [
     roles: ["super_user"],
   },
   {
-    title: "Gestion de leads",
-    subtitle: "Asignar y gestionar leads del call center.",
+    title: "Operacion Call Center",
+    subtitle: "Asignar TMK, priorizar pendientes y actualizar llamadas.",
     href: "/call-center",
     roles: ["super_user", "supervisor_call_center", "confirmador"],
   },

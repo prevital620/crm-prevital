@@ -79,6 +79,8 @@ type QuickFilter =
   | "no_interesa"
   | "cerrados";
 
+type LeadDashboardView = "resumen" | "promotores" | "listado";
+
 const allowedRoles = [
   "super_user",
   "promotor_opc",
@@ -208,6 +210,8 @@ export default function LeadsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [opcReportPromoterId, setOpcReportPromoterId] = useState("todos");
   const [availabilityPromoterId, setAvailabilityPromoterId] = useState("");
+  const [leadDashboardView, setLeadDashboardView] =
+    useState<LeadDashboardView>("resumen");
   const [showCallSummaryByPromoter, setShowCallSummaryByPromoter] = useState(false);
   const [startingOpcShift, setStartingOpcShift] = useState(false);
   const [savingAvailabilityUserId, setSavingAvailabilityUserId] = useState<string | null>(null);
@@ -241,6 +245,13 @@ export default function LeadsPage() {
     roleCode === "supervisor_call_center" ||
     roleCode === "super_user";
   const hideLeadHeroMeta = roleCode === "supervisor_opc";
+  const leadDashboardViews: Array<{ key: LeadDashboardView; label: string }> = [
+    { key: "resumen", label: "Resumen del dia" },
+    ...(canViewOpcPromoterReport
+      ? [{ key: "promotores" as LeadDashboardView, label: "Promotores" }]
+      : []),
+    { key: "listado", label: "Listado y busqueda" },
+  ];
   const effectiveLeadDateFilter = dateFilter || hoyISO();
   const currentOpcShift = useMemo(() => {
     if (!currentUserId || !effectiveLeadDateFilter) return null;
@@ -1321,14 +1332,14 @@ export default function LeadsPage() {
           <div className="absolute inset-x-0 top-0 h-1.5 bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Leads</p>
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Consulta de leads</p>
               <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.1rem]">
-                Gestión de leads
+                Consulta y reportes
               </h1>
               {!hideLeadHeroMeta ? (
                 <>
               <p className="mt-3 max-w-2xl text-sm leading-7 text-[#496356] md:text-[15px]">
-                Consulta, filtra y administra los leads visibles según el rol autenticado.
+                Elige si quieres ver resumen del dia, productividad por promotor o el listado para buscar y editar.
               </p>
               <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
                 <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">Vista de prospección</span>
@@ -1362,6 +1373,23 @@ export default function LeadsPage() {
                 Nuevo lead
               </Link>
             )}
+
+            <div className="flex flex-wrap gap-2">
+              {leadDashboardViews.map((view) => (
+                <button
+                  key={view.key}
+                  type="button"
+                  onClick={() => setLeadDashboardView(view.key)}
+                  className={`inline-flex items-center rounded-2xl px-5 py-3 text-sm font-medium transition ${
+                    leadDashboardView === view.key
+                      ? "bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] text-white shadow-[0_16px_30px_rgba(63,105,82,0.26)]"
+                      : "border border-[#CFE4D8] bg-white/85 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                  }`}
+                >
+                  {view.label}
+                </button>
+              ))}
+            </div>
           </div>
         </section>
 
@@ -1377,7 +1405,7 @@ export default function LeadsPage() {
           </div>
         ) : null}
 
-        {showTmkSchedulingTools ? (
+        {leadDashboardView === "resumen" && showTmkSchedulingTools ? (
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
             <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
@@ -1386,7 +1414,7 @@ export default function LeadsPage() {
           </section>
         ) : null}
 
-        {showSupervisorOpcTools ? (
+        {leadDashboardView === "resumen" && showSupervisorOpcTools ? (
           <section className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
             <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
             <StatCard title="Nuevos" value={resumen.nuevos} active={quickFilter === "nuevos"} onClick={() => setQuickFilter("nuevos")} />
@@ -1397,7 +1425,7 @@ export default function LeadsPage() {
           </section>
         ) : null}
 
-        {(showTmkSchedulingTools || canViewOpcPromoterReport) ? (
+        {leadDashboardView === "resumen" && (showTmkSchedulingTools || canViewOpcPromoterReport) ? (
           <section className="rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(238,249,242,0.96)_100%)] p-5 shadow-[0_20px_48px_rgba(95,125,102,0.12)]">
             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
               <div>
@@ -1495,7 +1523,10 @@ export default function LeadsPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => setOpcReportPromoterId(item.promoterId)}
+                          onClick={() => {
+                            setOpcReportPromoterId(item.promoterId);
+                            setLeadDashboardView("promotores");
+                          }}
                           className="rounded-2xl border border-[#CFE4D8] bg-[#F7FCF9] px-3 py-2 text-xs font-semibold text-[#4F6F5B] transition hover:bg-[#EAF7EF]"
                         >
                           Ver ritmo
@@ -1520,7 +1551,7 @@ export default function LeadsPage() {
           </section>
         ) : null}
 
-        {canViewOpcPromoterReport ? (
+        {leadDashboardView === "promotores" && canViewOpcPromoterReport ? (
           <section className="overflow-hidden rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(238,249,242,0.96)_100%)] shadow-[0_24px_60px_rgba(95,125,102,0.14)]">
             <div className="grid gap-5 p-6 xl:grid-cols-[1.1fr_0.9fr]">
               <div>
@@ -1761,7 +1792,8 @@ export default function LeadsPage() {
           </section>
         ) : null}
 
-        {showSupervisorOpcTools ? (
+        {leadDashboardView === "listado" ? (
+          showSupervisorOpcTools ? (
           <section className="grid gap-6 xl:grid-cols-2">
             <section className="rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
               <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
@@ -2183,7 +2215,8 @@ export default function LeadsPage() {
               </div>
             )}
           </section>
-        )}
+          )
+        ) : null}
       </div>
     </main>
   );

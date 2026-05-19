@@ -480,7 +480,7 @@ function CallCenterPageContent() {
 
       if (!allowedRoles.includes(auth.roleCode)) {
         setAuthorized(false);
-        setError("No tienes permiso para entrar a Gestión de leads.");
+        setError("No tienes permiso para entrar a Operacion Call Center.");
         return;
       }
 
@@ -1201,14 +1201,14 @@ function CallCenterPageContent() {
 
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Gestión de leads</p>
-              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.2rem]">{"Gesti\u00F3n de leads"}</h1>
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.28em] text-[#5F7D66] shadow-sm">Operacion Call Center</p>
+              <h1 className="mt-3 text-4xl font-bold tracking-tight text-[#1F3128] md:text-[3.2rem]">Operacion Call Center</h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 {isSupervisorCallCenterView
-                  ? "Puedes consultar, asignar, organizar por bloques, cancelar citas y actualizar el estado de los leads."
+                  ? "Asigna TMK, prioriza pendientes, revisa resumen de llamadas y actualiza estados del call center."
                   : currentRoleCode === "confirmador"
-                  ? "Puedes consultar todos los leads, cancelar citas y actualizar su estado."
-                  : "Puedes consultar tus leads asignados o creados por ti, cancelar citas y actualizar su estado."}
+                  ? "Consulta los leads del grupo, cancela citas y actualiza estados de llamadas."
+                  : "Consulta tus leads asignados o creados por ti, cancela citas y actualiza estados de llamadas."}
               </p>
               <div className="mt-4 flex flex-wrap gap-2 text-xs font-medium text-[#4F6F5B]">
                 <span className="rounded-full bg-white/80 px-3 py-1 shadow-sm ring-1 ring-[#D8ECE1]">
