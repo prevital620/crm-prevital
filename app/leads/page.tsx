@@ -208,6 +208,7 @@ export default function LeadsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [opcReportPromoterId, setOpcReportPromoterId] = useState("todos");
   const [availabilityPromoterId, setAvailabilityPromoterId] = useState("");
+  const [showCallSummaryByPromoter, setShowCallSummaryByPromoter] = useState(false);
   const [startingOpcShift, setStartingOpcShift] = useState(false);
   const [savingAvailabilityUserId, setSavingAvailabilityUserId] = useState<string | null>(null);
 
@@ -828,6 +829,88 @@ export default function LeadsPage() {
     { key: "agendados", label: "Cita / Agendado", value: resumen.agendados },
   ] as const;
 
+  const resumenLlamadasPorPromotor = useMemo(() => {
+    const grouped = new Map<
+      string,
+      {
+        promoterId: string;
+        promoterName: string;
+        total: number;
+        nuevos: number;
+        pendientes: number;
+        noContestan: number;
+        fueraServicio: number;
+        datoFalso: number;
+        noInteresa: number;
+        agendados: number;
+      }
+    >();
+
+    opcTeamPromoters.forEach((promoter) => {
+      grouped.set(promoter.id, {
+        promoterId: promoter.id,
+        promoterName: promoter.full_name?.trim() || "Sin nombre",
+        total: 0,
+        nuevos: 0,
+        pendientes: 0,
+        noContestan: 0,
+        fueraServicio: 0,
+        datoFalso: 0,
+        noInteresa: 0,
+        agendados: 0,
+      });
+    });
+
+    const teamPromoterIds = new Set(opcTeamPromoters.map((item) => item.id));
+
+    leadsPorRol
+      .filter((lead) => lead.source === "opc")
+      .filter((lead) => {
+        if (teamPromoterIds.size === 0) return true;
+        return teamPromoterIds.has(lead.created_by_user_id);
+      })
+      .filter((lead) => soloFecha(lead.created_at) === effectiveLeadDateFilter)
+      .forEach((lead) => {
+        const promoterId = lead.created_by_user_id || "sin_promotor";
+        const current =
+          grouped.get(promoterId) ||
+          {
+            promoterId,
+            promoterName: getCreatorName(promoterId),
+            total: 0,
+            nuevos: 0,
+            pendientes: 0,
+            noContestan: 0,
+            fueraServicio: 0,
+            datoFalso: 0,
+            noInteresa: 0,
+            agendados: 0,
+          };
+        const status = getVisibleStatus(lead, effectiveLeadDateFilter);
+
+        current.total += 1;
+        if (status === "nuevo") current.nuevos += 1;
+        if (status === "pendiente_contacto") current.pendientes += 1;
+        if (status === "no_responde") current.noContestan += 1;
+        if (status === "fuera_servicio") current.fueraServicio += 1;
+        if (status === "dato_falso") current.datoFalso += 1;
+        if (status === "no_interesa") current.noInteresa += 1;
+        if (status === "agendado") current.agendados += 1;
+
+        grouped.set(promoterId, current);
+      });
+
+    return Array.from(grouped.values()).sort(
+      (a, b) => b.total - a.total || a.promoterName.localeCompare(b.promoterName, "es")
+    );
+  }, [
+    leadsPorRol,
+    opcTeamPromoters,
+    effectiveLeadDateFilter,
+    creatorNames,
+    activeAppointmentByLeadId,
+  ]);
+
   const leadsFiltrados = useMemo(() => {
     const q = search.trim().toLowerCase();
 
@@ -1330,17 +1413,33 @@ export default function LeadsPage() {
                 </p>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setQuickFilter("todos")}
-                className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
-                  quickFilter === "todos"
-                    ? "bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] text-white shadow-[0_16px_30px_rgba(63,105,82,0.3)]"
-                    : "border border-[#CFE4D8] bg-white/90 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
-                }`}
-              >
-                {`Ver todos (${resumen.total})`}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                {canViewOpcPromoterReport ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowCallSummaryByPromoter((prev) => !prev)}
+                    className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                      showCallSummaryByPromoter
+                        ? "bg-[linear-gradient(135deg,_#6D9D88_0%,_#5F7D66_100%)] text-white shadow-[0_14px_26px_rgba(95,125,102,0.22)]"
+                        : "border border-[#CFE4D8] bg-white/90 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                    }`}
+                  >
+                    {showCallSummaryByPromoter ? "Ocultar por promotor" : "Ver por promotor"}
+                  </button>
+                ) : null}
+
+                <button
+                  type="button"
+                  onClick={() => setQuickFilter("todos")}
+                  className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                    quickFilter === "todos"
+                      ? "bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] text-white shadow-[0_16px_30px_rgba(63,105,82,0.3)]"
+                      : "border border-[#CFE4D8] bg-white/90 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                  }`}
+                >
+                  {`Ver todos (${resumen.total})`}
+                </button>
+              </div>
             </div>
 
             <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
@@ -1362,6 +1461,62 @@ export default function LeadsPage() {
                 </button>
               ))}
             </div>
+
+            {showCallSummaryByPromoter && canViewOpcPromoterReport ? (
+              <div className="mt-5 rounded-[28px] border border-[#D6E8DA] bg-white/70 p-4">
+                <div className="flex flex-col gap-1 md:flex-row md:items-end md:justify-between">
+                  <div>
+                    <h3 className="text-lg font-bold text-[#24312A]">
+                      Detalle por promotor
+                    </h3>
+                    <p className="mt-1 text-xs leading-5 text-[#51695C]">
+                      Incluye todas las promotoras visibles para tu grupo en la fecha seleccionada, aunque estén en cero.
+                    </p>
+                  </div>
+                  <span className="rounded-full border border-[#D6E8DA] bg-[#F7FCF9] px-3 py-1 text-xs font-semibold text-[#5F7D66]">
+                    {effectiveLeadDateFilter}
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                  {resumenLlamadasPorPromotor.map((item) => (
+                    <article
+                      key={item.promoterId}
+                      className="rounded-[24px] border border-[#D6E8DA] bg-white p-4 shadow-[0_12px_26px_rgba(95,125,102,0.08)]"
+                    >
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div>
+                          <h4 className="text-base font-bold text-[#24312A]">
+                            {item.promoterName}
+                          </h4>
+                          <p className="mt-1 text-sm text-[#51695C]">
+                            {item.total} leads creados
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setOpcReportPromoterId(item.promoterId)}
+                          className="rounded-2xl border border-[#CFE4D8] bg-[#F7FCF9] px-3 py-2 text-xs font-semibold text-[#4F6F5B] transition hover:bg-[#EAF7EF]"
+                        >
+                          Ver ritmo
+                        </button>
+                      </div>
+
+                      <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                        <MiniMetric label="Citas" value={item.agendados} />
+                        <MiniMetric label="Dato falso" value={item.datoFalso} />
+                        <MiniMetric label="Pendientes" value={item.pendientes} />
+                        <MiniMetric label="No contesta" value={item.noContestan} />
+                        <MiniMetric label="# fuera servicio" value={item.fueraServicio} />
+                        <MiniMetric label="No interesa" value={item.noInteresa} />
+                        <MiniMetric label="Nuevos" value={item.nuevos} />
+                        <MiniMetric label="Total" value={item.total} strong />
+                      </div>
+                    </article>
+                  ))}
+                </div>
+              </div>
+            ) : null}
           </section>
         ) : null}
 
@@ -2061,6 +2216,31 @@ function StatCard({
         </p>
       </div>
     </button>
+  );
+}
+
+function MiniMetric({
+  label,
+  value,
+  strong = false,
+}: {
+  label: string;
+  value: number;
+  strong?: boolean;
+}) {
+  return (
+    <div
+      className={`rounded-2xl border p-3 ${
+        strong
+          ? "border-[#A8CDBD] bg-[linear-gradient(135deg,_#EDF8F1_0%,_#DDEFE4_100%)]"
+          : "border-[#E2EFE7] bg-[#F7FCF9]"
+      }`}
+    >
+      <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-[#5F7D66]">
+        {label}
+      </p>
+      <p className="mt-1 text-xl font-bold text-[#24312A]">{value}</p>
+    </div>
   );
 }
 
