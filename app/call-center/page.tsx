@@ -65,24 +65,27 @@ type QuickFilter =
   | "asignados"
   | "pendientes"
   | "no_contestan"
+  | "fuera_servicio"
   | "interesados"
   | "pendientes_cita"
   | "agendados"
   | "no_asistio"
+  | "dato_falso"
+  | "no_interesa"
   | "cerrados";
 
 type LeadSourceFilter = "todos" | "opc" | "base";
 
 const statusOptions = [
-  { value: "nuevo", label: "Nuevo" },
-  { value: "pendiente_contacto", label: "Pendiente" },
-  { value: "interesado", label: "Interesado" },
-  { value: "no_responde", label: "No responde" },
-  { value: "contactado", label: "Contactado" },
-  { value: "agendado", label: "Agendado" },
+  { value: "pendiente_contacto", label: "Pendientes" },
+  { value: "no_responde", label: "No contesta" },
+  { value: "fuera_servicio", label: "# fuera de servicio" },
   { value: "dato_falso", label: "Dato falso" },
   { value: "no_interesa", label: "No interesa" },
+  { value: "agendado", label: "Cita / Agendado" },
 ];
+
+const statusOptionValues = new Set(statusOptions.map((option) => option.value));
 
 const commissionSourceOptions = [
   { value: "opc", label: "OPC" },
@@ -141,6 +144,8 @@ function estadoBadge(estado: string | null) {
       return "border-amber-200 bg-amber-50 text-amber-700";
     case "no_responde":
       return "border-orange-200 bg-orange-50 text-orange-700";
+    case "fuera_servicio":
+      return "border-sky-200 bg-sky-50 text-sky-700";
     case "contactado":
       return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "agendado":
@@ -160,11 +165,12 @@ function traducirEstado(estado: string | null) {
   const map: Record<string, string> = {
     asignado: "Asignado",
     nuevo: "Nuevo",
-    pendiente_contacto: "Pendiente",
+    pendiente_contacto: "Pendientes",
     interesado: "Interesado",
-    no_responde: "No responde",
+    no_responde: "No contesta",
+    fuera_servicio: "# fuera de servicio",
     contactado: "Contactado",
-    agendado: "Agendado",
+    agendado: "Cita / Agendado",
     no_asistio: "No asistió",
     dato_falso: "Dato falso",
     no_interesa: "No interesa",
@@ -231,13 +237,16 @@ const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "redes", label: "Leads redes" },
   { key: "sin_asignar", label: "Sin asignar" },
   { key: "pendientes", label: "Pendientes" },
-  { key: "no_contestan", label: "No contestan" },
+  { key: "no_contestan", label: "No contesta" },
+  { key: "fuera_servicio", label: "# fuera de servicio" },
   { key: "interesados", label: "Interesados" },
   { key: "nuevos", label: "Nuevos" },
   { key: "asignados", label: "Asignados" },
   { key: "pendientes_cita", label: "Pendientes de cita" },
-  { key: "agendados", label: "Agendados" },
+  { key: "agendados", label: "Cita / Agendado" },
   { key: "no_asistio", label: "No asistió" },
+  { key: "dato_falso", label: "Dato falso" },
+  { key: "no_interesa", label: "No interesa" },
   { key: "cerrados", label: "Descartados" },
 ];
 
@@ -574,7 +583,7 @@ function CallCenterPageContent() {
 
   async function guardarEstado(leadId: string) {
     try {
-      const newStatus = selectedStatuses[leadId] || "nuevo";
+      const newStatus = selectedStatuses[leadId] || "pendiente_contacto";
 
       setSavingStatusLeadId(leadId);
       setMensaje("");
@@ -664,7 +673,7 @@ function CallCenterPageContent() {
       const { error: leadError } = await supabase
         .from("leads")
         .update({
-          status: "contactado",
+          status: "pendiente_contacto",
         })
         .eq("id", lead.id);
 
@@ -678,13 +687,13 @@ function CallCenterPageContent() {
 
       setLeads((prev) =>
         prev.map((item) =>
-          item.id === lead.id ? { ...item, status: "contactado" } : item
+          item.id === lead.id ? { ...item, status: "pendiente_contacto" } : item
         )
       );
 
       setSelectedStatuses((prev) => ({
         ...prev,
-        [lead.id]: "contactado",
+        [lead.id]: "pendiente_contacto",
       }));
 
       setMensaje("Cita cancelada correctamente. El cupo quedó liberado.");
@@ -788,7 +797,6 @@ function CallCenterPageContent() {
     const estado = obtenerEstadoVisible(lead);
     return (
       estado === "pendiente_contacto" ||
-      estado === "no_responde" ||
       estado === "interesado"
     );
   }
@@ -809,6 +817,10 @@ function CallCenterPageContent() {
   function esCerrado(lead: Lead) {
     const estado = obtenerEstadoVisible(lead);
     return estado === "dato_falso" || estado === "no_interesa";
+  }
+
+  function esFueraDeServicio(lead: Lead) {
+    return obtenerEstadoVisible(lead) === "fuera_servicio";
   }
 
   function esSinAsignarPendienteONoContesta(lead: Lead) {
@@ -889,13 +901,25 @@ function CallCenterPageContent() {
       asignados: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "asignado").length,
       pendientes: leadsDelDia.filter((lead) => esPendiente(lead)).length,
       noContestan: leadsDelDia.filter((lead) => esNoContesta(lead)).length,
+      fueraServicio: leadsDelDia.filter((lead) => esFueraDeServicio(lead)).length,
       interesados: leadsDelDia.filter((lead) => esInteresado(lead)).length,
       pendientesCita: leadsDelDia.filter((lead) => esPendienteDeCita(lead)).length,
       agendados: leadsDelDia.filter((lead) => tieneCitaActiva(lead)).length,
       noAsistio: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio").length,
+      datoFalso: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "dato_falso").length,
+      noInteresa: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_interesa").length,
       cerrados: leadsDelDia.filter((lead) => esCerrado(lead)).length,
     };
   }, [leadsDelDia, leadsUltimos30Dias, activeAppointmentByLeadId]);
+
+  const resumenLlamadas = [
+    { key: "pendientes", label: "Pendientes", value: resumen.pendientes },
+    { key: "no_contestan", label: "No contesta", value: resumen.noContestan },
+    { key: "fuera_servicio", label: "# fuera de servicio", value: resumen.fueraServicio },
+    { key: "dato_falso", label: "Dato falso", value: resumen.datoFalso },
+    { key: "no_interesa", label: "No interesa", value: resumen.noInteresa },
+    { key: "agendados", label: "Cita / Agendado", value: resumen.agendados },
+  ] as const;
 
   const leadsFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
@@ -935,6 +959,10 @@ function CallCenterPageContent() {
       base = base.filter((lead) => esNoContesta(lead));
     }
 
+    if (quickFilter === "fuera_servicio") {
+      base = base.filter((lead) => esFueraDeServicio(lead));
+    }
+
     if (quickFilter === "interesados") {
       base = base.filter((lead) => esInteresado(lead));
     }
@@ -949,6 +977,14 @@ function CallCenterPageContent() {
 
     if (quickFilter === "no_asistio") {
       base = base.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio");
+    }
+
+    if (quickFilter === "dato_falso") {
+      base = base.filter((lead) => obtenerEstadoVisible(lead) === "dato_falso");
+    }
+
+    if (quickFilter === "no_interesa") {
+      base = base.filter((lead) => obtenerEstadoVisible(lead) === "no_interesa");
     }
 
     if (quickFilter === "cerrados") {
@@ -1028,9 +1064,15 @@ function CallCenterPageContent() {
     },
     {
       key: "no_contestan",
-      title: "No contestan",
+      title: "No contesta",
       value: resumen.noContestan,
       highlight: resumen.noContestan > 0,
+    },
+    {
+      key: "fuera_servicio",
+      title: "# fuera de servicio",
+      value: resumen.fueraServicio,
+      highlight: resumen.fueraServicio > 0,
     },
     {
       key: "interesados",
@@ -1053,7 +1095,7 @@ function CallCenterPageContent() {
     },
     {
       key: "agendados",
-      title: "Agendados",
+      title: "Cita / Agendado",
       value: resumen.agendados,
       highlight: false,
     },
@@ -1061,6 +1103,18 @@ function CallCenterPageContent() {
       key: "no_asistio",
       title: "No asistió",
       value: resumen.noAsistio,
+      highlight: false,
+    },
+    {
+      key: "dato_falso",
+      title: "Dato falso",
+      value: resumen.datoFalso,
+      highlight: false,
+    },
+    {
+      key: "no_interesa",
+      title: "No interesa",
+      value: resumen.noInteresa,
       highlight: false,
     },
     {
@@ -1256,6 +1310,55 @@ function CallCenterPageContent() {
           ))}
         </section>
 
+        <section className="rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(238,249,242,0.96)_100%)] p-5 shadow-[0_20px_48px_rgba(95,125,102,0.12)]">
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div>
+              <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-[#5F7D66] shadow-sm">
+                Resumen de llamadas
+              </p>
+              <h2 className="mt-3 text-2xl font-bold tracking-tight text-[#24312A]">
+                Cierre por estado
+              </h2>
+              <p className="mt-2 text-sm leading-6 text-[#51695C]">
+                Usa el filtro de fecha para revisar hoy o días anteriores. Si una cita queda activa en agenda,
+                el lead suma automáticamente como Cita / Agendado.
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setQuickFilter("todos")}
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                quickFilter === "todos"
+                  ? "bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] text-white shadow-[0_16px_30px_rgba(63,105,82,0.3)]"
+                  : "border border-[#CFE4D8] bg-white/90 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+              }`}
+            >
+              {`Ver todos (${resumen.total})`}
+            </button>
+          </div>
+
+          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            {resumenLlamadas.map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setQuickFilter(item.key)}
+                className={`rounded-[24px] border p-4 text-left shadow-sm transition hover:-translate-y-0.5 ${
+                  quickFilter === item.key
+                    ? "border-[#7FA287] bg-[linear-gradient(135deg,_#F1FBF5_0%,_#E0F1E6_100%)] ring-2 ring-[#DDECE1]"
+                    : "border-[#D6E8DA] bg-white/90 hover:border-[#9BC4AF]"
+                }`}
+              >
+                <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5F7D66]">
+                  {item.label}
+                </p>
+                <p className="mt-2 text-3xl font-bold text-[#24312A]">{item.value}</p>
+              </button>
+            ))}
+          </div>
+        </section>
+
         <section className="rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.96)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]">
           {isSupervisorCallCenterView ? (
             <div className="mb-5 rounded-[28px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-5 shadow-inner">
@@ -1384,6 +1487,8 @@ function CallCenterPageContent() {
                 const activeAppointment = activeAppointmentByLeadId[lead.id];
                 const hasActiveAppointment = !!activeAppointment;
                 const estadoVisible = obtenerEstadoVisible(lead);
+                const selectedStatus = selectedStatuses[lead.id] || lead.status || "pendiente_contacto";
+                const hasSelectedStatusOption = statusOptionValues.has(selectedStatus);
 
                 return (
                   <div
@@ -1569,7 +1674,7 @@ function CallCenterPageContent() {
                           <div className="flex flex-col gap-3">
                             <select
                               className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-3.5 text-slate-800 outline-none transition focus:border-[#7FA287]"
-                              value={selectedStatuses[lead.id] || lead.status || "nuevo"}
+                              value={selectedStatus}
                               onChange={(e) =>
                                 setSelectedStatuses((prev) => ({
                                   ...prev,
@@ -1577,6 +1682,11 @@ function CallCenterPageContent() {
                                 }))
                               }
                             >
+                              {!hasSelectedStatusOption ? (
+                                <option value={selectedStatus}>
+                                  {traducirEstado(selectedStatus)}
+                                </option>
+                              ) : null}
                               {statusOptions.map((status) => (
                                 <option key={status.value} value={status.value}>
                                   {status.label}

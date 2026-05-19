@@ -69,10 +69,14 @@ type QuickFilter =
   | "todos"
   | "nuevos"
   | "pendientes"
+  | "no_contestan"
+  | "fuera_servicio"
   | "interesados"
   | "pendientes_cita"
   | "agendados"
   | "no_asistio"
+  | "dato_falso"
+  | "no_interesa"
   | "cerrados";
 
 const allowedRoles = [
@@ -89,6 +93,7 @@ const opcVisibleStatuses = [
   "pendiente_contacto",
   "interesado",
   "no_responde",
+  "fuera_servicio",
   "contactado",
   "reagendar",
   "agendado",
@@ -97,6 +102,8 @@ const opcVisibleStatuses = [
   "vendido",
   "cerrado",
   "descartado",
+  "dato_falso",
+  "no_interesa",
 ];
 
 const ACTIVE_APPOINTMENT_STATUSES = [
@@ -139,6 +146,8 @@ function estadoBadge(estado: string | null) {
       return "border-amber-200 bg-amber-50 text-amber-700";
     case "no_responde":
       return "border-orange-200 bg-orange-50 text-orange-700";
+    case "fuera_servicio":
+      return "border-sky-200 bg-sky-50 text-sky-700";
     case "contactado":
       return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "reagendar":
@@ -154,6 +163,8 @@ function estadoBadge(estado: string | null) {
     case "cerrado":
       return "border-slate-300 bg-slate-200 text-slate-800";
     case "descartado":
+    case "dato_falso":
+    case "no_interesa":
       return "border-red-200 bg-red-50 text-red-700";
     case "agendada":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
@@ -612,10 +623,14 @@ export default function LeadsPage() {
       "todos",
       "nuevos",
       "pendientes",
+      "no_contestan",
+      "fuera_servicio",
       "interesados",
       "pendientes_cita",
       "agendados",
       "no_asistio",
+      "dato_falso",
+      "no_interesa",
       "cerrados",
     ]);
 
@@ -740,7 +755,15 @@ export default function LeadsPage() {
 
   function isPending(lead: LeadRow, appointmentDate?: string) {
     const estado = getVisibleStatus(lead, appointmentDate);
-    return estado === "pendiente_contacto" || estado === "no_responde";
+    return estado === "pendiente_contacto";
+  }
+
+  function isNoContesta(lead: LeadRow, appointmentDate?: string) {
+    return getVisibleStatus(lead, appointmentDate) === "no_responde";
+  }
+
+  function isFueraServicio(lead: LeadRow, appointmentDate?: string) {
+    return getVisibleStatus(lead, appointmentDate) === "fuera_servicio";
   }
 
   function isInterested(lead: LeadRow, appointmentDate?: string) {
@@ -769,7 +792,9 @@ export default function LeadsPage() {
     return (
       estado === "vendido" ||
       estado === "cerrado" ||
-      estado === "descartado"
+      estado === "descartado" ||
+      estado === "dato_falso" ||
+      estado === "no_interesa"
     );
   }
 
@@ -782,13 +807,26 @@ export default function LeadsPage() {
       total: delDia.length,
       nuevos: delDia.filter((lead) => getVisibleStatus(lead, effectiveLeadDateFilter) === "nuevo").length,
       pendientes: delDia.filter((lead) => isPending(lead, effectiveLeadDateFilter)).length,
+      noContestan: delDia.filter((lead) => isNoContesta(lead, effectiveLeadDateFilter)).length,
+      fueraServicio: delDia.filter((lead) => isFueraServicio(lead, effectiveLeadDateFilter)).length,
       interesados: delDia.filter((lead) => isInterested(lead, effectiveLeadDateFilter)).length,
       pendientesCita: delDia.filter((lead) => isPendingSchedule(lead, effectiveLeadDateFilter)).length,
       agendados: delDia.filter((lead) => isScheduled(lead, effectiveLeadDateFilter)).length,
       noAsistio: delDia.filter((lead) => isNoAsistio(lead, effectiveLeadDateFilter)).length,
+      datoFalso: delDia.filter((lead) => getVisibleStatus(lead, effectiveLeadDateFilter) === "dato_falso").length,
+      noInteresa: delDia.filter((lead) => getVisibleStatus(lead, effectiveLeadDateFilter) === "no_interesa").length,
       cerrados: delDia.filter((lead) => isClosed(lead, effectiveLeadDateFilter)).length,
     };
   }, [leadsPorRol, effectiveLeadDateFilter, activeAppointmentByLeadId]);
+
+  const resumenLlamadas = [
+    { key: "pendientes", label: "Pendientes", value: resumen.pendientes },
+    { key: "no_contestan", label: "No contesta", value: resumen.noContestan },
+    { key: "fuera_servicio", label: "# fuera de servicio", value: resumen.fueraServicio },
+    { key: "dato_falso", label: "Dato falso", value: resumen.datoFalso },
+    { key: "no_interesa", label: "No interesa", value: resumen.noInteresa },
+    { key: "agendados", label: "Cita / Agendado", value: resumen.agendados },
+  ] as const;
 
   const leadsFiltrados = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -806,6 +844,12 @@ export default function LeadsPage() {
       if (quickFilter === "pendientes") {
         base = base.filter((lead) => isPending(lead, effectiveLeadDateFilter));
       }
+      if (quickFilter === "no_contestan") {
+        base = base.filter((lead) => isNoContesta(lead, effectiveLeadDateFilter));
+      }
+      if (quickFilter === "fuera_servicio") {
+        base = base.filter((lead) => isFueraServicio(lead, effectiveLeadDateFilter));
+      }
       if (quickFilter === "interesados") {
         base = base.filter((lead) => isInterested(lead, effectiveLeadDateFilter));
       }
@@ -817,6 +861,12 @@ export default function LeadsPage() {
       }
       if (quickFilter === "no_asistio") {
         base = base.filter((lead) => isNoAsistio(lead, effectiveLeadDateFilter));
+      }
+      if (quickFilter === "dato_falso") {
+        base = base.filter((lead) => getVisibleStatus(lead, effectiveLeadDateFilter) === "dato_falso");
+      }
+      if (quickFilter === "no_interesa") {
+        base = base.filter((lead) => getVisibleStatus(lead, effectiveLeadDateFilter) === "no_interesa");
       }
       if (quickFilter === "cerrados") {
         base = base.filter((lead) => isClosed(lead, effectiveLeadDateFilter));
@@ -1083,17 +1133,20 @@ export default function LeadsPage() {
   function translateStatus(status: string) {
     const map: Record<string, string> = {
       nuevo: "Nuevo",
-      pendiente_contacto: "Pendiente",
+      pendiente_contacto: "Pendientes",
       interesado: "Interesado",
-      no_responde: "No responde",
+      no_responde: "No contesta",
+      fuera_servicio: "# fuera de servicio",
       contactado: "Contactado",
       reagendar: "Reagendar",
-      agendado: "Agendado",
+      agendado: "Cita / Agendado",
       asistio: "AsistiÃ³",
       no_asistio: "No asistió",
       vendido: "Vendido",
       cerrado: "Cerrado",
       descartado: "Descartado",
+      dato_falso: "Dato falso",
+      no_interesa: "No interesa",
       agendada: "Agendada",
       confirmada: "Confirmada",
       en_espera: "En espera",
@@ -1245,8 +1298,8 @@ export default function LeadsPage() {
           <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
             <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
-            <StatCard title="Por agendar" value={resumen.pendientesCita} active={quickFilter === "pendientes_cita"} onClick={() => setQuickFilter("pendientes_cita")} />
-            <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
+            <StatCard title="No contesta" value={resumen.noContestan} active={quickFilter === "no_contestan"} onClick={() => setQuickFilter("no_contestan")} />
+            <StatCard title="Cita / Agendado" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
           </section>
         ) : null}
 
@@ -1255,9 +1308,60 @@ export default function LeadsPage() {
             <StatCard title="Todos" value={resumen.total} active={quickFilter === "todos"} onClick={() => setQuickFilter("todos")} />
             <StatCard title="Nuevos" value={resumen.nuevos} active={quickFilter === "nuevos"} onClick={() => setQuickFilter("nuevos")} />
             <StatCard title="Pendientes" value={resumen.pendientes} active={quickFilter === "pendientes"} onClick={() => setQuickFilter("pendientes")} />
-            <StatCard title="Interesados" value={resumen.interesados} active={quickFilter === "interesados"} onClick={() => setQuickFilter("interesados")} />
-            <StatCard title="Agendados" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
-            <StatCard title="No asistió" value={resumen.noAsistio} active={quickFilter === "no_asistio"} onClick={() => setQuickFilter("no_asistio")} />
+            <StatCard title="No contesta" value={resumen.noContestan} active={quickFilter === "no_contestan"} onClick={() => setQuickFilter("no_contestan")} />
+            <StatCard title="Cita / Agendado" value={resumen.agendados} active={quickFilter === "agendados"} onClick={() => setQuickFilter("agendados")} />
+            <StatCard title="No interesa" value={resumen.noInteresa} active={quickFilter === "no_interesa"} onClick={() => setQuickFilter("no_interesa")} />
+          </section>
+        ) : null}
+
+        {(showTmkSchedulingTools || canViewOpcPromoterReport) ? (
+          <section className="rounded-[34px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_rgba(255,255,255,0.98)_0%,_rgba(238,249,242,0.96)_100%)] p-5 shadow-[0_20px_48px_rgba(95,125,102,0.12)]">
+            <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+              <div>
+                <p className="inline-flex rounded-full border border-[#CFE4D8] bg-white/80 px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-[#5F7D66] shadow-sm">
+                  Resumen de llamadas
+                </p>
+                <h2 className="mt-3 text-2xl font-bold tracking-tight text-[#24312A]">
+                  Cierre por estado
+                </h2>
+                <p className="mt-2 text-sm leading-6 text-[#51695C]">
+                  Filtra por fecha para revisar el día correcto, incluso si algún estado se actualiza después.
+                  Las citas activas cuentan automáticamente como Cita / Agendado.
+                </p>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setQuickFilter("todos")}
+                className={`rounded-2xl px-4 py-2 text-sm font-semibold transition ${
+                  quickFilter === "todos"
+                    ? "bg-[linear-gradient(135deg,_#274534_0%,_#3F6952_45%,_#5F7D66_100%)] text-white shadow-[0_16px_30px_rgba(63,105,82,0.3)]"
+                    : "border border-[#CFE4D8] bg-white/90 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                }`}
+              >
+                {`Ver todos (${resumen.total})`}
+              </button>
+            </div>
+
+            <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+              {resumenLlamadas.map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setQuickFilter(item.key)}
+                  className={`rounded-[24px] border p-4 text-left shadow-sm transition hover:-translate-y-0.5 ${
+                    quickFilter === item.key
+                      ? "border-[#7FA287] bg-[linear-gradient(135deg,_#F1FBF5_0%,_#E0F1E6_100%)] ring-2 ring-[#DDECE1]"
+                      : "border-[#D6E8DA] bg-white/90 hover:border-[#9BC4AF]"
+                  }`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#5F7D66]">
+                    {item.label}
+                  </p>
+                  <p className="mt-2 text-3xl font-bold text-[#24312A]">{item.value}</p>
+                </button>
+              ))}
+            </div>
           </section>
         ) : null}
 
