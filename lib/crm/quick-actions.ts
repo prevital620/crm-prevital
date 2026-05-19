@@ -210,8 +210,32 @@ export function getVisibleQuickActions(roleCodes: Array<string | null | undefine
     });
   }
 
+  const contextualActions = withCommercialEssentials.map((action) => {
+    if (action.href !== "/usuarios" || effectiveRoles.includes("super_user")) {
+      return action;
+    }
+
+    if (effectiveRoles.includes("supervisor_opc")) {
+      return {
+        ...action,
+        title: "Activar o desactivar promotor",
+        subtitle: "Solo promotores de tu grupo. Puedes habilitar o inhabilitar su acceso.",
+      };
+    }
+
+    if (effectiveRoles.includes("supervisor_call_center")) {
+      return {
+        ...action,
+        title: "Activar o desactivar equipo TMK",
+        subtitle: "Solo TMK y confirmadores de tu grupo. Puedes habilitar o inhabilitar su acceso.",
+      };
+    }
+
+    return action;
+  });
+
   if (effectiveRoles.includes("promotor_opc")) {
-    return withCommercialEssentials.sort((a, b) => {
+    return contextualActions.sort((a, b) => {
       const order: Record<string, number> = {
         "/leads/nuevo": 1,
         "/leads": 2,
@@ -221,7 +245,7 @@ export function getVisibleQuickActions(roleCodes: Array<string | null | undefine
   }
 
   if (effectiveRoles.includes("tmk")) {
-    return withCommercialEssentials.sort((a, b) => {
+    return contextualActions.sort((a, b) => {
       const order: Record<string, number> = {
         "/leads/nuevo": 1,
         "/leads": 2,
@@ -234,7 +258,7 @@ export function getVisibleQuickActions(roleCodes: Array<string | null | undefine
   }
 
   if (effectiveRoles.includes("confirmador")) {
-    return withCommercialEssentials.sort((a, b) => {
+    return contextualActions.sort((a, b) => {
       const order: Record<string, number> = {
         "/call-center": 1,
         "/leads": 2,
@@ -249,13 +273,13 @@ export function getVisibleQuickActions(roleCodes: Array<string | null | undefine
   }
 
   if (effectiveRoles.includes("super_user")) {
-    return withCommercialEssentials.filter(
+    return contextualActions.filter(
       (action) => !["/recepcion?view=agenda", "/recepcion?view=config"].includes(action.href)
     );
   }
 
   if (isCommercialProfile) {
-    return withCommercialEssentials.sort((a, b) => {
+    return contextualActions.sort((a, b) => {
       const order: Record<string, number> = {
         "/consulta-cliente": 1,
         "/recepcion?view=comercial": 2,
@@ -269,5 +293,5 @@ export function getVisibleQuickActions(roleCodes: Array<string | null | undefine
     });
   }
 
-  return withCommercialEssentials;
+  return contextualActions;
 }

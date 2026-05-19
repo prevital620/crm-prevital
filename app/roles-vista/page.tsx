@@ -37,7 +37,7 @@ const roleOptions: RoleOption[] = [
   {
     code: "supervisor_opc",
     name: "Supervisor OPC",
-    description: "Gestion de leads, reporte de promotores, usuarios del grupo y comisiones.",
+    description: "Gestion de leads, reporte de promotores, activacion de promotores de su grupo y comisiones.",
   },
   {
     code: "tmk",
@@ -47,7 +47,7 @@ const roleOptions: RoleOption[] = [
   {
     code: "supervisor_call_center",
     name: "Supervisor Call Center",
-    description: "Asignacion de leads, agenda visible, equipo TMK y manifiestos.",
+    description: "Asignacion de leads, agenda visible, activacion del equipo TMK de su grupo y manifiestos.",
   },
   {
     code: "confirmador",
