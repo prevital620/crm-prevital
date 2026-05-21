@@ -117,16 +117,6 @@ function hoyISO() {
   return `${y}-${m}-${d}`;
 }
 
-function restarDiasISO(dias: number) {
-  const fecha = new Date();
-  fecha.setHours(0, 0, 0, 0);
-  fecha.setDate(fecha.getDate() - dias);
-  const y = fecha.getFullYear();
-  const m = String(fecha.getMonth() + 1).padStart(2, "0");
-  const d = String(fecha.getDate()).padStart(2, "0");
-  return `${y}-${m}-${d}`;
-}
-
 function soloFecha(fecha: string | null | undefined) {
   if (!fecha) return "";
   if (fecha.includes("T")) return dateToLocalISO(fecha);
@@ -884,16 +874,6 @@ function CallCenterPageContent() {
     };
   }, [leadsDelDia]);
 
-  const leadsUltimos30Dias = useMemo(() => {
-    const inicioVentana = restarDiasISO(29);
-    const finVentana = hoyISO();
-
-    return leadsBasePorRol.filter((lead) => {
-      const fechaLead = soloFecha(lead.created_at);
-      return fechaLead >= inicioVentana && fechaLead <= finVentana;
-    });
-  }, [leadsBasePorRol]);
-
   const resumen = useMemo(() => {
     return {
       total: leadsDelDia.length,
@@ -902,7 +882,7 @@ function CallCenterPageContent() {
       ).length,
       nuevos: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo" && !estaAsignado(lead)).length,
       sinAsignar: leadsDelDia.filter((lead) => !estaAsignado(lead)).length,
-      sinAsignarPendientesNoContestan: leadsUltimos30Dias.filter((lead) =>
+      sinAsignarPendientesNoContestan: leadsDelDia.filter((lead) =>
         esSinAsignarPendienteONoContesta(lead)
       ).length,
       asignados: leadsDelDia.filter((lead) => estaAsignado(lead)).length,
@@ -917,7 +897,7 @@ function CallCenterPageContent() {
       noInteresa: leadsGestionDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_interesa").length,
       cerrados: leadsGestionDelDia.filter((lead) => esCerrado(lead)).length,
     };
-  }, [leadsDelDia, leadsGestionDelDia, leadsUltimos30Dias, activeAppointmentByLeadId]);
+  }, [leadsDelDia, leadsGestionDelDia, activeAppointmentByLeadId]);
 
   const resumenLlamadas = [
     { key: "pendientes", label: "Pendientes", value: resumen.pendientes },
@@ -945,7 +925,7 @@ function CallCenterPageContent() {
 
     let base =
       quickFilter === "sin_asignar_pendientes_no_contestan"
-        ? [...leadsUltimos30Dias]
+        ? [...leadsDelDia]
         : useGestionDate
           ? [...leadsGestionDelDia]
           : [...leadsDelDia];
@@ -1038,7 +1018,6 @@ function CallCenterPageContent() {
   }, [
     leadsDelDia,
     leadsGestionDelDia,
-    leadsUltimos30Dias,
     busqueda,
     quickFilter,
     leadSourceFilter,
@@ -1068,7 +1047,7 @@ function CallCenterPageContent() {
     },
     {
       key: "sin_asignar_pendientes_no_contestan",
-      title: "Sin asignar nuevos / pendientes / no contestan (30 d\u00EDas)",
+      title: "Por asignar del d\u00EDa",
       value: resumen.sinAsignarPendientesNoContestan,
       highlight: resumen.sinAsignarPendientesNoContestan > 0,
     },
@@ -1300,7 +1279,7 @@ function CallCenterPageContent() {
                       : "border border-[#CFE4D8] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#ECF8F1_100%)] text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-white"
                   }`}
                 >
-                  {`Sin asignar 30 d\u00EDas (${resumen.sinAsignarPendientesNoContestan})`}
+                  {`Por asignar del d\u00EDa (${resumen.sinAsignarPendientesNoContestan})`}
                 </button>
               </>
             )}
@@ -1389,7 +1368,7 @@ function CallCenterPageContent() {
                 Prioriza primero <span className="font-medium text-[#4F6F5B]">Sin asignar</span>,{" "}
                 <span className="font-medium text-[#4F6F5B]">Pendientes</span> y{" "}
                 <span className="font-medium text-[#4F6F5B]">No contestan</span> para que no se pierdan leads. El acceso
-                directo superior revisa siempre los {"\u00FAltimos 30 d\u00EDas"}.
+                directo superior revisa siempre la fecha seleccionada.
               </p>
             </div>
           ) : null}
