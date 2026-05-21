@@ -37,9 +37,11 @@ export default function NutricionAgendaPage() {
   const [loading, setLoading] = useState(true);
   const [appointments, setAppointments] = useState<AppointmentRow[]>([]);
   const [error, setError] = useState("");
+  const [message, setMessage] = useState("");
   const [search, setSearch] = useState("");
   const [dateFilter, setDateFilter] = useState(hoyISO());
   const [viewMode, setViewMode] = useState<ViewMode>("dia");
+  const [closingAppointmentId, setClosingAppointmentId] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -105,6 +107,38 @@ export default function NutricionAgendaPage() {
     }));
   }, [filteredAppointments]);
 
+  async function closeAppointment(appointmentId: string) {
+    const appointment = appointments.find((item) => item.id === appointmentId);
+    if (!appointment) return;
+
+    const currentStatus = (appointment.status || "").toLowerCase();
+    if (currentStatus === "finalizada" || currentStatus === "cancelada") return;
+
+    try {
+      setClosingAppointmentId(appointmentId);
+      setError("");
+      setMessage("");
+
+      const { error } = await supabase
+        .from("appointments")
+        .update({ status: "finalizada" })
+        .eq("id", appointmentId);
+
+      if (error) throw error;
+
+      setAppointments((current) =>
+        current.map((item) =>
+          item.id === appointmentId ? { ...item, status: "finalizada" } : item
+        )
+      );
+      setMessage(`Cita de ${appointment.patient_name || "nutrición"} cerrada correctamente.`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "No se pudo cerrar la cita.");
+    } finally {
+      setClosingAppointmentId(null);
+    }
+  }
+
   return (
     <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
@@ -158,6 +192,12 @@ export default function NutricionAgendaPage() {
           </div>
         ) : null}
 
+        {message ? (
+          <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-700">
+            {message}
+          </div>
+        ) : null}
+
         <section className="rounded-3xl border border-[#D6E8DA] bg-white p-6 shadow-sm">
           <div className="mb-5 flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
             <div>
@@ -204,6 +244,20 @@ export default function NutricionAgendaPage() {
                   >
                     Abrir atencion
                   </Link>
+                  {!["finalizada", "cancelada"].includes(
+                    String(appointment.estado || "").toLowerCase()
+                  ) ? (
+                    <button
+                      type="button"
+                      onClick={() => closeAppointment(appointment.id)}
+                      disabled={closingAppointmentId === appointment.id}
+                      className="inline-flex items-center justify-center rounded-2xl border border-[#5F7D66] bg-white px-4 py-2 text-sm font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                    >
+                      {closingAppointmentId === appointment.id
+                        ? "Cerrando..."
+                        : "Cerrar cita"}
+                    </button>
+                  ) : null}
                 </div>
               )}
             />
