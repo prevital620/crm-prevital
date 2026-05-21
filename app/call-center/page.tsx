@@ -32,6 +32,7 @@ type Lead = {
   created_by_user_id: string | null;
   assigned_to_user_id: string | null;
   commission_source_type: string | null;
+  qualification_result: string | null;
 };
 
 type CallCenterUser = {
@@ -67,13 +68,13 @@ type QuickFilter =
   | "pendientes"
   | "no_contestan"
   | "fuera_servicio"
-  | "interesados"
-  | "pendientes_cita"
   | "agendados"
+  | "asistio"
   | "no_asistio"
   | "dato_falso"
   | "no_interesa"
-  | "cerrados";
+  | "q"
+  | "no_q";
 
 type LeadSourceFilter = "todos" | "opc" | "base";
 
@@ -84,6 +85,8 @@ const statusOptions = [
   { value: "dato_falso", label: "Dato falso" },
   { value: "no_interesa", label: "No interesa" },
   { value: "agendado", label: "Cita / Agendado" },
+  { value: "asistio", label: "Asistió" },
+  { value: "no_asistio", label: "No asistió" },
 ];
 
 const statusOptionValues = new Set(statusOptions.map((option) => option.value));
@@ -93,6 +96,11 @@ const commissionSourceOptions = [
   { value: "redes", label: "Redes" },
   { value: "base", label: "Base" },
   { value: "otro", label: "Otro" },
+];
+
+const qualificationOptions = [
+  { value: "q", label: "Q" },
+  { value: "no_q", label: "No Q" },
 ];
 
 const allowedRoles = [
@@ -141,6 +149,8 @@ function estadoBadge(estado: string | null) {
       return "border-indigo-200 bg-indigo-50 text-indigo-700";
     case "agendado":
       return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    case "asistio":
+      return "border-green-200 bg-green-50 text-green-700";
     case "no_asistio":
       return "border-fuchsia-200 bg-fuchsia-50 text-fuchsia-700";
     case "dato_falso":
@@ -162,6 +172,7 @@ function traducirEstado(estado: string | null) {
     fuera_servicio: "# fuera de servicio",
     contactado: "Contactado",
     agendado: "Cita / Agendado",
+    asistio: "Asistió",
     no_asistio: "No asistió",
     dato_falso: "Dato falso",
     no_interesa: "No interesa",
@@ -202,6 +213,12 @@ function traducirFuenteComision(value: string | null) {
   return map[value] || value;
 }
 
+function traducirCalificacion(value: string | null) {
+  if (value === "q") return "Q";
+  if (value === "no_q") return "No Q";
+  return "Sin definir";
+}
+
 function normalizeLeadSourceValue(value: string | null | undefined) {
   return String(value || "").trim().toLowerCase();
 }
@@ -230,15 +247,14 @@ const quickFilterButtons: Array<{ key: QuickFilter; label: string }> = [
   { key: "pendientes", label: "Pendientes" },
   { key: "no_contestan", label: "No contesta" },
   { key: "fuera_servicio", label: "# fuera de servicio" },
-  { key: "interesados", label: "Interesados" },
-  { key: "nuevos", label: "Nuevos" },
   { key: "asignados", label: "Asignados" },
-  { key: "pendientes_cita", label: "Pendientes de cita" },
   { key: "agendados", label: "Cita / Agendado" },
+  { key: "asistio", label: "Asistió" },
   { key: "no_asistio", label: "No asistió" },
   { key: "dato_falso", label: "Dato falso" },
   { key: "no_interesa", label: "No interesa" },
-  { key: "cerrados", label: "Descartados" },
+  { key: "q", label: "Q" },
+  { key: "no_q", label: "No Q" },
 ];
 
 export default function CallCenterPage() {
@@ -269,9 +285,11 @@ function CallCenterPageContent() {
   const [selectedAssignments, setSelectedAssignments] = useState<Record<string, string>>({});
   const [selectedStatuses, setSelectedStatuses] = useState<Record<string, string>>({});
   const [selectedCommissionSources, setSelectedCommissionSources] = useState<Record<string, string>>({});
+  const [selectedQualifications, setSelectedQualifications] = useState<Record<string, string>>({});
   const [savingLeadId, setSavingLeadId] = useState<string | null>(null);
   const [savingStatusLeadId, setSavingStatusLeadId] = useState<string | null>(null);
   const [savingCommissionLeadId, setSavingCommissionLeadId] = useState<string | null>(null);
+  const [savingQualificationLeadId, setSavingQualificationLeadId] = useState<string | null>(null);
   const [cancelingAppointmentId, setCancelingAppointmentId] = useState<string | null>(null);
   const [quickFilter, setQuickFilter] = useState<QuickFilter>("todos");
   const [leadSourceFilter, setLeadSourceFilter] = useState<LeadSourceFilter>("todos");
@@ -289,7 +307,7 @@ function CallCenterPageContent() {
     const { data, error } = await supabase
       .from("leads")
       .select(
-        "id, first_name, last_name, full_name, phone, city, interest_service, capture_location, source, status, observations, created_at, updated_at, created_by_user_id, assigned_to_user_id, commission_source_type"
+        "id, first_name, last_name, full_name, phone, city, interest_service, capture_location, source, status, observations, created_at, updated_at, created_by_user_id, assigned_to_user_id, commission_source_type, qualification_result"
       )
       .order("created_at", { ascending: false });
 
@@ -439,16 +457,19 @@ function CallCenterPageContent() {
       const assignments: Record<string, string> = {};
       const statuses: Record<string, string> = {};
       const commissionSources: Record<string, string> = {};
+      const qualifications: Record<string, string> = {};
 
       leadsData.forEach((lead) => {
         assignments[lead.id] = lead.assigned_to_user_id || "";
         statuses[lead.id] = lead.status || "nuevo";
         commissionSources[lead.id] = lead.commission_source_type || "";
+        qualifications[lead.id] = lead.qualification_result || "";
       });
 
       setSelectedAssignments(assignments);
       setSelectedStatuses(statuses);
       setSelectedCommissionSources(commissionSources);
+      setSelectedQualifications(qualifications);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los datos del módulo.");
     } finally {
@@ -646,6 +667,46 @@ function CallCenterPageContent() {
     }
   }
 
+  async function guardarCalificacion(leadId: string) {
+    try {
+      const qualificationResult = selectedQualifications[leadId] || null;
+
+      setSavingQualificationLeadId(leadId);
+      setMensaje("");
+      setError("");
+
+      const { error } = await supabase
+        .from("leads")
+        .update({
+          qualification_result: qualificationResult,
+        })
+        .eq("id", leadId);
+
+      if (error) {
+        console.error("Error guardando Q/No Q:", error);
+        throw new Error(error.message || "No se pudo guardar Q/No Q.");
+      }
+
+      setLeads((prev) =>
+        prev.map((lead) =>
+          lead.id === leadId
+            ? {
+                ...lead,
+                qualification_result: qualificationResult,
+                updated_at: new Date().toISOString(),
+              }
+            : lead
+        )
+      );
+
+      setMensaje(qualificationResult ? "Q/No Q guardado correctamente." : "Se limpió Q/No Q.");
+    } catch (err: any) {
+      setError(err?.message || "No se pudo guardar Q/No Q.");
+    } finally {
+      setSavingQualificationLeadId(null);
+    }
+  }
+
   async function cancelarCita(lead: Lead, appointment: AppointmentRow) {
     try {
       setCancelingAppointmentId(appointment.id);
@@ -796,20 +857,6 @@ function CallCenterPageContent() {
     return obtenerEstadoVisible(lead) === "no_responde";
   }
 
-  function esInteresado(lead: Lead) {
-    return obtenerEstadoVisible(lead) === "interesado";
-  }
-
-  function esPendienteDeCita(lead: Lead) {
-    const estado = obtenerEstadoVisible(lead);
-    return !tieneCitaActiva(lead) && estado === "contactado";
-  }
-
-  function esCerrado(lead: Lead) {
-    const estado = obtenerEstadoVisible(lead);
-    return estado === "dato_falso" || estado === "no_interesa" || estado === "descartado";
-  }
-
   function esFueraDeServicio(lead: Lead) {
     return obtenerEstadoVisible(lead) === "fuera_servicio";
   }
@@ -889,13 +936,13 @@ function CallCenterPageContent() {
       pendientes: leadsGestionDelDia.filter((lead) => esPendiente(lead)).length,
       noContestan: leadsGestionDelDia.filter((lead) => esNoContesta(lead)).length,
       fueraServicio: leadsGestionDelDia.filter((lead) => esFueraDeServicio(lead)).length,
-      interesados: leadsGestionDelDia.filter((lead) => esInteresado(lead)).length,
-      pendientesCita: leadsGestionDelDia.filter((lead) => esPendienteDeCita(lead)).length,
       agendados: leadsGestionDelDia.filter((lead) => tieneCitaActiva(lead)).length,
+      asistio: leadsGestionDelDia.filter((lead) => obtenerEstadoVisible(lead) === "asistio").length,
       noAsistio: leadsGestionDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio").length,
       datoFalso: leadsGestionDelDia.filter((lead) => obtenerEstadoVisible(lead) === "dato_falso").length,
       noInteresa: leadsGestionDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_interesa").length,
-      cerrados: leadsGestionDelDia.filter((lead) => esCerrado(lead)).length,
+      q: leadsGestionDelDia.filter((lead) => lead.qualification_result === "q").length,
+      noQ: leadsGestionDelDia.filter((lead) => lead.qualification_result === "no_q").length,
     };
   }, [leadsDelDia, leadsGestionDelDia, activeAppointmentByLeadId]);
 
@@ -906,6 +953,10 @@ function CallCenterPageContent() {
     { key: "dato_falso", label: "Dato falso", value: resumen.datoFalso },
     { key: "no_interesa", label: "No interesa", value: resumen.noInteresa },
     { key: "agendados", label: "Cita / Agendado", value: resumen.agendados },
+    { key: "asistio", label: "Asistió", value: resumen.asistio },
+    { key: "no_asistio", label: "No asistió", value: resumen.noAsistio },
+    { key: "q", label: "Q", value: resumen.q },
+    { key: "no_q", label: "No Q", value: resumen.noQ },
   ] as const;
 
   const leadsFiltrados = useMemo(() => {
@@ -915,13 +966,13 @@ function CallCenterPageContent() {
       quickFilter === "pendientes" ||
       quickFilter === "no_contestan" ||
       quickFilter === "fuera_servicio" ||
-      quickFilter === "interesados" ||
-      quickFilter === "pendientes_cita" ||
       quickFilter === "agendados" ||
+      quickFilter === "asistio" ||
       quickFilter === "no_asistio" ||
       quickFilter === "dato_falso" ||
       quickFilter === "no_interesa" ||
-      quickFilter === "cerrados";
+      quickFilter === "q" ||
+      quickFilter === "no_q";
 
     let base =
       quickFilter === "sin_asignar_pendientes_no_contestan"
@@ -964,16 +1015,12 @@ function CallCenterPageContent() {
       base = base.filter((lead) => esFueraDeServicio(lead));
     }
 
-    if (quickFilter === "interesados") {
-      base = base.filter((lead) => esInteresado(lead));
-    }
-
-    if (quickFilter === "pendientes_cita") {
-      base = base.filter((lead) => esPendienteDeCita(lead));
-    }
-
     if (quickFilter === "agendados") {
       base = base.filter((lead) => tieneCitaActiva(lead));
+    }
+
+    if (quickFilter === "asistio") {
+      base = base.filter((lead) => obtenerEstadoVisible(lead) === "asistio");
     }
 
     if (quickFilter === "no_asistio") {
@@ -988,8 +1035,12 @@ function CallCenterPageContent() {
       base = base.filter((lead) => obtenerEstadoVisible(lead) === "no_interesa");
     }
 
-    if (quickFilter === "cerrados") {
-      base = base.filter((lead) => esCerrado(lead));
+    if (quickFilter === "q") {
+      base = base.filter((lead) => lead.qualification_result === "q");
+    }
+
+    if (quickFilter === "no_q") {
+      base = base.filter((lead) => lead.qualification_result === "no_q");
     }
 
     if (showLeadSourceFilter) {
@@ -1040,22 +1091,10 @@ function CallCenterPageContent() {
   const statCards = [
     { key: "todos", title: "Todos", value: resumen.total, highlight: false },
     {
-      key: "redes",
-      title: "Leads redes",
-      value: resumen.redes,
-      highlight: resumen.redes > 0,
-    },
-    {
       key: "sin_asignar_pendientes_no_contestan",
       title: "Por asignar del d\u00EDa",
       value: resumen.sinAsignarPendientesNoContestan,
       highlight: resumen.sinAsignarPendientesNoContestan > 0,
-    },
-    {
-      key: "sin_asignar",
-      title: "Sin asignar",
-      value: resumen.sinAsignar,
-      highlight: resumen.sinAsignar > 0,
     },
     {
       key: "pendientes",
@@ -1076,28 +1115,21 @@ function CallCenterPageContent() {
       highlight: resumen.fueraServicio > 0,
     },
     {
-      key: "interesados",
-      title: "Interesados",
-      value: resumen.interesados,
-      highlight: false,
-    },
-    { key: "nuevos", title: "Nuevos", value: resumen.nuevos, highlight: false },
-    {
       key: "asignados",
       title: "Asignados",
       value: resumen.asignados,
       highlight: false,
     },
     {
-      key: "pendientes_cita",
-      title: "Pendientes de cita",
-      value: resumen.pendientesCita,
-      highlight: false,
-    },
-    {
       key: "agendados",
       title: "Cita / Agendado",
       value: resumen.agendados,
+      highlight: false,
+    },
+    {
+      key: "asistio",
+      title: "Asistió",
+      value: resumen.asistio,
       highlight: false,
     },
     {
@@ -1119,9 +1151,15 @@ function CallCenterPageContent() {
       highlight: false,
     },
     {
-      key: "cerrados",
-      title: "Descartados",
-      value: resumen.cerrados,
+      key: "q",
+      title: "Q",
+      value: resumen.q,
+      highlight: false,
+    },
+    {
+      key: "no_q",
+      title: "No Q",
+      value: resumen.noQ,
       highlight: false,
     },
   ] as const;
@@ -1129,9 +1167,7 @@ function CallCenterPageContent() {
   const visibleStatCards = statCards.filter(
     (card) =>
       isSupervisorCallCenterView ||
-      (card.key !== "redes" &&
-        card.key !== "sin_asignar" &&
-        card.key !== "sin_asignar_pendientes_no_contestan" &&
+      (card.key !== "sin_asignar_pendientes_no_contestan" &&
         card.key !== "asignados")
   );
 
@@ -1490,6 +1526,7 @@ function CallCenterPageContent() {
                 const estadoVisible = obtenerEstadoVisible(lead);
                 const selectedStatus = selectedStatuses[lead.id] || lead.status || "pendiente_contacto";
                 const hasSelectedStatusOption = statusOptionValues.has(selectedStatus);
+                const selectedQualification = selectedQualifications[lead.id] || "";
 
                 return (
                   <div
@@ -1532,6 +1569,10 @@ function CallCenterPageContent() {
                                 <p className="text-[#4F6F5B]">
                                   <span className="font-medium">Fuente para comisión:</span>{" "}
                                   {traducirFuenteComision(lead.commission_source_type)}
+                                </p>
+                                <p className="text-[#4F6F5B]">
+                                  <span className="font-medium">Q / No Q:</span>{" "}
+                                  {traducirCalificacion(lead.qualification_result)}
                                 </p>
                               </>
                             ) : null}
@@ -1582,7 +1623,7 @@ function CallCenterPageContent() {
                         </div>
                       </div>
 
-                      <div className={`grid gap-3 ${canChangeStatus ? "xl:grid-cols-3" : canManageCommissionSource ? "xl:grid-cols-2" : ""}`}>
+                      <div className={`grid gap-3 ${canChangeStatus ? "xl:grid-cols-4" : canManageCommissionSource ? "xl:grid-cols-2" : ""}`}>
                       {canAssign ? (
                         <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
                           <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">
@@ -1704,6 +1745,43 @@ function CallCenterPageContent() {
                               {savingStatusLeadId === lead.id
                                 ? "Guardando..."
                                 : "Guardar estado"}
+                            </button>
+                          </div>
+                        </div>
+                      ) : null}
+
+                      {canChangeStatus ? (
+                        <div className="rounded-3xl border border-[#E3ECE5] bg-[#F8F7F4] p-4">
+                          <p className="mb-3 text-sm font-semibold text-[#4F6F5B]">Q / No Q</p>
+
+                          <div className="flex flex-col gap-3">
+                            <select
+                              className="w-full rounded-2xl border border-[#D6E8DA] bg-white p-3.5 text-slate-800 outline-none transition focus:border-[#7FA287]"
+                              value={selectedQualification}
+                              onChange={(e) =>
+                                setSelectedQualifications((prev) => ({
+                                  ...prev,
+                                  [lead.id]: e.target.value,
+                                }))
+                              }
+                            >
+                              <option value="">Sin definir</option>
+                              {qualificationOptions.map((item) => (
+                                <option key={item.value} value={item.value}>
+                                  {item.label}
+                                </option>
+                              ))}
+                            </select>
+
+                            <button
+                              type="button"
+                              onClick={() => guardarCalificacion(lead.id)}
+                              disabled={savingQualificationLeadId === lead.id}
+                              className="rounded-2xl border border-[#5F7D66] bg-white px-4 py-3 text-sm font-medium text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                            >
+                              {savingQualificationLeadId === lead.id
+                                ? "Guardando..."
+                                : "Guardar Q/No Q"}
                             </button>
                           </div>
                         </div>
