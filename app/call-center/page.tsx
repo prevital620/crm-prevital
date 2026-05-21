@@ -28,6 +28,7 @@ type Lead = {
   status: string;
   observations: string | null;
   created_at: string;
+  updated_at: string;
   created_by_user_id: string | null;
   assigned_to_user_id: string | null;
   commission_source_type: string | null;
@@ -298,7 +299,7 @@ function CallCenterPageContent() {
     const { data, error } = await supabase
       .from("leads")
       .select(
-        "id, first_name, last_name, full_name, phone, city, interest_service, capture_location, source, status, observations, created_at, created_by_user_id, assigned_to_user_id, commission_source_type"
+        "id, first_name, last_name, full_name, phone, city, interest_service, capture_location, source, status, observations, created_at, updated_at, created_by_user_id, assigned_to_user_id, commission_source_type"
       )
       .order("created_at", { ascending: false });
 
@@ -603,7 +604,7 @@ function CallCenterPageContent() {
 
       setLeads((prev) =>
         prev.map((lead) =>
-          lead.id === leadId ? { ...lead, status: newStatus } : lead
+          lead.id === leadId ? { ...lead, status: newStatus, updated_at: new Date().toISOString() } : lead
         )
       );
 
@@ -816,7 +817,7 @@ function CallCenterPageContent() {
 
   function esCerrado(lead: Lead) {
     const estado = obtenerEstadoVisible(lead);
-    return estado === "dato_falso" || estado === "no_interesa";
+    return estado === "dato_falso" || estado === "no_interesa" || estado === "descartado";
   }
 
   function esFueraDeServicio(lead: Lead) {
@@ -870,6 +871,12 @@ function CallCenterPageContent() {
     );
   }, [leadsBasePorRol, fechaFiltro]);
 
+  const leadsGestionDelDia = useMemo(() => {
+    return leadsBasePorRol.filter((lead) =>
+      fechaFiltro ? soloFecha(lead.updated_at || lead.created_at) === fechaFiltro : true
+    );
+  }, [leadsBasePorRol, fechaFiltro]);
+
   const resumenPorOrigen = useMemo(() => {
     return {
       opc: leadsDelDia.filter((lead) => leadMatchesSourceFilter(lead, "opc")).length,
@@ -893,24 +900,24 @@ function CallCenterPageContent() {
       redes: leadsDelDia.filter(
         (lead) => (lead.source || "").toLowerCase() === "redes" && obtenerEstadoVisible(lead) === "nuevo"
       ).length,
-      nuevos: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo").length,
+      nuevos: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "nuevo" && !estaAsignado(lead)).length,
       sinAsignar: leadsDelDia.filter((lead) => !estaAsignado(lead)).length,
       sinAsignarPendientesNoContestan: leadsUltimos30Dias.filter((lead) =>
         esSinAsignarPendienteONoContesta(lead)
       ).length,
-      asignados: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "asignado").length,
-      pendientes: leadsDelDia.filter((lead) => esPendiente(lead)).length,
-      noContestan: leadsDelDia.filter((lead) => esNoContesta(lead)).length,
-      fueraServicio: leadsDelDia.filter((lead) => esFueraDeServicio(lead)).length,
-      interesados: leadsDelDia.filter((lead) => esInteresado(lead)).length,
-      pendientesCita: leadsDelDia.filter((lead) => esPendienteDeCita(lead)).length,
-      agendados: leadsDelDia.filter((lead) => tieneCitaActiva(lead)).length,
-      noAsistio: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio").length,
-      datoFalso: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "dato_falso").length,
-      noInteresa: leadsDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_interesa").length,
-      cerrados: leadsDelDia.filter((lead) => esCerrado(lead)).length,
+      asignados: leadsDelDia.filter((lead) => estaAsignado(lead)).length,
+      pendientes: leadsGestionDelDia.filter((lead) => esPendiente(lead)).length,
+      noContestan: leadsGestionDelDia.filter((lead) => esNoContesta(lead)).length,
+      fueraServicio: leadsGestionDelDia.filter((lead) => esFueraDeServicio(lead)).length,
+      interesados: leadsGestionDelDia.filter((lead) => esInteresado(lead)).length,
+      pendientesCita: leadsGestionDelDia.filter((lead) => esPendienteDeCita(lead)).length,
+      agendados: leadsGestionDelDia.filter((lead) => tieneCitaActiva(lead)).length,
+      noAsistio: leadsGestionDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_asistio").length,
+      datoFalso: leadsGestionDelDia.filter((lead) => obtenerEstadoVisible(lead) === "dato_falso").length,
+      noInteresa: leadsGestionDelDia.filter((lead) => obtenerEstadoVisible(lead) === "no_interesa").length,
+      cerrados: leadsGestionDelDia.filter((lead) => esCerrado(lead)).length,
     };
-  }, [leadsDelDia, leadsUltimos30Dias, activeAppointmentByLeadId]);
+  }, [leadsDelDia, leadsGestionDelDia, leadsUltimos30Dias, activeAppointmentByLeadId]);
 
   const resumenLlamadas = [
     { key: "pendientes", label: "Pendientes", value: resumen.pendientes },
@@ -924,13 +931,27 @@ function CallCenterPageContent() {
   const leadsFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
 
+    const useGestionDate =
+      quickFilter === "pendientes" ||
+      quickFilter === "no_contestan" ||
+      quickFilter === "fuera_servicio" ||
+      quickFilter === "interesados" ||
+      quickFilter === "pendientes_cita" ||
+      quickFilter === "agendados" ||
+      quickFilter === "no_asistio" ||
+      quickFilter === "dato_falso" ||
+      quickFilter === "no_interesa" ||
+      quickFilter === "cerrados";
+
     let base =
       quickFilter === "sin_asignar_pendientes_no_contestan"
         ? [...leadsUltimos30Dias]
-        : [...leadsDelDia];
+        : useGestionDate
+          ? [...leadsGestionDelDia]
+          : [...leadsDelDia];
 
     if (quickFilter === "nuevos") {
-      base = base.filter((lead) => obtenerEstadoVisible(lead) === "nuevo");
+      base = base.filter((lead) => obtenerEstadoVisible(lead) === "nuevo" && !estaAsignado(lead));
     }
 
     if (quickFilter === "redes") {
@@ -948,7 +969,7 @@ function CallCenterPageContent() {
     }
 
     if (quickFilter === "asignados") {
-      base = base.filter((lead) => obtenerEstadoVisible(lead) === "asignado");
+      base = base.filter((lead) => estaAsignado(lead));
     }
 
     if (quickFilter === "pendientes") {
@@ -1016,6 +1037,7 @@ function CallCenterPageContent() {
     });
   }, [
     leadsDelDia,
+    leadsGestionDelDia,
     leadsUltimos30Dias,
     busqueda,
     quickFilter,
