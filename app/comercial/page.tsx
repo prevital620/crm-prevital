@@ -208,6 +208,7 @@ const creditProviderOptions = [
   { value: "welly", label: "Welly" },
   { value: "medipay", label: "MediPay" },
   { value: "sumaspay", label: "SumasPay" },
+  { value: "credimio", label: "Credimio" },
 ];
 
 const nextStepOptions = [
@@ -253,7 +254,7 @@ function buildPaymentMethodSummary(paymentMethod: string, creditProvider?: strin
     return `Créditos - ${creditProviderLabel(creditProvider)}`;
   }
 
-  if (["addi", "welly", "medipay", "sumaspay"].includes(paymentMethod)) {
+  if (["addi", "welly", "medipay", "sumaspay", "credimio"].includes(paymentMethod)) {
     return `Créditos - ${creditProviderLabel(paymentMethod)}`;
   }
 
@@ -1240,12 +1241,12 @@ export default function ComercialPage() {
         sales_assessment: item.sales_assessment || "",
         proposal_text: item.proposal_text || "",
         purchased_service: item.purchased_service || "",
-        payment_method: ["addi", "welly", "medipay", "sumaspay"].includes(item.payment_method || "")
+        payment_method: ["addi", "welly", "medipay", "sumaspay", "credimio"].includes(item.payment_method || "")
           ? "creditos"
           : item.payment_method || "",
         credit_provider:
           item.credit_provider ||
-          (["addi", "welly", "medipay", "sumaspay"].includes(item.payment_method || "")
+          (["addi", "welly", "medipay", "sumaspay", "credimio"].includes(item.payment_method || "")
             ? item.payment_method || ""
             : ""),
         cash_amount: item.cash_amount ? String(item.cash_amount) : "",
@@ -1581,11 +1582,11 @@ export default function ComercialPage() {
       const paymentMethod = form.payment_method || null;
       const isCreditPayment =
         paymentMethod === "creditos" ||
-        ["addi", "welly", "medipay", "sumaspay"].includes(paymentMethod || "");
+        ["addi", "welly", "medipay", "sumaspay", "credimio"].includes(paymentMethod || "");
       const creditProvider =
         paymentMethod === "creditos"
           ? form.credit_provider || null
-          : ["addi", "welly", "medipay", "sumaspay"].includes(paymentMethod || "")
+          : ["addi", "welly", "medipay", "sumaspay", "credimio"].includes(paymentMethod || "")
           ? paymentMethod
           : null;
 

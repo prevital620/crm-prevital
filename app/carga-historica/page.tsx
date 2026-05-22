@@ -183,6 +183,7 @@ const paymentOptions = [
   { value: "addi", label: "Addi" },
   { value: "welly", label: "Welly" },
   { value: "medipay", label: "MediPay" },
+  { value: "credimio", label: "Credimio" },
 ];
 
 const affiliationOptions = [
@@ -954,7 +955,7 @@ export default function CargaHistoricaPage() {
       const volumeNumber = calculatedVolume;
       const cashNumber = calculatedCash;
       const portfolioNumber = calculatedPortfolio;
-      const isCreditPayment = ["cartera", "addi", "welly", "medipay"].includes(
+      const isCreditPayment = ["cartera", "addi", "welly", "medipay", "credimio"].includes(
         form.payment_method
       );
       const netCommissionBase = Math.max(0, cashNumber);

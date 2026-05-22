@@ -133,8 +133,15 @@ function uniqueNonEmpty(values: string[]) {
 function buildPaymentMethodSummary(paymentMethod: string | null | undefined) {
   const value = String(paymentMethod || "").trim().toLowerCase();
   if (!value) return "Sin definir";
-  if (["addi", "welly", "medipay", "sumaspay"].includes(value)) {
-    const label = value === "sumaspay" ? "Sumaspay" : value.charAt(0).toUpperCase() + value.slice(1);
+  if (["addi", "welly", "medipay", "sumaspay", "credimio"].includes(value)) {
+    const labels: Record<string, string> = {
+      addi: "Addi",
+      welly: "Welly",
+      medipay: "MediPay",
+      sumaspay: "SumasPay",
+      credimio: "Credimio",
+    };
+    const label = labels[value] || value;
     return `Créditos - ${label}`;
   }
 

@@ -70,6 +70,7 @@ const commercialPaymentOptions = [
   { value: "welly", label: "Welly" },
   { value: "medipay", label: "MediPay" },
   { value: "sumaspay", label: "SumasPay" },
+  { value: "credimio", label: "Credimio" },
 ] as const;
 
 function hoyISO() {

@@ -1,5 +1,12 @@
-const CREDIT_PAYMENT_METHODS = new Set(["creditos", "addi", "welly", "medipay", "sumaspay"]);
-const CREDIT_PROVIDERS = new Set(["addi", "welly", "medipay", "sumaspay"]);
+const CREDIT_PAYMENT_METHODS = new Set([
+  "creditos",
+  "addi",
+  "welly",
+  "medipay",
+  "sumaspay",
+  "credimio",
+]);
+const CREDIT_PROVIDERS = new Set(["addi", "welly", "medipay", "sumaspay", "credimio"]);
 
 export function isCreditCommissionPayment(params: {
   paymentMethod?: string | null;

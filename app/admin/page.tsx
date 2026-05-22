@@ -96,6 +96,8 @@ function paymentMethodLabel(value: string | null | undefined) {
     addi: "Addi",
     welly: "Welly",
     medipay: "Medipay",
+    sumaspay: "SumasPay",
+    credimio: "Credimio",
   };
   if (!value) return "Sin definir";
   return map[value] || value;
