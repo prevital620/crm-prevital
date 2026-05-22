@@ -107,6 +107,19 @@ export default function NutricionAgendaPage() {
     }));
   }, [filteredAppointments]);
 
+  const pendingCloseAppointments = useMemo(() => {
+    return appointments
+      .filter((item) => {
+        const status = (item.status || "").toLowerCase();
+        return status !== "finalizada" && status !== "cancelada";
+      })
+      .sort((a, b) => {
+        const dateA = `${a.appointment_date} ${a.appointment_time || ""}`;
+        const dateB = `${b.appointment_date} ${b.appointment_time || ""}`;
+        return dateA.localeCompare(dateB);
+      });
+  }, [appointments]);
+
   async function closeAppointment(appointmentId: string) {
     const appointment = appointments.find((item) => item.id === appointmentId);
     if (!appointment) return;
@@ -219,6 +232,51 @@ export default function NutricionAgendaPage() {
               </div>
             </div>
           </div>
+
+          {pendingCloseAppointments.length > 0 ? (
+            <div className="mb-5 rounded-[28px] border border-amber-200 bg-amber-50/70 p-5">
+              <div className="flex flex-col gap-2 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="text-lg font-semibold text-[#24312A]">
+                    Citas pendientes por cerrar
+                  </h3>
+                  <p className="mt-1 text-sm leading-6 text-amber-800">
+                    Citas de nutricion antiguas o pendientes que todavia no estan finalizadas.
+                  </p>
+                </div>
+                <span className="rounded-full bg-white px-3 py-1 text-sm font-semibold text-amber-800">
+                  {pendingCloseAppointments.length}
+                </span>
+              </div>
+
+              <div className="mt-4 grid gap-3">
+                {pendingCloseAppointments.map((appointment) => (
+                  <div
+                    key={appointment.id}
+                    className="flex flex-col gap-3 rounded-2xl border border-amber-200 bg-white p-4 md:flex-row md:items-center md:justify-between"
+                  >
+                    <div>
+                      <p className="font-semibold text-[#24312A]">
+                        {appointment.patient_name || "Sin nombre"}
+                      </p>
+                      <p className="mt-1 text-sm text-[#607368]">
+                        {appointment.appointment_date} {formatHora(appointment.appointment_time)} ·{" "}
+                        {appointment.status || "Sin estado"}
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => closeAppointment(appointment.id)}
+                      disabled={closingAppointmentId === appointment.id}
+                      className="inline-flex items-center justify-center rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-semibold text-white transition hover:bg-[#4F6F5B] disabled:opacity-60"
+                    >
+                      {closingAppointmentId === appointment.id ? "Cerrando..." : "Cerrar cita"}
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : null}
 
           {loading ? (
             <div className="rounded-2xl border border-dashed border-[#D6E8DA] bg-[#FBFCFB] p-6 text-sm text-slate-500">
