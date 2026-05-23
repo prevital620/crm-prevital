@@ -40,6 +40,7 @@ type CommercialCaseSummaryRow = {
 };
 
 type DailySummary = {
+  presenceTotal: number;
   presenceQ: number;
   presenceNq: number;
   sales: number;
@@ -87,7 +88,9 @@ function hasRealSale(item: CommercialCaseSummaryRow) {
       item.sale_result === "ganada" ||
       item.sale_result === "venta_realizada" ||
       Number(item.sale_value || 0) > 0 ||
-      Number(item.volume_amount || 0) > 0
+      Number(item.volume_amount || 0) > 0 ||
+      Number(item.cash_amount || 0) > 0 ||
+      Number(item.portfolio_amount || 0) > 0
   );
 }
 
@@ -105,9 +108,16 @@ function buildDailySummary(
     { presenceQ: 0, presenceNq: 0 }
   );
 
-  const salesRows = todayClosedCases.filter(hasRealSale);
+  const salesRowsById = new Map<string, CommercialCaseSummaryRow>();
+  [...todayCases, ...todayClosedCases].forEach((item) => {
+    if (hasRealSale(item)) {
+      salesRowsById.set(item.id, item);
+    }
+  });
+  const salesRows = Array.from(salesRowsById.values());
 
   return {
+    presenceTotal: classified.presenceQ + classified.presenceNq,
     presenceQ: classified.presenceQ,
     presenceNq: classified.presenceNq,
     sales: salesRows.length,
@@ -130,6 +140,7 @@ export default function HomePage() {
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
   const [dailySummary, setDailySummary] = useState<DailySummary>({
+    presenceTotal: 0,
     presenceQ: 0,
     presenceNq: 0,
     sales: 0,
@@ -410,6 +421,12 @@ export default function HomePage() {
         {isSuperUser ? (
           <>
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              <StatCard
+                title="Total presencias"
+                value={loading ? "..." : String(dailySummary.presenceTotal)}
+                subtitle="Q y NQ ingresados hoy"
+                icon={<LayoutGrid className="h-5 w-5" />}
+              />
               <StatCard
                 title="Presencias Q"
                 value={loading ? "..." : String(dailySummary.presenceQ)}
