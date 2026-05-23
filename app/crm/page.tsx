@@ -8,6 +8,9 @@ import { supabase } from "@/lib/supabase";
 import LogoutButton from "@/components/logout-button";
 import { getCurrentUserRole, normalizeRoleCode } from "@/lib/auth";
 import { repairMojibake } from "@/lib/text/repairMojibake";
+import printDailyManifest from "@/lib/print/templates/printDailyManifest";
+import { calculateNetCommissionBase } from "@/lib/commercial/commission-base";
+import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
 import { PrevitalButton } from "@/components/ui/prevital-button";
 import {
   PrevitalCard,
@@ -19,7 +22,7 @@ import {
   PrevitalFilterBar,
   PrevitalFilterGroup,
 } from "@/components/layout/prevital-filter-bar";
-import { Banknote, BadgeCheck, BadgeX, LayoutGrid, RefreshCcw, ShieldCheck, ShoppingCart, WalletCards } from "lucide-react";
+import { Banknote, BadgeCheck, BadgeX, LayoutGrid, Printer, RefreshCcw, ShieldCheck, ShoppingCart, WalletCards } from "lucide-react";
 import {
   getVisibleQuickActions,
   quickActions,
@@ -28,15 +31,32 @@ import {
 
 type CommercialCaseSummaryRow = {
   id: string;
+  customer_name?: string;
   created_at: string;
+  updated_at?: string | null;
   closed_at: string | null;
+  assigned_commercial_user_id?: string | null;
+  call_user_id?: string | null;
+  opc_user_id?: string | null;
+  status?: string | null;
   commercial_notes: string | null;
   sale_result: string | null;
   purchased_service: string | null;
   sale_value: number | null;
+  sales_assessment?: string | null;
+  payment_method?: string | null;
+  credit_provider?: string | null;
   cash_amount: number | null;
+  net_commission_base?: number | null;
   portfolio_amount: number | null;
   volume_amount: number | null;
+  closing_notes?: string | null;
+};
+
+type ManifestSourceUser = {
+  id: string;
+  full_name: string;
+  employee_code: string;
 };
 
 type DailySummary = {
@@ -71,6 +91,54 @@ function formatMoney(value: number) {
   return `$${Number(value || 0).toLocaleString("es-CO")}`;
 }
 
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function formatManifestTime(value: string | null | undefined) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleTimeString("es-CO", {
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function getCommercialReceptionSummary(item: CommercialCaseSummaryRow) {
+  const source =
+    item.sale_result && !["ganada", "perdida", "pendiente"].includes(item.sale_result)
+      ? item.sale_result
+      : parseStoredCommercialNotes(item.commercial_notes).receptionSummary;
+
+  if (!source) return [];
+  return source
+    .split("|")
+    .map((part) => repairMojibake(part).trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+
+function getReceptionSummaryValue(item: CommercialCaseSummaryRow, label: string) {
+  const normalizedLabel = normalizeText(label);
+  const line = getCommercialReceptionSummary(item).find((entry) =>
+    normalizeText(entry).startsWith(`${normalizedLabel}:`)
+  );
+  return line?.split(":").slice(1).join(":").trim() || "";
+}
+
+function paymentMethodSummary(
+  paymentMethod: string | null | undefined,
+  creditProvider: string | null | undefined
+) {
+  if (!paymentMethod) return "No registrado";
+  if (paymentMethod === "creditos") return creditProvider ? `Créditos - ${creditProvider}` : "Créditos";
+  return paymentMethod;
+}
+
 function getInitialClassification(item: CommercialCaseSummaryRow) {
   const notes = repairMojibake(item.commercial_notes || "").toLowerCase();
   const match = notes.match(/clasificaci[oó]n inicial:\s*([^|.\n]+)/i);
@@ -92,6 +160,29 @@ function hasRealSale(item: CommercialCaseSummaryRow) {
       Number(item.cash_amount || 0) > 0 ||
       Number(item.portfolio_amount || 0) > 0
   );
+}
+
+function buildManifestObservation(item: CommercialCaseSummaryRow, hasSale: boolean) {
+  const receptionObservation = getReceptionSummaryValue(item, "Observaciones recepción") || "";
+  const classificationReason = getReceptionSummaryValue(item, "Motivo clasificación") || "";
+  const initialClassification = getReceptionSummaryValue(item, "Clasificación inicial") || "";
+  const isInitialNoQ = normalizeText(initialClassification) === "no q";
+
+  if (hasSale) {
+    const finalQualificationNote =
+      isInitialNoQ && classificationReason
+        ? `Inicial: ${classificationReason} Final: Q por venta.`
+        : "Q por venta.";
+
+    return (
+      [receptionObservation, finalQualificationNote].filter(Boolean).join(" ") ||
+      item.sales_assessment ||
+      item.closing_notes ||
+      finalQualificationNote
+    );
+  }
+
+  return receptionObservation || classificationReason || item.sales_assessment || item.closing_notes || "";
 }
 
 function buildDailySummary(
@@ -293,6 +384,164 @@ export default function HomePage() {
     }
   }
 
+  async function imprimirManifiestoHoy() {
+    try {
+      setErrorMessage("");
+
+      const today = getLocalDateISO();
+      const tomorrow = addDaysISO(today, 1);
+      const todayStart = `${today}T00:00:00-05:00`;
+      const tomorrowStart = `${tomorrow}T00:00:00-05:00`;
+
+      const [casesResult, sourceUsersResult] = await Promise.all([
+        supabase
+          .from("commercial_cases")
+          .select(
+            `
+              id,
+              customer_name,
+              assigned_commercial_user_id,
+              call_user_id,
+              opc_user_id,
+              status,
+              commercial_notes,
+              sale_result,
+              purchased_service,
+              sale_value,
+              sales_assessment,
+              payment_method,
+              credit_provider,
+              cash_amount,
+              portfolio_amount,
+              net_commission_base,
+              volume_amount,
+              closing_notes,
+              created_at,
+              updated_at,
+              closed_at
+            `
+          )
+          .gte("created_at", todayStart)
+          .lt("created_at", tomorrowStart)
+          .order("created_at", { ascending: true }),
+        supabase
+          .from("user_roles")
+          .select(
+            `
+              user_id,
+              profiles!user_roles_user_id_fkey (
+                id,
+                full_name,
+                employee_code
+              ),
+              roles!user_roles_role_id_fkey (
+                code
+              )
+            `
+          ),
+      ]);
+
+      if (casesResult.error) throw casesResult.error;
+      if (sourceUsersResult.error) throw sourceUsersResult.error;
+
+      const sourceUserMap = new Map<string, ManifestSourceUser>();
+      ((sourceUsersResult.data as any[]) || []).forEach((row) => {
+        const roleCode = row.roles?.code || "";
+        const id = row.profiles?.id || row.user_id;
+        if (!id) return;
+        if (
+          ![
+            "promotor_opc",
+            "supervisor_opc",
+            "tmk",
+            "confirmador",
+            "supervisor_call_center",
+            "comercial",
+          ].includes(roleCode)
+        ) {
+          return;
+        }
+        if (sourceUserMap.has(id)) return;
+        sourceUserMap.set(id, {
+          id,
+          full_name: row.profiles?.full_name || "Sin nombre",
+          employee_code: row.profiles?.employee_code || "",
+        });
+      });
+
+      const rows = (((casesResult.data as CommercialCaseSummaryRow[]) || [])).map((item) => {
+        const tmk = item.call_user_id ? sourceUserMap.get(item.call_user_id) : undefined;
+        const opc = item.opc_user_id ? sourceUserMap.get(item.opc_user_id) : undefined;
+        const analyst = item.assigned_commercial_user_id
+          ? sourceUserMap.get(item.assigned_commercial_user_id)
+          : undefined;
+        const hasSale = hasRealSale(item);
+        const cashAmount = Number(item.cash_amount || 0);
+        const commissionableAmount = Number(
+          item.net_commission_base ??
+            calculateNetCommissionBase({
+              cashAmount,
+              paymentMethod: item.payment_method || null,
+              creditProvider: item.credit_provider || null,
+            })
+        );
+
+        return {
+          horaLlegada: formatManifestTime(item.created_at),
+          horaSalida: formatManifestTime(item.closed_at || (hasSale ? item.updated_at || null : null)),
+          nombreCompleto: item.customer_name || "Sin nombre",
+          analista: analyst?.full_name || "",
+          codigoTMK: tmk?.employee_code || "",
+          codigoOPC: opc?.employee_code || "",
+          calificacion:
+            hasSale || normalizeText(item.status) === "finalizado"
+              ? "Q"
+              : getReceptionSummaryValue(item, "Clasificación inicial") || "Sin definir",
+          valorCaja: hasSale ? cashAmount.toLocaleString("es-CO") : "",
+          valorComisionable: hasSale ? commissionableAmount.toLocaleString("es-CO") : "",
+          ventaRealizada: hasSale,
+          formaPago: hasSale ? paymentMethodSummary(item.payment_method, item.credit_provider) : "",
+          observaciones: buildManifestObservation(item, hasSale),
+        };
+      });
+
+      let totalQ = 0;
+      let totalNoQ = 0;
+      let totalVentas = 0;
+      let totalCaja = 0;
+      let totalComisionable = 0;
+
+      rows.forEach((row) => {
+        const qualification = normalizeText(row.calificacion);
+        if (qualification === "q") totalQ += 1;
+        if (qualification === "no q") totalNoQ += 1;
+        if (row.ventaRealizada) totalVentas += 1;
+
+        const cashValue = Number(String(row.valorCaja || "").replace(/\./g, "").replace(/,/g, "."));
+        if (cashValue > 0) totalCaja += cashValue;
+
+        const commissionableValue = Number(
+          String(row.valorComisionable || "").replace(/\./g, "").replace(/,/g, ".")
+        );
+        if (commissionableValue > 0) totalComisionable += commissionableValue;
+      });
+
+      printDailyManifest({
+        fecha: today,
+        generatedAt: new Date().toLocaleString("es-CO"),
+        shiftLabel: "Todo",
+        totalQ,
+        totalNoQ,
+        totalVentas,
+        totalCaja: `$${totalCaja.toLocaleString("es-CO")}`,
+        totalComisionable: `$${totalComisionable.toLocaleString("es-CO")}`,
+        rows,
+      });
+    } catch (error: any) {
+      setErrorMessage(error?.message || "No se pudo imprimir el manifiesto.");
+    }
+  }
+
   useEffect(() => {
     void checkSessionAndLoad();
   }, []);
@@ -305,6 +554,20 @@ export default function HomePage() {
   }, [allRoleCodes, currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
+  const canPrintManifest = [
+    ...(allRoleCodes || []),
+    currentRoleCode,
+  ].some((roleCode) =>
+    [
+      "super_user",
+      "administrador",
+      "recepcion",
+      "gerencia_comercial",
+      "supervisor_opc",
+      "supervisor_call_center",
+      "confirmador",
+    ].includes(roleCode || "")
+  );
 
   const superUserSections = useMemo<QuickActionSection[]>(() => {
     if (!isSuperUser) return [];
@@ -403,13 +666,24 @@ export default function HomePage() {
             </div>
           </PrevitalFilterGroup>
 
-          <PrevitalButton
-            variant="secondary"
-            leftIcon={<RefreshCcw className="h-4 w-4" />}
-            onClick={() => void loadDashboard(currentRoleCode, currentUserId)}
-          >
-            Actualizar panel
-          </PrevitalButton>
+          <div className="flex flex-wrap gap-3">
+            {canPrintManifest ? (
+              <PrevitalButton
+                variant="secondary"
+                leftIcon={<Printer className="h-4 w-4" />}
+                onClick={() => void imprimirManifiestoHoy()}
+              >
+                Imprimir manifiesto
+              </PrevitalButton>
+            ) : null}
+            <PrevitalButton
+              variant="secondary"
+              leftIcon={<RefreshCcw className="h-4 w-4" />}
+              onClick={() => void loadDashboard(currentRoleCode, currentUserId)}
+            >
+              Actualizar panel
+            </PrevitalButton>
+          </div>
         </PrevitalFilterBar>
 
         {errorMessage ? (
