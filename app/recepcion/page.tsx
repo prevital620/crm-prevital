@@ -2672,6 +2672,7 @@ function RecepcionContent() {
             })
         );
         const receptionClassification = getReceptionSummaryValue(item, "Clasificación inicial");
+        const finalizedSale = hasSale && Boolean(item.closed_at || normalizeText(item.status) === "finalizado");
 
         return {
           horaLlegada: formatManifestTime(item.created_at),
@@ -2681,7 +2682,7 @@ function RecepcionContent() {
           codigoTMK: tmk?.employee_code || "",
           codigoOPC: opc?.employee_code || "",
           calificacion:
-            hasSale
+            finalizedSale
               ? "Q"
               : receptionClassification || "Sin definir",
           valorCaja: hasSale ? cashAmount.toLocaleString("es-CO") : "",
