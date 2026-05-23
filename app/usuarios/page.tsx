@@ -71,6 +71,7 @@ export default function UsuariosPage() {
         "super_user",
         "supervisor_opc",
         "supervisor_call_center",
+        "gerencia_comercial",
       ];
 
       if (!auth.roleCode || !allowedRoleCodes.includes(auth.roleCode)) {
@@ -385,10 +386,17 @@ Correo de acceso: ${user.email}`
 
   const canManageAllUsers = Boolean(viewer?.is_super_user);
   const isSupervisorView = authorized && !canManageAllUsers;
+  const isCommercialManagementView = Boolean(viewer?.role_codes?.includes("gerencia_comercial"));
   const viewerGroupCode = viewer?.commission_group_code || null;
-  const pageBadge = canManageAllUsers ? "Super Usuario" : "Supervisor";
+  const pageBadge = canManageAllUsers
+    ? "Super Usuario"
+    : isCommercialManagementView
+      ? "Gerencia comercial"
+      : "Supervisor";
   const pageDescription = canManageAllUsers
     ? "Consulta empleados creados en el CRM, editarlos, desactivarlos o eliminarlos cuando sea necesario."
+    : isCommercialManagementView
+    ? "Consulta comerciales activos e inactivos y habilita o inhabilita su acceso cuando sea necesario."
     : `Consulta el personal de tu grupo${
         viewerGroupCode ? ` ${viewerGroupCode}` : ""
       } y habilita o inhabilita su acceso cuando sea necesario.`;
@@ -550,7 +558,9 @@ Correo de acceso: ${user.email}`
                 </h2>
                 <p className="mt-1 text-sm text-slate-500">
                   {isSupervisorView
-                    ? "Solo aparecen usuarios activos e inactivos del personal que puedes administrar en tu grupo."
+                    ? isCommercialManagementView
+                      ? "Solo aparecen comerciales activos e inactivos que gerencia puede habilitar o inhabilitar."
+                      : "Solo aparecen usuarios activos e inactivos del personal que puedes administrar en tu grupo."
                     : "Lista general de empleados creados en el sistema."}
                 </p>
               </div>
@@ -739,6 +749,8 @@ Correo de acceso: ${user.email}`
                           <p className="mt-3 text-xs text-[#607368]">
                             {canManageAllUsers
                               ? "Puedes editar, restablecer la contraseÃ±a temporal, desactivar o eliminar el acceso por backend."
+                              : isCommercialManagementView
+                              ? "Como gerencia, solo puedes habilitar o inhabilitar el acceso de comerciales."
                               : "Como supervisor, solo puedes habilitar o inhabilitar el acceso de personal de tu grupo."}
                           </p>
                           <p className="hidden">

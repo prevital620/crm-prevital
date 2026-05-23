@@ -878,7 +878,7 @@ export default function GerenciaComercialPage() {
                           }))
                         }
                       >
-                        <option value="">Gerente que comisiona</option>
+                        <option value="">Gerente encargado</option>
                         {managerUsers.map((user) => (
                           <option key={user.id} value={user.id}>
                             {user.full_name} · {getCommercialTeamLabel(user.team_key)}

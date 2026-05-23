@@ -137,6 +137,10 @@ function supervisorCanManageUser(managerRoleCodes: string[], targetRoleCodes: st
     );
   }
 
+  if (managerRoleCodes.includes("gerencia_comercial")) {
+    return targetRoleCodes.includes("comercial");
+  }
+
   return false;
 }
 
@@ -342,9 +346,13 @@ export async function PATCH(
     const effectiveRoleCodes = await getEffectiveRoleCodes(id, payload.role_ids);
 
     if (!authCheck.isSuperUser) {
+      const isCommercialManagement = authCheck.roleCodes.includes("gerencia_comercial");
       const targetGroupCode = normalizeGroupCode(currentProfile.commission_group_code);
 
-      if (!targetGroupCode || targetGroupCode !== authCheck.commissionGroupCode) {
+      if (
+        !isCommercialManagement &&
+        (!targetGroupCode || targetGroupCode !== authCheck.commissionGroupCode)
+      ) {
         return NextResponse.json(
           {
             error:

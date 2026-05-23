@@ -68,6 +68,10 @@ function supervisorCanSeeUser(managerRoleCodes: string[], targetRoleCodes: strin
     );
   }
 
+  if (managerRoleCodes.includes("gerencia_comercial")) {
+    return targetRoleCodes.includes("comercial");
+  }
+
   return false;
 }
 
@@ -304,7 +308,11 @@ export async function GET() {
         )
       `);
 
-    if (!authCheck.isSuperUser && authCheck.commissionGroupCode) {
+    if (
+      !authCheck.isSuperUser &&
+      !authCheck.roleCodes.includes("gerencia_comercial") &&
+      authCheck.commissionGroupCode
+    ) {
       profilesQuery = profilesQuery.eq(
         "commission_group_code",
         authCheck.commissionGroupCode

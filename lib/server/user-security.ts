@@ -271,8 +271,10 @@ export async function requireUserManagementAccess(
 
   const roleCodes = getRoleCodesFromRows(roleRows);
   const isSuperUser = roleCodes.includes("super_user");
+  const isCommercialManagement = roleCodes.includes("gerencia_comercial");
   const canManageGroupUsers =
     isSuperUser ||
+    isCommercialManagement ||
     roleCodes.includes("supervisor_opc") ||
     roleCodes.includes("supervisor_call_center");
 
@@ -286,7 +288,7 @@ export async function requireUserManagementAccess(
 
   const commissionGroupCode = normalizeGroupCode(profile?.commission_group_code);
 
-  if (!isSuperUser && !commissionGroupCode) {
+  if (!isSuperUser && !isCommercialManagement && !commissionGroupCode) {
     return {
       ok: false,
       error:
