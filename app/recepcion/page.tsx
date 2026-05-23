@@ -2671,6 +2671,7 @@ function RecepcionContent() {
               creditProvider: item.credit_provider,
             })
         );
+        const receptionClassification = getReceptionSummaryValue(item, "Clasificación inicial");
 
         return {
           horaLlegada: formatManifestTime(item.created_at),
@@ -2680,9 +2681,9 @@ function RecepcionContent() {
           codigoTMK: tmk?.employee_code || "",
           codigoOPC: opc?.employee_code || "",
           calificacion:
-            hasSale || normalizeText(item.status) === "finalizado"
+            hasSale
               ? "Q"
-              : getReceptionSummaryValue(item, "Clasificación inicial") || "Sin definir",
+              : receptionClassification || "Sin definir",
           valorCaja: hasSale ? cashAmount.toLocaleString("es-CO") : "",
           valorComisionable: hasSale ? commissionableAmount.toLocaleString("es-CO") : "",
           ventaRealizada: hasSale,

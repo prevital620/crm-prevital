@@ -415,6 +415,8 @@ export default function ManifiestosPage() {
             })
         );
 
+        const receptionClassification = getReceptionSummaryValue(item, "Clasificación inicial");
+
         return {
           horaLlegada: formatManifestTime(item.created_at),
           horaSalida: formatManifestTime(item.closed_at || (hasSale ? item.updated_at : null)),
@@ -423,9 +425,9 @@ export default function ManifiestosPage() {
           codigoTMK: tmk?.employee_code || "",
           codigoOPC: opc?.employee_code || "",
           calificacion:
-            hasSale || normalizeText(item.status) === "finalizado"
+            hasSale
               ? "Q"
-              : getReceptionSummaryValue(item, "Clasificación inicial") || "Sin definir",
+              : receptionClassification || "Sin definir",
           valorCaja: hasSale ? cashAmount.toLocaleString("es-CO") : "",
           valorComisionable: hasSale ? commissionableAmount.toLocaleString("es-CO") : "",
           ventaRealizada: hasSale,
