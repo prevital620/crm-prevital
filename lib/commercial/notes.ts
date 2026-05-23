@@ -46,3 +46,55 @@ export function buildStoredCommercialNotes(
 
   return `${RECEPTION_SUMMARY_MARKER}${summary}\n\n${COMMERCIAL_NOTES_MARKER}${notes}`;
 }
+
+export function updateReceptionInitialClassification(
+  value: string | null | undefined,
+  classification: "Q" | "No Q",
+  reason?: string | null
+) {
+  const parsed = parseStoredCommercialNotes(value);
+  const lines = (parsed.receptionSummary || "")
+    .split("|")
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const nextClassificationLine = `Clasificación inicial: ${classification}`;
+  const classificationIndex = lines.findIndex((line) =>
+    line
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase()
+      .startsWith("clasificacion inicial:")
+  );
+
+  if (classificationIndex >= 0) {
+    lines[classificationIndex] = nextClassificationLine;
+  } else {
+    lines.unshift(nextClassificationLine);
+  }
+
+  if (reason !== undefined) {
+    const nextReason = (reason || "").trim();
+    const reasonIndex = lines.findIndex((line) =>
+      line
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .trim()
+        .toLowerCase()
+        .startsWith("motivo clasificacion:")
+    );
+
+    if (nextReason) {
+      const nextReasonLine = `Motivo clasificación: ${nextReason}`;
+      if (reasonIndex >= 0) {
+        lines[reasonIndex] = nextReasonLine;
+      } else {
+        lines.splice(classificationIndex >= 0 ? classificationIndex + 1 : 1, 0, nextReasonLine);
+      }
+    } else if (reasonIndex >= 0) {
+      lines.splice(reasonIndex, 1);
+    }
+  }
+
+  return buildStoredCommercialNotes(lines.join(" | "), parsed.commercialNotes);
+}

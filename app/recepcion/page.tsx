@@ -27,6 +27,7 @@ import { inferCommercialTeamFromDate } from "@/lib/commercial/team";
 import {
   buildStoredCommercialNotes,
   parseStoredCommercialNotes,
+  updateReceptionInitialClassification,
 } from "@/lib/commercial/notes";
 import { digitsOnly } from "@/lib/users/userLookup";
 import { isSameLocalDay } from "@/lib/datetime/dateHelpers";
@@ -1196,6 +1197,7 @@ function RecepcionContent() {
   const [commercialCases, setCommercialCases] = useState<CommercialCaseRow[]>([]);
   const [savingCommercialIntake, setSavingCommercialIntake] = useState(false);
   const [commercialSearch, setCommercialSearch] = useState("");
+  const [classificationReasonByCase, setClassificationReasonByCase] = useState<Record<string, string>>({});
   const [sourceUsers, setSourceUsers] = useState<SourceUserOption[]>([]);
   const [manifestDateFrom, setManifestDateFrom] = useState(hoyISO());
   const [manifestDateTo, setManifestDateTo] = useState(hoyISO());
@@ -4549,6 +4551,49 @@ function imprimirRegistroComercial() {
     return true;
   }
 
+  async function corregirClasificacionRecepcion(caseItem: CommercialCaseRow, classification: "Q" | "No Q") {
+    const currentClassification = getReceptionSummaryValue(caseItem, "Clasificación inicial");
+    const reason =
+      classificationReasonByCase[caseItem.id] ??
+      getReceptionSummaryValue(caseItem, "Motivo clasificación");
+    if (currentClassification === classification && !classificationReasonByCase[caseItem.id]) return;
+
+    try {
+      setError("");
+      setMensaje("");
+
+      const nextNotes = updateReceptionInitialClassification(caseItem.commercial_notes, classification, reason);
+      const { error: updateError } = await supabase
+        .from("commercial_cases")
+        .update({
+          commercial_notes: nextNotes,
+          updated_by_user_id: currentUserId,
+        })
+        .eq("id", caseItem.id);
+
+      if (updateError) throw updateError;
+
+      setCommercialCases((prev) =>
+        prev.map((item) =>
+          item.id === caseItem.id
+            ? {
+                ...item,
+                commercial_notes: nextNotes,
+              }
+            : item
+        )
+      );
+      setClassificationReasonByCase((prev) => {
+        const next = { ...prev };
+        delete next[caseItem.id];
+        return next;
+      });
+      setMensaje(`Clasificación de ${caseItem.customer_name} actualizada a ${classification}.`);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo corregir la clasificación.");
+    }
+  }
+
   async function actualizarEstadoCita(id: string, forcedStatus?: string) {
     if (isReadOnlyAgendaForCall) return;
 
@@ -6134,6 +6179,57 @@ function imprimirRegistroComercial() {
                               {getCommercialReceptionSummary(item).join(" | ")}
                             </div>
                           ) : null}
+                          <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-[#D6E8DA] bg-white/80 p-3 text-sm text-slate-700">
+                            <span className="font-medium text-slate-800">Clasificación:</span>
+                            <select
+                              className="rounded-xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm font-medium text-[#24312A] outline-none transition focus:border-[#7FA287] focus:ring-2 focus:ring-[#DDEFE4]"
+                              value={
+                                getReceptionSummaryValue(item, "Clasificación inicial") === "No Q"
+                                  ? "No Q"
+                                  : "Q"
+                              }
+                              onChange={(event) =>
+                                void corregirClasificacionRecepcion(
+                                  item,
+                                  event.target.value === "No Q" ? "No Q" : "Q"
+                                )
+                              }
+                            >
+                              <option value="Q">Q</option>
+                              <option value="No Q">No Q</option>
+                            </select>
+                            <span className="text-xs text-slate-500">
+                              Corrige solo el registro de recepción.
+                            </span>
+                            <input
+                              className="min-w-[220px] flex-1 rounded-xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm text-[#24312A] outline-none transition focus:border-[#7FA287] focus:ring-2 focus:ring-[#DDEFE4]"
+                              placeholder="Observación del cambio"
+                              value={
+                                classificationReasonByCase[item.id] ??
+                                getReceptionSummaryValue(item, "Motivo clasificación")
+                              }
+                              onChange={(event) =>
+                                setClassificationReasonByCase((prev) => ({
+                                  ...prev,
+                                  [item.id]: event.target.value,
+                                }))
+                              }
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void corregirClasificacionRecepcion(
+                                  item,
+                                  getReceptionSummaryValue(item, "Clasificación inicial") === "No Q"
+                                    ? "No Q"
+                                    : "Q"
+                                )
+                              }
+                              className="rounded-xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                            >
+                              Guardar observación
+                            </button>
+                          </div>
                         </div>
                       </div>
                     </div>

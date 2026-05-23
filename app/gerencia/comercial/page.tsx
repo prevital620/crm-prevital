@@ -6,6 +6,8 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
+import { parseStoredCommercialNotes, updateReceptionInitialClassification } from "@/lib/commercial/notes";
+import { repairMojibake } from "@/lib/text/repairMojibake";
 import {
   CommercialTeamKey,
   getCommercialTeamLabel,
@@ -26,6 +28,7 @@ type CommercialCase = {
   manager_commission_user_id: string | null;
   assigned_at: string | null;
   status: string;
+  commercial_notes: string | null;
   sale_result: string | null;
   purchased_service: string | null;
   sale_value: number | null;
@@ -178,6 +181,35 @@ function formatMoney(value: number | null | undefined) {
   return `$${Number(value || 0).toLocaleString("es-CO")}`;
 }
 
+function normalizeText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .trim()
+    .toLowerCase();
+}
+
+function getCommercialReceptionSummary(item: CommercialCase) {
+  const source =
+    item.sale_result && !["ganada", "perdida", "pendiente"].includes(item.sale_result)
+      ? item.sale_result
+      : parseStoredCommercialNotes(item.commercial_notes).receptionSummary;
+
+  if (!source) return [];
+  return source
+    .split("|")
+    .map((part) => repairMojibake(part).trim().replace(/\s+/g, " "))
+    .filter(Boolean);
+}
+
+function getReceptionSummaryValue(item: CommercialCase, label: string) {
+  const normalizedLabel = normalizeText(label);
+  const line = getCommercialReceptionSummary(item).find((entry) =>
+    normalizeText(entry).startsWith(`${normalizedLabel}:`)
+  );
+  return line?.split(":").slice(1).join(":").trim() || "";
+}
+
 function getCaseReferenceDate(item: CommercialCase) {
   return item.closed_at || item.assigned_at || item.created_at;
 }
@@ -281,6 +313,7 @@ export default function GerenciaComercialPage() {
   const [saleValueMax, setSaleValueMax] = useState("");
   const [selectedCommercialByCase, setSelectedCommercialByCase] = useState<Record<string, string>>({});
   const [selectedManagerByCase, setSelectedManagerByCase] = useState<Record<string, string>>({});
+  const [classificationReasonByCase, setClassificationReasonByCase] = useState<Record<string, string>>({});
   const [savingCaseId, setSavingCaseId] = useState<string | null>(null);
 
   async function validarAcceso() {
@@ -335,6 +368,7 @@ export default function GerenciaComercialPage() {
             manager_commission_user_id,
             assigned_at,
             status,
+            commercial_notes,
             sale_result,
             purchased_service,
             sale_value,
@@ -765,6 +799,52 @@ export default function GerenciaComercialPage() {
     setActiveTab("en_gestion");
   }
 
+  async function corregirClasificacionRecepcion(caseItem: CommercialCase, classification: "Q" | "No Q") {
+    const currentClassification = getReceptionSummaryValue(caseItem, "Clasificación inicial");
+    const reason =
+      classificationReasonByCase[caseItem.id] ??
+      getReceptionSummaryValue(caseItem, "Motivo clasificación");
+    if (currentClassification === classification && !classificationReasonByCase[caseItem.id]) return;
+
+    try {
+      setSavingCaseId(caseItem.id);
+      setError("");
+      setMensaje("");
+
+      const nextNotes = updateReceptionInitialClassification(caseItem.commercial_notes, classification, reason);
+      const { error: updateError } = await supabase
+        .from("commercial_cases")
+        .update({
+          commercial_notes: nextNotes,
+          updated_by_user_id: currentUserId,
+        })
+        .eq("id", caseItem.id);
+
+      if (updateError) throw updateError;
+
+      setCases((prev) =>
+        prev.map((item) =>
+          item.id === caseItem.id
+            ? {
+                ...item,
+                commercial_notes: nextNotes,
+              }
+            : item
+        )
+      );
+      setClassificationReasonByCase((prev) => {
+        const next = { ...prev };
+        delete next[caseItem.id];
+        return next;
+      });
+      setMensaje(`Clasificación de ${caseItem.customer_name} actualizada a ${classification}.`);
+    } catch (err: any) {
+      setError(err?.message || "No se pudo corregir la clasificación.");
+    } finally {
+      setSavingCaseId(null);
+    }
+  }
+
   function renderCaseList(title: string, description: string, items: CommercialCase[]) {
     return (
       <section className={panelClass}>
@@ -834,6 +914,57 @@ export default function GerenciaComercialPage() {
                         />
                       </div>
                     ) : null}
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2 rounded-2xl border border-[#D6E8DA] bg-white/80 p-3 text-sm text-slate-700">
+                      <span className="font-medium text-[#24312A]">Clasificación recepción:</span>
+                      <select
+                        className="rounded-xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm font-medium text-[#24312A] outline-none transition focus:border-[#7FA287] focus:ring-2 focus:ring-[#DDEFE4]"
+                        value={
+                          getReceptionSummaryValue(item, "Clasificación inicial") === "No Q"
+                            ? "No Q"
+                            : "Q"
+                        }
+                        onChange={(event) =>
+                          void corregirClasificacionRecepcion(
+                            item,
+                            event.target.value === "No Q" ? "No Q" : "Q"
+                          )
+                        }
+                        disabled={savingCaseId === item.id}
+                      >
+                        <option value="Q">Q</option>
+                        <option value="No Q">No Q</option>
+                      </select>
+                      <input
+                        className="min-w-[220px] flex-1 rounded-xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm text-[#24312A] outline-none transition focus:border-[#7FA287] focus:ring-2 focus:ring-[#DDEFE4]"
+                        placeholder="Observación del cambio"
+                        value={
+                          classificationReasonByCase[item.id] ??
+                          getReceptionSummaryValue(item, "Motivo clasificación")
+                        }
+                        onChange={(event) =>
+                          setClassificationReasonByCase((prev) => ({
+                            ...prev,
+                            [item.id]: event.target.value,
+                          }))
+                        }
+                      />
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void corregirClasificacionRecepcion(
+                            item,
+                            getReceptionSummaryValue(item, "Clasificación inicial") === "No Q"
+                              ? "No Q"
+                              : "Q"
+                          )
+                        }
+                        disabled={savingCaseId === item.id}
+                        className="rounded-xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6] disabled:opacity-60"
+                      >
+                        Guardar observación
+                      </button>
+                    </div>
                   </div>
 
                     <div className="w-full rounded-[26px] border border-[#D7EADF] bg-[linear-gradient(135deg,_#F7FCF8_0%,_#EEF8F2_62%,_#E4F3EA_100%)] p-4 shadow-inner lg:w-[380px]">
