@@ -319,6 +319,11 @@ function normalizeMoneyString(value: string) {
   return value.replace(/[^\d]/g, "");
 }
 
+function normalizeIntegerString(value: string) {
+  const digits = value.replace(/[^\d]/g, "");
+  return digits.replace(/^0+(?=\d)/, "");
+}
+
 function numberFromString(value: string) {
   const raw = normalizeMoneyString(value);
   if (!raw) return 0;
@@ -1558,6 +1563,17 @@ export default function ComercialPage() {
       const volumeNumber = numberFromString(form.volume_amount);
       const cashNumber = numberFromString(form.cash_amount);
       const portfolioNumber = Math.max(0, volumeNumber - cashNumber);
+      const portfolioInstallments = Number(portfolioForm.installments_count || "0");
+
+      if (
+        portfolioNumber > 0 &&
+        (!Number.isInteger(portfolioInstallments) ||
+          portfolioInstallments < 1 ||
+          portfolioInstallments > 60)
+      ) {
+        throw new Error("Ingresa un número de cuotas válido para la cartera, entre 1 y 60.");
+      }
+
       const closingNotes = buildClosingNotes(
         form.closing_notes,
         portfolioForm,
@@ -2186,12 +2202,16 @@ const updatePayload: any = {
                         input={
                           <input
                             className={inputClass}
+                            type="number"
                             inputMode="numeric"
+                            min={1}
+                            max={60}
+                            step={1}
                             value={portfolioForm.installments_count}
                             onChange={(e) =>
                               setPortfolioForm((prev) => ({
                                 ...prev,
-                                installments_count: normalizeMoneyString(e.target.value),
+                                installments_count: normalizeIntegerString(e.target.value),
                               }))
                             }
                           />
