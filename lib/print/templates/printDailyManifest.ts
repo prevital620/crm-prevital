@@ -45,9 +45,9 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                 <td>${escapeHtml(row.horaSalida || "-")}</td>
                 <td>${escapeHtml(row.nombreCompleto || "Sin nombre")}</td>
                 <td>${escapeHtml(row.analista || "-")}</td>
-                <td>${escapeHtml(row.codigoTMK || "-")}</td>
-                <td>${escapeHtml(row.codigoOPC || "-")}</td>
-                <td>${escapeHtml(row.calificacion || "Sin definir")}</td>
+                <td class="code-cell">${escapeHtml(row.codigoTMK || "-")}</td>
+                <td class="code-cell">${escapeHtml(row.codigoOPC || "-")}</td>
+                <td class="qualification-cell">${escapeHtml(row.calificacion || "Sin definir")}</td>
                 <td class="numeric">${escapeHtml(row.valorCaja || "-")}</td>
                 <td class="numeric">${escapeHtml(row.valorComisionable || "-")}</td>
                 <td>${escapeHtml(row.formaPago || "-")}</td>
@@ -141,6 +141,16 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
           font-size: 8px;
         }
         td.numeric, th.numeric { text-align: right; }
+        .code-cell {
+          word-break: normal;
+          overflow-wrap: normal;
+          white-space: normal;
+          font-size: 8px;
+        }
+        .qualification-cell {
+          font-size: 8px;
+          text-align: center;
+        }
       </style>
     </head>
     <body>
@@ -206,14 +216,14 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                 <col style="width:6%">
                 <col style="width:6%">
                 <col style="width:14%">
-                <col style="width:12%">
-                <col style="width:6%">
-                <col style="width:6%">
+                <col style="width:14.5%">
+                <col style="width:7.5%">
                 <col style="width:7%">
+                <col style="width:4.5%">
                 <col style="width:8%">
-                <col style="width:9%">
-                <col style="width:10%">
-                <col style="width:13%">
+                <col style="width:8.5%">
+                <col style="width:9.5%">
+                <col style="width:12%">
               </colgroup>
               <thead>
                 <tr>
@@ -222,9 +232,9 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
                   <th>Hora salida</th>
                   <th>Nombre completo</th>
                   <th>Analista</th>
-                  <th>Codigo TMK</th>
-                  <th>Codigo OPC</th>
-                  <th>Calificacion</th>
+                  <th>Cod TMK</th>
+                  <th>Cod OPC</th>
+                  <th>Q/NQ</th>
                   <th class="numeric">Valor caja</th>
                   <th class="numeric">Comisionable</th>
                   <th>Forma de pago</th>

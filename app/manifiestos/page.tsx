@@ -35,6 +35,7 @@ type CommercialCaseRow = {
   volume_amount: number | null;
   closing_notes: string | null;
   created_at: string;
+  updated_at: string | null;
   closed_at: string | null;
 };
 
@@ -295,6 +296,7 @@ export default function ManifiestosPage() {
               volume_amount,
               closing_notes,
               created_at,
+              updated_at,
               closed_at
             `)
             .order("created_at", { ascending: false }),
@@ -415,7 +417,7 @@ export default function ManifiestosPage() {
 
         return {
           horaLlegada: formatManifestTime(item.created_at),
-          horaSalida: formatManifestTime(item.closed_at),
+          horaSalida: formatManifestTime(item.closed_at || (hasSale ? item.updated_at : null)),
           nombreCompleto: item.customer_name || "Sin nombre",
           analista: analyst?.full_name || "",
           codigoTMK: tmk?.employee_code || "",
