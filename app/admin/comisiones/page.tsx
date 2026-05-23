@@ -27,6 +27,7 @@ type AdminCommercialCase = {
   counts_for_commercial_bonus: boolean | null;
   payment_method: string | null;
   assigned_commercial_user_id: string | null;
+  manager_commission_user_id: string | null;
   commission_source_type: string | null;
   opc_user_id: string | null;
   call_user_id: string | null;
@@ -98,6 +99,7 @@ type CaseCorrectionState = {
   caseId: string;
   customerName: string;
   assignedCommercialUserId: string;
+  managerCommissionUserId: string;
   commissionSourceType: string;
   opcUserId: string;
   callUserId: string;
@@ -499,6 +501,7 @@ export default function AdminComisionesPage() {
             counts_for_commercial_bonus,
             payment_method,
             assigned_commercial_user_id,
+            manager_commission_user_id,
             commission_source_type,
             opc_user_id,
             call_user_id,
@@ -587,6 +590,7 @@ export default function AdminComisionesPage() {
       caseId: caseItem.id,
       customerName: caseItem.customer_name,
       assignedCommercialUserId: caseItem.assigned_commercial_user_id || "",
+      managerCommissionUserId: caseItem.manager_commission_user_id || "",
       commissionSourceType: caseItem.commission_source_type || "otro",
       opcUserId: caseItem.opc_user_id || "",
       callUserId: caseItem.call_user_id || "",
@@ -604,6 +608,7 @@ export default function AdminComisionesPage() {
 
       const payload = {
         assigned_commercial_user_id: editingCase.assignedCommercialUserId || null,
+        manager_commission_user_id: editingCase.managerCommissionUserId || null,
         commission_source_type: editingCase.commissionSourceType || null,
         opc_user_id: editingCase.opcUserId || null,
         call_user_id: editingCase.callUserId || null,
@@ -756,6 +761,10 @@ export default function AdminComisionesPage() {
     return visibleCollaboratorOptions.filter((item) =>
       ["Comercial", "Gerencia comercial"].includes(item.area)
     );
+  }, [visibleCollaboratorOptions]);
+
+  const managerOptions = useMemo(() => {
+    return visibleCollaboratorOptions.filter((item) => item.area === "Gerencia comercial");
   }, [visibleCollaboratorOptions]);
 
   const opcOptions = useMemo(() => {
@@ -1071,11 +1080,13 @@ export default function AdminComisionesPage() {
                       )?.id === currentUserId
                     )
                   : currentRoleCode === "gerencia_comercial"
-                    ? Boolean(resolvedCurrentTeamKey && collaboratorTeam === resolvedCurrentTeamKey)
+                    ? item.manager_commission_user_id === currentUserId ||
+                      Boolean(resolvedCurrentTeamKey && collaboratorTeam === resolvedCurrentTeamKey)
                     : true;
       const matchesCollaborator = effectiveCollaboratorFilter
         ? collaboratorAreaForFilter === "Gerencia comercial"
-          ? Boolean(selectedCollaborator?.teamKey && collaboratorTeam === selectedCollaborator.teamKey)
+          ? item.manager_commission_user_id === effectiveCollaboratorFilter ||
+            Boolean(selectedCollaborator?.teamKey && collaboratorTeam === selectedCollaborator.teamKey)
           : collaboratorAreaForFilter === "Supervisor OPC"
             ? Boolean(
                 (
@@ -1277,7 +1288,10 @@ export default function AdminComisionesPage() {
 
       const commercial = collaboratorOptionMap.get(item.assigned_commercial_user_id);
       const teamKey = commercial?.teamKey || null;
-      const manager = teamKey ? managerByTeam.get(teamKey) : null;
+      const explicitManager = item.manager_commission_user_id
+        ? collaboratorOptionMap.get(item.manager_commission_user_id) || null
+        : null;
+      const manager = explicitManager || (teamKey ? managerByTeam.get(teamKey) : null);
 
       rawEntries.push({
         caseId: item.id,
@@ -2042,7 +2056,7 @@ export default function AdminComisionesPage() {
                 </button>
               </div>
 
-              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-5">
+              <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-6">
                 <div>
                   <label className="mb-2 block text-sm font-medium text-slate-700">Comercial</label>
                   <select
@@ -2060,6 +2074,26 @@ export default function AdminComisionesPage() {
                     {commercialOptions.map((item) => (
                       <option key={item.id} value={item.id}>
                         {item.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">Gerente comisión</label>
+                  <select
+                    className={inputClass}
+                    value={editingCase.managerCommissionUserId}
+                    onChange={(e) =>
+                      setEditingCase((current) =>
+                        current ? { ...current, managerCommissionUserId: e.target.value } : current
+                      )
+                    }
+                  >
+                    <option value="">Por equipo del comercial</option>
+                    {managerOptions.map((item) => (
+                      <option key={item.id} value={item.id}>
+                        {item.name} · {getCommercialTeamLabel(item.teamKey)}
                       </option>
                     ))}
                   </select>

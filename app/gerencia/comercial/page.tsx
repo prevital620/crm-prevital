@@ -23,6 +23,7 @@ type CommercialCase = {
   city: string | null;
   assigned_commercial_user_id: string | null;
   assigned_by_user_id: string | null;
+  manager_commission_user_id: string | null;
   assigned_at: string | null;
   status: string;
   sale_result: string | null;
@@ -269,6 +270,7 @@ export default function GerenciaComercialPage() {
 
   const [cases, setCases] = useState<CommercialCase[]>([]);
   const [commercialUsers, setCommercialUsers] = useState<CommercialUser[]>([]);
+  const [managerUsers, setManagerUsers] = useState<CommercialUser[]>([]);
 
   const [activeTab, setActiveTab] = useState<GerenciaTab>("pendientes");
   const [search, setSearch] = useState("");
@@ -278,6 +280,7 @@ export default function GerenciaComercialPage() {
   const [saleValueMin, setSaleValueMin] = useState("");
   const [saleValueMax, setSaleValueMax] = useState("");
   const [selectedCommercialByCase, setSelectedCommercialByCase] = useState<Record<string, string>>({});
+  const [selectedManagerByCase, setSelectedManagerByCase] = useState<Record<string, string>>({});
   const [savingCaseId, setSavingCaseId] = useState<string | null>(null);
 
   async function validarAcceso() {
@@ -329,6 +332,7 @@ export default function GerenciaComercialPage() {
             city,
             assigned_commercial_user_id,
             assigned_by_user_id,
+            manager_commission_user_id,
             assigned_at,
             status,
             sale_result,
@@ -456,6 +460,10 @@ export default function GerenciaComercialPage() {
               return user.role_code === "comercial";
             });
 
+      const visibleManagers = teamUsers.filter((user) =>
+        gerenciaRoleCodes.includes(user.role_code)
+      );
+
       const visibleCaseRows =
         currentRoleCode === "super_user"
           ? casesData
@@ -471,31 +479,41 @@ export default function GerenciaComercialPage() {
                   return true;
                 }
 
-                return caseTeam === detectedTeam;
+                return item.manager_commission_user_id === currentUserId || caseTeam === detectedTeam;
               }
 
               if (managerWithoutDetectedTeam) {
                 return (
                   item.status === "pendiente_asignacion_comercial" ||
+                  item.manager_commission_user_id === currentUserId ||
                   item.assigned_by_user_id === currentUserId ||
                   item.assigned_commercial_user_id === currentUserId
                 );
               }
 
               return (
+                item.manager_commission_user_id === currentUserId ||
                 item.assigned_by_user_id === currentUserId ||
                 item.assigned_commercial_user_id === currentUserId
               );
             });
 
       const selected: Record<string, string> = {};
+      const selectedManagers: Record<string, string> = {};
       visibleCaseRows.forEach((item) => {
         selected[item.id] = item.assigned_commercial_user_id || "";
+        selectedManagers[item.id] =
+          item.manager_commission_user_id ||
+          resolveDefaultManagerId(item.assigned_commercial_user_id || "", visibleUsers, visibleManagers) ||
+          currentUserId ||
+          "";
       });
 
       setCases(visibleCaseRows);
       setCommercialUsers(visibleUsers);
+      setManagerUsers(visibleManagers);
       setSelectedCommercialByCase(selected);
+      setSelectedManagerByCase(selectedManagers);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los casos comerciales.");
     } finally {
@@ -662,7 +680,22 @@ export default function GerenciaComercialPage() {
       : "bg-amber-100 text-amber-700 border border-amber-200";
   }
 
-  async function asignarCaso(caseId: string, commercialId: string) {
+  function resolveDefaultManagerId(
+    commercialId: string,
+    commercialOptions = commercialUsers,
+    managerOptions = managerUsers
+  ) {
+    const commercial = commercialId
+      ? commercialOptions.find((user) => user.id === commercialId)
+      : null;
+    const teamManager = commercial?.team_key
+      ? managerOptions.find((user) => user.team_key === commercial.team_key)
+      : null;
+
+    return teamManager?.id || currentUserId || "";
+  }
+
+  async function asignarCaso(caseId: string, commercialId: string, managerCommissionUserId: string) {
     if (!currentUserId) {
       setError("No se encontró el usuario actual.");
       return;
@@ -672,6 +705,9 @@ export default function GerenciaComercialPage() {
       setError("Debes seleccionar un usuario para atender.");
       return;
     }
+
+    const resolvedManagerCommissionUserId =
+      managerCommissionUserId || resolveDefaultManagerId(commercialId);
 
     try {
       setSavingCaseId(caseId);
@@ -685,6 +721,7 @@ export default function GerenciaComercialPage() {
         .update({
           assigned_commercial_user_id: commercialId,
           assigned_by_user_id: currentUserId,
+          manager_commission_user_id: resolvedManagerCommissionUserId || null,
           assigned_at: assignedAt,
           status: "asignado_comercial",
           updated_by_user_id: currentUserId,
@@ -700,6 +737,7 @@ export default function GerenciaComercialPage() {
                 ...item,
                 assigned_commercial_user_id: commercialId,
                 assigned_by_user_id: currentUserId,
+                manager_commission_user_id: resolvedManagerCommissionUserId || null,
                 assigned_at: assignedAt,
                 status: "asignado_comercial",
               }
@@ -708,6 +746,7 @@ export default function GerenciaComercialPage() {
       );
 
       setSelectedCommercialByCase((prev) => ({ ...prev, [caseId]: commercialId }));
+      setSelectedManagerByCase((prev) => ({ ...prev, [caseId]: resolvedManagerCommissionUserId || "" }));
       setMensaje(commercialId === currentUserId ? "Te asignaste este cliente correctamente." : "Cliente asignado correctamente.");
     } catch (err: any) {
       setError(err?.message || "No se pudo asignar el caso.");
@@ -722,7 +761,7 @@ export default function GerenciaComercialPage() {
       return;
     }
 
-    await asignarCaso(caseId, currentUserId);
+    await asignarCaso(caseId, currentUserId, selectedManagerByCase[caseId] || currentUserId);
     setActiveTab("en_gestion");
   }
 
@@ -806,12 +845,20 @@ export default function GerenciaComercialPage() {
                       <select
                         className={inputClass}
                         value={selectedCommercialByCase[item.id] || ""}
-                        onChange={(e) =>
+                        onChange={(e) => {
+                          const commercialId = e.target.value;
                           setSelectedCommercialByCase((prev) => ({
                             ...prev,
-                            [item.id]: e.target.value,
-                          }))
-                        }
+                            [item.id]: commercialId,
+                          }));
+                          setSelectedManagerByCase((prev) => ({
+                            ...prev,
+                            [item.id]:
+                              resolveDefaultManagerId(commercialId) ||
+                              item.manager_commission_user_id ||
+                              "",
+                          }));
+                        }}
                       >
                         <option value="">Selecciona quién atenderá</option>
                         {commercialUsers.map((user) => (
@@ -821,12 +868,31 @@ export default function GerenciaComercialPage() {
                         ))}
                       </select>
 
+                      <select
+                        className={inputClass}
+                        value={selectedManagerByCase[item.id] || ""}
+                        onChange={(e) =>
+                          setSelectedManagerByCase((prev) => ({
+                            ...prev,
+                            [item.id]: e.target.value,
+                          }))
+                        }
+                      >
+                        <option value="">Gerente que comisiona</option>
+                        {managerUsers.map((user) => (
+                          <option key={user.id} value={user.id}>
+                            {user.full_name} · {getCommercialTeamLabel(user.team_key)}
+                          </option>
+                        ))}
+                      </select>
+
                       <div className="flex flex-wrap gap-2">
                         <button
                           type="button"
                           onClick={() => {
                             const commercialId = selectedCommercialByCase[item.id] || "";
-                            void asignarCaso(item.id, commercialId);
+                            const managerId = selectedManagerByCase[item.id] || "";
+                            void asignarCaso(item.id, commercialId, managerId);
                           }}
                           disabled={savingCaseId === item.id}
                           className="rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-4 py-3 text-sm font-semibold text-white shadow-[0_12px_24px_rgba(95,125,102,0.18)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:opacity-60"
