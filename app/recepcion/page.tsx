@@ -2565,7 +2565,13 @@ function RecepcionContent() {
   const nutritionPendingAppointments = useMemo(() => {
     const q = nutritionDeliverySearch.trim().toLowerCase();
     return appointments
-      .filter((item) => isNutritionService(item.service_type) && item.status === "finalizada" && hasPendingNutritionDelivery(item.notes))
+      .filter(
+        (item) =>
+          isNutritionService(item.service_type) &&
+          item.status === "finalizada" &&
+          hasPendingNutritionDelivery(item.notes) &&
+          (fechaFiltro ? item.appointment_date === fechaFiltro : true)
+      )
       .filter((item) => {
         if (!q) return true;
         const text = `${item.patient_name || ""} ${item.phone || ""} ${item.city || ""}`.toLowerCase();
@@ -2575,7 +2581,7 @@ function RecepcionContent() {
         if (a.appointment_date !== b.appointment_date) return b.appointment_date.localeCompare(a.appointment_date);
         return b.appointment_time.localeCompare(a.appointment_time);
       });
-  }, [appointments, nutritionDeliverySearch]);
+  }, [appointments, fechaFiltro, nutritionDeliverySearch]);
 
   const nutritionPendingSummary = useMemo(() => ({
     total: nutritionPendingAppointments.length,
@@ -4368,7 +4374,7 @@ function imprimirRegistroComercial() {
         phone: effectivePhone || null,
         city: effectiveCity || null,
         appointment_date: form.appointment_date,
-        appointment_time: form.appointment_time,
+        appointment_time: normalizarHora(form.appointment_time),
         status: form.status,
         service_type:
           activeSection === "agenda"
@@ -4386,6 +4392,45 @@ function imprimirRegistroComercial() {
           }) || null,
         updated_by_user_id: currentUserId,
       };
+
+      const { data: freshAppointments, error: freshAppointmentsError } = await supabase
+        .from("appointments")
+        .select("id, appointment_date, appointment_time, status, service_type, notes")
+        .eq("appointment_date", payload.appointment_date)
+        .in("status", ACTIVE_APPOINTMENT_STATUSES);
+
+      if (freshAppointmentsError) throw freshAppointmentsError;
+
+      const freshActiveAppointments = (freshAppointments || []).map((item) => ({
+        id: item.id,
+        appointment_date: item.appointment_date,
+        appointment_time: normalizarHora(item.appointment_time || ""),
+        status: item.status,
+        service_type: item.service_type,
+        notes: item.notes,
+      }));
+      const freshAvailability = buildSlotAvailability({
+        appointments: freshActiveAppointments,
+        section: activeSection,
+        serviceType: payload.service_type || "",
+        appointmentDate: payload.appointment_date,
+        durationMinutes,
+        slotSettings,
+        selectedDateClosed,
+        selectedDateDailyCapacity,
+        selectedDateActiveTotal: freshActiveAppointments.filter(
+          (item) => item.id !== editingAppointmentId
+        ).length,
+        editingAppointmentId,
+        getSectionForService,
+      });
+      const freshSlot = freshAvailability.find((slot) => slot.value === payload.appointment_time);
+
+      if (!freshSlot || freshSlot.disabled) {
+        setError("Ese horario ya fue ocupado. Actualiza la agenda y selecciona otra hora.");
+        await cargarTodo();
+        return;
+      }
 
       let savedAppointment: AppointmentRow | null = null;
 
@@ -4986,10 +5031,29 @@ function imprimirRegistroComercial() {
                   </span>
                 </div>
 
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-end">
+                  <label className="flex-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#5F7D66]">
+                    Fecha
+                    <input
+                      type="date"
+                      value={fechaFiltro}
+                      onChange={(event) => setFechaFiltro(event.target.value)}
+                      className="mt-2 w-full rounded-2xl border border-[#D6E8DA] bg-white px-3 py-2 text-sm font-medium normal-case tracking-normal text-[#24312A] outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setFechaFiltro(hoyISO())}
+                    className="rounded-2xl border border-[#D6E8DA] bg-white px-4 py-2 text-sm font-semibold text-[#4F6F5B] transition hover:bg-[#F4FAF6]"
+                  >
+                    Hoy
+                  </button>
+                </div>
+
                 <div className="mt-4 space-y-3">
                   {nutritionPendingAppointments.length === 0 ? (
                     <div className="rounded-[22px] border border-dashed border-[#D6E8DA] bg-[#F8FCF9] p-4 text-sm text-[#607368]">
-                      Sin entregas de nutrición pendientes.
+                      Sin entregas de nutrición pendientes para esta fecha.
                     </div>
                   ) : (
                     nutritionPendingAppointments.slice(0, 4).map((item) => (
@@ -6090,18 +6154,26 @@ function imprimirRegistroComercial() {
                   </p>
                 </div>
 
-                <input
-                  className="w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] md:max-w-xs"
-                  placeholder="Buscar por nombre o teléfono"
-                  value={nutritionDeliverySearch}
-                  onChange={(e) => setNutritionDeliverySearch(e.target.value)}
-                />
+                <div className="grid w-full gap-3 md:max-w-xl md:grid-cols-[180px_1fr]">
+                  <input
+                    type="date"
+                    className="w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
+                    value={fechaFiltro}
+                    onChange={(e) => setFechaFiltro(e.target.value)}
+                  />
+                  <input
+                    className="w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
+                    placeholder="Buscar por nombre o teléfono"
+                    value={nutritionDeliverySearch}
+                    onChange={(e) => setNutritionDeliverySearch(e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="mt-5 space-y-3">
                 {nutritionPendingAppointments.length === 0 ? (
                   <div className="rounded-[26px] border border-dashed border-[#CFE4D8] bg-[#F7FCF8] p-6 text-sm text-[#607368]">
-                    No hay clientes pendientes de entrega nutricional.
+                    No hay clientes pendientes de entrega nutricional para esta fecha.
                   </div>
                 ) : (
                   nutritionPendingAppointments.map((item) => (
