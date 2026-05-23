@@ -28,6 +28,44 @@ type DailyManifestPrintData = {
   rows: ManifestRow[];
 };
 
+const spanishMonths = [
+  "enero",
+  "febrero",
+  "marzo",
+  "abril",
+  "mayo",
+  "junio",
+  "julio",
+  "agosto",
+  "septiembre",
+  "octubre",
+  "noviembre",
+  "diciembre",
+];
+
+function formatManifestDateForTitle(value: string) {
+  const match = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return value.trim();
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const monthName = spanishMonths[month - 1];
+
+  if (!year || !monthName || !day) return value.trim();
+  return `${day} de ${monthName} ${year}`;
+}
+
+function buildManifestPrintTitle(fecha: string, shiftLabel?: string) {
+  const period = fecha
+    .split(/\s+al\s+/i)
+    .map(formatManifestDateForTitle)
+    .join(" al ");
+  const shift = shiftLabel && shiftLabel !== "Todo" && shiftLabel !== "Todas" ? ` ${shiftLabel}` : "";
+
+  return `Manifiesto ${period}${shift}`.trim();
+}
+
 export default function printDailyManifest(data: DailyManifestPrintData) {
   const logoSrc =
     typeof window !== "undefined"
@@ -254,7 +292,7 @@ export default function printDailyManifest(data: DailyManifestPrintData) {
   `;
 
   openPrintWindow({
-    title: `Manifiesto comercial${data.shiftLabel ? ` ${data.shiftLabel}` : ""}`,
+    title: buildManifestPrintTitle(data.fecha, data.shiftLabel),
     html,
   });
 }
