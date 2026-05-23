@@ -319,15 +319,17 @@ function normalizeMoneyString(value: string) {
   return value.replace(/[^\d]/g, "");
 }
 
-function normalizeIntegerString(value: string) {
-  const digits = value.replace(/[^\d]/g, "");
-  return digits.replace(/^0+(?=\d)/, "");
-}
-
 function numberFromString(value: string) {
   const raw = normalizeMoneyString(value);
   if (!raw) return 0;
   return Number(raw);
+}
+
+function normalizeDateInput(value: string) {
+  const digits = value.replace(/[^\d]/g, "").slice(0, 8);
+  if (digits.length <= 4) return digits;
+  if (digits.length <= 6) return `${digits.slice(0, 4)}-${digits.slice(4)}`;
+  return `${digits.slice(0, 4)}-${digits.slice(4, 6)}-${digits.slice(6)}`;
 }
 
 function formatMoneyDisplay(value: string | number | null | undefined) {
@@ -646,6 +648,10 @@ export default function ComercialPage() {
     () => Number(portfolioForm.installments_count || "0"),
     [portfolioForm.installments_count]
   );
+  const selectedInstallmentsCount =
+    installmentsCountNumber >= 1 && installmentsCountNumber <= 60
+      ? portfolioForm.installments_count
+      : "";
 
   const automaticInstallmentValue = useMemo(() => {
     if (!calculatedPortfolio || !installmentsCountNumber) return 0;
@@ -2200,21 +2206,23 @@ const updatePayload: any = {
                       <Field
                         label="Numero de cuotas"
                         input={
-                          <input
+                          <select
                             className={inputClass}
-                            type="number"
-                            inputMode="numeric"
-                            min={1}
-                            max={60}
-                            step={1}
-                            value={portfolioForm.installments_count}
+                            value={selectedInstallmentsCount}
                             onChange={(e) =>
                               setPortfolioForm((prev) => ({
                                 ...prev,
-                                installments_count: normalizeIntegerString(e.target.value),
+                                installments_count: e.target.value,
                               }))
                             }
-                          />
+                          >
+                            <option value="">Selecciona cuotas</option>
+                            {Array.from({ length: 60 }, (_, index) => index + 1).map((count) => (
+                              <option key={count} value={String(count)}>
+                                {count}
+                              </option>
+                            ))}
+                          </select>
                         }
                       />
 
@@ -2234,12 +2242,15 @@ const updatePayload: any = {
                         input={
                           <input
                             className={inputClass}
-                            type="date"
+                            type="text"
+                            inputMode="numeric"
+                            placeholder="AAAA-MM-DD"
+                            pattern="\d{4}-\d{2}-\d{2}"
                             value={portfolioForm.first_installment_date}
                             onChange={(e) =>
                               setPortfolioForm((prev) => ({
                                 ...prev,
-                                first_installment_date: e.target.value,
+                                first_installment_date: normalizeDateInput(e.target.value),
                               }))
                             }
                           />
