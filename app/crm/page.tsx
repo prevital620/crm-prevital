@@ -19,30 +19,32 @@ import {
   PrevitalFilterBar,
   PrevitalFilterGroup,
 } from "@/components/layout/prevital-filter-bar";
-import { Activity, LayoutGrid, RefreshCcw, ShieldCheck, Users } from "lucide-react";
+import { Banknote, BadgeCheck, BadgeX, LayoutGrid, RefreshCcw, ShieldCheck, ShoppingCart, WalletCards } from "lucide-react";
 import {
   getVisibleQuickActions,
   quickActions,
   type QuickAction,
 } from "@/lib/crm/quick-actions";
 
-type Lead = {
+type CommercialCaseSummaryRow = {
   id: string;
-  full_name: string | null;
-  first_name: string;
-  last_name: string | null;
-  phone: string;
-  city: string | null;
-  status: string;
   created_at: string;
+  closed_at: string | null;
+  commercial_notes: string | null;
+  sale_result: string | null;
+  purchased_service: string | null;
+  sale_value: number | null;
+  cash_amount: number | null;
+  portfolio_amount: number | null;
+  volume_amount: number | null;
 };
 
-type Profile = {
-  id: string;
-  full_name: string;
-  job_title: string | null;
-  is_active: boolean;
-  created_at: string;
+type DailySummary = {
+  presenceQ: number;
+  presenceNq: number;
+  sales: number;
+  cash: number;
+  portfolio: number;
 };
 
 type QuickActionSection = {
@@ -50,6 +52,69 @@ type QuickActionSection = {
   description: string;
   items: QuickAction[];
 };
+
+function getLocalDateISO(date = new Date()) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function addDaysISO(isoDate: string, days: number) {
+  const [year, month, day] = isoDate.split("-").map(Number);
+  const date = new Date(year, month - 1, day + days);
+  return getLocalDateISO(date);
+}
+
+function formatMoney(value: number) {
+  return `$${Number(value || 0).toLocaleString("es-CO")}`;
+}
+
+function getInitialClassification(item: CommercialCaseSummaryRow) {
+  const notes = repairMojibake(item.commercial_notes || "").toLowerCase();
+  const match = notes.match(/clasificaci[oó]n inicial:\s*([^|.\n]+)/i);
+  const value = (match?.[1] || "").trim().toLowerCase();
+
+  if (!value) return "";
+  if (value.startsWith("no q") || value === "nq") return "nq";
+  if (value.startsWith("q")) return "q";
+  return "";
+}
+
+function hasRealSale(item: CommercialCaseSummaryRow) {
+  return Boolean(
+    item.purchased_service ||
+      item.sale_result === "ganada" ||
+      item.sale_result === "venta_realizada" ||
+      Number(item.sale_value || 0) > 0 ||
+      Number(item.volume_amount || 0) > 0
+  );
+}
+
+function buildDailySummary(
+  todayCases: CommercialCaseSummaryRow[],
+  todayClosedCases: CommercialCaseSummaryRow[]
+): DailySummary {
+  const classified = todayCases.reduce(
+    (acc, item) => {
+      const classification = getInitialClassification(item);
+      if (classification === "q") acc.presenceQ += 1;
+      if (classification === "nq") acc.presenceNq += 1;
+      return acc;
+    },
+    { presenceQ: 0, presenceNq: 0 }
+  );
+
+  const salesRows = todayClosedCases.filter(hasRealSale);
+
+  return {
+    presenceQ: classified.presenceQ,
+    presenceNq: classified.presenceNq,
+    sales: salesRows.length,
+    cash: salesRows.reduce((acc, item) => acc + Number(item.cash_amount || 0), 0),
+    portfolio: salesRows.reduce((acc, item) => acc + Number(item.portfolio_amount || 0), 0),
+  };
+}
 
 export default function HomePage() {
   const router = useRouter();
@@ -64,9 +129,13 @@ export default function HomePage() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserName, setCurrentUserName] = useState<string | null>(null);
 
-  const [totalLeadCount, setTotalLeadCount] = useState(0);
-  const [leads, setLeads] = useState<Lead[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [dailySummary, setDailySummary] = useState<DailySummary>({
+    presenceQ: 0,
+    presenceNq: 0,
+    sales: 0,
+    cash: 0,
+    portfolio: 0,
+  });
 
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -175,68 +244,37 @@ export default function HomePage() {
       setLoading(true);
       setErrorMessage("");
 
-      const effectiveRole = normalizeRoleCode(roleCode ?? currentRoleCode);
-      const effectiveUserId = userId ?? currentUserId ?? null;
+      const today = getLocalDateISO();
+      const tomorrow = addDaysISO(today, 1);
+      const todayStart = `${today}T00:00:00-05:00`;
+      const tomorrowStart = `${tomorrow}T00:00:00-05:00`;
 
-      let leadsQuery = supabase
-        .from("leads")
-        .select("id, full_name, first_name, last_name, phone, city, status, created_at")
-        .order("created_at", { ascending: false })
-        .limit(20);
-
-      let leadsCountQuery = supabase
-        .from("leads")
-        .select("*", { count: "exact", head: true });
-
-      if (effectiveRole === "promotor_opc" && effectiveUserId) {
-        leadsQuery = supabase
-          .from("leads")
-          .select("id, full_name, first_name, last_name, phone, city, status, created_at")
-          .eq("created_by_user_id", effectiveUserId)
-          .order("created_at", { ascending: false })
-          .limit(20);
-
-        leadsCountQuery = supabase
-          .from("leads")
-          .select("*", { count: "exact", head: true })
-          .eq("created_by_user_id", effectiveUserId);
-      }
-
-      if (
-        (effectiveRole === "confirmador" ||
-          effectiveRole === "tmk" ||
-          effectiveRole === "supervisor_call_center") &&
-        effectiveUserId
-      ) {
-        leadsQuery = supabase
-          .from("leads")
-          .select("id, full_name, first_name, last_name, phone, city, status, created_at")
-          .or(`assigned_to_user_id.eq.${effectiveUserId},created_by_user_id.eq.${effectiveUserId}`)
-          .order("created_at", { ascending: false })
-          .limit(20);
-
-        leadsCountQuery = supabase
-          .from("leads")
-          .select("*", { count: "exact", head: true })
-          .or(`assigned_to_user_id.eq.${effectiveUserId},created_by_user_id.eq.${effectiveUserId}`);
-      }
-
-      const [leadsResult, leadsCountResult, profilesResult] = await Promise.all([
-        leadsQuery,
-        leadsCountQuery,
+      const [todayCasesResult, todayClosedCasesResult] = await Promise.all([
         supabase
-          .from("profiles")
-          .select("id, full_name, job_title, is_active, created_at")
-          .order("created_at", { ascending: false }),
+          .from("commercial_cases")
+          .select(
+            "id, created_at, closed_at, commercial_notes, sale_result, purchased_service, sale_value, cash_amount, portfolio_amount, volume_amount"
+          )
+          .gte("created_at", todayStart)
+          .lt("created_at", tomorrowStart),
+        supabase
+          .from("commercial_cases")
+          .select(
+            "id, created_at, closed_at, commercial_notes, sale_result, purchased_service, sale_value, cash_amount, portfolio_amount, volume_amount"
+          )
+          .gte("closed_at", todayStart)
+          .lt("closed_at", tomorrowStart),
       ]);
 
-      if (leadsResult.error) throw leadsResult.error;
-      if (leadsCountResult.error) throw leadsCountResult.error;
-      if (profilesResult.error) throw profilesResult.error;
+      if (todayCasesResult.error) throw todayCasesResult.error;
+      if (todayClosedCasesResult.error) throw todayClosedCasesResult.error;
 
-      setTotalLeadCount(leadsCountResult.count ?? 0);
-      setLeads((leadsResult.data as Lead[]) ?? []);
-      setProfiles((profilesResult.data as Profile[]) ?? []);
+      setDailySummary(
+        buildDailySummary(
+          (todayCasesResult.data as CommercialCaseSummaryRow[]) ?? [],
+          (todayClosedCasesResult.data as CommercialCaseSummaryRow[]) ?? []
+        )
+      );
     } catch (error: any) {
       setErrorMessage(error?.message || "Ocurrio un error cargando el panel.");
     } finally {
@@ -256,12 +294,6 @@ export default function HomePage() {
   }, [allRoleCodes, currentRoleCode]);
 
   const isSuperUser = currentRoleCode === "super_user";
-  const totalLeads = totalLeadCount || leads.length;
-  const totalUsers = profiles.length;
-
-  const activeUsers = useMemo(() => {
-    return profiles.filter((item) => item.is_active).length;
-  }, [profiles]);
 
   const superUserSections = useMemo<QuickActionSection[]>(() => {
     if (!isSuperUser) return [];
@@ -303,10 +335,6 @@ export default function HomePage() {
       }))
       .filter((section) => section.items.length > 0);
   }, [isSuperUser, visibleQuickActions]);
-
-  const superUserActionCount = useMemo(() => {
-    return superUserSections.reduce((acc, section) => acc + section.items.length, 0);
-  }, [superUserSections]);
 
   if (checkingSession) {
     return (
@@ -383,22 +411,34 @@ export default function HomePage() {
           <>
             <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               <StatCard
-                title="Leads totales"
-                value={loading ? "..." : String(totalLeads)}
-                subtitle="Conteo real en la base de datos"
-                icon={<Activity className="h-5 w-5" />}
+                title="Presencias Q"
+                value={loading ? "..." : String(dailySummary.presenceQ)}
+                subtitle="Ingresos comerciales del dia"
+                icon={<BadgeCheck className="h-5 w-5" />}
               />
               <StatCard
-                title="Usuarios"
-                value={loading ? "..." : String(totalUsers)}
-                subtitle={`${activeUsers} activos actualmente`}
-                icon={<Users className="h-5 w-5" />}
+                title="Presencias NQ"
+                value={loading ? "..." : String(dailySummary.presenceNq)}
+                subtitle="Ingresos no calificados del dia"
+                icon={<BadgeX className="h-5 w-5" />}
               />
               <StatCard
-                title="Accesos clave"
-                value={loading ? "..." : String(superUserActionCount)}
-                subtitle="Atajos principales del super usuario"
-                icon={<LayoutGrid className="h-5 w-5" />}
+                title="Ventas"
+                value={loading ? "..." : String(dailySummary.sales)}
+                subtitle="Casos cerrados con venta hoy"
+                icon={<ShoppingCart className="h-5 w-5" />}
+              />
+              <StatCard
+                title="Caja"
+                value={loading ? "..." : formatMoney(dailySummary.cash)}
+                subtitle="Pago recibido hoy"
+                icon={<Banknote className="h-5 w-5" />}
+              />
+              <StatCard
+                title="Cartera"
+                value={loading ? "..." : formatMoney(dailySummary.portfolio)}
+                subtitle="Saldo financiado hoy"
+                icon={<WalletCards className="h-5 w-5" />}
               />
             </section>
 
