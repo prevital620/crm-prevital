@@ -447,8 +447,8 @@ export default function AdminComisionesPage() {
   const [areaFilter, setAreaFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
   const [commissionSourceFilter, setCommissionSourceFilter] = useState("");
-  const [goalAm, setGoalAm] = useState("150000000");
-  const [goalPm, setGoalPm] = useState("150000000");
+  const goalAm = "150000000";
+  const goalPm = "150000000";
   const [showInactive, setShowInactive] = useState(false);
   const [editingCase, setEditingCase] = useState<CaseCorrectionState | null>(null);
   const [savingCorrection, setSavingCorrection] = useState(false);
@@ -1922,34 +1922,6 @@ export default function AdminComisionesPage() {
                 onChange={(e) => setSearch(e.target.value)}
               />
             </div>
-          </div>
-
-          <div className="mt-4 grid gap-4 md:grid-cols-2">
-            {isAdminView ? (
-              <>
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Meta grupo AM</label>
-                  <input
-                    className={inputClass}
-                    inputMode="numeric"
-                    value={goalAm}
-                    onChange={(e) => setGoalAm(e.target.value.replace(/\D/g, ""))}
-                    placeholder="150000000"
-                  />
-                </div>
-
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">Meta grupo PM</label>
-                  <input
-                    className={inputClass}
-                    inputMode="numeric"
-                    value={goalPm}
-                    onChange={(e) => setGoalPm(e.target.value.replace(/\D/g, ""))}
-                    placeholder="150000000"
-                  />
-                </div>
-              </>
-            ) : null}
           </div>
 
           {canManageInactiveFilter ? (
