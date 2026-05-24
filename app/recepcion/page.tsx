@@ -3847,9 +3847,13 @@ function imprimirRegistroComercial() {
         normalizedCommercialSource === "opc"
           ? "opc"
           : normalizedCommercialSource === "tmk"
-          ? "tmk"
+          ? commercialForm.opc_usuario_id
+            ? "opc"
+            : "base"
           : normalizedCommercialSource === "redes"
           ? "redes"
+          : normalizedCommercialSource === "base" || normalizedCommercialSource === "lead_existente"
+          ? "base"
           : "otro";
 
       try {
@@ -4529,10 +4533,16 @@ function imprimirRegistroComercial() {
         city: appointment.city || null,
         lead_source_type: normalizeCommercialCaseLeadSource(normalizedSource),
         commission_source_type:
-          normalizedSource === "opc" || normalizedSource === "tmk"
-            ? normalizedSource
+          normalizedSource === "opc"
+            ? "opc"
+            : normalizedSource === "tmk"
+              ? inferredSource.opc_usuario_id
+                ? "opc"
+                : "base"
             : normalizedSource === "redes"
               ? "redes"
+              : normalizedSource === "base" || normalizedSource === "lead_existente"
+                ? "base"
               : "otro",
         opc_user_id:
           normalizedSource === "opc"

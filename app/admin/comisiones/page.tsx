@@ -255,6 +255,12 @@ function inferOpcCommissionOriginType(caseItem: AdminCommercialCase): "lead" | "
   return inferSaleOriginType(caseItem);
 }
 
+function inferPayableCommissionSource(caseItem: AdminCommercialCase) {
+  const source = caseItem.commission_source_type || null;
+  if (source === "base" || source === "opc" || source === "redes") return source;
+  return null;
+}
+
 function extractInitialClassification(value: string | null | undefined) {
   const receptionSummary = parseStoredCommercialNotes(value).receptionSummary;
   const normalized = normalizeText(receptionSummary);
@@ -322,7 +328,7 @@ function buildCommissionEntries(
   const portfolio = Number(caseItem.portfolio_amount || 0);
   const baseNeta = Number(caseItem.net_commission_base || 0);
   const saleOriginType = inferSaleOriginType(caseItem);
-  const sourceType = caseItem.commission_source_type || null;
+  const sourceType = inferPayableCommissionSource(caseItem);
   const hasSale = hasRealSale(caseItem);
   const isQ = isCaseQ(caseItem);
 
@@ -361,8 +367,9 @@ function buildCommissionEntries(
   if (caseItem.call_user_id) {
     const callProfile = profileMap.get(caseItem.call_user_id);
     const isBase = sourceType === "base";
-    const fixedCommission = isQ ? (isBase ? 10000 : 5000) : 0;
-    const saleCommission = hasSale ? baseNeta * (isBase ? 0.02 : 0.01) : 0;
+    const isLeadSource = sourceType === "opc" || sourceType === "redes";
+    const fixedCommission = isQ ? (isBase ? 10000 : isLeadSource ? 5000 : 0) : 0;
+    const saleCommission = hasSale && (isBase || isLeadSource) ? baseNeta * (isBase ? 0.02 : 0.01) : 0;
 
     entries.push({
       caseId: caseItem.id,
@@ -399,7 +406,6 @@ const inputClass =
 const commissionSourceOptions = [
   { value: "base", label: "Base" },
   { value: "opc", label: "OPC" },
-  { value: "tmk", label: "TMK" },
   { value: "redes", label: "Redes" },
   { value: "otro", label: "Otro" },
 ];
@@ -1226,11 +1232,7 @@ export default function AdminComisionesPage() {
           : [collaboratorArea, opcArea, callArea].includes(effectiveAreaFilter)
         : true;
       const matchesCommissionSource = commissionSourceFilter
-        ? commissionSourceFilter === "opc"
-          ? Boolean(item.opc_user_id)
-          : commissionSourceFilter === "tmk"
-            ? Boolean(item.call_user_id)
-            : (item.commission_source_type || "") === commissionSourceFilter
+        ? inferPayableCommissionSource(item) === commissionSourceFilter
         : true;
       const matchesSearch = q
         ? normalizeText(item.customer_name).includes(q) ||
@@ -1279,7 +1281,7 @@ export default function AdminComisionesPage() {
 
     casosFiltrados.forEach((item) => {
       const saleOriginType = inferSaleOriginType(item);
-      const sourceType = item.commission_source_type || null;
+      const sourceType = inferPayableCommissionSource(item);
       const isQ = isCaseQ(item);
       const hasSale = hasRealSale(item);
       const volume = Number(item.volume_amount || 0);
@@ -1338,8 +1340,10 @@ export default function AdminComisionesPage() {
 
         if (supervisorCall) {
           const isBase = sourceType === "base";
-          const fixedCommission = isQ ? (isBase ? 6000 : 3000) : 0;
-          const saleCommission = hasSale ? baseNeta * (isBase ? 0.02 : 0.01) : 0;
+          const isLeadSource = sourceType === "opc" || sourceType === "redes";
+          const fixedCommission = isQ ? (isBase ? 6000 : isLeadSource ? 3000 : 0) : 0;
+          const saleCommission =
+            hasSale && (isBase || isLeadSource) ? baseNeta * (isBase ? 0.02 : 0.01) : 0;
 
           rawEntries.push({
             caseId: item.id,
@@ -1383,7 +1387,7 @@ export default function AdminComisionesPage() {
         beneficiaryName: commercial ? collaboratorDisplayLabel(commercial) : "Comercial sin asignar",
         beneficiaryArea: commercial?.area || "Comercial",
         commissionKind: "comercial",
-        sourceType: item.commission_source_type || null,
+        sourceType: inferPayableCommissionSource(item),
         saleOriginType: inferSaleOriginType(item),
         isQ: isCaseQ(item),
         hasSale: true,
@@ -1407,7 +1411,7 @@ export default function AdminComisionesPage() {
           beneficiaryName: collaboratorDisplayLabel(manager),
           beneficiaryArea: manager.area,
           commissionKind: "gerencia_comercial",
-          sourceType: item.commission_source_type || null,
+          sourceType: inferPayableCommissionSource(item),
           saleOriginType: inferSaleOriginType(item),
           isQ: isCaseQ(item),
           hasSale: true,
