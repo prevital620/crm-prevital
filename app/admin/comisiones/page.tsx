@@ -6,6 +6,7 @@ import { supabase } from "@/lib/supabase";
 import { getCurrentUserRole } from "@/lib/auth";
 import SessionBadge from "@/components/session-badge";
 import { parseStoredCommercialNotes } from "@/lib/commercial/notes";
+import { toSpanishErrorMessage } from "@/lib/errors/spanish";
 import {
   inferCommercialTeam,
   getCommercialTeamLabel,
@@ -269,13 +270,6 @@ function isCaseQ(caseItem: AdminCommercialCase) {
   return extractInitialClassification(caseItem.commercial_notes) === "Q";
 }
 
-function matchesCommissionQuickFilter(caseItem: AdminCommercialCase, quickFilter: string) {
-  if (!quickFilter) return true;
-  if (quickFilter === "opc") return Boolean(caseItem.opc_user_id);
-  if (quickFilter === "tmk") return Boolean(caseItem.call_user_id);
-  return (caseItem.commission_source_type || "") === quickFilter;
-}
-
 function getCommercialRate(baseNeta: number) {
   if (baseNeta <= 500000) return 0.05;
   if (baseNeta <= 1200000) return 0.06;
@@ -388,15 +382,6 @@ const panelClass =
 const inputClass =
   "w-full rounded-2xl border border-[#CFE4D8] bg-white/92 px-4 py-3 text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]";
 
-const commissionSourceQuickFilters = [
-  { value: "", label: "Todos" },
-  { value: "opc", label: "OPC" },
-  { value: "tmk", label: "TMK" },
-  { value: "base", label: "Base" },
-  { value: "redes", label: "Redes" },
-  { value: "otro", label: "Otro" },
-];
-
 const commissionSourceOptions = [
   { value: "base", label: "Base" },
   { value: "opc", label: "OPC" },
@@ -404,6 +389,24 @@ const commissionSourceOptions = [
   { value: "redes", label: "Redes" },
   { value: "otro", label: "Otro" },
 ];
+
+function collaboratorMatchesGroupFilter(
+  collaborator: CollaboratorOption | null | undefined,
+  groupFilter: string
+) {
+  if (!groupFilter) return true;
+  if (!collaborator) return false;
+
+  if (groupFilter.startsWith("group:")) {
+    return collaborator.groupCode === groupFilter.slice("group:".length);
+  }
+
+  if (groupFilter.startsWith("team:")) {
+    return collaborator.teamKey === groupFilter.slice("team:".length);
+  }
+
+  return true;
+}
 
 function StatCard({
   title,
@@ -442,7 +445,7 @@ export default function AdminComisionesPage() {
   const [search, setSearch] = useState("");
   const [collaboratorFilter, setCollaboratorFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
-  const [commissionSourceFilter, setCommissionSourceFilter] = useState("");
+  const [groupFilter, setGroupFilter] = useState("");
   const [goalAm, setGoalAm] = useState("150000000");
   const [goalPm, setGoalPm] = useState("150000000");
   const [showInactive, setShowInactive] = useState(false);
@@ -471,9 +474,9 @@ export default function AdminComisionesPage() {
       setCurrentRoleCode(auth.roleCode);
       setCurrentUserId(auth.user.id);
       setAuthorized(true);
-    } catch (err: any) {
+    } catch (err: unknown) {
       setAuthorized(false);
-      setError(err?.message || "No se pudo validar el acceso.");
+      setError(toSpanishErrorMessage(err, "No se pudo validar el acceso."));
     } finally {
       setLoadingAuth(false);
     }
@@ -578,8 +581,8 @@ export default function AdminComisionesPage() {
           role_names: rolesByUser.get(profile.id) || [],
         })) as ProfileOption[]) || []
       );
-    } catch (err: any) {
-      setError(err?.message || "No se pudieron cargar los datos de comisiones.");
+    } catch (err: unknown) {
+      setError(toSpanishErrorMessage(err, "No se pudieron cargar los datos de comisiones."));
     } finally {
       setLoading(false);
     }
@@ -624,8 +627,8 @@ export default function AdminComisionesPage() {
 
       await cargarDatos();
       setEditingCase(null);
-    } catch (err: any) {
-      setError(err?.message || "No se pudo guardar la corrección del caso.");
+    } catch (err: unknown) {
+      setError(toSpanishErrorMessage(err, "No se pudo guardar la corrección del caso."));
     } finally {
       setSavingCorrection(false);
     }
@@ -693,7 +696,9 @@ export default function AdminComisionesPage() {
   const effectiveAreaFilter =
     isAdminView || isSelfScopedRole ? areaFilter || commissionAreaForRole || "" : "";
   const effectiveCollaboratorFilter =
-    isAdminView || isSelfScopedRole
+    isAdminView
+      ? collaboratorFilter
+      : isSelfScopedRole
       ? collaboratorFilter || currentUserId || ""
       : isTeamScopedRole
         ? collaboratorFilter
@@ -897,6 +902,50 @@ export default function AdminComisionesPage() {
     return Array.from(unique).sort((a, b) => a.localeCompare(b, "es"));
   }, [visibleCollaboratorOptions]);
 
+  const groupFilterOptions = useMemo(() => {
+    const groupCodes = new Set<string>();
+    const teamKeys = new Set<CommercialTeamKey>();
+
+    visibleCollaboratorOptions.forEach((item) => {
+      if (effectiveAreaFilter && item.area !== effectiveAreaFilter) return;
+
+      if (item.groupCode) {
+        groupCodes.add(item.groupCode);
+      }
+
+      if (
+        item.teamKey &&
+        ["Comercial", "Gerencia comercial"].includes(item.area)
+      ) {
+        teamKeys.add(item.teamKey);
+      }
+    });
+
+    const teamOptions = Array.from(teamKeys)
+      .sort((a, b) => a.localeCompare(b, "es"))
+      .map((teamKey) => ({
+        value: `team:${teamKey}`,
+        label: getCommercialTeamLabel(teamKey),
+      }));
+
+    const groupOptions = Array.from(groupCodes)
+      .sort((a, b) => a.localeCompare(b, "es"))
+      .map((groupCode) => ({
+        value: `group:${groupCode}`,
+        label: groupCode,
+      }));
+
+    return [...teamOptions, ...groupOptions];
+  }, [effectiveAreaFilter, visibleCollaboratorOptions]);
+
+  useEffect(() => {
+    if (!groupFilter) return;
+    const stillExists = groupFilterOptions.some((item) => item.value === groupFilter);
+    if (!stillExists) {
+      setGroupFilter("");
+    }
+  }, [groupFilter, groupFilterOptions]);
+
   const teamScopedCollaboratorOptions = useMemo(() => {
     const hasSupervisorScope =
       currentRoleCode === "supervisor_opc" ||
@@ -960,17 +1009,23 @@ export default function AdminComisionesPage() {
     return baseOptions.filter((item) => item.area === effectiveAreaFilter);
   }, [isTeamScopedRole, teamScopedCollaboratorOptions, visibleCollaboratorOptions, effectiveAreaFilter]);
 
+  const groupFilteredCollaboratorOptions = useMemo(() => {
+    return filteredCollaboratorOptions.filter((item) =>
+      collaboratorMatchesGroupFilter(item, groupFilter)
+    );
+  }, [filteredCollaboratorOptions, groupFilter]);
+
   useEffect(() => {
     if ((!isAdminView && !isTeamScopedRole) || !collaboratorFilter) return;
 
-    const stillExists = filteredCollaboratorOptions.some(
+    const stillExists = groupFilteredCollaboratorOptions.some(
       (item) => item.id === collaboratorFilter
     );
 
     if (!stillExists) {
       setCollaboratorFilter("");
     }
-  }, [isAdminView, isTeamScopedRole, collaboratorFilter, filteredCollaboratorOptions]);
+  }, [isAdminView, isTeamScopedRole, collaboratorFilter, groupFilteredCollaboratorOptions]);
 
   const casosFiltrados = useMemo(() => {
     const q = normalizeText(search);
@@ -1018,7 +1073,7 @@ export default function AdminComisionesPage() {
           })
         : null;
 
-      const collaboratorAreaForFilter = areaFilter || selectedCollaborator?.area || "";
+      const collaboratorAreaForFilter = effectiveAreaFilter || selectedCollaborator?.area || "";
       const matchesDateFrom = dateFrom ? createdDate >= dateFrom : true;
       const matchesDateTo = dateTo ? createdDate <= dateTo : true;
       const matchesRoleScope = isAdminView
@@ -1150,7 +1205,6 @@ export default function AdminComisionesPage() {
               ? Boolean(item.call_user_id)
           : [collaboratorArea, opcArea, callArea].includes(effectiveAreaFilter)
         : true;
-      const matchesCommissionSource = matchesCommissionQuickFilter(item, commissionSourceFilter);
       const matchesSearch = q
         ? normalizeText(item.customer_name).includes(q) ||
           normalizeText(item.phone).includes(q) ||
@@ -1166,7 +1220,6 @@ export default function AdminComisionesPage() {
         matchesRoleScope &&
         matchesCollaborator &&
         matchesArea &&
-        matchesCommissionSource &&
         matchesSearch
       );
     });
@@ -1178,7 +1231,6 @@ export default function AdminComisionesPage() {
     effectiveCollaboratorFilter,
     collaboratorOptionMap,
     effectiveAreaFilter,
-    commissionSourceFilter,
     search,
     supervisorOpcByTeam,
     supervisorCallByTeam,
@@ -1189,7 +1241,6 @@ export default function AdminComisionesPage() {
     isAdminView,
     currentRoleCode,
     currentUserId,
-    currentCollaborator,
     resolvedCurrentGroupCode,
     resolvedCurrentTeamKey,
   ]);
@@ -1342,7 +1393,7 @@ export default function AdminComisionesPage() {
     });
 
     return rawEntries.filter((item) => {
-      const matchesArea = areaFilter
+      const matchesArea = effectiveAreaFilter
           ? effectiveAreaFilter === "Comercial"
             ? item.commissionKind === "comercial"
           : effectiveAreaFilter === "Gerencia comercial"
@@ -1362,8 +1413,12 @@ export default function AdminComisionesPage() {
       const matchesCollaborator = effectiveCollaboratorFilter
         ? item.beneficiaryId === effectiveCollaboratorFilter
         : true;
+      const matchesGroup = collaboratorMatchesGroupFilter(
+        collaboratorOptionMap.get(item.beneficiaryId),
+        groupFilter
+      );
 
-      return matchesArea && matchesCollaborator;
+      return matchesArea && matchesCollaborator && matchesGroup;
     });
   }, [
     casosFiltrados,
@@ -1372,6 +1427,7 @@ export default function AdminComisionesPage() {
     managerByTeam,
     effectiveAreaFilter,
     effectiveCollaboratorFilter,
+    groupFilter,
     supervisorOpcByTeam,
     supervisorCallByTeam,
     supervisorOpcByGroup,
@@ -1415,7 +1471,6 @@ export default function AdminComisionesPage() {
 
     if (currentRoleCode === "gerencia_comercial") {
       return commissionEntries.filter((item) => {
-        if (!currentCollaborator?.teamKey) return false;
         const scopedTeamKey = resolvedCurrentTeamKey;
         if (!scopedTeamKey) return false;
 
@@ -1445,12 +1500,12 @@ export default function AdminComisionesPage() {
       scopedCommissionEntries.filter((item) => item.hasSale).map((item) => item.caseId)
     );
 
-    if (visibleCaseIds.size === 0 && !effectiveAreaFilter && !effectiveCollaboratorFilter) {
+    if (visibleCaseIds.size === 0 && !effectiveAreaFilter && !effectiveCollaboratorFilter && !groupFilter) {
       return casosFiltrados.filter((item) => hasRealSale(item));
     }
 
     return casosFiltrados.filter((item) => hasRealSale(item) && visibleCaseIds.has(item.id));
-  }, [casosFiltrados, scopedCommissionEntries, effectiveAreaFilter, effectiveCollaboratorFilter]);
+  }, [casosFiltrados, scopedCommissionEntries, effectiveAreaFilter, effectiveCollaboratorFilter, groupFilter]);
 
   const bonusRows = useMemo(() => {
     if (
@@ -1732,7 +1787,7 @@ export default function AdminComisionesPage() {
         <section className={panelClass}>
           <div
             className={`grid gap-4 md:grid-cols-2 ${
-              isAdminView || isTeamScopedRole ? "xl:grid-cols-4" : "xl:grid-cols-3"
+              isAdminView || isTeamScopedRole ? "xl:grid-cols-5" : "xl:grid-cols-3"
             }`}
           >
             <div>
@@ -1762,7 +1817,11 @@ export default function AdminComisionesPage() {
                   <select
                     className={inputClass}
                     value={areaFilter}
-                    onChange={(e) => setAreaFilter(e.target.value)}
+                    onChange={(e) => {
+                      setAreaFilter(e.target.value);
+                      setGroupFilter("");
+                      setCollaboratorFilter("");
+                    }}
                   >
                     <option value="">Todos</option>
                     {areaOptions.map((item) => (
@@ -1773,6 +1832,29 @@ export default function AdminComisionesPage() {
                   </select>
                 </div>
               </>
+            ) : null}
+
+            {isAdminView ? (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Grupo o equipo
+                </label>
+                <select
+                  className={inputClass}
+                  value={groupFilter}
+                  onChange={(e) => {
+                    setGroupFilter(e.target.value);
+                    setCollaboratorFilter("");
+                  }}
+                >
+                  <option value="">Todos</option>
+                  {groupFilterOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
             ) : null}
 
             {isAdminView || isTeamScopedRole ? (
@@ -1786,14 +1868,14 @@ export default function AdminComisionesPage() {
                   onChange={(e) => setCollaboratorFilter(e.target.value)}
                 >
                   <option value="">Todos</option>
-                  {filteredCollaboratorOptions.map((item) => (
+                  {groupFilteredCollaboratorOptions.map((item) => (
                     <option key={item.id} value={item.id}>
                       {item.name}
                       {item.isActive ? "" : " (Inhabilitado)"}
                     </option>
                   ))}
                 </select>
-                {isTeamScopedRole && filteredCollaboratorOptions.length === 0 ? (
+                {isTeamScopedRole && groupFilteredCollaboratorOptions.length === 0 ? (
                   <p className="mt-2 text-xs leading-5 text-[#7A8A81]">
                     {teamScopedEmptyLabel}
                   </p>
@@ -1879,34 +1961,13 @@ export default function AdminComisionesPage() {
                 setDateTo(hoyISO());
                 setAreaFilter(isAdminView || isTeamScopedRole ? "" : commissionAreaForRole);
                 setCollaboratorFilter(isAdminView || isTeamScopedRole ? "" : currentUserId || "");
-                setCommissionSourceFilter("");
+                setGroupFilter("");
                 setSearch("");
               }}
               className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
               Limpiar filtros
             </button>
-          </div>
-
-          <div className="mt-4 flex flex-wrap gap-3">
-            {commissionSourceQuickFilters.map((item) => {
-              const isActive = commissionSourceFilter === item.value;
-
-              return (
-                <button
-                  key={item.value || "all"}
-                  type="button"
-                  onClick={() => setCommissionSourceFilter(item.value)}
-                  className={`rounded-2xl px-4 py-3 text-sm font-medium transition ${
-                    isActive
-                      ? "bg-[linear-gradient(135deg,_#5F7D66_0%,_#7FA287_100%)] text-white shadow-[0_14px_28px_rgba(95,125,102,0.18)]"
-                      : "border border-[#CFE4D8] bg-white/88 text-[#4F6F5B] shadow-sm hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
-                  }`}
-                >
-                  {item.label}
-                </button>
-              );
-            })}
           </div>
         </section>
 
