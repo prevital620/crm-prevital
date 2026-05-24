@@ -565,20 +565,13 @@ export default function AdminPage() {
           </section>
 
           <section className={panelClass}>
-            <div className="flex items-center justify-between gap-3">
+            <div>
               <div>
                 <h2 className="text-2xl font-bold text-[#24312A]">Ventas reales del rango</h2>
                 <p className="mt-1 text-sm text-[#607368]">
                   Solo aparecen registros con volumen, caja o cartera mayor a cero.
                 </p>
               </div>
-
-              <a
-                href="/admin/comisiones"
-                className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
-              >
-                Ir a comisiones
-              </a>
             </div>
 
             {loading ? (

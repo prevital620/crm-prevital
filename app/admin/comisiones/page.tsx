@@ -446,6 +446,7 @@ export default function AdminComisionesPage() {
   const [collaboratorFilter, setCollaboratorFilter] = useState("");
   const [areaFilter, setAreaFilter] = useState("");
   const [groupFilter, setGroupFilter] = useState("");
+  const [commissionSourceFilter, setCommissionSourceFilter] = useState("");
   const [goalAm, setGoalAm] = useState("150000000");
   const [goalPm, setGoalPm] = useState("150000000");
   const [showInactive, setShowInactive] = useState(false);
@@ -1205,6 +1206,13 @@ export default function AdminComisionesPage() {
               ? Boolean(item.call_user_id)
           : [collaboratorArea, opcArea, callArea].includes(effectiveAreaFilter)
         : true;
+      const matchesCommissionSource = commissionSourceFilter
+        ? commissionSourceFilter === "opc"
+          ? Boolean(item.opc_user_id)
+          : commissionSourceFilter === "tmk"
+            ? Boolean(item.call_user_id)
+            : (item.commission_source_type || "") === commissionSourceFilter
+        : true;
       const matchesSearch = q
         ? normalizeText(item.customer_name).includes(q) ||
           normalizeText(item.phone).includes(q) ||
@@ -1220,6 +1228,7 @@ export default function AdminComisionesPage() {
         matchesRoleScope &&
         matchesCollaborator &&
         matchesArea &&
+        matchesCommissionSource &&
         matchesSearch
       );
     });
@@ -1231,6 +1240,7 @@ export default function AdminComisionesPage() {
     effectiveCollaboratorFilter,
     collaboratorOptionMap,
     effectiveAreaFilter,
+    commissionSourceFilter,
     search,
     supervisorOpcByTeam,
     supervisorCallByTeam,
@@ -1752,7 +1762,7 @@ export default function AdminComisionesPage() {
               </h1>
               <p className="mt-3 max-w-3xl text-sm leading-7 text-[#496356] md:text-[15px]">
                 {isAdminView
-                  ? "Vista separada para revisar base neta, ventas y comisiones por colaborador."
+                  ? "Totales del mes y detalle filtrable por rol, grupo, fuente, fechas, colaborador y nombre."
                   : "Consulta en tiempo real tu fijo, variable, bonos y total según el rango filtrado."}
               </p>
             </div>
@@ -1787,7 +1797,7 @@ export default function AdminComisionesPage() {
         <section className={panelClass}>
           <div
             className={`grid gap-4 md:grid-cols-2 ${
-              isAdminView || isTeamScopedRole ? "xl:grid-cols-5" : "xl:grid-cols-3"
+              isAdminView || isTeamScopedRole ? "xl:grid-cols-3" : "xl:grid-cols-3"
             }`}
           >
             <div>
@@ -1849,6 +1859,26 @@ export default function AdminComisionesPage() {
                 >
                   <option value="">Todos</option>
                   {groupFilterOptions.map((item) => (
+                    <option key={item.value} value={item.value}>
+                      {item.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+
+            {isAdminView ? (
+              <div>
+                <label className="mb-2 block text-sm font-medium text-slate-700">
+                  Fuente
+                </label>
+                <select
+                  className={inputClass}
+                  value={commissionSourceFilter}
+                  onChange={(e) => setCommissionSourceFilter(e.target.value)}
+                >
+                  <option value="">Todas</option>
+                  {commissionSourceOptions.map((item) => (
                     <option key={item.value} value={item.value}>
                       {item.label}
                     </option>
@@ -1962,6 +1992,7 @@ export default function AdminComisionesPage() {
                 setAreaFilter(isAdminView || isTeamScopedRole ? "" : commissionAreaForRole);
                 setCollaboratorFilter(isAdminView || isTeamScopedRole ? "" : currentUserId || "");
                 setGroupFilter("");
+                setCommissionSourceFilter("");
                 setSearch("");
               }}
               className="rounded-2xl border border-[#CFE4D8] bg-white/88 px-4 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
@@ -1972,12 +2003,12 @@ export default function AdminComisionesPage() {
         </section>
 
         <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-          <StatCard title="Ventas" value={String(resumen.total)} subtitle="Ventas reales filtradas" />
-          <StatCard title="Volumen" value={formatMoney(resumen.volumen)} subtitle="Suma filtrada" />
-          <StatCard title="Caja" value={formatMoney(resumen.caja)} subtitle="Pago recibido" />
-          <StatCard title="Base neta" value={formatMoney(resumen.baseNeta)} subtitle="Base comisionable" />
-          <StatCard title="Bonos" value={formatMoney(resumen.bonosTotal)} subtitle="Total mensual calculado" />
-          <StatCard title="Comisión" value={formatMoney(resumen.comisionTotal)} subtitle="Total calculado" />
+          <StatCard title="Ventas del periodo" value={String(resumen.total)} subtitle="Ventas reales filtradas" />
+          <StatCard title="Volumen del periodo" value={formatMoney(resumen.volumen)} subtitle="Suma filtrada" />
+          <StatCard title="Caja del periodo" value={formatMoney(resumen.caja)} subtitle="Pago recibido" />
+          <StatCard title="Base neta del periodo" value={formatMoney(resumen.baseNeta)} subtitle="Base comisionable" />
+          <StatCard title="Bonos del periodo" value={formatMoney(resumen.bonosTotal)} subtitle="Bonos comerciales" />
+          <StatCard title="Comisión total" value={formatMoney(resumen.comisionTotal)} subtitle="Fijo, venta y bonos" />
         </section>
 
         {(isAdminView || commissionAreaForRole === "Comercial" || commissionAreaForRole === "Gerencia comercial") && (
