@@ -80,6 +80,7 @@ type CommissionEntry = {
 type CollaboratorOption = {
   id: string;
   name: string;
+  employeeCode: string | null;
   area: string;
   teamKey: CommercialTeamKey | null;
   groupCode: string | null;
@@ -186,9 +187,9 @@ function normalizeArea(jobTitle: string | null | undefined) {
   if (!value) return "Sin rol";
   if (value.includes("supervisor") && value.includes("opc")) return "Supervisor OPC";
   if (value.includes("supervisor") && value.includes("call")) return "Supervisor Call";
-  if (value.includes("confirmador")) return "Call center";
+  if (value.includes("confirmador")) return "Confirmador TMK";
   if (value.includes("promotor") || value === "opc" || value.includes(" opc")) return "OPC";
-  if (value.includes("call center") || value === "call" || value.includes("call")) return "Call center";
+  if (value.includes("call center") || value === "call" || value.includes("call")) return "Confirmador TMK";
   if (value.includes("tmk")) return "TMK";
   if (value.includes("gerencia comercial") || value.includes("gerente comercial")) return "Gerencia comercial";
   if (value.includes("comercial")) return "Comercial";
@@ -216,7 +217,7 @@ function getCollaboratorArea(profile: ProfileOption | null | undefined) {
   if (roleCode === "supervisor_opc") return "Supervisor OPC";
   if (roleCode === "tmk") return "TMK";
   if (roleCode === "supervisor_call_center") return "Supervisor Call";
-  if (roleCode === "confirmador") return "Call center";
+  if (roleCode === "confirmador") return "Confirmador TMK";
   if (roleCode === "comercial") return "Comercial";
   if (roleCode === "gerencia_comercial" || roleCode === "gerente_comercial") {
     return "Gerencia comercial";
@@ -227,7 +228,7 @@ function getCollaboratorArea(profile: ProfileOption | null | undefined) {
   if (roleName.includes("supervisor opc")) return "Supervisor OPC";
   if (roleName === "tmk") return "TMK";
   if (roleName.includes("supervisor call")) return "Supervisor Call";
-  if (roleName.includes("confirmador")) return "Call center";
+  if (roleName.includes("confirmador")) return "Confirmador TMK";
   if (roleName.includes("gerencia comercial") || roleName.includes("gerente comercial")) {
     return "Gerencia comercial";
   }
@@ -247,6 +248,11 @@ function inferSaleOriginType(caseItem: AdminCommercialCase): "lead" | "directo" 
   }
 
   return "directo";
+}
+
+function inferOpcCommissionOriginType(caseItem: AdminCommercialCase): "lead" | "directo" {
+  if (caseItem.opc_user_id && caseItem.call_user_id) return "lead";
+  return inferSaleOriginType(caseItem);
 }
 
 function extractInitialClassification(value: string | null | undefined) {
@@ -293,10 +299,17 @@ function getCommissionAreaFromRole(roleCode: string | null | undefined) {
   if (roleCode === "supervisor_opc") return "Supervisor OPC";
   if (roleCode === "tmk") return "TMK";
   if (roleCode === "supervisor_call_center") return "Supervisor Call";
-  if (roleCode === "confirmador") return "Call center";
+  if (roleCode === "confirmador") return "Confirmador TMK";
   if (roleCode === "comercial") return "Comercial";
   if (roleCode === "gerencia_comercial") return "Gerencia comercial";
   return "";
+}
+
+function profileDisplayLabel(profile: ProfileOption | null | undefined, fallback: string) {
+  if (!profile) return fallback;
+  return [profile.full_name || fallback, profile.employee_code, profile.commission_group_code]
+    .filter(Boolean)
+    .join(" - ");
 }
 
 function buildCommissionEntries(
@@ -315,10 +328,11 @@ function buildCommissionEntries(
 
   if (caseItem.opc_user_id) {
     const opcProfile = profileMap.get(caseItem.opc_user_id);
+    const opcOriginType = inferOpcCommissionOriginType(caseItem);
     const fixedCommission =
-      saleOriginType === "directo" ? (isQ ? 10000 : 0) : isQ ? 5000 : 1000;
+      opcOriginType === "directo" ? (isQ ? 10000 : 0) : isQ ? 5000 : 1000;
     const saleCommission = hasSale
-      ? baseNeta * (saleOriginType === "directo" ? 0.02 : 0.01)
+      ? baseNeta * (opcOriginType === "directo" ? 0.02 : 0.01)
       : 0;
 
     entries.push({
@@ -327,11 +341,11 @@ function buildCommissionEntries(
       phone: caseItem.phone,
       createdAt: caseItem.created_at,
       beneficiaryId: caseItem.opc_user_id,
-      beneficiaryName: opcProfile?.full_name || "OPC sin asignar",
+      beneficiaryName: profileDisplayLabel(opcProfile, "OPC sin asignar"),
       beneficiaryArea: normalizeArea(opcProfile?.job_title),
       commissionKind: "opc",
       sourceType,
-      saleOriginType,
+      saleOriginType: opcOriginType,
       isQ,
       hasSale,
       volume,
@@ -356,7 +370,7 @@ function buildCommissionEntries(
       phone: caseItem.phone,
       createdAt: caseItem.created_at,
       beneficiaryId: caseItem.call_user_id,
-      beneficiaryName: callProfile?.full_name || "TMK sin asignar",
+      beneficiaryName: profileDisplayLabel(callProfile, "TMK sin asignar"),
       beneficiaryArea: normalizeArea(callProfile?.job_title),
       commissionKind: "tmk",
       sourceType,
@@ -406,6 +420,10 @@ function collaboratorMatchesGroupFilter(
   }
 
   return true;
+}
+
+function collaboratorDisplayLabel(item: CollaboratorOption) {
+  return [item.name, item.employeeCode, item.groupCode].filter(Boolean).join(" - ");
 }
 
 function StatCard({
@@ -661,6 +679,7 @@ export default function AdminComisionesPage() {
     return profiles.map((profile) => ({
       id: profile.id,
       name: profile.full_name || "Sin nombre",
+      employeeCode: profile.employee_code || null,
       area: getCollaboratorArea(profile),
       teamKey: inferCommercialTeam({
         full_name: profile.full_name,
@@ -781,7 +800,7 @@ export default function AdminComisionesPage() {
 
   const tmkOptions = useMemo(() => {
     return visibleCollaboratorOptions.filter((item) =>
-      ["TMK", "Call center", "Supervisor Call"].includes(item.area)
+      ["TMK", "Confirmador TMK", "Supervisor Call"].includes(item.area)
     );
   }, [visibleCollaboratorOptions]);
 
@@ -973,14 +992,14 @@ export default function AdminComisionesPage() {
       if (resolvedCurrentGroupCode) {
         return visibleCollaboratorOptions.filter(
           (item) =>
-            ["TMK", "Call center"].includes(item.area) &&
+            ["TMK", "Confirmador TMK"].includes(item.area) &&
             item.groupCode === resolvedCurrentGroupCode
         );
       }
 
       return visibleCollaboratorOptions.filter(
         (item) =>
-          ["TMK", "Call center"].includes(item.area) &&
+          ["TMK", "Confirmador TMK"].includes(item.area) &&
           item.teamKey === resolvedCurrentTeamKey
       );
     }
@@ -1188,7 +1207,7 @@ export default function AdminComisionesPage() {
             : collaboratorAreaForFilter === "OPC" || collaboratorAreaForFilter === "Supervisor OPC"
               ? item.opc_user_id === effectiveCollaboratorFilter
               : collaboratorAreaForFilter === "TMK" ||
-                  collaboratorAreaForFilter === "Call center" ||
+                  collaboratorAreaForFilter === "Confirmador TMK" ||
                   collaboratorAreaForFilter === "Supervisor Call"
                 ? item.call_user_id === effectiveCollaboratorFilter
                 : [
@@ -1270,6 +1289,7 @@ export default function AdminComisionesPage() {
 
       if (item.opc_user_id) {
         const opc = collaboratorOptionMap.get(item.opc_user_id);
+        const opcOriginType = inferOpcCommissionOriginType(item);
         const supervisorOpc =
           (opc?.groupCode ? supervisorOpcByGroup.get(opc.groupCode) : null) ||
           (opc?.teamKey ? supervisorOpcByTeam.get(opc.teamKey) : null) ||
@@ -1277,12 +1297,12 @@ export default function AdminComisionesPage() {
 
         if (supervisorOpc) {
           const fixedCommission = isQ
-            ? saleOriginType === "directo"
+            ? opcOriginType === "directo"
               ? 6000
               : 3000
             : 0;
           const saleCommission = hasSale
-            ? baseNeta * (saleOriginType === "directo" ? 0.02 : 0.01)
+            ? baseNeta * (opcOriginType === "directo" ? 0.02 : 0.01)
             : 0;
 
           rawEntries.push({
@@ -1291,11 +1311,11 @@ export default function AdminComisionesPage() {
             phone: item.phone,
             createdAt: item.created_at,
             beneficiaryId: supervisorOpc.id,
-            beneficiaryName: supervisorOpc.name,
+            beneficiaryName: collaboratorDisplayLabel(supervisorOpc),
             beneficiaryArea: supervisorOpc.area,
             commissionKind: "supervisor_opc",
             sourceType,
-            saleOriginType,
+            saleOriginType: opcOriginType,
             isQ,
             hasSale,
             volume,
@@ -1327,7 +1347,7 @@ export default function AdminComisionesPage() {
             phone: item.phone,
             createdAt: item.created_at,
             beneficiaryId: supervisorCall.id,
-            beneficiaryName: supervisorCall.name,
+            beneficiaryName: collaboratorDisplayLabel(supervisorCall),
             beneficiaryArea: supervisorCall.area,
             commissionKind: "supervisor_call",
             sourceType,
@@ -1360,7 +1380,7 @@ export default function AdminComisionesPage() {
         phone: item.phone,
         createdAt: item.created_at,
         beneficiaryId: item.assigned_commercial_user_id,
-        beneficiaryName: commercial?.name || "Comercial sin asignar",
+        beneficiaryName: commercial ? collaboratorDisplayLabel(commercial) : "Comercial sin asignar",
         beneficiaryArea: commercial?.area || "Comercial",
         commissionKind: "comercial",
         sourceType: item.commission_source_type || null,
@@ -1384,7 +1404,7 @@ export default function AdminComisionesPage() {
           phone: item.phone,
           createdAt: item.created_at,
           beneficiaryId: manager.id,
-          beneficiaryName: manager.name,
+          beneficiaryName: collaboratorDisplayLabel(manager),
           beneficiaryArea: manager.area,
           commissionKind: "gerencia_comercial",
           sourceType: item.commission_source_type || null,
@@ -1413,7 +1433,7 @@ export default function AdminComisionesPage() {
                 ? item.commissionKind === "supervisor_opc"
                 : item.commissionKind === "opc"
               : effectiveAreaFilter === "TMK" ||
-                  effectiveAreaFilter === "Call center" ||
+                  effectiveAreaFilter === "Confirmador TMK" ||
                   effectiveAreaFilter === "Supervisor Call"
                 ? effectiveAreaFilter === "Supervisor Call"
                   ? item.commissionKind === "supervisor_call"
@@ -1523,7 +1543,7 @@ export default function AdminComisionesPage() {
       effectiveAreaFilter === "OPC" ||
       effectiveAreaFilter === "Supervisor OPC" ||
       effectiveAreaFilter === "TMK" ||
-      effectiveAreaFilter === "Call center" ||
+      effectiveAreaFilter === "Confirmador TMK" ||
       effectiveAreaFilter === "Supervisor Call" ||
       effectiveAreaFilter === "Gerencia comercial"
     ) {
@@ -1555,7 +1575,7 @@ export default function AdminComisionesPage() {
       if (!byCommercial.has(item.assigned_commercial_user_id)) {
         byCommercial.set(item.assigned_commercial_user_id, {
           collaboratorId: item.assigned_commercial_user_id,
-          collaboratorName: commercial?.name || "Comercial sin asignar",
+          collaboratorName: commercial ? collaboratorDisplayLabel(commercial) : "Comercial sin asignar",
           teamKey,
           bonusBase: 0,
           individualBonus: 0,
@@ -1900,7 +1920,7 @@ export default function AdminComisionesPage() {
                   <option value="">Todos</option>
                   {groupFilteredCollaboratorOptions.map((item) => (
                     <option key={item.id} value={item.id}>
-                      {item.name}
+                      {collaboratorDisplayLabel(item)}
                       {item.isActive ? "" : " (Inhabilitado)"}
                     </option>
                   ))}
@@ -2137,7 +2157,7 @@ export default function AdminComisionesPage() {
                     <option value="">Sin asignar</option>
                     {commercialOptions.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.name}
+                        {collaboratorDisplayLabel(item)}
                       </option>
                     ))}
                   </select>
@@ -2157,7 +2177,7 @@ export default function AdminComisionesPage() {
                     <option value="">Por equipo del comercial</option>
                     {managerOptions.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.name} · {getCommercialTeamLabel(item.teamKey)}
+                        {collaboratorDisplayLabel(item)} - {getCommercialTeamLabel(item.teamKey)}
                       </option>
                     ))}
                   </select>
@@ -2198,14 +2218,14 @@ export default function AdminComisionesPage() {
                     <option value="">Sin OPC</option>
                     {opcOptions.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.name}
+                        {collaboratorDisplayLabel(item)}
                       </option>
                     ))}
                   </select>
                 </div>
 
                 <div>
-                  <label className="mb-2 block text-sm font-medium text-slate-700">TMK / Call center</label>
+                  <label className="mb-2 block text-sm font-medium text-slate-700">TMK / Confirmador TMK</label>
                   <select
                     className={inputClass}
                     value={editingCase.callUserId}
@@ -2218,7 +2238,7 @@ export default function AdminComisionesPage() {
                     <option value="">Sin TMK</option>
                     {tmkOptions.map((item) => (
                       <option key={item.id} value={item.id}>
-                        {item.name}
+                        {collaboratorDisplayLabel(item)}
                       </option>
                     ))}
                   </select>
