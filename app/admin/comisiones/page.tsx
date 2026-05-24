@@ -29,6 +29,7 @@ type AdminCommercialCase = {
   payment_method: string | null;
   assigned_commercial_user_id: string | null;
   manager_commission_user_id: string | null;
+  lead_source_type: string | null;
   commission_source_type: string | null;
   opc_user_id: string | null;
   call_user_id: string | null;
@@ -154,10 +155,9 @@ function formatDateTime(value: string | null | undefined) {
 function commissionSourceLabel(value: string | null | undefined) {
   const map: Record<string, string> = {
     opc: "OPC",
-    tmk: "TMK",
     redes: "Redes",
     base: "Base",
-    otro: "Otro",
+    otro: "Referido / Otro",
   };
 
   if (!value) return "Sin definir";
@@ -256,15 +256,38 @@ function inferOpcCommissionOriginType(caseItem: AdminCommercialCase): "lead" | "
 }
 
 function inferPayableCommissionSource(caseItem: AdminCommercialCase) {
-  const source = caseItem.commission_source_type || null;
+  const source = caseItem.commission_source_type || caseItem.lead_source_type || null;
   if (source === "base" || source === "opc" || source === "redes" || source === "otro") {
     return source;
   }
+
+  if (source === "tmk") {
+    if (caseItem.opc_user_id) return "opc";
+    const leadSource = caseItem.lead_source_type;
+    if (leadSource === "base" || leadSource === "opc" || leadSource === "redes" || leadSource === "otro") {
+      return leadSource;
+    }
+    return "otro";
+  }
+
   return null;
 }
 
 function isLeadCommissionSource(sourceType: string | null | undefined) {
   return sourceType === "opc" || sourceType === "redes" || sourceType === "otro";
+}
+
+function commissionOriginSummaryLabel(item: CommissionEntry) {
+  if (item.commissionKind === "opc" || item.commissionKind === "supervisor_opc") {
+    return item.saleOriginType === "directo" ? "Directo" : "Inbound";
+  }
+
+  if (item.commissionKind === "tmk" || item.commissionKind === "supervisor_call") {
+    const sourceLabel = commissionSourceLabel(item.sourceType);
+    return item.sourceType === "opc" ? "OPC inbound" : sourceLabel;
+  }
+
+  return "Venta";
 }
 
 function extractInitialClassification(value: string | null | undefined) {
@@ -342,7 +365,7 @@ function buildCommissionEntries(
     const opcProfile = profileMap.get(caseItem.opc_user_id);
     const opcOriginType = inferOpcCommissionOriginType(caseItem);
     const fixedCommission =
-      opcOriginType === "directo" ? (isQ ? 10000 : 0) : isQ ? 5000 : 1000;
+      opcOriginType === "directo" ? (isQ ? 10000 : 0) : isQ ? 5000 : 0;
     const saleCommission = hasSale
       ? baseNeta * (opcOriginType === "directo" ? 0.02 : 0.01)
       : 0;
@@ -536,6 +559,7 @@ export default function AdminComisionesPage() {
             payment_method,
             assigned_commercial_user_id,
             manager_commission_user_id,
+            lead_source_type,
             commission_source_type,
             opc_user_id,
             call_user_id,
@@ -1662,8 +1686,7 @@ export default function AdminComisionesPage() {
       {
         collaboratorId: string;
         collaboratorName: string;
-        area: string;
-        tipoComision: string;
+        origenCounts: Record<string, number>;
         casosQ: number;
         ventas: number;
         fijo: number;
@@ -1681,8 +1704,7 @@ export default function AdminComisionesPage() {
         map.set(collaboratorId, {
           collaboratorId,
           collaboratorName: item.beneficiaryName,
-          area: item.beneficiaryArea,
-          tipoComision: commissionKindLabel(item.commissionKind),
+          origenCounts: {},
           casosQ: 0,
           ventas: 0,
           fijo: 0,
@@ -1694,6 +1716,8 @@ export default function AdminComisionesPage() {
       }
 
       const current = map.get(collaboratorId)!;
+      const originLabel = commissionOriginSummaryLabel(item);
+      current.origenCounts[originLabel] = (current.origenCounts[originLabel] || 0) + 1;
       if (item.isQ) current.casosQ += 1;
       if (item.hasSale) current.ventas += 1;
       current.fijo += item.fixedCommission;
@@ -1708,8 +1732,7 @@ export default function AdminComisionesPage() {
         map.set(item.collaboratorId, {
           collaboratorId: item.collaboratorId,
           collaboratorName: item.collaboratorName,
-          area: profile?.area || "Comercial",
-          tipoComision: profile?.area === "Gerencia comercial" ? "Gerencia comercial" : "Comercial",
+          origenCounts: {},
           casosQ: 0,
           ventas: 0,
           fijo: 0,
@@ -1725,7 +1748,16 @@ export default function AdminComisionesPage() {
       current.totalComision += item.totalBonus;
     });
 
-    return Array.from(map.values()).sort((a, b) => b.totalComision - a.totalComision);
+    return Array.from(map.values())
+      .map((item) => ({
+        ...item,
+        origenLead:
+          Object.entries(item.origenCounts)
+            .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+            .map(([label, count]) => (count > 1 ? `${label} (${count})` : label))
+            .join(", ") || "Sin origen",
+      }))
+      .sort((a, b) => b.totalComision - a.totalComision);
   }, [scopedCommissionEntries, bonusRows, collaboratorOptionMap]);
 
   if (loadingAuth) {
@@ -2087,14 +2119,13 @@ export default function AdminComisionesPage() {
                 <thead>
                   <tr className="border-b border-[#D7EADF] text-left text-xs uppercase tracking-[0.14em] text-[#5B6E63]">
                     <th className="px-3 py-3">Colaborador</th>
-                    <th className="px-3 py-3">Área</th>
-                    <th className="px-3 py-3">Tipo</th>
-                    <th className="px-3 py-3">Casos Q</th>
+                    <th className="px-3 py-3">Origen lead</th>
+                    <th className="px-3 py-3"># Qs</th>
+                    <th className="px-3 py-3">Comisión Q</th>
                     <th className="px-3 py-3">Ventas</th>
-                    <th className="px-3 py-3">Fijo</th>
-                    <th className="px-3 py-3">Venta</th>
-                    <th className="px-3 py-3">Bono</th>
-                    <th className="px-3 py-3">Base neta</th>
+                    <th className="px-3 py-3">Neto ventas</th>
+                    <th className="px-3 py-3">Comisión venta</th>
+                    <th className="px-3 py-3">Bonos</th>
                     <th className="px-3 py-3">Total comisión</th>
                   </tr>
                 </thead>
@@ -2102,14 +2133,13 @@ export default function AdminComisionesPage() {
                   {resumenPorColaborador.map((item) => (
                     <tr key={item.collaboratorId} className="border-b border-slate-100">
                       <td className="px-3 py-3 font-medium text-slate-900">{item.collaboratorName}</td>
-                      <td className="px-3 py-3 text-slate-700">{item.area}</td>
-                      <td className="px-3 py-3 text-slate-700">{item.tipoComision}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.origenLead}</td>
                       <td className="px-3 py-3 text-slate-700">{item.casosQ}</td>
-                      <td className="px-3 py-3 text-slate-700">{item.ventas}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.fijo)}</td>
+                      <td className="px-3 py-3 text-slate-700">{item.ventas}</td>
+                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNeta)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.variable)}</td>
                       <td className="px-3 py-3 text-slate-700">{formatMoney(item.bono)}</td>
-                      <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNeta)}</td>
                       <td className="px-3 py-3 font-semibold text-slate-900">{formatMoney(item.totalComision)}</td>
                     </tr>
                   ))}
