@@ -149,12 +149,12 @@ export default function LoginPage() {
 
         <div className="relative z-10">
           <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-28 w-28 items-center justify-center overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#d7e2da]">
+            <div className="mx-auto mb-4 flex h-32 w-44 items-center justify-center overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#d7e2da]">
               <Image
                 src="/prevital-logo-vivo.png"
                 alt="Prevital"
-                width={112}
-                height={112}
+                width={176}
+                height={128}
                 className="h-full w-full object-contain"
                 priority
               />

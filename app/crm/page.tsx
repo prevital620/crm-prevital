@@ -635,7 +635,7 @@ export default function HomePage() {
       </div>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
-          <div className="relative h-16 w-16 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+          <div className="relative h-24 w-36 overflow-hidden rounded-[24px] border border-[#D6E8DA] bg-white shadow-sm">
             <Image src="/prevital-logo-vivo.png" alt="Prevital" fill className="object-contain" priority />
           </div>
         </div>

@@ -362,7 +362,7 @@ export default function AdminPage() {
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[430px] w-[430px] opacity-[0.04] md:h-[580px] md:w-[580px]">
           <Image
-            src="/prevital-logo.jpeg"
+            src="/prevital-logo-vivo.png"
             alt="Prevital"
             fill
             className="object-contain"
@@ -388,12 +388,12 @@ export default function AdminPage() {
       ) : (
         <div className="mx-auto max-w-7xl space-y-6">
           <div className="flex items-center gap-3">
-            <div className="relative h-14 w-14 overflow-hidden rounded-[20px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_#FFFFFF_0%,_#F0FBF5_60%,_#E2F4EA_100%)] shadow-[0_14px_30px_rgba(95,125,102,0.18)]">
+            <div className="relative h-24 w-36 overflow-hidden rounded-[24px] border border-[#CFE4D8] bg-[linear-gradient(135deg,_#FFFFFF_0%,_#F0FBF5_60%,_#E2F4EA_100%)] shadow-[0_14px_30px_rgba(95,125,102,0.18)]">
               <Image
-                src="/prevital-logo.jpeg"
+                src="/prevital-logo-vivo.png"
                 alt="Prevital"
                 fill
-                className="object-contain p-1"
+                className="object-contain"
                 priority
               />
             </div>
