@@ -70,6 +70,64 @@ function looksLikeEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value.trim());
 }
 
+function maskPhone(value: string | null | undefined) {
+  if (!value) return null;
+  if (value.length <= 4) return "****";
+  return `${value.slice(0, 2)}***${value.slice(-4)}`;
+}
+
+function logWebhookDebugSummary(payload: unknown) {
+  const root = asRecord(payload);
+  const entries = Array.isArray(root?.entry) ? root.entry : [];
+
+  console.info("[whatsapp] webhook POST received", {
+    object: asString(root?.object) || null,
+    entryCount: entries.length,
+  });
+
+  entries.forEach((entry, entryIndex) => {
+    const entryRecord = asRecord(entry);
+    const changes = Array.isArray(entryRecord?.changes) ? entryRecord.changes : [];
+
+    console.info("[whatsapp] webhook entry summary", {
+      entryIndex,
+      hasChanges: changes.length > 0,
+      changeCount: changes.length,
+    });
+
+    changes.forEach((change, changeIndex) => {
+      const changeRecord = asRecord(change);
+      const value = asRecord(changeRecord?.value);
+      const metadata = asRecord(value?.metadata);
+      const phoneNumberId = asString(metadata?.phone_number_id) || null;
+      const valueMessages = Array.isArray(value?.messages) ? value.messages : [];
+
+      console.info("[whatsapp] webhook change summary", {
+        entryIndex,
+        changeIndex,
+        field: asString(changeRecord?.field) || null,
+        hasMessages: valueMessages.length > 0,
+        messageCount: valueMessages.length,
+        phoneNumberId,
+      });
+
+      valueMessages.forEach((item, messageIndex) => {
+        const message = asRecord(item);
+
+        console.info("[whatsapp] webhook message summary", {
+          entryIndex,
+          changeIndex,
+          messageIndex,
+          messageType: asString(message?.type) || null,
+          from: maskPhone(asString(message?.from)),
+          messageId: asString(message?.id) || null,
+          phoneNumberId,
+        });
+      });
+    });
+  });
+}
+
 function extractInboundTextMessages(payload: unknown): InboundTextMessage[] {
   const root = asRecord(payload);
   const entries = Array.isArray(root?.entry) ? root.entry : [];
@@ -311,6 +369,8 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     const payload = await request.json();
+    logWebhookDebugSummary(payload);
+
     after(async () => {
       const messages = extractInboundTextMessages(payload);
 
