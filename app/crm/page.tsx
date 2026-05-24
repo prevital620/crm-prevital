@@ -630,13 +630,13 @@ export default function HomePage() {
     <main className="relative min-h-screen overflow-hidden bg-[#F8F7F4] p-6 md:p-8">
       <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
         <div className="relative h-[420px] w-[420px] opacity-[0.05] md:h-[520px] md:w-[520px]">
-          <Image src="/prevital-logo.jpeg" alt="Prevital" fill className="object-contain" priority />
+          <Image src="/prevital-logo-vivo.png" alt="Prevital" fill className="object-contain" priority />
         </div>
       </div>
       <div className="mx-auto max-w-7xl space-y-6">
         <div className="flex items-center gap-3">
-          <div className="relative h-12 w-12 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
-            <Image src="/prevital-logo.jpeg" alt="Prevital" fill className="object-contain p-1" priority />
+          <div className="relative h-16 w-16 overflow-hidden rounded-2xl border border-[#D6E8DA] bg-white shadow-sm">
+            <Image src="/prevital-logo-vivo.png" alt="Prevital" fill className="object-contain" priority />
           </div>
         </div>
 

@@ -138,7 +138,7 @@ export default function LoginPage() {
       <section className="relative w-full max-w-xl overflow-hidden rounded-[2rem] border border-[#d7e2da] bg-white p-6 shadow-sm md:p-8">
         <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-[0.06]">
           <Image
-            src="/prevital-logo.jpeg"
+            src="/prevital-logo-vivo.png"
             alt="Marca de agua Prevital"
             width={420}
             height={420}
@@ -149,12 +149,12 @@ export default function LoginPage() {
 
         <div className="relative z-10">
           <div className="mb-6 text-center">
-            <div className="mx-auto mb-4 flex h-24 w-24 items-center justify-center overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#d7e2da]">
+            <div className="mx-auto mb-4 flex h-28 w-28 items-center justify-center overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-[#d7e2da]">
               <Image
-                src="/prevital-logo.jpeg"
+                src="/prevital-logo-vivo.png"
                 alt="Prevital"
-                width={96}
-                height={96}
+                width={112}
+                height={112}
                 className="h-full w-full object-contain"
                 priority
               />
