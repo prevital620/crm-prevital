@@ -2335,10 +2335,7 @@ export default function AdminComisionesPage() {
                     <th className="px-3 py-3">Cliente</th>
                     <th className="px-3 py-3">Fecha</th>
                     <th className="px-3 py-3">Beneficiario</th>
-                    <th className="px-3 py-3">Área</th>
-                    <th className="px-3 py-3">Tipo</th>
                     <th className="px-3 py-3">Fuente</th>
-                    <th className="px-3 py-3">Origen</th>
                     <th className="px-3 py-3">Q</th>
                     <th className="px-3 py-3">Base neta</th>
                     <th className="px-3 py-3">Fijo</th>
@@ -2362,12 +2359,7 @@ export default function AdminComisionesPage() {
                         </td>
                         <td className="px-3 py-3 text-slate-700">{formatDateTime(item.createdAt)}</td>
                         <td className="px-3 py-3 text-slate-700">{item.beneficiaryName}</td>
-                        <td className="px-3 py-3 text-slate-700">{item.beneficiaryArea}</td>
-                        <td className="px-3 py-3 text-slate-700">{commissionKindLabel(item.commissionKind)}</td>
-                        <td className="px-3 py-3 text-slate-700">{commissionSourceLabel(item.sourceType)}</td>
-                        <td className="px-3 py-3 text-slate-700">
-                          {item.saleOriginType === "directo" ? "Directo" : "Lead"}
-                        </td>
+                        <td className="px-3 py-3 text-slate-700">{commissionOriginSummaryLabel(item)}</td>
                         <td className="px-3 py-3 text-slate-700">{item.isQ ? "Q" : "No Q"}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(item.baseNeta)}</td>
                         <td className="px-3 py-3 text-slate-700">{formatMoney(item.fixedCommission)}</td>
