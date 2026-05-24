@@ -257,8 +257,14 @@ function inferOpcCommissionOriginType(caseItem: AdminCommercialCase): "lead" | "
 
 function inferPayableCommissionSource(caseItem: AdminCommercialCase) {
   const source = caseItem.commission_source_type || null;
-  if (source === "base" || source === "opc" || source === "redes") return source;
+  if (source === "base" || source === "opc" || source === "redes" || source === "otro") {
+    return source;
+  }
   return null;
+}
+
+function isLeadCommissionSource(sourceType: string | null | undefined) {
+  return sourceType === "opc" || sourceType === "redes" || sourceType === "otro";
 }
 
 function extractInitialClassification(value: string | null | undefined) {
@@ -367,7 +373,7 @@ function buildCommissionEntries(
   if (caseItem.call_user_id) {
     const callProfile = profileMap.get(caseItem.call_user_id);
     const isBase = sourceType === "base";
-    const isLeadSource = sourceType === "opc" || sourceType === "redes";
+    const isLeadSource = isLeadCommissionSource(sourceType);
     const fixedCommission = isQ ? (isBase ? 10000 : isLeadSource ? 5000 : 0) : 0;
     const saleCommission = hasSale && (isBase || isLeadSource) ? baseNeta * (isBase ? 0.02 : 0.01) : 0;
 
@@ -407,7 +413,7 @@ const commissionSourceOptions = [
   { value: "base", label: "Base" },
   { value: "opc", label: "OPC" },
   { value: "redes", label: "Redes" },
-  { value: "otro", label: "Otro" },
+  { value: "otro", label: "Referido / Otro" },
 ];
 
 function collaboratorMatchesGroupFilter(
@@ -1340,7 +1346,7 @@ export default function AdminComisionesPage() {
 
         if (supervisorCall) {
           const isBase = sourceType === "base";
-          const isLeadSource = sourceType === "opc" || sourceType === "redes";
+          const isLeadSource = isLeadCommissionSource(sourceType);
           const fixedCommission = isQ ? (isBase ? 6000 : isLeadSource ? 3000 : 0) : 0;
           const saleCommission =
             hasSale && (isBase || isLeadSource) ? baseNeta * (isBase ? 0.02 : 0.01) : 0;

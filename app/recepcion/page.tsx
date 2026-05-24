@@ -427,6 +427,20 @@ function normalizarFuenteManual(value: string | null | undefined) {
   return found?.value || normalized;
 }
 
+function resolveCommercialLeadOriginSource(
+  value: string | null | undefined,
+  options?: { hasRelatedOpc?: boolean }
+) {
+  const normalized = normalizarFuenteManual(value);
+
+  if (options?.hasRelatedOpc || normalized === "opc") return "opc";
+  if (normalized === "redes") return "redes";
+  if (normalized === "base" || normalized === "lead_existente") return "base";
+  if (!normalized || normalized === "tmk") return "otro";
+
+  return "otro";
+}
+
 function normalizeGroupCode(value: string | null | undefined) {
   return (value || "").trim().toUpperCase();
 }
@@ -3843,18 +3857,23 @@ function imprimirRegistroComercial() {
         const fuenteDetalleValor = sourceNeedsUserSelection
           ? selectedSourceUserLabel || ""
           : commercialForm.referido_por.trim();
-      const commissionSourceType =
-        normalizedCommercialSource === "opc"
-          ? "opc"
-          : normalizedCommercialSource === "tmk"
-          ? commercialForm.opc_usuario_id
-            ? "opc"
-            : "base"
-          : normalizedCommercialSource === "redes"
-          ? "redes"
-          : normalizedCommercialSource === "base" || normalizedCommercialSource === "lead_existente"
-          ? "base"
-          : "otro";
+      const appointmentContext = selectedCommercialAppointmentId
+        ? appointments.find((item) => item.id === selectedCommercialAppointmentId) || null
+        : null;
+      const appointmentInferredSource = appointmentContext
+        ? inferirFuenteComercialDesdeCita(appointmentContext)
+        : null;
+      const selectedLeadOriginSource = resolveCommercialLeadOriginSource(normalizedCommercialSource, {
+        hasRelatedOpc:
+          normalizedCommercialSource === "opc" ||
+          Boolean(commercialForm.opc_usuario_id),
+      });
+      const realLeadOriginSource =
+        appointmentInferredSource?.lead_origin_source &&
+        !(appointmentInferredSource.lead_origin_source === "otro" && selectedLeadOriginSource !== "otro")
+          ? appointmentInferredSource.lead_origin_source
+          : selectedLeadOriginSource;
+      const commissionSourceType = realLeadOriginSource;
 
       try {
         const identifier = commercialForm.documento.trim() || commercialForm.phone.trim();
@@ -3959,10 +3978,6 @@ function imprimirRegistroComercial() {
         commercialForm.observaciones ? `Observaciones recepción: ${commercialForm.observaciones}` : "",
       ].filter(Boolean).join(" | ");
 
-      const appointmentContext = selectedCommercialAppointmentId
-        ? appointments.find((item) => item.id === selectedCommercialAppointmentId) || null
-        : null;
-
       if (appointmentContext) {
         const payload: any = {
           status: "asistio",
@@ -3993,7 +4008,7 @@ function imprimirRegistroComercial() {
           city: commercialForm.city.trim() || null,
           status: "pendiente_asignacion_comercial",
           lead_source_type: normalizeCommercialCaseLeadSource(
-            normalizedCommercialSource
+            realLeadOriginSource
           ),
           commission_source_type: commissionSourceType,
           opc_user_id:
@@ -4135,8 +4150,21 @@ function imprimirRegistroComercial() {
       fuente = manualSource;
     }
 
+    const leadOriginCandidate =
+      relatedOpc || (user && isOpcSourceRole(user.role_code))
+        ? "opc"
+        : leadSource && leadSource !== "tmk"
+          ? leadSource
+          : manualSource && manualSource !== "tmk"
+            ? manualSource
+            : fuente;
+    const leadOriginSource = resolveCommercialLeadOriginSource(leadOriginCandidate, {
+      hasRelatedOpc: Boolean(relatedOpc || (user && isOpcSourceRole(user.role_code))),
+    });
+
     return {
       fuente,
+      lead_origin_source: leadOriginSource,
       fuente_grupo: normalizeGroupCode(user?.group_code),
       fuente_usuario_id: user?.id || "",
       fuente_usuario_codigo: user?.employee_code || "",
@@ -4531,19 +4559,8 @@ function imprimirRegistroComercial() {
         customer_name: appointment.patient_name,
         phone: appointment.phone || null,
         city: appointment.city || null,
-        lead_source_type: normalizeCommercialCaseLeadSource(normalizedSource),
-        commission_source_type:
-          normalizedSource === "opc"
-            ? "opc"
-            : normalizedSource === "tmk"
-              ? inferredSource.opc_usuario_id
-                ? "opc"
-                : "base"
-            : normalizedSource === "redes"
-              ? "redes"
-              : normalizedSource === "base" || normalizedSource === "lead_existente"
-                ? "base"
-              : "otro",
+        lead_source_type: normalizeCommercialCaseLeadSource(inferredSource.lead_origin_source),
+        commission_source_type: inferredSource.lead_origin_source,
         opc_user_id:
           normalizedSource === "opc"
             ? inferredSource.fuente_usuario_id || null
