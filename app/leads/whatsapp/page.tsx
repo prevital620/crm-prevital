@@ -65,7 +65,7 @@ function displayName(lead: WhatsappLead) {
   return lead.full_name || lead.profile_name || "Sin nombre";
 }
 
-export default function AdminWhatsappLeadsPage() {
+export default function LeadsWhatsappPage() {
   const [leads, setLeads] = useState<WhatsappLead[]>([]);
   const [status, setStatus] = useState("");
   const [campaignCode, setCampaignCode] = useState("PV_DETOX");
@@ -164,10 +164,10 @@ export default function AdminWhatsappLeadsPage() {
 
           <div className="mt-4 flex flex-wrap gap-3">
             <a
-              href="/admin"
+              href="/leads"
               className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
             >
-              Volver a admin
+              Volver a consultas
             </a>
 
             <button

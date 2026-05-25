@@ -132,7 +132,6 @@ function StatCard({
 export default function AdminPage() {
   const [loadingAuth, setLoadingAuth] = useState(true);
   const [authorized, setAuthorized] = useState(false);
-  const [isSuperUser, setIsSuperUser] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const [cases, setCases] = useState<AdminCommercialCase[]>([]);
@@ -159,7 +158,6 @@ export default function AdminPage() {
 
       if (!session) {
         setAuthorized(false);
-        setIsSuperUser(false);
         setError("Debes iniciar sesión para usar este módulo.");
         return;
       }
@@ -170,12 +168,10 @@ export default function AdminPage() {
 
         if (!normalizedRole || !allowedRoles.includes(normalizedRole)) {
           setAuthorized(false);
-          setIsSuperUser(false);
           setError("No tienes permiso para entrar a Admin.");
           return;
         }
 
-        setIsSuperUser(normalizedRole === "super_user");
         setAuthorized(true);
         return;
       } catch {
@@ -191,17 +187,14 @@ export default function AdminPage() {
 
         if (!fallbackRole || !allowedRoles.includes(fallbackRole)) {
           setAuthorized(false);
-          setIsSuperUser(false);
           setError("No tienes permiso para entrar a Admin.");
           return;
         }
 
-        setIsSuperUser(fallbackRole === "super_user");
         setAuthorized(true);
       }
     } catch (err: unknown) {
       setAuthorized(false);
-      setIsSuperUser(false);
       setError(toSpanishErrorMessage(err, "No se pudo validar el acceso."));
     } finally {
       setLoadingAuth(false);
@@ -455,14 +448,6 @@ export default function AdminPage() {
                 Ver cartera
               </a>
 
-              {isSuperUser ? (
-                <a
-                  href="/admin/whatsapp-leads"
-                  className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
-                >
-                  Leads WhatsApp
-                </a>
-              ) : null}
             </div>
           </section>
 

@@ -138,6 +138,14 @@ function soloFecha(fecha: string | null | undefined) {
   return fecha.slice(0, 10);
 }
 
+function normalizeText(value: string | null | undefined) {
+  return String(value || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/\p{Diacritic}/gu, "")
+    .trim();
+}
+
 function estadoBadge(estado: string | null) {
   switch (estado) {
     case "nuevo":
@@ -198,6 +206,7 @@ export default function LeadsPage() {
   const [creatorNames, setCreatorNames] = useState<Record<string, string>>({});
   const [profileGroupCodes, setProfileGroupCodes] = useState<Record<string, string | null>>({});
   const [currentCommissionGroupCode, setCurrentCommissionGroupCode] = useState<string | null>(null);
+  const [currentProfileName, setCurrentProfileName] = useState<string | null>(null);
   const [opcTeamPromoters, setOpcTeamPromoters] = useState<OpcTeamPromoter[]>([]);
   const [opcWorkSessions, setOpcWorkSessions] = useState<OpcWorkSessionRow[]>([]);
   const [error, setError] = useState("");
@@ -239,6 +248,13 @@ export default function LeadsPage() {
   const showLeadStatusFilters = showSupervisorOpcTools || showTmkSchedulingTools;
 
   const isSuperUser = roleCode === "super_user";
+  const normalizedCurrentProfileName = normalizeText(currentProfileName);
+  const canViewWhatsappLeads =
+    isSuperUser ||
+    (roleCode === "supervisor_call_center" &&
+      currentOperationalGroupCode === "CB" &&
+      normalizedCurrentProfileName.includes("bibiana") &&
+      normalizedCurrentProfileName.includes("calle"));
   const canScheduleFromLeadsList =
     roleCode === "tmk" ||
     roleCode === "confirmador" ||
@@ -465,6 +481,7 @@ export default function LeadsPage() {
         setCreatorNames({});
         setProfileGroupCodes({});
         setCurrentCommissionGroupCode(null);
+        setCurrentProfileName(null);
         return;
       }
 
@@ -485,6 +502,9 @@ export default function LeadsPage() {
       });
 
       const currentGroupCode = groupMap[currentUserId || ""] || null;
+      const currentProfile = ((profilesData as ProfileRow[]) || []).find(
+        (profile) => profile.id === currentUserId
+      );
       const { data: promoterRolesData, error: promoterRolesError } = await supabase
         .from("user_roles")
         .select(`
@@ -573,6 +593,7 @@ export default function LeadsPage() {
       setCreatorNames(namesMap);
       setProfileGroupCodes(groupMap);
       setCurrentCommissionGroupCode(currentGroupCode);
+      setCurrentProfileName(currentProfile?.full_name?.trim() || null);
       setOpcTeamPromoters(teamPromoters);
     } catch (err: any) {
       setError(err?.message || "No se pudieron cargar los leads.");
@@ -1373,6 +1394,15 @@ export default function LeadsPage() {
                 Nuevo lead
               </Link>
             )}
+
+            {canViewWhatsappLeads ? (
+              <Link
+                href="/leads/whatsapp"
+                className="inline-flex items-center rounded-2xl border border-[#CFE4D8] bg-white/85 px-5 py-3 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+              >
+                Leads WhatsApp
+              </Link>
+            ) : null}
 
             <div className="flex flex-wrap gap-2">
               {leadDashboardViews.map((view) => (
