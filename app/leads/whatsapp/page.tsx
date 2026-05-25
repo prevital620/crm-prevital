@@ -16,6 +16,15 @@ type WhatsappLead = {
   created_at: string | null;
 };
 
+type WhatsappMessage = {
+  id: string;
+  phone: string;
+  direction: "inbound" | "outbound" | string;
+  message_id: string | null;
+  body: string | null;
+  created_at: string | null;
+};
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -67,12 +76,19 @@ function displayName(lead: WhatsappLead) {
 
 export default function LeadsWhatsappPage() {
   const [leads, setLeads] = useState<WhatsappLead[]>([]);
+  const [selectedLead, setSelectedLead] = useState<WhatsappLead | null>(null);
+  const [messages, setMessages] = useState<WhatsappMessage[]>([]);
   const [status, setStatus] = useState("");
   const [campaignCode, setCampaignCode] = useState("PV_DETOX");
   const [dateFrom, setDateFrom] = useState(monthStartISO());
   const [dateTo, setDateTo] = useState(todayISO());
   const [loading, setLoading] = useState(true);
+  const [loadingMessages, setLoadingMessages] = useState(false);
+  const [replyMessage, setReplyMessage] = useState("");
+  const [sendingReply, setSendingReply] = useState(false);
   const [error, setError] = useState("");
+  const [conversationError, setConversationError] = useState("");
+  const [conversationNotice, setConversationNotice] = useState("");
 
   const registeredCount = useMemo(
     () => leads.filter((lead) => lead.status === "registered").length,
@@ -106,6 +122,78 @@ export default function LeadsWhatsappPage() {
       setLeads([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadMessages(lead: WhatsappLead) {
+    try {
+      setLoadingMessages(true);
+      setConversationError("");
+      setConversationNotice("");
+
+      const params = new URLSearchParams({ phone: lead.phone });
+      const response = await fetch(`/api/whatsapp/messages?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok) {
+        throw new Error(payload?.error || "No se pudo cargar la conversacion.");
+      }
+
+      setMessages((payload?.messages as WhatsappMessage[]) || []);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar la conversacion.";
+      setConversationError(message);
+      setMessages([]);
+    } finally {
+      setLoadingMessages(false);
+    }
+  }
+
+  function selectLead(lead: WhatsappLead) {
+    setSelectedLead(lead);
+    setReplyMessage("");
+    void loadMessages(lead);
+  }
+
+  async function sendManualReply(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if (!selectedLead || !replyMessage.trim()) {
+      setConversationError("Escribe un mensaje antes de enviarlo.");
+      return;
+    }
+
+    try {
+      setSendingReply(true);
+      setConversationError("");
+      setConversationNotice("");
+
+      const response = await fetch("/api/whatsapp/messages/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: selectedLead.phone,
+          message: replyMessage.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || "No se pudo enviar el mensaje.");
+      }
+
+      setReplyMessage("");
+      setConversationNotice("Mensaje enviado y guardado en el historial.");
+      await loadMessages(selectedLead);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo enviar el mensaje.";
+      setConversationError(message);
+    } finally {
+      setSendingReply(false);
     }
   }
 
@@ -274,7 +362,7 @@ export default function LeadsWhatsappPage() {
           <div className="mb-4 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
             <div>
               <h2 className="text-2xl font-bold text-[#0E2340]">Registros</h2>
-              <p className="mt-1 text-sm text-[#496356]">Solo lectura.</p>
+              <p className="mt-1 text-sm text-[#496356]">Selecciona un lead para ver y responder la conversacion.</p>
             </div>
             {loading ? <p className="text-sm text-[#607368]">Cargando...</p> : null}
           </div>
@@ -290,13 +378,14 @@ export default function LeadsWhatsappPage() {
                   <th className="border-b border-[#DCEDE3] px-4 py-3">Origen</th>
                   <th className="border-b border-[#DCEDE3] px-4 py-3">Estado</th>
                   <th className="border-b border-[#DCEDE3] px-4 py-3">Creacion</th>
+                  <th className="border-b border-[#DCEDE3] px-4 py-3">Conversacion</th>
                 </tr>
               </thead>
               <tbody>
                 {!loading && leads.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={8}
                       className="rounded-2xl border border-dashed border-[#CFE4D8] px-4 py-8 text-center text-[#607368]"
                     >
                       No hay leads para esos filtros.
@@ -305,7 +394,12 @@ export default function LeadsWhatsappPage() {
                 ) : null}
 
                 {leads.map((lead) => (
-                  <tr key={lead.id} className="align-top text-[#10233F]">
+                  <tr
+                    key={lead.id}
+                    className={`align-top text-[#10233F] transition ${
+                      selectedLead?.id === lead.id ? "bg-[#EAF7EF]" : "hover:bg-[#F7FCF8]"
+                    }`}
+                  >
                     <td className="border-b border-[#EDF5EF] px-4 py-4 font-semibold">
                       {displayName(lead)}
                     </td>
@@ -327,12 +421,155 @@ export default function LeadsWhatsappPage() {
                     <td className="border-b border-[#EDF5EF] px-4 py-4">
                       {formatDateTime(lead.created_at)}
                     </td>
+                    <td className="border-b border-[#EDF5EF] px-4 py-4">
+                      <button
+                        type="button"
+                        onClick={() => selectLead(lead)}
+                        className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7]"
+                      >
+                        Ver conversacion
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
         </section>
+
+        {selectedLead ? (
+          <section className={panelClass}>
+            <div className="grid gap-6 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.4fr)]">
+              <div className="rounded-[26px] border border-[#DCEDE3] bg-white/85 p-5">
+                <p className="inline-flex rounded-full border border-[#CFE4D8] bg-[#E8F6EE] px-3 py-1 text-xs font-semibold uppercase tracking-[0.22em] text-[#5F7D66]">
+                  Lead seleccionado
+                </p>
+                <h2 className="mt-4 text-2xl font-bold text-[#0E2340]">
+                  {displayName(selectedLead)}
+                </h2>
+                <dl className="mt-4 space-y-3 text-sm text-[#24312A]">
+                  <div>
+                    <dt className="font-semibold text-[#5B6E63]">Telefono</dt>
+                    <dd>{selectedLead.phone}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-[#5B6E63]">Correo</dt>
+                    <dd>{selectedLead.email || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-[#5B6E63]">Campana</dt>
+                    <dd>{selectedLead.campaign_code || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-[#5B6E63]">Origen</dt>
+                    <dd>{selectedLead.source || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-[#5B6E63]">Estado</dt>
+                    <dd>{statusLabel(selectedLead.status)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-[#5B6E63]">Creacion</dt>
+                    <dd>{formatDateTime(selectedLead.created_at)}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              <div className="rounded-[26px] border border-[#DCEDE3] bg-white/85 p-5">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                  <div>
+                    <h2 className="text-2xl font-bold text-[#0E2340]">Conversacion</h2>
+                    <p className="mt-1 text-sm leading-6 text-[#496356]">
+                      Puedes responder libremente dentro de la ventana de 24 horas desde el ultimo mensaje del usuario. Para mensajes posteriores se necesitaran plantillas aprobadas.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => void loadMessages(selectedLead)}
+                    disabled={loadingMessages}
+                    className="inline-flex items-center justify-center rounded-2xl border border-[#CFE4D8] bg-white/90 px-4 py-2 text-sm font-medium text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 hover:border-[#9BC4AF] hover:bg-[#F5FCF7] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {loadingMessages ? "Actualizando..." : "Actualizar conversacion"}
+                  </button>
+                </div>
+
+                {conversationError ? (
+                  <div className="mt-4 rounded-2xl border border-[#E6C9C5] bg-[#FFF5F3] p-3 text-sm text-[#9A4E43]">
+                    {conversationError}
+                  </div>
+                ) : null}
+
+                {conversationNotice ? (
+                  <div className="mt-4 rounded-2xl border border-[#BFE0CD] bg-[#F1FBF5] p-3 text-sm text-[#2D6B4A]">
+                    {conversationNotice}
+                  </div>
+                ) : null}
+
+                <div className="mt-5 max-h-[520px] space-y-3 overflow-y-auto rounded-[24px] border border-[#EDF5EF] bg-[#F8FCF9] p-4">
+                  {loadingMessages ? (
+                    <p className="text-sm text-[#607368]">Cargando conversacion...</p>
+                  ) : messages.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-[#CFE4D8] bg-white/80 px-4 py-8 text-center text-sm text-[#607368]">
+                      No hay mensajes guardados para este telefono.
+                    </p>
+                  ) : (
+                    messages.map((message) => {
+                      const isOutbound = message.direction === "outbound";
+
+                      return (
+                        <div
+                          key={message.id}
+                          className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
+                        >
+                          <div
+                            className={`max-w-[82%] rounded-[22px] px-4 py-3 shadow-sm ${
+                              isOutbound
+                                ? "bg-[#456A55] text-white"
+                                : "border border-[#DCEDE3] bg-white text-[#10233F]"
+                            }`}
+                          >
+                            <p className="whitespace-pre-wrap text-sm leading-6">
+                              {message.body || "-"}
+                            </p>
+                            <p
+                              className={`mt-2 text-[11px] ${
+                                isOutbound ? "text-white/75" : "text-[#607368]"
+                              }`}
+                            >
+                              {isOutbound ? "Enviado" : "Recibido"} · {formatDateTime(message.created_at)}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+
+                <form onSubmit={sendManualReply} className="mt-5 space-y-3">
+                  <label className="block text-sm font-semibold text-[#24312A]">
+                    Respuesta manual
+                  </label>
+                  <textarea
+                    className={`${inputClass} min-h-28 resize-y`}
+                    value={replyMessage}
+                    onChange={(event) => setReplyMessage(event.target.value)}
+                    placeholder="Escribe la respuesta para WhatsApp..."
+                    disabled={sendingReply}
+                  />
+                  <div className="flex justify-end">
+                    <button
+                      type="submit"
+                      disabled={sendingReply || !replyMessage.trim()}
+                      className="inline-flex min-h-[48px] items-center justify-center rounded-2xl bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-5 py-2 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {sendingReply ? "Enviando..." : "Enviar"}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          </section>
+        ) : null}
       </div>
     </main>
   );
