@@ -39,6 +39,7 @@ type WhatsappLeadRow = {
   safe_deadline_at: string | null;
   felicitation_scheduled_for: string | null;
   felicitation_sent_at: string | null;
+  after_hours_ack_sent_at: string | null;
 };
 
 type InboundTextMessage = {
@@ -69,6 +70,9 @@ const ALREADY_REGISTERED_MESSAGE =
 
 const UPDATE_DATA_MESSAGE =
   "Claro \ud83d\ude0a Para actualizar tu inscripci\u00f3n, por favor env\u00edanos nuevamente tu nombre completo.";
+
+const AFTER_HOURS_ACK_MESSAGE =
+  "\u00a1Gracias por responder! \ud83d\udc9a\n\nTu mensaje qued\u00f3 registrado. Nuestro equipo de Prevital te contactar\u00e1 en horario de atenci\u00f3n para ayudarte a coordinar tu cita.\n\nHorario de atenci\u00f3n: lunes a s\u00e1bado de 8:00 a. m. a 6:00 p. m. \ud83c\udf3f";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -107,6 +111,21 @@ function maskPhone(value: string | null | undefined) {
   if (!value) return null;
   if (value.length <= 4) return "****";
   return `${value.slice(0, 2)}***${value.slice(-4)}`;
+}
+
+function isWithinAttentionHours(date: Date) {
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Bogota",
+    weekday: "short",
+    hour: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const weekday = values.weekday || "";
+  const hour = Number(values.hour);
+  const isSunday = weekday.toLowerCase().startsWith("sun") || weekday.toLowerCase().startsWith("dom");
+
+  return !isSunday && hour >= 8 && hour < 18;
 }
 
 function logWebhookDebugSummary(payload: unknown) {
@@ -260,7 +279,7 @@ async function getLeadByPhone(phone: string) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_leads")
     .select(
-      "id, phone, profile_name, full_name, email, status, last_inbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at"
+      "id, phone, profile_name, full_name, email, status, last_inbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at, after_hours_ack_sent_at"
     )
     .eq("phone", phone)
     .maybeSingle();
@@ -387,17 +406,30 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
     return;
   }
 
-  if (currentLead.status === "felicitacion_enviada") {
+  if (
+    currentLead.status === "felicitacion_enviada" ||
+    currentLead.status === "respondio_para_agendar"
+  ) {
+    const shouldSendAfterHoursAck =
+      !currentLead.after_hours_ack_sent_at && !isWithinAttentionHours(inboundAt);
+    const afterHoursAckSentAt = shouldSendAfterHoursAck
+      ? new Date().toISOString()
+      : currentLead.after_hours_ack_sent_at;
+
     const { error } = await supabaseAdmin
       .from("whatsapp_leads")
       .update({
         status: "respondio_para_agendar",
         priority: "alta",
+        after_hours_ack_sent_at: afterHoursAckSentAt,
         ...inboundWindowFields,
       })
       .eq("id", currentLead.id);
 
     if (error) throw error;
+    if (shouldSendAfterHoursAck) {
+      await replyToLead(message.from, AFTER_HOURS_ACK_MESSAGE);
+    }
     return;
   }
 
