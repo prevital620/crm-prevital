@@ -9,6 +9,15 @@ const allowedStatuses = new Set([
   "collecting_name",
   "collecting_email",
   "registered",
+  "registrado",
+  "felicitacion_programada",
+  "felicitacion_enviada",
+  "respondio_para_agendar",
+  "en_gestion_callcenter",
+  "agendado",
+  "sin_respuesta",
+  "requiere_template",
+  "cerrado",
 ]);
 
 function normalizeTextParam(value: string | null) {
@@ -46,7 +55,7 @@ export async function GET(request: Request) {
     let query = supabaseAdmin
       .from("whatsapp_leads")
       .select(
-        "id, phone, profile_name, full_name, email, campaign_code, source, status, created_at"
+        "id, phone, profile_name, full_name, email, campaign_code, source, status, created_at, last_inbound_at, last_outbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at, selected_at, assigned_to, notes, priority"
       )
       .order("created_at", { ascending: false })
       .limit(500);

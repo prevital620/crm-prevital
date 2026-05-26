@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getErrorMessage } from "@/lib/server/user-security";
 import { requireWhatsappLeadsAccess } from "@/lib/server/whatsapp-access";
-import { sendWhatsAppTextMessage } from "@/lib/whatsapp/sendMessage";
+import { sendAndStoreTextMessage } from "@/lib/whatsapp/outbound";
 
 export const dynamic = "force-dynamic";
 
@@ -38,7 +38,35 @@ export async function POST(request: Request) {
       );
     }
 
-    const sendResult = await sendWhatsAppTextMessage(phone, message);
+    const { data: lead, error: leadError } = await supabaseAdmin
+      .from("whatsapp_leads")
+      .select("id, status, reply_window_expires_at")
+      .eq("phone", phone)
+      .maybeSingle();
+
+    if (leadError) {
+      return NextResponse.json(
+        { success: false, error: leadError.message || "No se pudo validar el lead." },
+        { status: 400 }
+      );
+    }
+
+    const replyWindowExpiresAt = lead?.reply_window_expires_at
+      ? new Date(lead.reply_window_expires_at)
+      : null;
+
+    if (!replyWindowExpiresAt || new Date() >= replyWindowExpiresAt) {
+      return NextResponse.json(
+        {
+          success: false,
+          error:
+            "La ventana de 24 horas para mensajes libres esta vencida. Este caso requiere plantilla aprobada.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const sendResult = await sendAndStoreTextMessage(phone, message);
 
     if (!sendResult.ok) {
       return NextResponse.json(
@@ -52,33 +80,20 @@ export async function POST(request: Request) {
       );
     }
 
-    const outboundPayload = {
-      provider: "meta_whatsapp_cloud_api",
-      manual: true,
-      sent_by_user_id: authCheck.user.id,
-      meta_message_id: sendResult.messageId || null,
-      response: sendResult.raw || null,
-    };
+    if (lead?.id) {
+      const nextStatus =
+        lead.status === "respondio_para_agendar"
+          ? "en_gestion_callcenter"
+          : lead.status;
 
-    const { error: insertError } = await supabaseAdmin
-      .from("whatsapp_messages")
-      .insert({
-        phone,
-        direction: "outbound",
-        message_id: sendResult.messageId || null,
-        body: message,
-        payload: outboundPayload,
-      });
-
-    if (insertError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error:
-            "El mensaje fue enviado, pero no se pudo guardar en el historial. Reporta este caso a sistemas.",
-        },
-        { status: 500 }
-      );
+      await supabaseAdmin
+        .from("whatsapp_leads")
+        .update({
+          status: nextStatus,
+          last_outbound_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", lead.id);
     }
 
     return NextResponse.json({

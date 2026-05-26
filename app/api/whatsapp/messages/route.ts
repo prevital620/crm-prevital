@@ -33,7 +33,9 @@ export async function GET(request: Request) {
 
     const { data, error } = await supabaseAdmin
       .from("whatsapp_messages")
-      .select("id, phone, direction, message_id, body, created_at")
+      .select(
+        "id, phone, direction, message_id, body, created_at, message_type, media_url, media_caption, meta_message_id, status, error"
+      )
       .eq("phone", phone)
       .order("created_at", { ascending: true })
       .limit(300);

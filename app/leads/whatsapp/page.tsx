@@ -14,6 +14,16 @@ type WhatsappLead = {
   source: string | null;
   status: string | null;
   created_at: string | null;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
+  reply_window_expires_at: string | null;
+  safe_deadline_at: string | null;
+  felicitation_scheduled_for: string | null;
+  felicitation_sent_at: string | null;
+  selected_at: string | null;
+  assigned_to: string | null;
+  notes: string | null;
+  priority: string | null;
 };
 
 type WhatsappMessage = {
@@ -23,6 +33,12 @@ type WhatsappMessage = {
   message_id: string | null;
   body: string | null;
   created_at: string | null;
+  message_type: string | null;
+  media_url: string | null;
+  media_caption: string | null;
+  meta_message_id: string | null;
+  status: string | null;
+  error: string | null;
 };
 
 const panelClass =
@@ -51,6 +67,15 @@ function statusLabel(status: string | null | undefined) {
     collecting_name: "Pidiendo nombre",
     collecting_email: "Pidiendo correo",
     registered: "Registrado",
+    registrado: "Registrado",
+    felicitacion_programada: "Felicitacion programada",
+    felicitacion_enviada: "Felicitacion enviada",
+    respondio_para_agendar: "Respondio para agendar",
+    en_gestion_callcenter: "En gestion Call Center",
+    agendado: "Agendado",
+    sin_respuesta: "Sin respuesta",
+    requiere_template: "Requiere plantilla",
+    cerrado: "Cerrado",
   };
 
   if (!status) return "Sin estado";
@@ -74,6 +99,37 @@ function displayName(lead: WhatsappLead) {
   return lead.full_name || lead.profile_name || "Sin nombre";
 }
 
+function isInboundWithoutAnswer(lead: WhatsappLead) {
+  if (!lead.last_inbound_at) return false;
+  if (!lead.last_outbound_at) return true;
+  return new Date(lead.last_inbound_at).getTime() > new Date(lead.last_outbound_at).getTime();
+}
+
+function isWindowExpiringSoon(lead: WhatsappLead) {
+  if (!lead.reply_window_expires_at || lead.status === "requiere_template") return false;
+  const now = Date.now();
+  const expiresAt = new Date(lead.reply_window_expires_at).getTime();
+  return expiresAt > now && expiresAt - now <= 2 * 60 * 60 * 1000;
+}
+
+function isScheduledToday(lead: WhatsappLead) {
+  if (!lead.felicitation_scheduled_for) return false;
+  const today = new Date().toLocaleDateString("en-CA", { timeZone: "America/Bogota" });
+  const scheduledDay = new Date(lead.felicitation_scheduled_for).toLocaleDateString("en-CA", {
+    timeZone: "America/Bogota",
+  });
+  return today === scheduledDay;
+}
+
+function queuePriority(lead: WhatsappLead) {
+  if (lead.status === "respondio_para_agendar") return 1;
+  if (isInboundWithoutAnswer(lead)) return 2;
+  if (isWindowExpiringSoon(lead)) return 3;
+  if (lead.status === "felicitacion_programada") return 4;
+  if (lead.status === "registrado" || lead.status === "registered") return 5;
+  return 9;
+}
+
 export default function LeadsWhatsappPage() {
   const [leads, setLeads] = useState<WhatsappLead[]>([]);
   const [selectedLead, setSelectedLead] = useState<WhatsappLead | null>(null);
@@ -90,8 +146,37 @@ export default function LeadsWhatsappPage() {
   const [conversationError, setConversationError] = useState("");
   const [conversationNotice, setConversationNotice] = useState("");
 
-  const registeredCount = useMemo(
-    () => leads.filter((lead) => lead.status === "registered").length,
+  const sortedLeads = useMemo(
+    () =>
+      [...leads].sort((a, b) => {
+        const priorityDiff = queuePriority(a) - queuePriority(b);
+        if (priorityDiff !== 0) return priorityDiff;
+
+        const aSchedule = a.felicitation_scheduled_for
+          ? new Date(a.felicitation_scheduled_for).getTime()
+          : Number.MAX_SAFE_INTEGER;
+        const bSchedule = b.felicitation_scheduled_for
+          ? new Date(b.felicitation_scheduled_for).getTime()
+          : Number.MAX_SAFE_INTEGER;
+        if (aSchedule !== bSchedule) return aSchedule - bSchedule;
+
+        return (
+          new Date(b.created_at || 0).getTime() -
+          new Date(a.created_at || 0).getTime()
+        );
+      }),
+    [leads]
+  );
+
+  const counters = useMemo(
+    () => ({
+      pendientesPorAgendar: leads.filter((lead) => lead.status === "respondio_para_agendar")
+        .length,
+      respuestasSinAtender: leads.filter(isInboundWithoutAnswer).length,
+      ventanaPorVencer: leads.filter(isWindowExpiringSoon).length,
+      requierenPlantilla: leads.filter((lead) => lead.status === "requiere_template").length,
+      felicitacionesHoy: leads.filter(isScheduledToday).length,
+    }),
     [leads]
   );
 
@@ -115,7 +200,12 @@ export default function LeadsWhatsappPage() {
         throw new Error(payload?.error || "No se pudieron cargar los leads.");
       }
 
-      setLeads((payload?.leads as WhatsappLead[]) || []);
+      const nextLeads = (payload?.leads as WhatsappLead[]) || [];
+      setLeads(nextLeads);
+      if (selectedLead) {
+        const refreshedSelectedLead = nextLeads.find((lead) => lead.id === selectedLead.id);
+        if (refreshedSelectedLead) setSelectedLead(refreshedSelectedLead);
+      }
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar los leads.";
       setError(message);
@@ -268,23 +358,31 @@ export default function LeadsWhatsappPage() {
           </div>
         </section>
 
-        <section className="grid gap-4 md:grid-cols-3">
+        <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
           <div className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-white/95 p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
             <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
-            <p className="text-sm font-medium text-[#5B6E63]">Total filtrado</p>
-            <p className="mt-2 text-3xl font-bold text-[#24312A]">{leads.length}</p>
+            <p className="text-sm font-medium text-[#5B6E63]">Pendientes por agendar</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{counters.pendientesPorAgendar}</p>
           </div>
           <div className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-white/95 p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
             <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
-            <p className="text-sm font-medium text-[#5B6E63]">Registrados</p>
-            <p className="mt-2 text-3xl font-bold text-[#24312A]">{registeredCount}</p>
+            <p className="text-sm font-medium text-[#5B6E63]">Respuestas sin atender</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{counters.respuestasSinAtender}</p>
           </div>
           <div className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-white/95 p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
             <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
-            <p className="text-sm font-medium text-[#5B6E63]">Campana</p>
-            <p className="mt-2 text-3xl font-bold text-[#24312A]">
-              {campaignCode.trim() || "Todas"}
-            </p>
+            <p className="text-sm font-medium text-[#5B6E63]">Ventana por vencer</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{counters.ventanaPorVencer}</p>
+          </div>
+          <div className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-white/95 p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
+            <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
+            <p className="text-sm font-medium text-[#5B6E63]">Requieren plantilla</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{counters.requierenPlantilla}</p>
+          </div>
+          <div className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-white/95 p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]">
+            <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
+            <p className="text-sm font-medium text-[#5B6E63]">Felicitaciones hoy</p>
+            <p className="mt-2 text-3xl font-bold text-[#24312A]">{counters.felicitacionesHoy}</p>
           </div>
         </section>
 
@@ -300,7 +398,13 @@ export default function LeadsWhatsappPage() {
                 <option value="">Todos</option>
                 <option value="collecting_name">Pidiendo nombre</option>
                 <option value="collecting_email">Pidiendo correo</option>
-                <option value="registered">Registrado</option>
+                <option value="registrado">Registrados</option>
+                <option value="felicitacion_programada">Felicitacion programada</option>
+                <option value="felicitacion_enviada">Felicitacion enviada</option>
+                <option value="respondio_para_agendar">Respondio para agendar</option>
+                <option value="requiere_template">Requiere plantilla</option>
+                <option value="agendado">Agendados</option>
+                <option value="cerrado">Cerrados</option>
               </select>
             </div>
 
@@ -377,6 +481,8 @@ export default function LeadsWhatsappPage() {
                   <th className="border-b border-[#DCEDE3] px-4 py-3">Campana</th>
                   <th className="border-b border-[#DCEDE3] px-4 py-3">Origen</th>
                   <th className="border-b border-[#DCEDE3] px-4 py-3">Estado</th>
+                  <th className="border-b border-[#DCEDE3] px-4 py-3">Programada</th>
+                  <th className="border-b border-[#DCEDE3] px-4 py-3">Ventana</th>
                   <th className="border-b border-[#DCEDE3] px-4 py-3">Creacion</th>
                   <th className="border-b border-[#DCEDE3] px-4 py-3">Conversacion</th>
                 </tr>
@@ -385,7 +491,7 @@ export default function LeadsWhatsappPage() {
                 {!loading && leads.length === 0 ? (
                   <tr>
                     <td
-                      colSpan={8}
+                      colSpan={10}
                       className="rounded-2xl border border-dashed border-[#CFE4D8] px-4 py-8 text-center text-[#607368]"
                     >
                       No hay leads para esos filtros.
@@ -393,7 +499,7 @@ export default function LeadsWhatsappPage() {
                   </tr>
                 ) : null}
 
-                {leads.map((lead) => (
+                {sortedLeads.map((lead) => (
                   <tr
                     key={lead.id}
                     className={`align-top text-[#10233F] transition ${
@@ -417,6 +523,12 @@ export default function LeadsWhatsappPage() {
                       <span className="inline-flex rounded-full bg-[#E8F6EE] px-3 py-1 text-xs font-semibold text-[#4F6F5B] ring-1 ring-[#CFE4D8]">
                         {statusLabel(lead.status)}
                       </span>
+                    </td>
+                    <td className="border-b border-[#EDF5EF] px-4 py-4">
+                      {formatDateTime(lead.felicitation_scheduled_for)}
+                    </td>
+                    <td className="border-b border-[#EDF5EF] px-4 py-4">
+                      {formatDateTime(lead.reply_window_expires_at)}
                     </td>
                     <td className="border-b border-[#EDF5EF] px-4 py-4">
                       {formatDateTime(lead.created_at)}
@@ -471,6 +583,14 @@ export default function LeadsWhatsappPage() {
                   <div>
                     <dt className="font-semibold text-[#5B6E63]">Creacion</dt>
                     <dd>{formatDateTime(selectedLead.created_at)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-[#5B6E63]">Felicitacion programada</dt>
+                    <dd>{formatDateTime(selectedLead.felicitation_scheduled_for)}</dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-[#5B6E63]">Ventana 24h vence</dt>
+                    <dd>{formatDateTime(selectedLead.reply_window_expires_at)}</dd>
                   </div>
                 </dl>
               </div>
@@ -528,9 +648,21 @@ export default function LeadsWhatsappPage() {
                                 : "border border-[#DCEDE3] bg-white text-[#10233F]"
                             }`}
                           >
+                            {message.message_type === "image" && message.media_url ? (
+                              <img
+                                src={message.media_url}
+                                alt={message.media_caption || "Imagen WhatsApp"}
+                                className="mb-3 max-h-64 rounded-2xl object-contain"
+                              />
+                            ) : null}
                             <p className="whitespace-pre-wrap text-sm leading-6">
-                              {message.body || "-"}
+                              {message.body || message.media_caption || "-"}
                             </p>
+                            {message.error ? (
+                              <p className="mt-2 text-[11px] text-[#FBD0C9]">
+                                {message.error}
+                              </p>
+                            ) : null}
                             <p
                               className={`mt-2 text-[11px] ${
                                 isOutbound ? "text-white/75" : "text-[#607368]"

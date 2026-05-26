@@ -1,6 +1,10 @@
 import { after, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
-import { sendWhatsAppTextMessage } from "@/lib/whatsapp/sendMessage";
+import {
+  sendAndStoreImageMessage,
+  sendAndStoreTextMessage,
+} from "@/lib/whatsapp/outbound";
+import { calculateFelicitationSchedule } from "@/lib/whatsapp/scheduling";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -9,7 +13,19 @@ const EMPRESA = "Prevital";
 const CAMPAIGN_CODE = "PV_DETOX";
 const SOURCE = "WhatsApp SaleADS";
 
-type WhatsappLeadStatus = "collecting_name" | "collecting_email" | "registered";
+type WhatsappLeadStatus =
+  | "collecting_name"
+  | "collecting_email"
+  | "registered"
+  | "registrado"
+  | "felicitacion_programada"
+  | "felicitacion_enviada"
+  | "respondio_para_agendar"
+  | "en_gestion_callcenter"
+  | "agendado"
+  | "sin_respuesta"
+  | "requiere_template"
+  | "cerrado";
 
 type WhatsappLeadRow = {
   id: string;
@@ -18,6 +34,11 @@ type WhatsappLeadRow = {
   full_name: string | null;
   email: string | null;
   status: WhatsappLeadStatus;
+  last_inbound_at: string | null;
+  reply_window_expires_at: string | null;
+  safe_deadline_at: string | null;
+  felicitation_scheduled_for: string | null;
+  felicitation_sent_at: string | null;
 };
 
 type InboundTextMessage = {
@@ -41,7 +62,7 @@ const INVALID_EMAIL_MESSAGE =
   "Parece que el correo no qued\u00f3 completo. \u00bfNos lo puedes enviar nuevamente, por favor?";
 
 const REGISTERED_MESSAGE =
-  "\u00a1Listo! Tu inscripci\u00f3n qued\u00f3 confirmada \ud83d\udc9a\n\nSi sales elegido/a, nuestro equipo de Prevital te contactar\u00e1 para coordinar tu experiencia. Gracias por participar.";
+  "\u00a1Listo! \ud83d\udc9a Tu inscripci\u00f3n qued\u00f3 confirmada.\n\nGracias por participar en la campa\u00f1a de Detox I\u00f3nico de Prevital \ud83c\udf3f\n\nNuestro equipo revisar\u00e1 tu registro y, si eres seleccionado/a, te contactaremos por este mismo medio.";
 
 const ALREADY_REGISTERED_MESSAGE =
   "Tu inscripci\u00f3n ya est\u00e1 registrada \ud83d\udc9a Si necesitas actualizar alg\u00fan dato, escr\u00edbenos: actualizar datos.";
@@ -68,6 +89,18 @@ function normalizeText(value: string) {
 
 function looksLikeEmail(value: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/i.test(value.trim());
+}
+
+function parseInboundTimestamp(timestamp: string | null) {
+  if (!timestamp) return new Date();
+
+  const numeric = Number(timestamp);
+  if (Number.isFinite(numeric) && numeric > 0) {
+    return new Date(numeric * 1000);
+  }
+
+  const parsed = new Date(timestamp);
+  return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 }
 
 function maskPhone(value: string | null | undefined) {
@@ -190,7 +223,10 @@ async function insertInboundMessage(message: InboundTextMessage) {
     phone: message.from,
     direction: "inbound",
     message_id: message.messageId,
+    meta_message_id: message.messageId,
+    message_type: "text",
     body: message.body,
+    status: "received",
     payload: {
       phone_number_id: message.phoneNumberId,
       wa_id: message.waId,
@@ -209,29 +245,8 @@ async function insertInboundMessage(message: InboundTextMessage) {
   throw error;
 }
 
-async function saveOutboundMessage(phone: string, body: string, sendResult: unknown) {
-  const resultRecord = asRecord(sendResult);
-  const messageId = asString(resultRecord?.messageId) || null;
-
-  const { error } = await supabaseAdmin.from("whatsapp_messages").insert({
-    phone,
-    direction: "outbound",
-    message_id: messageId,
-    body,
-    payload: sendResult ?? null,
-  });
-
-  if (error && error.code !== "23505") {
-    console.error("[whatsapp] Could not store outbound message.", {
-      phone,
-      error: error.message,
-    });
-  }
-}
-
 async function replyToLead(phone: string, body: string) {
-  const result = await sendWhatsAppTextMessage(phone, body);
-  await saveOutboundMessage(phone, body, result);
+  return sendAndStoreTextMessage(phone, body);
 }
 
 async function createCrmLeadFromWhatsapp(_lead: WhatsappLeadRow) {
@@ -244,7 +259,9 @@ async function createCrmLeadFromWhatsapp(_lead: WhatsappLeadRow) {
 async function getLeadByPhone(phone: string) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_leads")
-    .select("id, phone, profile_name, full_name, email, status")
+    .select(
+      "id, phone, profile_name, full_name, email, status, last_inbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at"
+    )
     .eq("phone", phone)
     .maybeSingle();
 
@@ -265,6 +282,21 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
   const currentLead = await getLeadByPhone(message.from);
   const text = message.body.trim();
   const normalizedText = normalizeText(text);
+  const inboundAt = parseInboundTimestamp(message.timestamp);
+  const schedule = calculateFelicitationSchedule(inboundAt);
+  const inboundWindowFields = {
+    last_inbound_at: inboundAt.toISOString(),
+    reply_window_expires_at: schedule.replyWindowExpiresAt.toISOString(),
+    safe_deadline_at: schedule.safeDeadlineAt.toISOString(),
+    raw_last_message: {
+      phone_number_id: message.phoneNumberId,
+      wa_id: message.waId,
+      message_id: message.messageId,
+      timestamp: message.timestamp,
+      text: message.body,
+    },
+    updated_at: new Date().toISOString(),
+  };
 
   if (!currentLead) {
     const { error } = await supabaseAdmin.from("whatsapp_leads").insert({
@@ -274,13 +306,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
       campaign_code: CAMPAIGN_CODE,
       source: SOURCE,
       status: "collecting_name",
-      raw_last_message: {
-        phone_number_id: message.phoneNumberId,
-        wa_id: message.waId,
-        message_id: message.messageId,
-        timestamp: message.timestamp,
-        text: message.body,
-      },
+      ...inboundWindowFields,
     });
 
     if (error) throw error;
@@ -293,8 +319,9 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
       .from("whatsapp_leads")
       .update({
         status: "collecting_name",
-        raw_last_message: message.payload,
-        updated_at: new Date().toISOString(),
+        felicitation_scheduled_for: null,
+        felicitation_sent_at: null,
+        ...inboundWindowFields,
       })
       .eq("id", currentLead.id);
 
@@ -310,8 +337,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
         full_name: text,
         profile_name: currentLead.profile_name || message.profileName,
         status: "collecting_email",
-        raw_last_message: message.payload,
-        updated_at: new Date().toISOString(),
+        ...inboundWindowFields,
       })
       .eq("id", currentLead.id);
 
@@ -322,28 +348,63 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
 
   if (currentLead.status === "collecting_email") {
     if (!looksLikeEmail(text)) {
+      await supabaseAdmin
+        .from("whatsapp_leads")
+        .update(inboundWindowFields)
+        .eq("id", currentLead.id);
       await replyToLead(message.from, INVALID_EMAIL_MESSAGE);
       return;
     }
+
+    const scheduleStatus = schedule.canSchedule
+      ? "felicitacion_programada"
+      : "requiere_template";
 
     const { data: updatedLead, error } = await supabaseAdmin
       .from("whatsapp_leads")
       .update({
         email: text.toLowerCase(),
         profile_name: currentLead.profile_name || message.profileName,
-        status: "registered",
-        raw_last_message: message.payload,
-        updated_at: new Date().toISOString(),
+        status: scheduleStatus,
+        felicitation_scheduled_for: schedule.canSchedule
+          ? schedule.felicitationScheduledFor.toISOString()
+          : null,
+        selected_at: null,
+        ...inboundWindowFields,
       })
       .eq("id", currentLead.id)
-      .select("id, phone, profile_name, full_name, email, status")
+      .select("id, phone, profile_name, full_name, email, status, last_inbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at")
       .single();
 
     if (error) throw error;
     await createCrmLeadFromWhatsapp(updatedLead as WhatsappLeadRow);
     await replyToLead(message.from, REGISTERED_MESSAGE);
+    await sendAndStoreImageMessage(
+      message.from,
+      process.env.WHATSAPP_IMAGE_INSCRIPCION_URL,
+      "Inscripci\u00f3n confirmada Detox I\u00f3nico Prevital"
+    );
     return;
   }
+
+  if (currentLead.status === "felicitacion_enviada") {
+    const { error } = await supabaseAdmin
+      .from("whatsapp_leads")
+      .update({
+        status: "respondio_para_agendar",
+        priority: "alta",
+        ...inboundWindowFields,
+      })
+      .eq("id", currentLead.id);
+
+    if (error) throw error;
+    return;
+  }
+
+  await supabaseAdmin
+    .from("whatsapp_leads")
+    .update(inboundWindowFields)
+    .eq("id", currentLead.id);
 
   await replyToLead(message.from, ALREADY_REGISTERED_MESSAGE);
 }

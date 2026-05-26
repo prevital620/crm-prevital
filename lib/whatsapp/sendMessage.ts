@@ -1,6 +1,6 @@
 import "server-only";
 
-type SendWhatsAppTextMessageResult = {
+type SendWhatsAppMessageResult = {
   ok: boolean;
   messageId?: string;
   status?: number;
@@ -15,7 +15,33 @@ function getWhatsAppApiVersion() {
 export async function sendWhatsAppTextMessage(
   phone: string,
   message: string
-): Promise<SendWhatsAppTextMessageResult> {
+): Promise<SendWhatsAppMessageResult> {
+  return sendWhatsAppMessage(phone, {
+    type: "text",
+    text: {
+      body: message,
+    },
+  });
+}
+
+export async function sendWhatsAppImageMessage(
+  phone: string,
+  imageUrl: string,
+  caption?: string
+): Promise<SendWhatsAppMessageResult> {
+  return sendWhatsAppMessage(phone, {
+    type: "image",
+    image: {
+      link: imageUrl,
+      ...(caption ? { caption } : {}),
+    },
+  });
+}
+
+async function sendWhatsAppMessage(
+  phone: string,
+  messagePayload: Record<string, unknown>
+): Promise<SendWhatsAppMessageResult> {
   const accessToken = process.env.WHATSAPP_ACCESS_TOKEN;
   const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
@@ -41,10 +67,7 @@ export async function sendWhatsAppTextMessage(
         body: JSON.stringify({
           messaging_product: "whatsapp",
           to: phone,
-          type: "text",
-          text: {
-            body: message,
-          },
+          ...messagePayload,
         }),
       }
     );
