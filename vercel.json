@@ -1,8 +1,0 @@
-{
-  "crons": [
-    {
-      "path": "/api/whatsapp/process-scheduled",
-      "schedule": "0 13 * * *"
-    }
-  ]
-}
