@@ -161,9 +161,12 @@ function isScheduledToday(lead: WhatsappLead) {
 function queuePriority(lead: WhatsappLead) {
   if (lead.status === "respondio_para_agendar") return 1;
   if (isInboundWithoutAnswer(lead)) return 2;
-  if (isWindowExpiringSoon(lead)) return 3;
+  if (lead.status === "requiere_template") return 3;
+  if (isWindowExpiringSoon(lead)) return 4;
   if (lead.status === "felicitacion_programada") return 4;
-  if (lead.status === "registrado" || lead.status === "registered") return 5;
+  if (lead.status === "felicitacion_enviada") return 5;
+  if (lead.status === "registrado" || lead.status === "registered") return 6;
+  if (lead.status === "agendado" || lead.status === "cerrado") return 10;
   return 9;
 }
 
@@ -174,6 +177,40 @@ function conversationBadge(lead: WhatsappLead) {
   if (isWindowExpiringSoon(lead)) return "Ventana por vencer";
   if (isInboundWithoutAnswer(lead)) return "Pendiente";
   return statusLabel(lead.status);
+}
+
+function normalizedStatus(status: string | null | undefined) {
+  if (status === "registered") return "registrado";
+  if (status === "no_response") return "sin_respuesta";
+  return status || "sin_estado";
+}
+
+function statusTone(status: string | null | undefined) {
+  const tones: Record<string, string> = {
+    registrado: "border-[#BFE0CD] bg-[#EAF7EF] text-[#2F6B4E] ring-[#BFE0CD]",
+    felicitacion_programada: "border-[#BFD7EA] bg-[#EAF4FB] text-[#315E7D] ring-[#BFD7EA]",
+    felicitacion_enviada: "border-[#D8C8EA] bg-[#F1ECFA] text-[#6B4F8E] ring-[#D8C8EA]",
+    respondio_para_agendar: "border-[#EEC6B8] bg-[#FFF0E9] text-[#9A4E2E] ring-[#EEC6B8]",
+    en_gestion_callcenter: "border-[#BCE1DE] bg-[#E9F8F6] text-[#2B706E] ring-[#BCE1DE]",
+    agendado: "border-[#7FA287] bg-[#D9F0E1] text-[#23563C] ring-[#9BC4AF]",
+    sin_respuesta: "border-[#D7DDD9] bg-[#F1F4F2] text-[#596660] ring-[#D7DDD9]",
+    requiere_template: "border-[#E8D49D] bg-[#FFF7D9] text-[#8B6B22] ring-[#E8D49D]",
+    cerrado: "border-[#B8C0BD] bg-[#E6EAE8] text-[#3E4945] ring-[#B8C0BD]",
+  };
+
+  return tones[normalizedStatus(status)] || "border-[#CFE4D8] bg-[#F4FAF6] text-[#4F6F5B] ring-[#CFE4D8]";
+}
+
+function leadCardTone(lead: WhatsappLead, selected: boolean) {
+  if (lead.status === "respondio_para_agendar") {
+    return selected
+      ? "border-[#D98D72] bg-[#FFF4EF] shadow-[0_16px_34px_rgba(154,78,46,0.16)]"
+      : "border-[#EEC6B8] bg-[#FFF7F3] hover:border-[#D98D72] hover:bg-[#FFF1E9]";
+  }
+
+  return selected
+    ? "border-[#7FA287] bg-white shadow-[0_16px_34px_rgba(95,125,102,0.16)]"
+    : "border-transparent bg-white/70 hover:border-[#CFE4D8] hover:bg-white";
 }
 
 function canReplyFreely(lead: WhatsappLead | null) {
@@ -603,11 +640,7 @@ export default function LeadsWhatsappPage() {
                       key={lead.id}
                       type="button"
                       onClick={() => selectLead(lead)}
-                      className={`w-full rounded-[24px] border p-4 text-left transition ${
-                        selectedLead?.id === lead.id
-                          ? "border-[#7FA287] bg-white shadow-[0_16px_34px_rgba(95,125,102,0.16)]"
-                          : "border-transparent bg-white/70 hover:border-[#CFE4D8] hover:bg-white"
-                      }`}
+                      className={`w-full rounded-[24px] border p-4 text-left transition ${leadCardTone(lead, selectedLead?.id === lead.id)}`}
                     >
                       <div className="flex items-start gap-3">
                         <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#C7EEE1,_#6C9C88)] text-sm font-bold text-[#1F3128]">
@@ -624,7 +657,7 @@ export default function LeadsWhatsappPage() {
                           </div>
                           <p className="mt-1 truncate text-xs text-[#607368]">{lead.phone}</p>
                           <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className="rounded-full bg-[#E8F6EE] px-2.5 py-1 text-[11px] font-semibold text-[#4F6F5B] ring-1 ring-[#CFE4D8]">
+                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusTone(lead.status)}`}>
                               {conversationBadge(lead)}
                             </span>
                             {lead.campaign_code ? (
@@ -663,9 +696,13 @@ export default function LeadsWhatsappPage() {
                             {displayName(selectedLead)}
                           </h2>
                           <p className="mt-1 break-words text-xs text-[#607368] sm:text-sm">
-                            {selectedLead.phone} · {selectedLead.campaign_code || "-"} ·{" "}
-                            {statusLabel(selectedLead.status)}
+                            {selectedLead.phone} / {selectedLead.campaign_code || "-"}
                           </p>
+                          <div className="mt-2">
+                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ring-1 ${statusTone(selectedLead.status)}`}>
+                              {statusLabel(selectedLead.status)}
+                            </span>
+                          </div>
                           <div className="mt-2 grid gap-1 text-xs text-[#607368] md:grid-cols-2">
                             <span>Correo: {selectedLead.email || "-"}</span>
                             <span>Origen: {selectedLead.source || "-"}</span>
