@@ -14,7 +14,7 @@ export type FelicitationScheduleResult =
       canSchedule: false;
       replyWindowExpiresAt: Date;
       safeDeadlineAt: Date;
-      reason: "window_expired" | "outside_business_hours_without_margin";
+      reason: "window_expired" | "scheduled_outside_reply_window";
     };
 
 function bogotaParts(date: Date) {
@@ -42,8 +42,14 @@ function bogotaParts(date: Date) {
   };
 }
 
-function dateAtBogotaWallTime(year: number, month: number, day: number, hour: number) {
-  return new Date(Date.UTC(year, month - 1, day, hour + 5, 0, 0, 0));
+function dateAtBogotaWallTime(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute = 0
+) {
+  return new Date(Date.UTC(year, month - 1, day, hour + 5, minute, 0, 0));
 }
 
 function addBogotaDays(date: Date, days: number) {
@@ -61,22 +67,6 @@ function addBogotaDays(date: Date, days: number) {
 export function isWithinBogotaBusinessHours(date: Date) {
   const parts = bogotaParts(date);
   return parts.hour >= 8 && parts.hour < 16;
-}
-
-function clampToBusinessHourBefore(date: Date) {
-  const parts = bogotaParts(date);
-  const sameDayEight = dateAtBogotaWallTime(parts.year, parts.month, parts.day, 8);
-  const sameDaySixteen = dateAtBogotaWallTime(parts.year, parts.month, parts.day, 16);
-
-  if (date >= sameDaySixteen) {
-    return new Date(sameDaySixteen.getTime() - 60 * 1000);
-  }
-
-  if (date >= sameDayEight) {
-    return date;
-  }
-
-  return null;
 }
 
 export function calculateFelicitationSchedule(
@@ -97,39 +87,27 @@ export function calculateFelicitationSchedule(
     };
   }
 
+  const parts = bogotaParts(lastInboundAt);
   const nextDay = addBogotaDays(lastInboundAt, 1);
-  const preferredSendAt = dateAtBogotaWallTime(
-    nextDay.year,
-    nextDay.month,
-    nextDay.day,
-    8
-  );
+  const isMorningBeforeBusiness = parts.hour < 8;
+  const isBusinessBlock = parts.hour >= 8 && parts.hour < 16;
 
-  if (preferredSendAt <= safeDeadlineAt && preferredSendAt >= now) {
+  const scheduledAt = isBusinessBlock
+    ? dateAtBogotaWallTime(nextDay.year, nextDay.month, nextDay.day, 8, 26)
+    : dateAtBogotaWallTime(
+        isMorningBeforeBusiness ? parts.year : nextDay.year,
+        isMorningBeforeBusiness ? parts.month : nextDay.month,
+        isMorningBeforeBusiness ? parts.day : nextDay.day,
+        12,
+        43
+      );
+
+  if (scheduledAt >= now && scheduledAt <= replyWindowExpiresAt) {
     return {
       canSchedule: true,
       replyWindowExpiresAt,
       safeDeadlineAt,
-      felicitationScheduledFor: preferredSendAt,
-    };
-  }
-
-  const latestBusinessBeforeDeadline = clampToBusinessHourBefore(safeDeadlineAt);
-  if (latestBusinessBeforeDeadline && latestBusinessBeforeDeadline >= now) {
-    return {
-      canSchedule: true,
-      replyWindowExpiresAt,
-      safeDeadlineAt,
-      felicitationScheduledFor: latestBusinessBeforeDeadline,
-    };
-  }
-
-  if (isWithinBogotaBusinessHours(now) && now < replyWindowExpiresAt) {
-    return {
-      canSchedule: true,
-      replyWindowExpiresAt,
-      safeDeadlineAt,
-      felicitationScheduledFor: now,
+      felicitationScheduledFor: scheduledAt,
     };
   }
 
@@ -137,6 +115,6 @@ export function calculateFelicitationSchedule(
     canSchedule: false,
     replyWindowExpiresAt,
     safeDeadlineAt,
-    reason: "outside_business_hours_without_margin",
+    reason: "scheduled_outside_reply_window",
   };
 }

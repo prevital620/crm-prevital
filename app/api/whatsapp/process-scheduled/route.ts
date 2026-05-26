@@ -63,7 +63,7 @@ export async function POST(request: Request) {
       .select(
         "id, phone, full_name, profile_name, status, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at"
       )
-      .eq("status", "felicitacion_programada")
+      .in("status", ["felicitacion_programada", "registrado"])
       .is("felicitation_sent_at", null)
       .lte("felicitation_scheduled_for", now.toISOString())
       .order("felicitation_scheduled_for", { ascending: true })
@@ -87,7 +87,7 @@ export async function POST(request: Request) {
 
     for (const lead of leads) {
       if (
-        lead.status !== "felicitacion_programada" ||
+        !["felicitacion_programada", "registrado"].includes(lead.status || "") ||
         lead.felicitation_sent_at ||
         !lead.reply_window_expires_at ||
         !lead.safe_deadline_at
@@ -96,9 +96,8 @@ export async function POST(request: Request) {
       }
 
       const replyWindowExpiresAt = new Date(lead.reply_window_expires_at);
-      const safeDeadlineAt = new Date(lead.safe_deadline_at);
 
-      if (now >= replyWindowExpiresAt || now > safeDeadlineAt) {
+      if (now > replyWindowExpiresAt) {
         await markRequiresTemplate(lead.id);
         summary.requiresTemplate += 1;
         continue;
@@ -137,7 +136,7 @@ export async function POST(request: Request) {
           updated_at: sentAt,
         })
         .eq("id", lead.id)
-        .eq("status", "felicitacion_programada")
+        .in("status", ["felicitacion_programada", "registrado"])
         .is("felicitation_sent_at", null);
 
       if (updateError) {
