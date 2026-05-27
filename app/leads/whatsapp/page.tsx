@@ -402,11 +402,16 @@ export default function LeadsWhatsappPage() {
   const [conversationNotice, setConversationNotice] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState("");
+  const [activeColumnId, setActiveColumnId] = useState("inscritos");
 
   const kanbanColumns = useMemo(() => buildKanbanColumns(leads), [leads]);
   const totalLeads = useMemo(
     () => kanbanColumns.reduce((total, column) => total + column.items.length, 0),
     [kanbanColumns]
+  );
+  const activeColumn = useMemo(
+    () => kanbanColumns.find((column) => column.id === activeColumnId) || kanbanColumns[0],
+    [activeColumnId, kanbanColumns]
   );
 
   async function loadLeads() {
@@ -650,16 +655,29 @@ export default function LeadsWhatsappPage() {
           </div>
         </section>
 
-        <section className={`grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-6 ${selectedLead ? "hidden lg:grid" : ""}`}>
+        <section className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 ${selectedLead ? "hidden lg:grid" : ""}`}>
           {kanbanColumns.map((column) => (
-            <div
+            <button
               key={column.id}
-              className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-white/95 p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]"
+              type="button"
+              onClick={() => setActiveColumnId(column.id)}
+              className={`overflow-hidden rounded-[24px] border p-4 text-left shadow-[0_14px_32px_rgba(95,125,102,0.1)] transition hover:-translate-y-0.5 ${
+                activeColumnId === column.id
+                  ? "border-[#6C9C88] bg-white ring-2 ring-[#BFE0CD]"
+                  : `${column.tone} hover:border-[#9BC4AF]`
+              }`}
             >
               <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
-              <p className="text-sm font-medium text-[#5B6E63]">{column.title}</p>
-              <p className="mt-2 text-3xl font-bold text-[#24312A]">{column.items.length}</p>
-            </div>
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold leading-5 text-[#24312A]">{column.title}</p>
+                  <p className="mt-1 text-xs text-[#607368]">{column.hint}</p>
+                </div>
+                <span className="rounded-full bg-white px-2.5 py-1 text-sm font-bold text-[#4F6F5B] shadow-sm ring-1 ring-[#DCEDE3]">
+                  {column.items.length}
+                </span>
+              </div>
+            </button>
           ))}
         </section>
 
@@ -749,14 +767,16 @@ export default function LeadsWhatsappPage() {
         ) : null}
 
         <section className={`overflow-hidden border border-[#CFE4D8] bg-white/95 shadow-[0_24px_60px_rgba(95,125,102,0.12)] ${selectedLead ? "fixed inset-0 z-50 rounded-none lg:relative lg:inset-auto lg:z-auto lg:rounded-[32px]" : "rounded-[28px] sm:rounded-[32px]"}`}>
-          <div className={`grid lg:min-h-[720px] lg:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.9fr)] ${selectedLead ? "h-[100dvh] lg:h-auto" : "min-h-[620px]"}`}>
+          <div className={`grid lg:min-h-[720px] lg:grid-cols-[minmax(360px,0.8fr)_minmax(0,1.25fr)] ${selectedLead ? "h-[100dvh] lg:h-auto" : "min-h-[620px]"}`}>
             <aside className={`border-b border-[#DCEDE3] bg-[#F7FCF8] lg:border-b-0 lg:border-r ${selectedLead ? "hidden lg:block" : "block"}`}>
               <div className="sticky top-0 z-10 border-b border-[#DCEDE3] bg-[#F7FCF8]/95 p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-bold text-[#0E2340]">Conversaciones</h2>
                     <p className="text-xs text-[#607368]">
-                      {loading ? "Cargando..." : `${totalLeads} leads filtrados`}
+                      {loading
+                        ? "Cargando..."
+                        : `${activeColumn?.title || "Lista"} (${activeColumn?.items.length || 0}) de ${totalLeads}`}
                     </p>
                   </div>
                   <button
@@ -777,7 +797,79 @@ export default function LeadsWhatsappPage() {
                   </div>
                 ) : null}
 
-                <div className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-6">
+                <div className="space-y-3">
+                  {!loading && activeColumn?.items.length === 0 && totalLeads > 0 ? (
+                    <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-white/80 px-4 py-8 text-center text-sm text-[#607368]">
+                      No hay leads en {activeColumn.title.toLowerCase()} con estos filtros.
+                    </div>
+                  ) : null}
+
+                  {activeColumn?.items.map((lead) => {
+                    const needsAnswer = isInboundWithoutAnswer(lead);
+                    const needsHuman = lead.status === "requiere_humano";
+
+                    return (
+                      <button
+                        key={lead.id}
+                        type="button"
+                        onClick={() => selectLead(lead)}
+                        className={`w-full rounded-[24px] border p-4 text-left transition ${leadCardTone(lead, selectedLead?.id === lead.id)} ${
+                          needsAnswer ? "ring-2 ring-[#F1C1AA]" : ""
+                        }`}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#C7EEE1,_#6C9C88)] text-base font-bold text-[#1F3128]">
+                            {displayName(lead).slice(0, 1).toUpperCase()}
+                          </div>
+
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-start justify-between gap-3">
+                              <div className="min-w-0">
+                                <p className="truncate text-base font-bold text-[#10233F]">
+                                  {displayName(lead)}
+                                </p>
+                                <p className="mt-1 truncate text-sm text-[#607368]">{lead.phone}</p>
+                              </div>
+
+                              <span className="shrink-0 text-xs text-[#789084]">
+                                {formatDateTime(lead.last_inbound_at || lead.created_at)}
+                              </span>
+                            </div>
+
+                            {lead.appointment_date || lead.appointment_time ? (
+                              <div className="mt-3 rounded-2xl border border-[#CFE4D8] bg-white/80 px-3 py-2 text-sm font-semibold text-[#4F6F5B]">
+                                Cita: {formatAppointmentDate(lead.appointment_date)} · {formatAppointmentTime(lead.appointment_time)}
+                              </div>
+                            ) : null}
+
+                            <div className="mt-3 flex flex-wrap gap-1.5">
+                              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusTone(lead.appointment_status || lead.status)}`}>
+                                {lead.appointment_status ? statusLabel(lead.appointment_status) : conversationBadge(lead)}
+                              </span>
+                              {lead.campaign_code ? (
+                                <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#607368] ring-1 ring-[#DCEDE3]">
+                                  {lead.campaign_code}
+                                </span>
+                              ) : null}
+                              {needsAnswer ? (
+                                <span className="rounded-full bg-[#FFF0E9] px-2.5 py-1 text-[11px] font-bold text-[#9A4E2E] ring-1 ring-[#EEC6B8]">
+                                  Mensaje sin responder
+                                </span>
+                              ) : null}
+                              {needsHuman ? (
+                                <span className="rounded-full bg-[#FFF5F3] px-2.5 py-1 text-[11px] font-bold text-[#9A4E43] ring-1 ring-[#E6C9C5]">
+                                  Alerta
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <div className="hidden">
                   {kanbanColumns.map((column) => (
                     <div
                       key={column.id}
