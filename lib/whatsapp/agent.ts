@@ -54,7 +54,9 @@ export type WhatsappAgentContext = {
   preferredDate?: string;
   pendingDate?: string;
   pendingPeriod?: AgendaPeriod;
-  pendingAction?: "confirm_date_for_schedule";
+  pendingSlotDate?: string;
+  pendingSlotTime?: string;
+  pendingAction?: "confirm_date_for_schedule" | "confirm_slot_for_booking";
   lastOfferedPeriod?: AgendaPeriod;
   lastOfferedDate?: string;
 };
@@ -65,6 +67,15 @@ export type ParsedDatePreference = {
   label: string;
 };
 
+export type ParsedTimePreference =
+  | {
+      type: "any" | "earliest";
+    }
+  | {
+      type: "after" | "exact";
+      time: string;
+    };
+
 const AGENT_CONTEXT_PREFIX = "WhatsApp IA contexto:";
 const ACTIVE_APPOINTMENT_STATUSES = [
   "agendada",
@@ -74,49 +85,55 @@ const ACTIVE_APPOINTMENT_STATUSES = [
   "en_atencion",
 ];
 const DUPLICATE_APPOINTMENT_REPLY =
-  "Ya tienes una cita registrada en Prevital ðŸ’š Nuestro equipo revisarÃ¡ tu caso y te ayudarÃ¡ si necesitas cambiarla.";
+  "Ya tienes una cita registrada en Prevital 💚 Nuestro equipo revisará tu caso y te ayudará si necesitas cambiarla.";
 const APPOINTMENT_INSERT_ERROR_REPLY =
-  "Gracias por tu paciencia ðŸ’š Tuvimos un inconveniente al confirmar la cita automÃ¡ticamente. Nuestro equipo revisarÃ¡ tu caso y te contactarÃ¡ para ayudarte a finalizar la agenda.";
+  "Gracias por tu paciencia 💚 Tuvimos un inconveniente al confirmar la cita automáticamente. Nuestro equipo revisará tu caso y te contactará para ayudarte a finalizar la agenda.";
 
 export const PERIOD_QUESTION =
-  "Claro ðŸ˜Š Â¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu experiencia en Prevital?";
+  "Claro 😊 ¿Te queda mejor en la mañana o en la tarde?";
+
+export const MORNING_TIME_QUESTION =
+  "Perfecto 💚 ¿Qué horario te queda mejor entre 8:30 a. m. y 12:30 p. m.?";
+
+export const AFTERNOON_TIME_QUESTION =
+  "Perfecto 💚 ¿Qué horario te queda mejor entre 12:30 p. m. y 5:30 p. m.?";
 
 const CLINICAL_SAFE_REPLY =
-  "Esa informaciÃ³n la revisa directamente nuestro equipo profesional durante la cita ðŸ˜Š Yo puedo ayudarte a coordinar el horario para que recibas orientaciÃ³n adecuada en Prevital.";
+  "Esa información la revisa directamente nuestro equipo profesional durante la cita 😊 Yo puedo ayudarte a coordinar el horario para que recibas orientación adecuada en Prevital.";
 
 const INFO_TO_SCHEDULE_REPLY =
-  "Con gusto te ayudamos ðŸŒ¿ Para darte la informaciÃ³n completa y coordinar tu experiencia en Prevital, primero necesitamos agendar tu valoraciÃ³n. Â¿Te queda mejor en la maÃ±ana o en la tarde?";
+  "Con gusto te ayudamos 🌿 Para darte la información completa y coordinar tu experiencia en Prevital, primero necesitamos agendar tu valoración. ¿Te queda mejor en la mañana o en la tarde?";
 
 const LOCATION_REPLY =
-  "Estamos en El Poblado, MedellÃ­n ðŸŒ¿ Cuando confirmemos tu cita te compartiremos la direcciÃ³n completa e instrucciones para llegar.\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
+  "Estamos en El Poblado, Medellín 🌿 Cuando confirmemos tu cita te compartiremos la dirección completa e instrucciones para llegar.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const PRICE_REPLY =
-  "Esta experiencia no tiene costo para las personas seleccionadas ðŸ’š Te ayudo a coordinar tu cita en Prevital.\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
+  "Esta experiencia no tiene costo para las personas seleccionadas 💚 Te ayudo a coordinar tu cita en Prevital.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const DURATION_REPLY =
-  "La cita inicial tiene una duraciÃ³n aproximada de 30 minutos ðŸ˜Š\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
+  "La cita inicial tiene una duración aproximada de 30 minutos 😊\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const COMPANION_REPLY =
-  "Puedes venir acompaÃ±ado/a si lo deseas ðŸ˜Š Lo importante es que la cita quede a tu nombre y llegues con tu cÃ©dula original.\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
+  "Puedes venir acompañado/a si lo deseas 😊 Lo importante es que la cita quede a tu nombre y llegues con tu cédula original.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const WHAT_TO_BRING_REPLY =
-  "Para la cita es importante traer tu cÃ©dula original. Al confirmar la cita te enviaremos las instrucciones completas ðŸŒ¿\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
+  "Para la cita es importante traer tu cédula original. Al confirmar la cita te enviaremos las instrucciones completas 🌿\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const DIRECT_REPLIES_WITHOUT_PERIOD_QUESTION: Partial<Record<WhatsappAgentIntent, string>> = {
   asks_location:
-    "Estamos en El Poblado, MedellÃ­n ðŸŒ¿ Cuando confirmemos tu cita te compartiremos la direcciÃ³n completa e instrucciones para llegar.",
+    "Estamos en El Poblado, Medellín 🌿 Cuando confirmemos tu cita te compartiremos la dirección completa e instrucciones para llegar.",
   asks_price:
-    "Esta experiencia no tiene costo para las personas seleccionadas ðŸ’š",
+    "Esta experiencia no tiene costo para las personas seleccionadas 💚",
   asks_duration:
-    "La cita inicial tiene una duraciÃ³n aproximada de 30 minutos ðŸ˜Š",
+    "La cita inicial tiene una duración aproximada de 30 minutos 😊",
   asks_companion:
-    "Puedes venir acompaÃ±ado/a si lo deseas ðŸ˜Š Lo importante es que la cita quede a tu nombre y llegues con tu cÃ©dula original.",
+    "Puedes venir acompañado/a si lo deseas 😊 Lo importante es que la cita quede a tu nombre y llegues con tu cédula original.",
   asks_what_to_bring:
-    "Para la cita es importante traer tu cÃ©dula original. Al confirmar la cita te enviaremos las instrucciones completas ðŸŒ¿",
+    "Para la cita es importante traer tu cédula original. Al confirmar la cita te enviaremos las instrucciones completas 🌿",
   wants_info:
-    "Con gusto te ayudamos ðŸŒ¿ En la valoraciÃ³n nuestro equipo te darÃ¡ la informaciÃ³n completa para coordinar tu experiencia en Prevital.",
+    "Con gusto te ayudamos 🌿 En la valoración nuestro equipo te dará la información completa para coordinar tu experiencia en Prevital.",
   greeting:
-    "Con gusto te ayudamos ðŸŒ¿",
+    "Con gusto te ayudamos 🌿",
 };
 
 function normalizeText(value: string) {
@@ -197,11 +214,11 @@ export function analyzeWhatsappAgentIntent(message: string): WhatsappAgentIntent
     return "asks_duration";
   }
 
-  if (hasAny(normalized, ["acompanante", "acompaÃ±ante", "pareja", "hermana", "hermano", "mama", "mamÃ¡", "papa", "papÃ¡", "familiar", "puedo ir con alguien"])) {
+  if (hasAny(normalized, ["acompanante", "pareja", "hermana", "hermano", "mama", "papa", "familiar", "puedo ir con alguien"])) {
     return "asks_companion";
   }
 
-  if (hasAny(normalized, ["que debo llevar", "que llevo", "llevar algo", "cedula", "cÃ©dula", "documento"])) {
+  if (hasAny(normalized, ["que debo llevar", "que llevo", "llevar algo", "cedula", "documento"])) {
     return "asks_what_to_bring";
   }
 
@@ -331,12 +348,8 @@ export function formatSlotTime(time: string) {
 }
 
 export function detectPeriodPreference(message: string): AgendaPeriod | null {
-  const normalizedForAfternoon = normalizeText(message);
-  if (hasAny(normalizedForAfternoon, ["tarde", "despues del medio dia", "despues de medio dia"])) {
-    return "afternoon";
-  }
   const normalized = normalizeText(message);
-  if (hasAny(normalized, ["manana", "maÃ±ana", "temprano", "antes del medio dia", "antes de medio dia"])) {
+  if (hasAny(normalized, ["manana", "temprano", "antes del medio dia", "antes de medio dia"])) {
     return "morning";
   }
   if (hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"])) {
@@ -347,14 +360,14 @@ export function detectPeriodPreference(message: string): AgendaPeriod | null {
 
 export function isPositiveConfirmation(message: string) {
   const normalized = normalizeText(message);
-  return /^(si|sÃ­|sii|si correcto|sÃ­ correcto|correcto|asi es|exacto|ese|ese mismo|claro|dale|ok|okay|listo|confirmo)$/.test(normalized);
+  return /^(si|sii|si correcto|correcto|asi es|exacto|ese|esa|ese mismo|esa misma|claro|dale|ok|okay|listo|confirmo|me sirve|esa me sirve|ese me sirve)$/.test(normalized);
 }
 
 export function isNegativeDateConfirmation(message: string) {
   const normalized = normalizeText(message);
   return (
-    /^(no|no ese|otro|otro dia|otro dÃ­a)$/.test(normalized) ||
-    hasAny(normalized, ["no el otro", "otro martes", "me referia a otro", "me referÃ­a a otro"])
+    /^(no|no ese|otro|otro dia)$/.test(normalized) ||
+    hasAny(normalized, ["no el otro", "otro martes", "me referia a otro"])
   );
 }
 
@@ -401,7 +414,7 @@ export function parseDatePreference(
   const normalized = normalizeText(message);
   const today = todayBogota(now);
   const mentionsAfternoon = hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"]);
-  const asksAlternativeWeekday = /\bo\s+el\s+(lunes|martes|miercoles|miÃ©rcoles|jueves|viernes|sabado|sÃ¡bado|domingo)\b/.test(normalized);
+  const asksAlternativeWeekday = /\bo\s+el\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/.test(normalized);
   const morningOnlyPhrases = [
     "en la manana",
     "por la manana",
@@ -414,12 +427,12 @@ export function parseDatePreference(
       ? normalized.replace(/\bmanana\b/g, "")
       : normalized;
 
-  if (hasAny(normalized, ["pasado manana", "pasado maÃ±ana"])) {
+  if (hasAny(normalized, ["pasado manana"])) {
     const date = addDaysISO(today, 2);
     return { date, needsConfirmation: false, label: formatSlotDate(date) };
   }
 
-  if (/\bmanana\b/.test(normalized) || /\bmaÃ±ana\b/.test(message.toLowerCase())) {
+  if (/\bmanana\b/.test(normalized)) {
     const date = addDaysISO(today, 1);
     return { date, needsConfirmation: false, label: formatSlotDate(date) };
   }
@@ -427,6 +440,23 @@ export function parseDatePreference(
   if (hasAny(normalized, ["otra semana", "la proxima semana", "proxima semana"])) {
     const date = addDaysISO(today, 7);
     return { date, needsConfirmation: true, label: formatSlotDate(date) };
+  }
+
+  const weekdayMatch = normalized.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  if (weekdayMatch) {
+    const target = weekdayIndex(weekdayMatch[1]);
+    if (target === null) return null;
+
+    const base = dateFromISO(today);
+    const current = base.getUTCDay();
+    const diff = (target - current + 7) % 7 || 7;
+    const date = addDaysISO(today, diff);
+
+    return {
+      date,
+      needsConfirmation: diff > 6 || asksAlternativeWeekday,
+      label: formatSlotDate(date),
+    };
   }
 
   const explicitDate = normalized.match(/\b(\d{1,2})(?:\s*de\s*([a-z]+))?\b/);
@@ -453,23 +483,6 @@ export function parseDatePreference(
         label: formatSlotDate(date),
       };
     }
-  }
-
-  const weekdayMatch = normalized.match(/\b(lunes|martes|miercoles|miÃ©rcoles|jueves|viernes|sabado|sÃ¡bado|domingo)\b/);
-  if (weekdayMatch) {
-    const target = weekdayIndex(weekdayMatch[1]);
-    if (target === null) return null;
-
-    const base = dateFromISO(today);
-    const current = base.getUTCDay();
-    const diff = (target - current + 7) % 7 || 7;
-    const date = addDaysISO(today, diff);
-
-    return {
-      date,
-      needsConfirmation: diff > 6 || asksAlternativeWeekday,
-      label: formatSlotDate(date),
-    };
   }
 
   return null;
@@ -482,7 +495,7 @@ export function parseSpecificDatePreference(
   const normalized = normalizeText(message);
   const today = todayBogota(now);
   const mentionsAfternoon = hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"]);
-  const asksAlternativeWeekday = /\bo\s+el\s+(lunes|martes|miercoles|miÃ©rcoles|jueves|viernes|sabado|sÃ¡bado|domingo)\b/.test(normalized);
+  const asksAlternativeWeekday = /\bo\s+el\s+(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/.test(normalized);
   const morningOnlyPhrases = [
     "en la manana",
     "por la manana",
@@ -491,13 +504,13 @@ export function parseSpecificDatePreference(
     "por manana",
   ];
 
-  if (hasAny(normalized, ["pasado manana", "pasado maÃƒÂ±ana"])) {
+  if (hasAny(normalized, ["pasado manana"])) {
     const date = addDaysISO(today, 2);
     return { date, needsConfirmation: false, label: formatSlotDate(date) };
   }
 
   if (
-    (/\bmanana\b/.test(normalized) || /\bmaÃƒÂ±ana\b/.test(message.toLowerCase())) &&
+    /\bmanana\b/.test(normalized) &&
     (mentionsAfternoon || !hasAny(normalized, morningOnlyPhrases))
   ) {
     const date = addDaysISO(today, 1);
@@ -507,6 +520,23 @@ export function parseSpecificDatePreference(
   if (hasAny(normalized, ["otra semana", "la proxima semana", "proxima semana"])) {
     const date = addDaysISO(today, 7);
     return { date, needsConfirmation: true, label: formatSlotDate(date) };
+  }
+
+  const weekdayMatch = normalized.match(/\b(lunes|martes|miercoles|jueves|viernes|sabado|domingo)\b/);
+  if (weekdayMatch) {
+    const target = weekdayIndex(weekdayMatch[1]);
+    if (target === null) return null;
+
+    const base = dateFromISO(today);
+    const current = base.getUTCDay();
+    const diff = (target - current + 7) % 7 || 7;
+    const date = addDaysISO(today, diff);
+
+    return {
+      date,
+      needsConfirmation: diff > 6 || asksAlternativeWeekday,
+      label: formatSlotDate(date),
+    };
   }
 
   const explicitDate = normalized.match(/\b(\d{1,2})(?:\s*de\s*([a-z]+))?\b/);
@@ -535,30 +565,95 @@ export function parseSpecificDatePreference(
     }
   }
 
-  const weekdayMatch = normalized.match(/\b(lunes|martes|miercoles|miÃƒÂ©rcoles|jueves|viernes|sabado|sÃƒÂ¡bado|domingo)\b/);
-  if (weekdayMatch) {
-    const target = weekdayIndex(weekdayMatch[1]);
-    if (target === null) return null;
-
-    const base = dateFromISO(today);
-    const current = base.getUTCDay();
-    const diff = (target - current + 7) % 7 || 7;
-    const date = addDaysISO(today, diff);
-
-    return {
-      date,
-      needsConfirmation: diff > 6 || asksAlternativeWeekday,
-      label: formatSlotDate(date),
-    };
-  }
-
   return null;
 }
 
 function periodMatches(time: string, period?: AgendaPeriod) {
   if (!period) return true;
-  if (period === "morning") return time >= "08:00" && time < "12:00";
-  return time >= "12:00" && time <= "17:30";
+  if (period === "morning") return time >= "08:30" && time <= "12:30";
+  return time >= "12:30" && time <= "17:30";
+}
+
+export function timeToMinutes(time: string) {
+  const [hour, minute] = time.split(":").map(Number);
+  return hour * 60 + minute;
+}
+
+function minutesToTime(minutes: number) {
+  const hour = Math.floor(minutes / 60);
+  const minute = minutes % 60;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function normalizeRequestedHour(hour: number, period?: AgendaPeriod, meridiem?: string) {
+  const normalizedMeridiem = meridiem ? normalizeText(meridiem).replace(/\s+/g, "") : "";
+
+  if (normalizedMeridiem === "pm" && hour < 12) return hour + 12;
+  if (normalizedMeridiem === "am" && hour === 12) return 0;
+
+  if (!normalizedMeridiem && period === "afternoon" && hour >= 1 && hour <= 7) {
+    return hour + 12;
+  }
+
+  if (!normalizedMeridiem && !period && hour >= 1 && hour <= 5) {
+    return hour + 12;
+  }
+
+  return hour;
+}
+
+export function parseTimePreference(
+  message: string,
+  period?: AgendaPeriod
+): ParsedTimePreference | null {
+  const normalized = normalizeText(message);
+
+  if (
+    hasAny(normalized, [
+      "cualquier hora",
+      "cualquiera",
+      "la que haya",
+      "lo que haya",
+      "la que tengas",
+      "el que haya",
+    ])
+  ) {
+    return { type: "any" };
+  }
+
+  if (hasAny(normalized, ["la mas temprano", "lo mas temprano", "la primera", "temprano"])) {
+    return { type: "earliest" };
+  }
+
+  const afterMatch = normalized.match(
+    /\b(?:despues|luego|posterior|mas tarde)\s+(?:de\s+)?(?:las\s+)?(\d{1,2})(?::([0-5]\d))?\s*(a\s*m|p\s*m|am|pm)?\b/
+  );
+  if (afterMatch) {
+    const hour = normalizeRequestedHour(Number(afterMatch[1]), period, afterMatch[3]);
+    const minute = afterMatch[2] ? Number(afterMatch[2]) : 0;
+    return { type: "after", time: minutesToTime(hour * 60 + minute) };
+  }
+
+  const exactMatch = normalized.match(
+    /(?:\ba\s+las\s+|\blas\s+|\b)(\d{1,2})(?::([0-5]\d))?\s*(a\s*m|p\s*m|am|pm)?\b/
+  );
+  if (!exactMatch) return null;
+
+  const rawHour = Number(exactMatch[1]);
+  if (rawHour > 23) return null;
+
+  const hour = normalizeRequestedHour(rawHour, period, exactMatch[3]);
+  const minute = exactMatch[2] ? Number(exactMatch[2]) : 0;
+  const time = minutesToTime(hour * 60 + minute);
+
+  if (!periodMatches(time, period)) return null;
+  return { type: "exact", time };
+}
+
+export function inferPeriodFromTime(time: string): AgendaPeriod | null {
+  if (periodMatches(time, "afternoon")) return "afternoon";
+  if (periodMatches(time, "morning")) return "morning";
+  return null;
 }
 
 export function isFutureSlotAllowed(
@@ -578,6 +673,8 @@ export async function getNextWhatsappAgendaSlots(options: {
   now?: Date;
   maxDays?: number;
   exactDateOnly?: boolean;
+  minTime?: string;
+  targetTime?: string;
 } = {}) {
   const limit = options.limit || 3;
   const maxDays = options.exactDateOnly ? 1 : options.maxDays || 7;
@@ -585,8 +682,13 @@ export async function getNextWhatsappAgendaSlots(options: {
   const slots: OfferedAgendaSlot[] = [];
   const today = todayBogota(now);
   const startDate = options.preferredDate || addDaysISO(today, 1);
+  const shouldRankByTarget = Boolean(options.targetTime);
 
-  for (let offset = 0; offset < maxDays && slots.length < limit; offset += 1) {
+  for (
+    let offset = 0;
+    offset < maxDays && (shouldRankByTarget || slots.length < limit);
+    offset += 1
+  ) {
     const date = addDaysISO(startDate, offset);
     if (date < today) continue;
 
@@ -599,6 +701,7 @@ export async function getNextWhatsappAgendaSlots(options: {
     for (const slot of availability.slots) {
       if (slot.remaining <= 0) continue;
       if (!periodMatches(slot.time, options.period)) continue;
+      if (options.minTime && slot.time < options.minTime) continue;
       if (!isFutureSlotAllowed(date, slot.time, now, 60)) continue;
 
       slots.push({
@@ -608,35 +711,50 @@ export async function getNextWhatsappAgendaSlots(options: {
         remaining: slot.remaining,
       });
 
-      if (slots.length >= limit) break;
+      if (!shouldRankByTarget && slots.length >= limit) break;
     }
   }
 
-  return slots;
+  const rankedSlots = shouldRankByTarget
+    ? [...slots].sort((left, right) => {
+        const leftDistance = Math.abs(timeToMinutes(left.time) - timeToMinutes(options.targetTime!));
+        const rightDistance = Math.abs(timeToMinutes(right.time) - timeToMinutes(options.targetTime!));
+        return (
+          leftDistance - rightDistance ||
+          left.date.localeCompare(right.date) ||
+          left.time.localeCompare(right.time)
+        );
+      })
+    : slots;
+
+  return rankedSlots.slice(0, limit).map((slot, index) => ({
+    ...slot,
+    index: index + 1,
+  }));
 }
 
 export function buildSlotsOfferMessage(slots: OfferedAgendaSlot[], period?: AgendaPeriod) {
   if (slots.length === 0) {
-    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente ðŸ˜Š";
+    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente 😊";
   }
 
-  const periodLabel = period === "afternoon" ? "tarde" : "maÃ±ana";
+  const periodLabel = period === "afternoon" ? "tarde" : "mañana";
   const lines = slots.map(
     (slot) =>
       `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
   );
 
-  return `Perfecto ðŸ’š Tenemos estas opciones en la ${periodLabel}:\n\n${lines.join(
+  return `Perfecto 💚 Tenemos estas opciones en la ${periodLabel}:\n\n${lines.join(
     "\n"
-  )}\n\nÂ¿CuÃ¡l prefieres?`;
+  )}\n\n¿Cuál prefieres?`;
 }
 
 export function buildSlotsReminderMessage(slots: OfferedAgendaSlot[], period: AgendaPeriod) {
   if (slots.length === 0) {
-    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente ðŸ˜Š";
+    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente 😊";
   }
 
-  const periodLabel = period === "afternoon" ? "tarde" : "maÃ±ana";
+  const periodLabel = period === "afternoon" ? "tarde" : "mañana";
   const lines = slots.map(
     (slot) =>
       `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
@@ -644,7 +762,51 @@ export function buildSlotsReminderMessage(slots: OfferedAgendaSlot[], period: Ag
 
   return `Como me indicaste que te queda mejor en la ${periodLabel}, te comparto nuevamente opciones disponibles:\n\n${lines.join(
     "\n"
-  )}\n\nÂ¿CuÃ¡l prefieres?`;
+  )}\n\n¿Cuál prefieres?`;
+}
+
+export function buildSlotsOptionsMessage(slots: OfferedAgendaSlot[]) {
+  if (slots.length === 0) {
+    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente 😊";
+  }
+
+  const lines = slots.map(
+    (slot) =>
+      `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
+  );
+
+  return `${lines.join("\n")}\n\n¿Cuál prefieres?`;
+}
+
+export function buildPeriodTimeQuestion(period: AgendaPeriod) {
+  return period === "afternoon" ? AFTERNOON_TIME_QUESTION : MORNING_TIME_QUESTION;
+}
+
+export function buildExactSlotAvailableMessage(slot: OfferedAgendaSlot) {
+  return `Sí 💚 Tenemos disponible ${formatSlotDate(slot.date)} a las ${formatSlotTime(slot.time)}. ¿Quieres que te la separe?`;
+}
+
+export function buildExactSlotUnavailableIntro(date: string, time: string) {
+  return `Para ${formatSlotDate(date)} a las ${formatSlotTime(time)} no veo cupo disponible por ahora 😊 Te comparto opciones cercanas en esa misma jornada:`;
+}
+
+export function buildSingleNearbySlotMessage(requestedTime: string, slot: OfferedAgendaSlot) {
+  return `Para ${formatSlotTime(requestedTime)} no veo cupo disponible por ahora 😊 Pero tengo disponibilidad a las ${formatSlotTime(slot.time)} ¿Te sirve?`;
+}
+
+export function buildMultipleNearbySlotsMessage(requestedTime: string, slots: OfferedAgendaSlot[]) {
+  const lines = slots.map(
+    (slot) =>
+      `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
+  );
+
+  return `Para ${formatSlotTime(requestedTime)} no veo cupo disponible por ahora 😊 Tengo estas opciones cercanas:\n\n${lines.join(
+    "\n"
+  )}\n\n¿Cuál te sirve?`;
+}
+
+export function buildNoNearbySlotsMessage() {
+  return "Para ese horario no veo cupos disponibles por ahora 😊 ¿Quieres que revise otro horario o prefieres otro día?";
 }
 
 export function pickOfferedSlot(message: string, slots: OfferedAgendaSlot[]) {
@@ -857,7 +1019,7 @@ export async function createWhatsappAgentAppointment(params: {
       ok: false as const,
       reason: "slot_unavailable",
       error:
-        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoraciÃ³n ðŸ˜Š",
+        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoración 😊",
     };
   }
 
@@ -918,7 +1080,7 @@ export async function createWhatsappAgentAppointment(params: {
       ok: false as const,
       reason: "slot_unavailable",
       error:
-        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoraciÃƒÂ³n Ã°Å¸ËœÅ ",
+        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoración 😊",
     };
   }
 
@@ -998,28 +1160,28 @@ export function buildWhatsappAppointmentConfirmation(params: {
 }) {
   const displayName = params.name?.trim() || "Prevital";
 
-  return `*Hola, ${displayName}* ðŸ’š
+  return `*Hola, ${displayName}* 💚
 
 Tu cita gratuita en *Prevital* ha sido confirmada.
 
-ðŸ“… *Fecha:* ${formatSlotDate(params.date)}
-ðŸ• *Hora:* ${formatSlotTime(params.time)}
+📅 *Fecha:* ${formatSlotDate(params.date)}
+🕐 *Hora:* ${formatSlotTime(params.time)}
 
 *Muy importante presentar:*
-âœ”ï¸ CÃ©dula original
-âœ”ï¸ Disponibilidad aproximada de 30 minutos para tu orientaciÃ³n inicial
-âœ”ï¸ CÃ³digo de consulta gratis: *BD 0803*
+✔️ Cédula original
+✔️ Disponibilidad aproximada de 30 minutos para tu orientación inicial
+✔️ Código de consulta gratis: *BD 0803*
 
-ðŸ“ *DirecciÃ³n:*
+📍 *Dirección:*
 *Av. El Poblado*
 *Edificio Caja Social*
 Carrera 43A # 1 - 71, Piso 2
-Frente a San Fernando Plaza, MedellÃ­n.
+Frente a San Fernando Plaza, Medellín.
 
-ðŸ“² *Instagram:*
+📲 *Instagram:*
 https://www.instagram.com/prevital_col
 
-Gracias por priorizar tu bienestar ðŸŒ¿
+Gracias por priorizar tu bienestar 🌿
 Te esperamos en Prevital.`;
 }
 
