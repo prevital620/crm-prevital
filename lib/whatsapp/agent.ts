@@ -66,13 +66,28 @@ const LOCATION_REPLY =
   "Estamos en Medellín 🌿 Al confirmar tu cita, nuestro equipo te compartirá la información completa para llegar. ¿Te queda mejor en la mañana o en la tarde?";
 
 const PRICE_REPLY =
-  "Esta campaña permite participar por una experiencia sin costo en Prevital 🌿 Nuestro equipo validará tu registro y disponibilidad. ¿Te queda mejor en la mañana o en la tarde?";
+  "Esta experiencia no tiene costo para las personas seleccionadas 💚 ¿Te queda mejor en la mañana o en la tarde?";
 
 const DURATION_REPLY =
   "La cita inicial suele tomar aproximadamente entre 30 y 45 minutos 😊 ¿Te queda mejor en la mañana o en la tarde?";
 
 const WHAT_TO_BRING_REPLY =
   "Por ahora solo necesitamos coordinar tu cita 😊 Luego nuestro equipo te indicará cualquier recomendación necesaria. ¿Te queda mejor en la mañana o en la tarde?";
+
+const DIRECT_REPLIES_WITHOUT_PERIOD_QUESTION: Partial<Record<WhatsappAgentIntent, string>> = {
+  asks_location:
+    "Estamos en Medellín 🌿 Al confirmar tu cita, nuestro equipo te compartirá la información completa para llegar.",
+  asks_price:
+    "Esta experiencia no tiene costo para las personas seleccionadas 💚",
+  asks_duration:
+    "La cita inicial suele tomar aproximadamente entre 30 y 45 minutos 😊",
+  asks_what_to_bring:
+    "Por ahora solo necesitamos coordinar tu cita 😊 Luego nuestro equipo te indicará cualquier recomendación necesaria.",
+  wants_info:
+    "Con gusto te ayudamos 🌿 En la valoración nuestro equipo te dará la información completa para coordinar tu experiencia en Prevital.",
+  greeting:
+    "Con gusto te ayudamos 🌿",
+};
 
 function normalizeText(value: string) {
   return value
@@ -472,6 +487,22 @@ export function buildSlotsOfferMessage(slots: OfferedAgendaSlot[], period?: Agen
   )}\n\n¿Cuál prefieres?`;
 }
 
+export function buildSlotsReminderMessage(slots: OfferedAgendaSlot[], period: AgendaPeriod) {
+  if (slots.length === 0) {
+    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente 😊";
+  }
+
+  const periodLabel = period === "afternoon" ? "tarde" : "mañana";
+  const lines = slots.map(
+    (slot) =>
+      `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
+  );
+
+  return `Como me indicaste que te queda mejor en la ${periodLabel}, te comparto nuevamente opciones disponibles:\n\n${lines.join(
+    "\n"
+  )}\n\n¿Cuál prefieres?`;
+}
+
 export function pickOfferedSlot(message: string, slots: OfferedAgendaSlot[]) {
   const normalized = normalizeText(message);
 
@@ -616,4 +647,9 @@ export function replyForIntent(intent: WhatsappAgentIntent) {
   if (intent === "asks_what_to_bring") return WHAT_TO_BRING_REPLY;
   if (intent === "wants_info" || intent === "greeting") return INFO_TO_SCHEDULE_REPLY;
   return null;
+}
+
+export function replyForIntentWithKnownPeriod(intent: WhatsappAgentIntent) {
+  if (intent === "needs_human") return CLINICAL_SAFE_REPLY;
+  return DIRECT_REPLIES_WITHOUT_PERIOD_QUESTION[intent] || null;
 }

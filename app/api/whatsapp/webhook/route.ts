@@ -8,6 +8,7 @@ import { calculateFelicitationSchedule } from "@/lib/whatsapp/scheduling";
 import {
   analyzeWhatsappAgentIntent,
   buildSlotsOfferMessage,
+  buildSlotsReminderMessage,
   createWhatsappAgentAppointment,
   detectPeriodPreference,
   formatSlotDate,
@@ -21,6 +22,7 @@ import {
   PERIOD_QUESTION,
   readWhatsappAgentContext,
   replyForIntent,
+  replyForIntentWithKnownPeriod,
   writeWhatsappAgentContext,
 } from "@/lib/whatsapp/agent";
 
@@ -107,6 +109,9 @@ const BOOKING_DISABLED_CONFIRMATION =
 
 const DIFFERENT_DAY_MESSAGE =
   "Claro, sin problema 😊 ¿Qué día te queda fácil? Puedo revisar disponibilidad entre mañana y los próximos días.";
+
+const DIFFERENT_DAY_WITH_PERIOD_MESSAGE =
+  "Claro, sin problema 😊 ¿Qué día te queda fácil? Revisaré opciones en la jornada que me indicaste.";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -343,6 +348,8 @@ async function offerWhatsappAgentSlots(
   options: {
     period: "morning" | "afternoon";
     preferredDate?: string;
+    intro?: string;
+    reminder?: boolean;
   }
 ) {
   const slots = await getNextWhatsappAgendaSlots({
@@ -363,7 +370,11 @@ async function offerWhatsappAgentSlots(
       }),
       ...inboundWindowFields,
     });
-    await replyToLead(lead.phone, buildSlotsOfferMessage(slots, options.period));
+    const noSlotsMessage = buildSlotsOfferMessage(slots, options.period);
+    await replyToLead(
+      lead.phone,
+      options.intro ? `${options.intro}\n\n${noSlotsMessage}` : noSlotsMessage
+    );
     return;
   }
 
@@ -380,7 +391,13 @@ async function offerWhatsappAgentSlots(
     }),
     ...inboundWindowFields,
   });
-  await replyToLead(lead.phone, buildSlotsOfferMessage(slots, options.period));
+  const slotsMessage = options.reminder
+    ? buildSlotsReminderMessage(slots, options.period)
+    : buildSlotsOfferMessage(slots, options.period);
+  await replyToLead(
+    lead.phone,
+    options.intro ? `${options.intro}\n\n${slotsMessage}` : slotsMessage
+  );
 }
 
 async function handleWhatsappAgent(
@@ -392,6 +409,7 @@ async function handleWhatsappAgent(
   const context = readWhatsappAgentContext(lead.notes);
   const period = detectPeriodPreference(message.body);
   const datePreference = parseDatePreference(message.body);
+  const knownPeriod = period || context.lastOfferedPeriod || context.period;
   const shouldTreatAsPeriod = Boolean(period && lead.status !== "esperando_dia_preferido");
 
   if (intent === "needs_human") {
@@ -411,7 +429,10 @@ async function handleWhatsappAgent(
       notes: writeWhatsappAgentContext(lead.notes, context),
       ...inboundWindowFields,
     });
-    await replyToLead(message.from, DIFFERENT_DAY_MESSAGE);
+    await replyToLead(
+      message.from,
+      knownPeriod ? DIFFERENT_DAY_WITH_PERIOD_MESSAGE : DIFFERENT_DAY_MESSAGE
+    );
     return;
   }
 
@@ -542,6 +563,15 @@ async function handleWhatsappAgent(
   }
 
   if (intent === "wants_schedule") {
+    if (knownPeriod) {
+      await offerWhatsappAgentSlots(lead, inboundWindowFields, {
+        period: knownPeriod,
+        preferredDate: context.preferredDate,
+        reminder: true,
+      });
+      return;
+    }
+
     await updateWhatsappAgentLead(lead.id, {
       status: "esperando_preferencia_jornada",
       priority: "alta",
@@ -554,6 +584,16 @@ async function handleWhatsappAgent(
 
   const directReply = replyForIntent(intent);
   if (directReply) {
+    if (knownPeriod) {
+      await offerWhatsappAgentSlots(lead, inboundWindowFields, {
+        period: knownPeriod,
+        preferredDate: context.preferredDate,
+        intro: replyForIntentWithKnownPeriod(intent) || directReply,
+        reminder: true,
+      });
+      return;
+    }
+
     await updateWhatsappAgentLead(lead.id, {
       status: "esperando_preferencia_jornada",
       priority: "alta",
