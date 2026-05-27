@@ -236,15 +236,15 @@ export default function LeadsPage() {
   const currentOperationalGroupCode = normalizeOperationalGroupCode(
     currentCommissionGroupCode
   );
-  const isCallCenterCzReportRole =
+  const isCallCenterCbReportRole =
     (roleCode === "supervisor_call_center" || roleCode === "confirmador") &&
-    currentOperationalGroupCode === "CZ";
+    currentOperationalGroupCode === "CB";
   const canViewOpcPromoterReport =
     showSupervisorOpcTools ||
     roleCode === "promotor_opc" ||
-    isCallCenterCzReportRole;
+    isCallCenterCbReportRole;
   const showTeamOpcPromoterReport =
-    showSupervisorOpcTools || isCallCenterCzReportRole;
+    showSupervisorOpcTools || isCallCenterCbReportRole;
   const showLeadStatusFilters = showSupervisorOpcTools || showTmkSchedulingTools;
 
   const isSuperUser = roleCode === "super_user";
@@ -574,7 +574,7 @@ export default function LeadsPage() {
           if (roleCode === "super_user") return true;
           if (
             (roleCode === "supervisor_call_center" || roleCode === "confirmador") &&
-            currentGroupCode === "CZ"
+            currentGroupCode === "CB"
           ) {
             return true;
           }

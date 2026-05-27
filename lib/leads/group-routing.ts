@@ -3,8 +3,8 @@ export function normalizeOperationalGroupCode(value: string | null | undefined) 
   return normalized || null;
 }
 
-const opcLeadOperationalGroupCode = "CZ";
-const opcLeadOperationalRouteStartsAt = Date.parse("2026-05-02T05:00:00.000Z");
+const opcLeadOperationalGroupCode = "CB";
+const opcLeadOperationalRouteStartsAt = Date.parse("2026-05-27T18:11:28.000Z");
 
 function isOpcLead(source: string | null | undefined, commissionSourceType?: string | null) {
   return (
@@ -13,7 +13,7 @@ function isOpcLead(source: string | null | undefined, commissionSourceType?: str
   );
 }
 
-function shouldRouteOpcLeadToCz(createdAt: string | null | undefined) {
+function shouldRouteOpcLeadToOperationalGroup(createdAt: string | null | undefined) {
   if (!createdAt) return false;
 
   const timestamp = Date.parse(createdAt);
@@ -31,7 +31,7 @@ export function resolveLeadOperationalGroupCode(params: {
 }) {
   if (
     isOpcLead(params.source, params.commissionSourceType) &&
-    shouldRouteOpcLeadToCz(params.createdAt)
+    shouldRouteOpcLeadToOperationalGroup(params.createdAt)
   ) {
     return opcLeadOperationalGroupCode;
   }
