@@ -615,8 +615,13 @@ async function handleWhatsappAgent(
     });
 
     if (!result.ok) {
+      if (result.reason === "duplicate" || result.reason === "insert_failed") {
+        await replyToLead(message.from, result.error);
+        return;
+      }
+
       await updateWhatsappAgentLead(lead.id, {
-        status: "ofreciendo_horarios",
+        status: "esperando_confirmacion_horario",
         priority: "alta",
         ...inboundWindowFields,
       });

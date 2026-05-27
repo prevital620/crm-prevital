@@ -38,6 +38,17 @@ export type OfferedAgendaSlot = {
   remaining: number;
 };
 
+type WhatsappAppointmentCreateResult =
+  | {
+      ok: true;
+      appointmentId?: string;
+    }
+  | {
+      ok: false;
+      error: string;
+      reason: "slot_unavailable" | "duplicate" | "insert_failed";
+    };
+
 export type WhatsappAgentContext = {
   period?: AgendaPeriod;
   preferredDate?: string;
@@ -53,6 +64,17 @@ export type ParsedDatePreference = {
 };
 
 const AGENT_CONTEXT_PREFIX = "WhatsApp IA contexto:";
+const ACTIVE_APPOINTMENT_STATUSES = [
+  "agendada",
+  "confirmada",
+  "en_espera",
+  "reagendada",
+  "en_atencion",
+];
+const DUPLICATE_APPOINTMENT_REPLY =
+  "Ya tienes una cita registrada en Prevital 💚 Nuestro equipo revisará tu caso y te ayudará si necesitas cambiarla.";
+const APPOINTMENT_INSERT_ERROR_REPLY =
+  "Gracias por tu paciencia 💚 Tuvimos un inconveniente al confirmar la cita automáticamente. Nuestro equipo revisará tu caso y te contactará para ayudarte a finalizar la agenda.";
 
 export const PERIOD_QUESTION =
   "Claro 😊 ¿Te queda mejor en la mañana o en la tarde para coordinar tu experiencia en Prevital?";
@@ -588,10 +610,129 @@ export function isWhatsappAgentBookingEnabled() {
     .toLowerCase() === "true";
 }
 
+function phoneCandidates(value: string) {
+  const digits = value.replace(/[^\d]/g, "");
+  const withoutCountry = digits.startsWith("57") ? digits.slice(2) : digits;
+  const withCountry = withoutCountry ? `57${withoutCountry}` : "";
+  const candidates = [
+    value.trim(),
+    digits,
+    withoutCountry,
+    withCountry,
+    withCountry ? `+${withCountry}` : "",
+  ];
+
+  return Array.from(new Set(candidates.filter(Boolean)));
+}
+
+async function findRelatedLeadId(phone: string) {
+  const candidates = phoneCandidates(phone);
+
+  const { data, error } = await supabaseAdmin
+    .from("leads")
+    .select("id")
+    .in("phone", candidates)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return data?.[0]?.id || null;
+}
+
+async function findActiveAppointment(params: {
+  phone: string;
+  leadId: string | null;
+  whatsappLeadId: string;
+}) {
+  const candidates = phoneCandidates(params.phone);
+
+  const phoneResult = await supabaseAdmin
+    .from("appointments")
+    .select("id, lead_id, phone, appointment_date, appointment_time, status")
+    .in("status", ACTIVE_APPOINTMENT_STATUSES)
+    .in("phone", candidates)
+    .limit(1);
+
+  if (phoneResult.error) throw phoneResult.error;
+  if (phoneResult.data?.[0]) return phoneResult.data[0];
+
+  if (params.leadId) {
+    const leadResult = await supabaseAdmin
+      .from("appointments")
+      .select("id, lead_id, phone, appointment_date, appointment_time, status")
+      .in("status", ACTIVE_APPOINTMENT_STATUSES)
+      .eq("lead_id", params.leadId)
+      .limit(1);
+
+    if (leadResult.error) throw leadResult.error;
+    if (leadResult.data?.[0]) return leadResult.data[0];
+  }
+
+  const whatsappLeadResult = await supabaseAdmin
+    .from("appointments")
+    .select("id, lead_id, phone, appointment_date, appointment_time, status")
+    .in("status", ACTIVE_APPOINTMENT_STATUSES)
+    .ilike("notes", `%WhatsApp lead ID: ${params.whatsappLeadId}%`)
+    .limit(1);
+
+  if (whatsappLeadResult.error) throw whatsappLeadResult.error;
+  return whatsappLeadResult.data?.[0] || null;
+}
+
+async function markWhatsappLeadAgendado(id: string) {
+  await supabaseAdmin
+    .from("whatsapp_leads")
+    .update({ status: "agendado", priority: "normal", updated_at: new Date().toISOString() })
+    .eq("id", id);
+}
+
+async function markWhatsappLeadRequiresHuman(id: string) {
+  await supabaseAdmin
+    .from("whatsapp_leads")
+    .update({ status: "requiere_humano", priority: "alta", updated_at: new Date().toISOString() })
+    .eq("id", id);
+}
+
+async function markWhatsappLeadWaitingConfirmation(id: string) {
+  await supabaseAdmin
+    .from("whatsapp_leads")
+    .update({
+      status: "esperando_confirmacion_horario",
+      priority: "alta",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id);
+}
+
+async function claimWhatsappLeadForBooking(id: string) {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_leads")
+    .update({
+      status: "en_gestion_callcenter",
+      priority: "alta",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .in("status", [
+      "pendiente_agendar",
+      "ofreciendo_horarios",
+      "esperando_preferencia_jornada",
+      "esperando_dia_preferido",
+      "esperando_confirmacion_horario",
+      "felicitacion_enviada",
+      "respondio_para_agendar",
+    ])
+    .select("id")
+    .maybeSingle();
+
+  if (error) throw error;
+  return Boolean(data?.id);
+}
+
 export async function createWhatsappAgentAppointment(params: {
   lead: WhatsappAgentLead;
   slot: OfferedAgendaSlot;
-}) {
+}): Promise<WhatsappAppointmentCreateResult> {
   const availability = await getCommercialAgendaAvailability({
     date: params.slot.date,
     serviceType: "valoracion",
@@ -606,13 +747,77 @@ export async function createWhatsappAgentAppointment(params: {
   ) {
     return {
       ok: false as const,
+      reason: "slot_unavailable",
       error:
         "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoración 😊",
     };
   }
 
+  const claimed = await claimWhatsappLeadForBooking(params.lead.id);
+  if (!claimed) {
+    return {
+      ok: false as const,
+      reason: "duplicate",
+      error: DUPLICATE_APPOINTMENT_REPLY,
+    };
+  }
+
+  let leadId: string | null = null;
+  try {
+    leadId = await findRelatedLeadId(params.lead.phone);
+
+    const activeAppointment = await findActiveAppointment({
+      phone: params.lead.phone,
+      leadId,
+      whatsappLeadId: params.lead.id,
+    });
+
+    if (activeAppointment) {
+      await markWhatsappLeadAgendado(params.lead.id);
+      return {
+        ok: false as const,
+        reason: "duplicate",
+        error: DUPLICATE_APPOINTMENT_REPLY,
+      };
+    }
+  } catch (error) {
+    console.error("[whatsapp-agent] Could not verify active appointment before booking.", {
+      whatsappLeadId: params.lead.id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    await markWhatsappLeadRequiresHuman(params.lead.id);
+    return {
+      ok: false as const,
+      reason: "insert_failed",
+      error: APPOINTMENT_INSERT_ERROR_REPLY,
+    };
+  }
+
+  const freshAvailability = await getCommercialAgendaAvailability({
+    date: params.slot.date,
+    serviceType: "valoracion",
+  });
+  const freshSlot = freshAvailability.slots.find((slot) => slot.time === params.slot.time);
+
+  if (
+    !freshSlot ||
+    !freshSlot.available ||
+    freshSlot.remaining <= 0 ||
+    !isFutureSlotAllowed(params.slot.date, params.slot.time)
+  ) {
+    await markWhatsappLeadWaitingConfirmation(params.lead.id);
+    return {
+      ok: false as const,
+      reason: "slot_unavailable",
+      error:
+        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoraciÃ³n ðŸ˜Š",
+    };
+  }
+
   const notes = [
-    "Cita agendada desde WhatsApp IA",
+    leadId
+      ? "Cita agendada desde WhatsApp IA"
+      : "Cita agendada desde WhatsApp IA sin lead CRM relacionado",
     `WhatsApp lead ID: ${params.lead.id}`,
     params.lead.email ? `Correo: ${params.lead.email}` : "",
     `Auditoria: ${new Date().toISOString()}`,
@@ -624,7 +829,7 @@ export async function createWhatsappAgentAppointment(params: {
     .from("appointments")
     .insert([
       {
-        lead_id: null,
+        lead_id: leadId,
         patient_name: params.lead.full_name || "Lead WhatsApp",
         phone: params.lead.phone,
         appointment_date: params.slot.date,
@@ -640,12 +845,21 @@ export async function createWhatsappAgentAppointment(params: {
     .select("id")
     .single();
 
-  if (error) throw error;
+  if (error) {
+    console.error("[whatsapp-agent] Could not create appointment.", {
+      whatsappLeadId: params.lead.id,
+      code: error.code,
+      error: error.message,
+    });
+    await markWhatsappLeadRequiresHuman(params.lead.id);
+    return {
+      ok: false as const,
+      reason: "insert_failed",
+      error: APPOINTMENT_INSERT_ERROR_REPLY,
+    };
+  }
 
-  await supabaseAdmin
-    .from("whatsapp_leads")
-    .update({ status: "agendado", priority: "normal", updated_at: new Date().toISOString() })
-    .eq("id", params.lead.id);
+  await markWhatsappLeadAgendado(params.lead.id);
 
   return {
     ok: true as const,
