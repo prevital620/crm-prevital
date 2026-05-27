@@ -16,7 +16,7 @@ import {
   isWhatsappAgentBookingEnabled,
   isPositiveConfirmation,
   isSlotRejectionMessage,
-  parseDatePreference,
+  parseSpecificDatePreference,
   pickOfferedSlot,
   PERIOD_QUESTION,
   readWhatsappAgentContext,
@@ -114,6 +114,14 @@ const DIFFERENT_DAY_MESSAGE =
 
 const DIFFERENT_DAY_WITH_PERIOD_MESSAGE =
   "Claro, sin problema 😊 ¿Qué día te queda fácil? Revisaré opciones en la jornada que me indicaste.";
+
+function periodLabel(period: "morning" | "afternoon") {
+  return period === "afternoon" ? "tarde" : "ma\u00f1ana";
+}
+
+function noAvailabilityForDateMessage(dateLabel: string, period: "morning" | "afternoon") {
+  return `Para ${dateLabel} en la ${periodLabel(period)} no veo cupos disponibles por ahora \ud83d\ude0a \u00bfQuieres que revise el d\u00eda siguiente o prefieres otro d\u00eda?`;
+}
 
 const PRE_FELICITATION_LOCATION_MESSAGE =
   "Estamos en El Poblado, Medell\u00edn \ud83c\udf3f\n\nTu inscripci\u00f3n ya qued\u00f3 registrada. Si sales beneficiado/a, te contactaremos por este mismo medio para coordinar tu cita y enviarte la direcci\u00f3n completa.";
@@ -410,18 +418,21 @@ async function offerWhatsappAgentSlots(
     preferredDate?: string;
     intro?: string;
     reminder?: boolean;
+    exactDateOnly?: boolean;
+    noAvailabilityMessage?: string;
   }
 ) {
   const slots = await getNextWhatsappAgendaSlots({
     limit: 3,
     period: options.period,
     preferredDate: options.preferredDate,
+    exactDateOnly: options.exactDateOnly,
   });
   const context = readWhatsappAgentContext(lead.notes);
 
   if (slots.length === 0) {
     await updateWhatsappAgentLead(lead.id, {
-      status: "requiere_humano",
+      status: options.exactDateOnly ? "esperando_dia_preferido" : "requiere_humano",
       priority: "alta",
       notes: writeWhatsappAgentContext(lead.notes, {
         ...context,
@@ -430,7 +441,7 @@ async function offerWhatsappAgentSlots(
       }),
       ...inboundWindowFields,
     });
-    const noSlotsMessage = buildSlotsOfferMessage(slots, options.period);
+    const noSlotsMessage = options.noAvailabilityMessage || buildSlotsOfferMessage(slots, options.period);
     await replyToLead(
       lead.phone,
       options.intro ? `${options.intro}\n\n${noSlotsMessage}` : noSlotsMessage
@@ -467,10 +478,21 @@ async function handleWhatsappAgent(
 ) {
   const intent = analyzeWhatsappAgentIntent(message.body);
   const context = readWhatsappAgentContext(lead.notes);
+  const normalizedMessage = normalizeText(message.body);
   const period = detectPeriodPreference(message.body);
-  const datePreference = parseDatePreference(message.body);
-  const knownPeriod = period || context.lastOfferedPeriod || context.period;
-  const shouldTreatAsPeriod = Boolean(period && lead.status !== "esperando_dia_preferido");
+  const bareManana = /^(manana|ma\u00f1ana)$/.test(normalizedMessage);
+  const periodForScheduling =
+    lead.status === "esperando_dia_preferido" && bareManana ? null : period;
+  const treatsBareMorningAsPeriod =
+    lead.status === "esperando_preferencia_jornada" &&
+    bareManana;
+  const datePreference = treatsBareMorningAsPeriod
+    ? null
+    : parseSpecificDatePreference(message.body);
+  const knownPeriod = periodForScheduling || context.lastOfferedPeriod || context.period;
+  const shouldTreatAsPeriod = Boolean(
+    periodForScheduling && lead.status !== "esperando_dia_preferido"
+  );
 
   if (intent === "needs_human") {
     const safeReply = replyForIntent(intent) || AGENT_UNKNOWN_MESSAGE;
@@ -526,9 +548,37 @@ async function handleWhatsappAgent(
     return;
   }
 
-  if (shouldTreatAsPeriod && period) {
+  if (datePreference && periodForScheduling) {
+    if (datePreference.needsConfirmation) {
+      await updateWhatsappAgentLead(lead.id, {
+        status: "esperando_dia_preferido",
+        priority: "alta",
+        notes: writeWhatsappAgentContext(lead.notes, {
+          ...context,
+          period: periodForScheduling,
+          pendingDate: datePreference.date,
+        }),
+        ...inboundWindowFields,
+      });
+      await replyToLead(
+        message.from,
+        `\u00bfTe refieres a este ${datePreference.label}?`
+      );
+      return;
+    }
+
     await offerWhatsappAgentSlots(lead, inboundWindowFields, {
-      period,
+      period: periodForScheduling,
+      preferredDate: datePreference.date,
+      exactDateOnly: true,
+      noAvailabilityMessage: noAvailabilityForDateMessage(datePreference.label, periodForScheduling),
+    });
+    return;
+  }
+
+  if (shouldTreatAsPeriod && periodForScheduling) {
+    await offerWhatsappAgentSlots(lead, inboundWindowFields, {
+      period: periodForScheduling,
       preferredDate: context.preferredDate,
     });
     return;

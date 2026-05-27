@@ -329,6 +329,10 @@ export function formatSlotTime(time: string) {
 }
 
 export function detectPeriodPreference(message: string): AgendaPeriod | null {
+  const normalizedForAfternoon = normalizeText(message);
+  if (hasAny(normalizedForAfternoon, ["tarde", "despues del medio dia", "despues de medio dia"])) {
+    return "afternoon";
+  }
   const normalized = normalizeText(message);
   if (hasAny(normalized, ["manana", "mañana", "temprano", "antes del medio dia", "antes de medio dia"])) {
     return "morning";
@@ -386,6 +390,18 @@ export function parseDatePreference(
 ): ParsedDatePreference | null {
   const normalized = normalizeText(message);
   const today = todayBogota(now);
+  const mentionsAfternoon = hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"]);
+  const morningOnlyPhrases = [
+    "en la manana",
+    "por la manana",
+    "de la manana",
+    "en manana",
+    "por manana",
+  ];
+  const dateNormalized =
+    !mentionsAfternoon && hasAny(normalized, morningOnlyPhrases)
+      ? normalized.replace(/\bmanana\b/g, "")
+      : normalized;
 
   if (hasAny(normalized, ["pasado manana", "pasado mañana"])) {
     const date = addDaysISO(today, 2);
@@ -448,6 +464,85 @@ export function parseDatePreference(
   return null;
 }
 
+export function parseSpecificDatePreference(
+  message: string,
+  now = new Date()
+): ParsedDatePreference | null {
+  const normalized = normalizeText(message);
+  const today = todayBogota(now);
+  const mentionsAfternoon = hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"]);
+  const morningOnlyPhrases = [
+    "en la manana",
+    "por la manana",
+    "de la manana",
+    "en manana",
+    "por manana",
+  ];
+
+  if (hasAny(normalized, ["pasado manana", "pasado maÃ±ana"])) {
+    const date = addDaysISO(today, 2);
+    return { date, needsConfirmation: false, label: formatSlotDate(date) };
+  }
+
+  if (
+    (/\bmanana\b/.test(normalized) || /\bmaÃ±ana\b/.test(message.toLowerCase())) &&
+    (mentionsAfternoon || !hasAny(normalized, morningOnlyPhrases))
+  ) {
+    const date = addDaysISO(today, 1);
+    return { date, needsConfirmation: false, label: formatSlotDate(date) };
+  }
+
+  if (hasAny(normalized, ["otra semana", "la proxima semana", "proxima semana"])) {
+    const date = addDaysISO(today, 7);
+    return { date, needsConfirmation: true, label: formatSlotDate(date) };
+  }
+
+  const explicitDate = normalized.match(/\b(\d{1,2})(?:\s*de\s*([a-z]+))?\b/);
+  if (explicitDate) {
+    const day = Number(explicitDate[1]);
+    const parts = currentBogotaParts(now);
+    const month = explicitDate[2] ? monthNumber(explicitDate[2]) : parts.month;
+    if (month && day >= 1 && day <= 31) {
+      let year = parts.year;
+      let date = formatISODate(year, month, day);
+      if (date < today) {
+        if (explicitDate[2]) {
+          year += 1;
+          date = formatISODate(year, month, day);
+        } else {
+          const nextMonth = parts.month === 12 ? 1 : parts.month + 1;
+          const nextMonthYear = parts.month === 12 ? parts.year + 1 : parts.year;
+          date = formatISODate(nextMonthYear, nextMonth, day);
+        }
+      }
+      return {
+        date,
+        needsConfirmation: !explicitDate[2],
+        label: formatSlotDate(date),
+      };
+    }
+  }
+
+  const weekdayMatch = normalized.match(/\b(lunes|martes|miercoles|miÃ©rcoles|jueves|viernes|sabado|sÃ¡bado|domingo)\b/);
+  if (weekdayMatch) {
+    const target = weekdayIndex(weekdayMatch[1]);
+    if (target === null) return null;
+
+    const base = dateFromISO(today);
+    const current = base.getUTCDay();
+    const diff = (target - current + 7) % 7 || 7;
+    const date = addDaysISO(today, diff);
+
+    return {
+      date,
+      needsConfirmation: diff > 6,
+      label: formatSlotDate(date),
+    };
+  }
+
+  return null;
+}
+
 function periodMatches(time: string, period?: AgendaPeriod) {
   if (!period) return true;
   if (period === "morning") return time >= "08:00" && time < "12:00";
@@ -470,9 +565,10 @@ export async function getNextWhatsappAgendaSlots(options: {
   preferredDate?: string;
   now?: Date;
   maxDays?: number;
+  exactDateOnly?: boolean;
 } = {}) {
   const limit = options.limit || 3;
-  const maxDays = options.maxDays || 7;
+  const maxDays = options.exactDateOnly ? 1 : options.maxDays || 7;
   const now = options.now || new Date();
   const slots: OfferedAgendaSlot[] = [];
   const today = todayBogota(now);
