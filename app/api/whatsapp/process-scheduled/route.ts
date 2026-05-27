@@ -23,7 +23,16 @@ type ScheduledLead = {
 };
 
 const FELICITATION_MESSAGE = (name: string) =>
-  `\u00a1Hola, ${name}! \u2728 Tenemos una gran noticia \ud83d\udc9a\n\nHas sido seleccionado/a para disfrutar una experiencia de Detox I\u00f3nico sin costo en Prevital.\n\nResponde este mensaje para ayudarte a agendar tu cita. \ud83d\udcc5`;
+  `\u00a1Hola, ${name}! \u2728 Tenemos una gran noticia de Prevital \ud83d\udc9a\n\nHas salido beneficiado/a para vivir una experiencia de Detox I\u00f3nico sin costo.\n\nPara coordinar tu cita, por favor resp\u00f3ndenos si te queda mejor en la ma\u00f1ana o en la tarde. \ud83c\udf3f`;
+
+const SCHEDULABLE_STATUSES = ["felicitacion_programada", "registrado", "registered"];
+const EXCLUDED_STATUSES = new Set([
+  "agendado",
+  "cerrado",
+  "no_response",
+  "sin_respuesta",
+  "requiere_humano",
+]);
 
 function authorized(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -50,6 +59,18 @@ async function markRequiresTemplate(id: string) {
     .eq("id", id);
 }
 
+async function releaseClaim(id: string, status: string | null) {
+  await supabaseAdmin
+    .from("whatsapp_leads")
+    .update({
+      status: status || "felicitacion_programada",
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .eq("status", "felicitacion_enviada")
+    .is("felicitation_sent_at", null);
+}
+
 export async function POST(request: Request) {
   if (!authorized(request)) {
     return NextResponse.json({ error: "No autorizado." }, { status: 401 });
@@ -63,7 +84,7 @@ export async function POST(request: Request) {
       .select(
         "id, phone, full_name, profile_name, status, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at"
       )
-      .in("status", ["felicitacion_programada", "registrado"])
+      .in("status", SCHEDULABLE_STATUSES)
       .is("felicitation_sent_at", null)
       .lte("felicitation_scheduled_for", now.toISOString())
       .order("felicitation_scheduled_for", { ascending: true })
@@ -83,11 +104,13 @@ export async function POST(request: Request) {
       requiresTemplate: 0,
       skippedOutsideBusinessHours: 0,
       failed: 0,
+      imageWarnings: 0,
     };
 
     for (const lead of leads) {
       if (
-        !["felicitacion_programada", "registrado"].includes(lead.status || "") ||
+        !SCHEDULABLE_STATUSES.includes(lead.status || "") ||
+        EXCLUDED_STATUSES.has(lead.status || "") ||
         lead.felicitation_sent_at ||
         !lead.reply_window_expires_at ||
         !lead.safe_deadline_at
@@ -108,27 +131,53 @@ export async function POST(request: Request) {
         continue;
       }
 
+      const claimTime = new Date().toISOString();
+      const { data: claimedLead, error: claimError } = await supabaseAdmin
+        .from("whatsapp_leads")
+        .update({
+          status: "felicitacion_enviada",
+          selected_at: claimTime,
+          updated_at: claimTime,
+        })
+        .eq("id", lead.id)
+        .in("status", SCHEDULABLE_STATUSES)
+        .is("felicitation_sent_at", null)
+        .select(
+          "id, phone, full_name, profile_name, status, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at"
+        )
+        .maybeSingle();
+
+      if (claimError) {
+        summary.failed += 1;
+        continue;
+      }
+
+      if (!claimedLead) {
+        continue;
+      }
+
       const textResult = await sendAndStoreTextMessage(
         lead.phone,
         FELICITATION_MESSAGE(displayName(lead))
       );
 
       if (!textResult.ok) {
+        await releaseClaim(lead.id, lead.status);
         summary.failed += 1;
         continue;
       }
 
-      await sendAndStoreImageMessage(
+      const imageResult = await sendAndStoreImageMessage(
         lead.phone,
         process.env.WHATSAPP_IMAGE_FELICITACION_URL,
-        "Seleccionado/a Detox I\u00f3nico Prevital"
+        "Beneficiado/a Detox I\u00f3nico Prevital"
       );
 
       const sentAt = new Date().toISOString();
       const { error: updateError } = await supabaseAdmin
         .from("whatsapp_leads")
         .update({
-          status: "felicitacion_enviada",
+          status: "pendiente_agendar",
           selected_at: sentAt,
           felicitation_sent_at: sentAt,
           last_outbound_at: sentAt,
@@ -136,12 +185,16 @@ export async function POST(request: Request) {
           updated_at: sentAt,
         })
         .eq("id", lead.id)
-        .in("status", ["felicitacion_programada", "registrado"])
+        .eq("status", "felicitacion_enviada")
         .is("felicitation_sent_at", null);
 
       if (updateError) {
         summary.failed += 1;
         continue;
+      }
+
+      if (!imageResult.ok) {
+        summary.imageWarnings += 1;
       }
 
       summary.sent += 1;

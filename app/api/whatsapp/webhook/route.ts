@@ -106,11 +106,29 @@ const AGENT_UNKNOWN_MESSAGE =
 const BOOKING_DISABLED_CONFIRMATION =
   "Perfecto \ud83d\udc9a Ya tengo tu horario preferido. Nuestro equipo confirmara la cita por este mismo chat antes de dejarla agendada.";
 
+const AGENT_UNHANDLED_MESSAGE =
+  "Gracias por escribirnos \ud83d\ude0a Nuestro equipo revisar\u00e1 tu mensaje para ayudarte mejor.";
+
 const DIFFERENT_DAY_MESSAGE =
   "Claro, sin problema 😊 ¿Qué día te queda fácil? Puedo revisar disponibilidad entre mañana y los próximos días.";
 
 const DIFFERENT_DAY_WITH_PERIOD_MESSAGE =
   "Claro, sin problema 😊 ¿Qué día te queda fácil? Revisaré opciones en la jornada que me indicaste.";
+
+const PRE_FELICITATION_LOCATION_MESSAGE =
+  "Estamos en El Poblado, Medell\u00edn \ud83c\udf3f\n\nTu inscripci\u00f3n ya qued\u00f3 registrada. Si sales beneficiado/a, te contactaremos por este mismo medio para coordinar tu cita y enviarte la direcci\u00f3n completa.";
+
+const PRE_FELICITATION_COST_MESSAGE =
+  "Esta experiencia no tiene costo para las personas seleccionadas \ud83d\udc9a\n\nTu inscripci\u00f3n ya qued\u00f3 registrada y te contactaremos por este mismo medio cuando el equipo revise los registros.";
+
+const PRE_FELICITATION_WHEN_MESSAGE =
+  "Tu inscripci\u00f3n ya qued\u00f3 registrada \ud83d\ude0a Nuestro equipo revisar\u00e1 los registros y te contactaremos por este mismo medio si sales beneficiado/a.";
+
+const PRE_FELICITATION_CLINICAL_MESSAGE =
+  "Esa informaci\u00f3n la revisa directamente nuestro equipo profesional durante la cita \ud83d\ude0a Por ahora tu inscripci\u00f3n ya qued\u00f3 registrada y te contactaremos por este mismo medio si sales beneficiado/a.";
+
+const PRE_FELICITATION_UNKNOWN_MESSAGE =
+  "Gracias por escribirnos \ud83d\ude0a Tu inscripci\u00f3n ya qued\u00f3 registrada. Nuestro equipo revisar\u00e1 tu mensaje y te contactaremos por este mismo medio si sales beneficiado/a.";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -127,6 +145,10 @@ function normalizeText(value: string) {
     .replace(/\p{Diacritic}/gu, "")
     .trim()
     .toLowerCase();
+}
+
+function hasAny(text: string, words: string[]) {
+  return words.some((word) => text.includes(word));
 }
 
 function looksLikeEmail(value: string) {
@@ -315,9 +337,6 @@ async function createCrmLeadFromWhatsapp(_lead: WhatsappLeadRow) {
 
 function whatsappAgentCanHandle(status: string | null | undefined) {
   return [
-    "registered",
-    "registrado",
-    "felicitacion_programada",
     "felicitacion_enviada",
     "respondio_para_agendar",
     "pendiente_agendar",
@@ -327,6 +346,48 @@ function whatsappAgentCanHandle(status: string | null | undefined) {
     "esperando_confirmacion_horario",
     "requiere_humano",
   ].includes(status || "");
+}
+
+function isPreFelicitationStatus(status: string | null | undefined) {
+  return ["registered", "registrado", "felicitacion_programada"].includes(status || "");
+}
+
+function isAskingWhenNotice(text: string) {
+  return hasAny(text, [
+    "cuando avisan",
+    "cuando me avisan",
+    "cuando me contactan",
+    "cuando escriben",
+    "cuando se sabe",
+    "cuando me dicen",
+    "cuando llaman",
+    "cuando sale",
+    "cuando salen",
+  ]);
+}
+
+async function handlePreFelicitationLead(
+  lead: WhatsappLeadRow,
+  message: InboundTextMessage,
+  inboundWindowFields: Record<string, unknown>
+) {
+  const normalized = normalizeText(message.body);
+  const intent = analyzeWhatsappAgentIntent(message.body);
+  const reply = intent === "asks_location"
+    ? PRE_FELICITATION_LOCATION_MESSAGE
+    : intent === "asks_price"
+      ? PRE_FELICITATION_COST_MESSAGE
+      : intent === "needs_human"
+        ? PRE_FELICITATION_CLINICAL_MESSAGE
+        : isAskingWhenNotice(normalized)
+          ? PRE_FELICITATION_WHEN_MESSAGE
+          : PRE_FELICITATION_UNKNOWN_MESSAGE;
+
+  await supabaseAdmin
+    .from("whatsapp_leads")
+    .update(inboundWindowFields)
+    .eq("id", lead.id);
+  await replyToLead(message.from, reply);
 }
 
 async function updateWhatsappAgentLead(
@@ -622,7 +683,7 @@ async function handleWhatsappAgent(
     notes: writeWhatsappAgentContext(lead.notes, context),
     ...inboundWindowFields,
   });
-  await replyToLead(message.from, AGENT_UNKNOWN_MESSAGE);
+  await replyToLead(message.from, AGENT_UNHANDLED_MESSAGE);
 }
 
 async function getLeadByPhone(phone: string) {
@@ -753,6 +814,11 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
       process.env.WHATSAPP_IMAGE_INSCRIPCION_URL,
       "Inscripci\u00f3n confirmada Detox I\u00f3nico Prevital"
     );
+    return;
+  }
+
+  if (isPreFelicitationStatus(currentLead.status)) {
+    await handlePreFelicitationLead(currentLead, message, inboundWindowFields);
     return;
   }
 

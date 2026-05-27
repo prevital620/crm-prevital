@@ -209,7 +209,7 @@ function statusTone(status: string | null | undefined) {
     felicitacion_programada: "border-[#BFD7EA] bg-[#EAF4FB] text-[#315E7D] ring-[#BFD7EA]",
     felicitacion_enviada: "border-[#D8C8EA] bg-[#F1ECFA] text-[#6B4F8E] ring-[#D8C8EA]",
     respondio_para_agendar: "border-[#EEC6B8] bg-[#FFF0E9] text-[#9A4E2E] ring-[#EEC6B8]",
-    pendiente_agendar: "border-[#CFE4D8] bg-[#F4FAF6] text-[#4F6F5B] ring-[#CFE4D8]",
+    pendiente_agendar: "border-[#EEC6B8] bg-[#FFF0E9] text-[#9A4E2E] ring-[#EEC6B8]",
     esperando_preferencia_jornada: "border-[#BFD7EA] bg-[#EAF4FB] text-[#315E7D] ring-[#BFD7EA]",
     esperando_dia_preferido: "border-[#E8D49D] bg-[#FFF7D9] text-[#8B6B22] ring-[#E8D49D]",
     ofreciendo_horarios: "border-[#BFD7EA] bg-[#EAF4FB] text-[#315E7D] ring-[#BFD7EA]",
@@ -228,6 +228,7 @@ function statusTone(status: string | null | undefined) {
 function leadCardTone(lead: WhatsappLead, selected: boolean) {
   if (
     lead.status === "respondio_para_agendar" ||
+    lead.status === "pendiente_agendar" ||
     lead.status === "esperando_confirmacion_horario" ||
     lead.status === "requiere_humano"
   ) {
