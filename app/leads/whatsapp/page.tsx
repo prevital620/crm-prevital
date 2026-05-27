@@ -957,33 +957,33 @@ export default function LeadsWhatsappPage() {
             <div className={`min-w-0 flex-col bg-[linear-gradient(180deg,_#F1FAF4_0%,_#EAF5EE_100%)] ${selectedLead ? "flex h-[100dvh] lg:min-h-[720px]" : "hidden min-h-[620px] lg:flex lg:min-h-[720px]"}`}>
               {selectedLead ? (
                 <>
-                  <header className="shrink-0 border-b border-[#DCEDE3] bg-white/95 p-3 shadow-sm sm:p-4">
+                  <header className="shrink-0 border-b border-[#DCEDE3] bg-white/95 p-2.5 shadow-sm sm:p-3">
                     <button
                       type="button"
                       onClick={returnToList}
-                      className="mb-3 inline-flex min-h-10 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-3 py-2 text-xs font-semibold text-[#4F6F5B] shadow-sm lg:hidden"
+                      className="mb-2 inline-flex min-h-9 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-3 py-1.5 text-xs font-semibold text-[#4F6F5B] shadow-sm lg:hidden"
                     >
                       <ArrowLeft className="h-4 w-4" />
                       Volver
                     </button>
-                    <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                      <div className="flex min-w-0 items-start gap-3">
-                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#C7EEE1,_#6C9C88)] text-base font-bold text-[#1F3128]">
+                    <div className="flex flex-col gap-2.5 xl:flex-row xl:items-start xl:justify-between">
+                      <div className="flex min-w-0 items-start gap-2.5">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#C7EEE1,_#6C9C88)] text-sm font-bold text-[#1F3128]">
                           {displayName(selectedLead).slice(0, 1).toUpperCase()}
                         </div>
                         <div className="min-w-0">
-                          <h2 className="truncate text-lg font-bold text-[#0E2340] sm:text-xl">
+                          <h2 className="truncate text-base font-bold text-[#0E2340] sm:text-lg">
                             {displayName(selectedLead)}
                           </h2>
-                          <p className="mt-1 break-words text-xs text-[#607368] sm:text-sm">
+                          <p className="mt-0.5 break-words text-xs text-[#607368]">
                             {selectedLead.phone} / {selectedLead.campaign_code || "-"}
                           </p>
-                          <div className="mt-2">
-                            <span className={`inline-flex rounded-full border px-3 py-1 text-xs font-semibold ring-1 ${statusTone(selectedLead.status)}`}>
+                          <div className="mt-1">
+                            <span className={`inline-flex rounded-full border px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${statusTone(selectedLead.status)}`}>
                               {statusLabel(selectedLead.status)}
                             </span>
                           </div>
-                          <div className="mt-2 grid gap-1 text-xs text-[#607368] md:grid-cols-2">
+                          <div className="mt-1 grid gap-x-3 gap-y-0.5 text-[11px] text-[#607368] md:grid-cols-2">
                             <span>Correo: {selectedLead.email || "-"}</span>
                             <span>Origen: {selectedLead.source || "-"}</span>
                             <span>Creado: {formatDateTime(selectedLead.created_at)}</span>
@@ -992,12 +992,12 @@ export default function LeadsWhatsappPage() {
                         </div>
                       </div>
 
-                      <div className="flex gap-2 overflow-x-auto pb-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
+                      <div className="flex gap-1.5 overflow-x-auto pb-1 xl:flex-wrap xl:overflow-visible xl:pb-0">
                         <button
                           type="button"
                           onClick={() => void loadMessages(selectedLead)}
                           disabled={loadingMessages}
-                          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-3 py-2 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#CFE4D8] bg-white px-3 py-1.5 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           <RefreshCcw className="h-4 w-4" />
                           {loadingMessages ? "Actualizando" : "Actualizar"}
@@ -1006,7 +1006,7 @@ export default function LeadsWhatsappPage() {
                           <button
                             type="button"
                             onClick={() => showActionPendingNotice("Gestionar cita")}
-                            className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-3 py-2 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
+                            className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#CFE4D8] bg-white px-3 py-1.5 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
                           >
                             <CalendarCheck className="h-4 w-4" />
                             Gestionar cita
@@ -1015,7 +1015,7 @@ export default function LeadsWhatsappPage() {
                         <button
                           type="button"
                           onClick={() => showActionPendingNotice("Marcar no responde")}
-                          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-3 py-2 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
+                          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#CFE4D8] bg-white px-3 py-1.5 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
                         >
                           <Clock3 className="h-4 w-4" />
                           No responde
@@ -1023,7 +1023,7 @@ export default function LeadsWhatsappPage() {
                         <button
                           type="button"
                           onClick={() => showActionPendingNotice("Cerrar conversacion")}
-                          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#E6C9C5] bg-white px-3 py-2 text-xs font-semibold text-[#9A4E43] shadow-sm transition hover:-translate-y-0.5"
+                          className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#E6C9C5] bg-white px-3 py-1.5 text-xs font-semibold text-[#9A4E43] shadow-sm transition hover:-translate-y-0.5"
                         >
                           <XCircle className="h-4 w-4" />
                           Cerrar
@@ -1032,9 +1032,9 @@ export default function LeadsWhatsappPage() {
                     </div>
                   </header>
 
-                  <div className="shrink-0 border-b border-[#DCEDE3] bg-[#F8FCF9]/95 px-3 py-2 sm:px-4 sm:py-3">
-                    <p className="rounded-2xl border border-[#CFE4D8] bg-white/85 px-3 py-2 text-xs leading-5 text-[#496356] sm:px-4 sm:py-3 sm:text-sm sm:leading-6">
-                      Puedes responder libremente dentro de la ventana de 24 horas desde el ultimo mensaje del usuario. Para mensajes posteriores se necesitaran plantillas aprobadas.
+                  <div className="shrink-0 border-b border-[#DCEDE3] bg-[#F8FCF9]/95 px-3 py-1.5 sm:px-4">
+                    <p className="rounded-xl border border-[#CFE4D8] bg-white/85 px-3 py-1.5 text-xs leading-5 text-[#496356]">
+                      Ventana activa: puedes responder libremente dentro de 24h. Luego se requieren plantillas.
                     </p>
                   </div>
 
@@ -1063,8 +1063,8 @@ export default function LeadsWhatsappPage() {
                     </div>
                   ) : null}
 
-                  <div className="min-h-0 flex-1 overflow-y-auto px-3 py-4 sm:px-4 sm:py-5">
-                    <div className="mx-auto max-w-4xl space-y-3">
+                  <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3 sm:px-4 sm:py-4">
+                    <div className="mx-auto max-w-4xl space-y-2.5">
                       {loadingMessages ? (
                         <p className="rounded-2xl bg-white/85 px-4 py-3 text-sm text-[#607368] shadow-sm">
                           Cargando conversacion...
@@ -1084,7 +1084,7 @@ export default function LeadsWhatsappPage() {
                               className={`flex ${isOutbound ? "justify-end" : "justify-start"}`}
                             >
                               <div
-                                className={`max-w-[88%] break-words rounded-[22px] px-3 py-2 shadow-sm sm:max-w-[78%] sm:px-4 sm:py-3 ${
+                                className={`max-w-[88%] break-words rounded-[20px] px-3 py-2 shadow-sm sm:max-w-[78%] sm:px-3.5 sm:py-2.5 ${
                                   isOutbound
                                     ? "rounded-br-md bg-[#DCF8C6] text-[#10233F]"
                                     : "rounded-bl-md border border-[#DCEDE3] bg-white text-[#10233F]"
@@ -1122,9 +1122,9 @@ export default function LeadsWhatsappPage() {
 
                   <form
                     onSubmit={sendManualReply}
-                    className="shrink-0 border-t border-[#CFE4D8] bg-white/95 p-2 shadow-[0_-18px_40px_rgba(95,125,102,0.08)] backdrop-blur sm:p-4"
+                    className="shrink-0 border-t border-[#CFE4D8] bg-white/95 p-2 shadow-[0_-18px_40px_rgba(95,125,102,0.08)] backdrop-blur sm:p-3"
                   >
-                    <div className="mx-auto max-w-4xl space-y-3">
+                    <div className="mx-auto max-w-4xl space-y-2">
                       <div className="flex gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible sm:pb-0">
                         {quickReplies.map((reply) => (
                           <button
@@ -1132,7 +1132,7 @@ export default function LeadsWhatsappPage() {
                             type="button"
                             onClick={() => insertQuickReply(reply.text)}
                             disabled={sendingReply || !canReplyFreely(selectedLead)}
-                            className="shrink-0 rounded-full border border-[#CFE4D8] bg-[#F7FCF8] px-3 py-1.5 text-xs font-semibold text-[#4F6F5B] transition hover:-translate-y-0.5 hover:bg-[#EAF7EF] disabled:cursor-not-allowed disabled:opacity-60"
+                            className="shrink-0 rounded-full border border-[#CFE4D8] bg-[#F7FCF8] px-2.5 py-1 text-[11px] font-semibold text-[#4F6F5B] transition hover:-translate-y-0.5 hover:bg-[#EAF7EF] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {reply.label}
                           </button>
@@ -1154,12 +1154,12 @@ export default function LeadsWhatsappPage() {
                         </div>
                       ) : null}
 
-                      <div className="flex items-end gap-1.5 rounded-[24px] border border-[#CFE4D8] bg-[#F7FCF8] p-1.5 sm:gap-2 sm:p-2">
+                      <div className="flex items-end gap-1.5 rounded-[20px] border border-[#CFE4D8] bg-[#F7FCF8] p-1.5">
                         <button
                           type="button"
                           onClick={() => setEmojiOpen((current) => !current)}
                           disabled={sendingReply || !canReplyFreely(selectedLead)}
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:w-11"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                           title="Emojis"
                         >
                           <Smile className="h-5 w-5" />
@@ -1167,14 +1167,14 @@ export default function LeadsWhatsappPage() {
                         <button
                           type="button"
                           onClick={showAttachmentBlockedNotice}
-                          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-white text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 sm:h-11 sm:w-11"
+                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
                           title="Adjuntar imagen"
                         >
                           <Paperclip className="h-5 w-5" />
                         </button>
                         <textarea
                           ref={textareaRef}
-                          className="max-h-32 min-h-10 min-w-0 flex-1 resize-none rounded-2xl border border-transparent bg-white px-3 py-2.5 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] sm:max-h-36 sm:min-h-11 sm:px-4 sm:py-3"
+                          className="max-h-28 min-h-9 min-w-0 flex-1 resize-none rounded-2xl border border-transparent bg-white px-3 py-2 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
                           value={replyMessage}
                           onChange={(event) => setReplyMessage(event.target.value)}
                           onKeyDown={handleReplyKeyDown}
@@ -1188,7 +1188,7 @@ export default function LeadsWhatsappPage() {
                         <button
                           type="submit"
                           disabled={sendingReply || !replyMessage.trim() || !canReplyFreely(selectedLead)}
-                          className="flex h-10 min-w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60 sm:h-11 sm:min-w-11 sm:px-4"
+                          className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                           title="Enviar"
                         >
                           {sendingReply ? "..." : <Send className="h-5 w-5" />}

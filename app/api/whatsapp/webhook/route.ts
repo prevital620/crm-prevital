@@ -44,6 +44,8 @@ const SOURCE = "WhatsApp SaleADS";
 type WhatsappLeadStatus =
   | "collecting_name"
   | "collecting_email"
+  | "pidiendo_nombre"
+  | "pidiendo_correo"
   | "registered"
   | "registrado"
   | "felicitacion_programada"
@@ -98,7 +100,7 @@ const INVALID_EMAIL_MESSAGE =
   "Parece que el correo no qued\u00f3 completo. \u00bfNos lo puedes enviar nuevamente, por favor?";
 
 const REGISTERED_MESSAGE =
-  "\u00a1Listo! \ud83d\udc9a Tu inscripci\u00f3n qued\u00f3 confirmada.\n\nGracias por participar en la campa\u00f1a de Detox I\u00f3nico de Prevital \ud83c\udf3f\n\nNuestro equipo revisar\u00e1 tu registro y, si eres seleccionado/a, te contactaremos por este mismo medio.";
+  "\u00a1Listo! \ud83d\udc9a Recibimos tu inscripci\u00f3n correctamente.";
 
 const ALREADY_REGISTERED_MESSAGE =
   "Tu inscripci\u00f3n ya est\u00e1 registrada \ud83d\udc9a Si necesitas actualizar alg\u00fan dato, escr\u00edbenos: actualizar datos.";
@@ -146,6 +148,9 @@ const PRE_FELICITATION_CLINICAL_MESSAGE =
 
 const PRE_FELICITATION_UNKNOWN_MESSAGE =
   "Gracias por escribirnos \ud83d\ude0a Tu inscripci\u00f3n ya qued\u00f3 registrada. Nuestro equipo revisar\u00e1 tu mensaje y te contactaremos por este mismo medio si sales beneficiado/a.";
+
+const PRE_FELICITATION_THANKS_MESSAGE =
+  "Con mucho gusto \ud83d\ude0a\ud83d\udc9a\n\nTu inscripci\u00f3n qued\u00f3 registrada correctamente. Esperamos que puedas ser seleccionado/a para vivir esta experiencia en Prevital \ud83c\udf3f\n\nTe contactaremos por este mismo medio si sales beneficiado/a.";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -383,6 +388,18 @@ function isAskingWhenNotice(text: string) {
   ]);
 }
 
+function isThanksMessage(text: string) {
+  const normalized = normalizeText(text).replace(/[^\p{Letter}\p{Number}\s]/gu, " ");
+  const compact = normalized.replace(/\s+/g, " ").trim();
+  return [
+    "gracias",
+    "muchas gracias",
+    "ok gracias",
+    "listo gracias",
+    "perfecto gracias",
+  ].includes(compact);
+}
+
 async function handlePreFelicitationLead(
   lead: WhatsappLeadRow,
   message: InboundTextMessage,
@@ -390,7 +407,9 @@ async function handlePreFelicitationLead(
 ) {
   const normalized = normalizeText(message.body);
   const intent = analyzeWhatsappAgentIntent(message.body);
-  const reply = intent === "asks_location"
+  const reply = isThanksMessage(message.body)
+    ? PRE_FELICITATION_THANKS_MESSAGE
+    : intent === "asks_location"
     ? PRE_FELICITATION_LOCATION_MESSAGE
     : intent === "asks_price"
       ? PRE_FELICITATION_COST_MESSAGE
@@ -1224,7 +1243,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
     return;
   }
 
-  if (currentLead.status === "collecting_name") {
+  if (currentLead.status === "collecting_name" || currentLead.status === "pidiendo_nombre") {
     const { error } = await supabaseAdmin
       .from("whatsapp_leads")
       .update({
@@ -1240,7 +1259,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
     return;
   }
 
-  if (currentLead.status === "collecting_email") {
+  if (currentLead.status === "collecting_email" || currentLead.status === "pidiendo_correo") {
     if (!looksLikeEmail(text)) {
       await supabaseAdmin
         .from("whatsapp_leads")
@@ -1276,7 +1295,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
     await sendAndStoreImageMessage(
       message.from,
       process.env.WHATSAPP_IMAGE_INSCRIPCION_URL,
-      "Inscripci\u00f3n confirmada Detox I\u00f3nico Prevital"
+      "Si tu inscripci\u00f3n resulta favorecida, te contactaremos pronto \ud83c\udf3f"
     );
     return;
   }

@@ -16,6 +16,8 @@ type ScheduledLead = {
   full_name: string | null;
   profile_name: string | null;
   status: string | null;
+  last_inbound_at: string | null;
+  last_outbound_at: string | null;
   reply_window_expires_at: string | null;
   safe_deadline_at: string | null;
   felicitation_scheduled_for: string | null;
@@ -26,6 +28,12 @@ const FELICITATION_MESSAGE = (name: string) =>
   `\u00a1Hola, ${name}! \u2728 Tenemos una gran noticia de Prevital \ud83d\udc9a\n\nHas salido beneficiado/a para vivir una experiencia de Detox I\u00f3nico sin costo.\n\nPara coordinar tu cita, por favor resp\u00f3ndenos si te queda mejor en la ma\u00f1ana o en la tarde. \ud83c\udf3f`;
 
 const SCHEDULABLE_STATUSES = ["felicitacion_programada", "registrado", "registered"];
+const REGISTRATION_REMINDER_STATUSES = [
+  "collecting_name",
+  "pidiendo_nombre",
+  "collecting_email",
+  "pidiendo_correo",
+];
 const EXCLUDED_STATUSES = new Set([
   "agendado",
   "cerrado",
@@ -33,6 +41,12 @@ const EXCLUDED_STATUSES = new Set([
   "sin_respuesta",
   "requiere_humano",
 ]);
+
+const NAME_REMINDER_MESSAGE =
+  "Hola \ud83d\ude0a \u00bfsigues en l\u00ednea?\n\nQueremos ayudarte a completar tu inscripci\u00f3n para la experiencia de Detox I\u00f3nico en Prevital \ud83c\udf3f\n\nSolo necesitamos que nos env\u00edes tu nombre completo para continuar.";
+
+const EMAIL_REMINDER_MESSAGE =
+  "Hola \ud83d\ude0a solo nos falta tu correo electr\u00f3nico para finalizar tu inscripci\u00f3n.\n\nPuedes enviarlo por aqu\u00ed y dejamos tu registro completo \ud83d\udc9a";
 
 function authorized(request: Request) {
   const secret = process.env.CRON_SECRET;
@@ -46,6 +60,94 @@ function authorized(request: Request) {
 
 function displayName(lead: ScheduledLead) {
   return lead.full_name || lead.profile_name || "Hola";
+}
+
+function isNameCollectionStatus(status: string | null) {
+  return status === "collecting_name" || status === "pidiendo_nombre";
+}
+
+function isEmailCollectionStatus(status: string | null) {
+  return status === "collecting_email" || status === "pidiendo_correo";
+}
+
+function reminderMessageForStatus(status: string | null) {
+  if (isNameCollectionStatus(status)) return NAME_REMINDER_MESSAGE;
+  if (isEmailCollectionStatus(status)) return EMAIL_REMINDER_MESSAGE;
+  return null;
+}
+
+function minutesSince(value: string | null, now: Date) {
+  if (!value) return Number.POSITIVE_INFINITY;
+  const timestamp = new Date(value).getTime();
+  if (Number.isNaN(timestamp)) return Number.POSITIVE_INFINITY;
+  return (now.getTime() - timestamp) / 60000;
+}
+
+async function alreadySentReminder(phone: string, body: string) {
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("id, created_at")
+    .eq("phone", phone)
+    .eq("direction", "outbound")
+    .eq("body", body)
+    .order("created_at", { ascending: false })
+    .limit(1);
+
+  if (error) throw error;
+  return Boolean(data?.length);
+}
+
+async function processRegistrationReminders(now: Date) {
+  const thresholdIso = new Date(now.getTime() - 10 * 60 * 1000).toISOString();
+
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_leads")
+    .select(
+      "id, phone, full_name, profile_name, status, last_inbound_at, last_outbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at"
+    )
+    .in("status", REGISTRATION_REMINDER_STATUSES)
+    .lte("last_inbound_at", thresholdIso)
+    .order("last_inbound_at", { ascending: true })
+    .limit(50);
+
+  if (error) throw error;
+
+  const summary = {
+    checked: data?.length || 0,
+    sent: 0,
+    skippedWindowExpired: 0,
+    skippedDuplicate: 0,
+    skippedUserResponded: 0,
+    failed: 0,
+  };
+
+  for (const lead of ((data || []) as ScheduledLead[])) {
+    const reminder = reminderMessageForStatus(lead.status);
+    if (!reminder || !lead.reply_window_expires_at || now > new Date(lead.reply_window_expires_at)) {
+      summary.skippedWindowExpired += 1;
+      continue;
+    }
+
+    if (minutesSince(lead.last_inbound_at, now) < 10) {
+      summary.skippedUserResponded += 1;
+      continue;
+    }
+
+    if (await alreadySentReminder(lead.phone, reminder)) {
+      summary.skippedDuplicate += 1;
+      continue;
+    }
+
+    const result = await sendAndStoreTextMessage(lead.phone, reminder);
+    if (!result.ok) {
+      summary.failed += 1;
+      continue;
+    }
+
+    summary.sent += 1;
+  }
+
+  return summary;
 }
 
 async function markRequiresTemplate(id: string) {
@@ -78,11 +180,30 @@ export async function POST(request: Request) {
 
   try {
     const now = new Date();
+    let registrationReminders = {
+      checked: 0,
+      sent: 0,
+      skippedWindowExpired: 0,
+      skippedDuplicate: 0,
+      skippedUserResponded: 0,
+      failed: 0,
+      error: null as string | null,
+    };
+
+    try {
+      registrationReminders = {
+        ...(await processRegistrationReminders(now)),
+        error: null,
+      };
+    } catch (error) {
+      registrationReminders.error =
+        error instanceof Error ? error.message : "No se pudieron procesar recordatorios.";
+    }
 
     const { data, error } = await supabaseAdmin
       .from("whatsapp_leads")
       .select(
-        "id, phone, full_name, profile_name, status, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at"
+        "id, phone, full_name, profile_name, status, last_inbound_at, last_outbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at"
       )
       .in("status", SCHEDULABLE_STATUSES)
       .is("felicitation_sent_at", null)
@@ -200,7 +321,7 @@ export async function POST(request: Request) {
       summary.sent += 1;
     }
 
-    return NextResponse.json({ ok: true, summary });
+    return NextResponse.json({ ok: true, summary, registrationReminders });
   } catch (error: unknown) {
     return NextResponse.json(
       { error: getErrorMessage(error, "Error interno del servidor.") },
