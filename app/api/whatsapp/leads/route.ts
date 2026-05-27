@@ -14,6 +14,8 @@ const allowedStatuses = new Set([
   "felicitacion_enviada",
   "respondio_para_agendar",
   "pendiente_agendar",
+  "esperando_preferencia_jornada",
+  "esperando_dia_preferido",
   "ofreciendo_horarios",
   "esperando_confirmacion_horario",
   "en_gestion_callcenter",

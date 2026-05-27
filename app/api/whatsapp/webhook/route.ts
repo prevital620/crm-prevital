@@ -9,12 +9,19 @@ import {
   analyzeWhatsappAgentIntent,
   buildSlotsOfferMessage,
   createWhatsappAgentAppointment,
+  detectPeriodPreference,
   formatSlotDate,
   formatSlotTime,
   getNextWhatsappAgendaSlots,
   isWhatsappAgentBookingEnabled,
+  isPositiveConfirmation,
+  isSlotRejectionMessage,
+  parseDatePreference,
   pickOfferedSlot,
+  PERIOD_QUESTION,
+  readWhatsappAgentContext,
   replyForIntent,
+  writeWhatsappAgentContext,
 } from "@/lib/whatsapp/agent";
 
 export const dynamic = "force-dynamic";
@@ -33,6 +40,8 @@ type WhatsappLeadStatus =
   | "felicitacion_enviada"
   | "respondio_para_agendar"
   | "pendiente_agendar"
+  | "esperando_preferencia_jornada"
+  | "esperando_dia_preferido"
   | "ofreciendo_horarios"
   | "esperando_confirmacion_horario"
   | "en_gestion_callcenter"
@@ -55,6 +64,7 @@ type WhatsappLeadRow = {
   felicitation_scheduled_for: string | null;
   felicitation_sent_at: string | null;
   after_hours_ack_sent_at: string | null;
+  notes: string | null;
 };
 
 type InboundTextMessage = {
@@ -94,6 +104,9 @@ const AGENT_UNKNOWN_MESSAGE =
 
 const BOOKING_DISABLED_CONFIRMATION =
   "Perfecto \ud83d\udc9a Ya tengo tu horario preferido. Nuestro equipo confirmara la cita por este mismo chat antes de dejarla agendada.";
+
+const DIFFERENT_DAY_MESSAGE =
+  "Claro, sin problema 😊 ¿Qué día te queda fácil? Puedo revisar disponibilidad entre mañana y los próximos días.";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -304,6 +317,8 @@ function whatsappAgentCanHandle(status: string | null | undefined) {
     "felicitacion_enviada",
     "respondio_para_agendar",
     "pendiente_agendar",
+    "esperando_preferencia_jornada",
+    "esperando_dia_preferido",
     "ofreciendo_horarios",
     "esperando_confirmacion_horario",
     "requiere_humano",
@@ -324,26 +339,48 @@ async function updateWhatsappAgentLead(
 
 async function offerWhatsappAgentSlots(
   lead: WhatsappLeadRow,
-  inboundWindowFields: Record<string, unknown>
+  inboundWindowFields: Record<string, unknown>,
+  options: {
+    period: "morning" | "afternoon";
+    preferredDate?: string;
+  }
 ) {
-  const slots = await getNextWhatsappAgendaSlots(3);
+  const slots = await getNextWhatsappAgendaSlots({
+    limit: 3,
+    period: options.period,
+    preferredDate: options.preferredDate,
+  });
+  const context = readWhatsappAgentContext(lead.notes);
 
   if (slots.length === 0) {
     await updateWhatsappAgentLead(lead.id, {
       status: "requiere_humano",
       priority: "alta",
+      notes: writeWhatsappAgentContext(lead.notes, {
+        ...context,
+        period: options.period,
+        preferredDate: options.preferredDate || context.preferredDate,
+      }),
       ...inboundWindowFields,
     });
-    await replyToLead(lead.phone, buildSlotsOfferMessage(slots));
+    await replyToLead(lead.phone, buildSlotsOfferMessage(slots, options.period));
     return;
   }
 
   await updateWhatsappAgentLead(lead.id, {
     status: "esperando_confirmacion_horario",
     priority: "alta",
+    notes: writeWhatsappAgentContext(lead.notes, {
+      ...context,
+      period: options.period,
+      preferredDate: options.preferredDate || context.preferredDate,
+      pendingDate: undefined,
+      lastOfferedPeriod: options.period,
+      lastOfferedDate: slots[0]?.date,
+    }),
     ...inboundWindowFields,
   });
-  await replyToLead(lead.phone, buildSlotsOfferMessage(slots));
+  await replyToLead(lead.phone, buildSlotsOfferMessage(slots, options.period));
 }
 
 async function handleWhatsappAgent(
@@ -352,6 +389,10 @@ async function handleWhatsappAgent(
   inboundWindowFields: Record<string, unknown>
 ) {
   const intent = analyzeWhatsappAgentIntent(message.body);
+  const context = readWhatsappAgentContext(lead.notes);
+  const period = detectPeriodPreference(message.body);
+  const datePreference = parseDatePreference(message.body);
+  const shouldTreatAsPeriod = Boolean(period && lead.status !== "esperando_dia_preferido");
 
   if (intent === "needs_human") {
     await updateWhatsappAgentLead(lead.id, {
@@ -363,8 +404,94 @@ async function handleWhatsappAgent(
     return;
   }
 
+  if (isSlotRejectionMessage(message.body)) {
+    await updateWhatsappAgentLead(lead.id, {
+      status: "esperando_dia_preferido",
+      priority: "alta",
+      notes: writeWhatsappAgentContext(lead.notes, context),
+      ...inboundWindowFields,
+    });
+    await replyToLead(message.from, DIFFERENT_DAY_MESSAGE);
+    return;
+  }
+
+  if (
+    lead.status === "esperando_dia_preferido" &&
+    context.pendingDate &&
+    isPositiveConfirmation(message.body)
+  ) {
+    await updateWhatsappAgentLead(lead.id, {
+      status: "esperando_preferencia_jornada",
+      priority: "alta",
+      notes: writeWhatsappAgentContext(lead.notes, {
+        ...context,
+        preferredDate: context.pendingDate,
+        pendingDate: undefined,
+      }),
+      ...inboundWindowFields,
+    });
+    await replyToLead(message.from, "Perfecto 💚 ¿Te queda mejor en la mañana o en la tarde?");
+    return;
+  }
+
+  if (shouldTreatAsPeriod && period) {
+    await offerWhatsappAgentSlots(lead, inboundWindowFields, {
+      period,
+      preferredDate: context.preferredDate,
+    });
+    return;
+  }
+
+  if (datePreference && lead.status !== "esperando_preferencia_jornada") {
+    if (datePreference.needsConfirmation) {
+      await updateWhatsappAgentLead(lead.id, {
+        status: "esperando_dia_preferido",
+        priority: "alta",
+        notes: writeWhatsappAgentContext(lead.notes, {
+          ...context,
+          pendingDate: datePreference.date,
+        }),
+        ...inboundWindowFields,
+      });
+      await replyToLead(
+        message.from,
+        `¿Te refieres a este ${datePreference.label}?`
+      );
+      return;
+    }
+
+    await updateWhatsappAgentLead(lead.id, {
+      status: "esperando_preferencia_jornada",
+      priority: "alta",
+      notes: writeWhatsappAgentContext(lead.notes, {
+        ...context,
+        preferredDate: datePreference.date,
+        pendingDate: undefined,
+      }),
+      ...inboundWindowFields,
+    });
+    await replyToLead(message.from, "Perfecto 💚 ¿Te queda mejor en la mañana o en la tarde?");
+    return;
+  }
+
   if (intent === "chooses_slot") {
-    const slots = await getNextWhatsappAgendaSlots(3);
+    if (lead.status !== "esperando_confirmacion_horario") {
+      await updateWhatsappAgentLead(lead.id, {
+        status: "esperando_preferencia_jornada",
+        priority: "alta",
+        notes: writeWhatsappAgentContext(lead.notes, context),
+        ...inboundWindowFields,
+      });
+      await replyToLead(message.from, PERIOD_QUESTION);
+      return;
+    }
+
+    const selectedPeriod = context.lastOfferedPeriod || context.period;
+    const slots = await getNextWhatsappAgendaSlots({
+      limit: 3,
+      period: selectedPeriod,
+      preferredDate: context.preferredDate,
+    });
     const selectedSlot = pickOfferedSlot(message.body, slots);
 
     if (!selectedSlot) {
@@ -415,15 +542,22 @@ async function handleWhatsappAgent(
   }
 
   if (intent === "wants_schedule") {
-    await offerWhatsappAgentSlots(lead, inboundWindowFields);
+    await updateWhatsappAgentLead(lead.id, {
+      status: "esperando_preferencia_jornada",
+      priority: "alta",
+      notes: writeWhatsappAgentContext(lead.notes, context),
+      ...inboundWindowFields,
+    });
+    await replyToLead(message.from, PERIOD_QUESTION);
     return;
   }
 
   const directReply = replyForIntent(intent);
   if (directReply) {
     await updateWhatsappAgentLead(lead.id, {
-      status: "pendiente_agendar",
+      status: "esperando_preferencia_jornada",
       priority: "alta",
+      notes: writeWhatsappAgentContext(lead.notes, context),
       ...inboundWindowFields,
     });
     await replyToLead(message.from, directReply);
@@ -433,6 +567,7 @@ async function handleWhatsappAgent(
   await updateWhatsappAgentLead(lead.id, {
     status: "pendiente_agendar",
     priority: "normal",
+    notes: writeWhatsappAgentContext(lead.notes, context),
     ...inboundWindowFields,
   });
   await replyToLead(message.from, AGENT_UNKNOWN_MESSAGE);
@@ -442,7 +577,7 @@ async function getLeadByPhone(phone: string) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_leads")
     .select(
-      "id, phone, profile_name, full_name, email, status, last_inbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at, after_hours_ack_sent_at"
+      "id, phone, profile_name, full_name, email, status, last_inbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at, after_hours_ack_sent_at, notes"
     )
     .eq("phone", phone)
     .maybeSingle();
@@ -555,7 +690,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
         ...inboundWindowFields,
       })
       .eq("id", currentLead.id)
-      .select("id, phone, profile_name, full_name, email, status, last_inbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at")
+      .select("id, phone, profile_name, full_name, email, status, last_inbound_at, reply_window_expires_at, safe_deadline_at, felicitation_scheduled_for, felicitation_sent_at, after_hours_ack_sent_at, notes")
       .single();
 
     if (error) throw error;

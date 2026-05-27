@@ -109,6 +109,8 @@ function statusLabel(status: string | null | undefined) {
     felicitacion_enviada: "Felicitacion enviada",
     respondio_para_agendar: "Respondio para agendar",
     pendiente_agendar: "Pendiente agendar",
+    esperando_preferencia_jornada: "Esperando jornada",
+    esperando_dia_preferido: "Esperando dia",
     ofreciendo_horarios: "Ofreciendo horarios",
     esperando_confirmacion_horario: "Esperando confirmacion",
     en_gestion_callcenter: "En gestion Call Center",
@@ -165,6 +167,8 @@ function isScheduledToday(lead: WhatsappLead) {
 function queuePriority(lead: WhatsappLead) {
   if (lead.status === "requiere_humano") return 1;
   if (lead.status === "esperando_confirmacion_horario") return 1;
+  if (lead.status === "esperando_preferencia_jornada") return 2;
+  if (lead.status === "esperando_dia_preferido") return 2;
   if (lead.status === "ofreciendo_horarios") return 2;
   if (lead.status === "pendiente_agendar") return 2;
   if (lead.status === "respondio_para_agendar") return 1;
@@ -182,6 +186,8 @@ function conversationBadge(lead: WhatsappLead) {
   if (lead.status === "agendado") return "Agendado";
   if (lead.status === "requiere_humano") return "Requiere humano";
   if (lead.status === "esperando_confirmacion_horario") return "Esperando confirmacion";
+  if (lead.status === "esperando_preferencia_jornada") return "Esperando jornada";
+  if (lead.status === "esperando_dia_preferido") return "Esperando dia";
   if (lead.status === "ofreciendo_horarios") return "Ofreciendo horarios";
   if (lead.status === "pendiente_agendar") return "Pendiente agendar";
   if (lead.status === "requiere_template") return "Requiere plantilla";
@@ -204,6 +210,8 @@ function statusTone(status: string | null | undefined) {
     felicitacion_enviada: "border-[#D8C8EA] bg-[#F1ECFA] text-[#6B4F8E] ring-[#D8C8EA]",
     respondio_para_agendar: "border-[#EEC6B8] bg-[#FFF0E9] text-[#9A4E2E] ring-[#EEC6B8]",
     pendiente_agendar: "border-[#CFE4D8] bg-[#F4FAF6] text-[#4F6F5B] ring-[#CFE4D8]",
+    esperando_preferencia_jornada: "border-[#BFD7EA] bg-[#EAF4FB] text-[#315E7D] ring-[#BFD7EA]",
+    esperando_dia_preferido: "border-[#E8D49D] bg-[#FFF7D9] text-[#8B6B22] ring-[#E8D49D]",
     ofreciendo_horarios: "border-[#BFD7EA] bg-[#EAF4FB] text-[#315E7D] ring-[#BFD7EA]",
     esperando_confirmacion_horario: "border-[#EEC6B8] bg-[#FFF0E9] text-[#9A4E2E] ring-[#EEC6B8]",
     en_gestion_callcenter: "border-[#BCE1DE] bg-[#E9F8F6] text-[#2B706E] ring-[#BCE1DE]",
@@ -280,11 +288,13 @@ export default function LeadsWhatsappPage() {
   const counters = useMemo(
     () => ({
       pendientesPorAgendar: leads.filter((lead) =>
-        ["respondio_para_agendar", "pendiente_agendar"].includes(lead.status || "")
+        ["respondio_para_agendar", "pendiente_agendar", "esperando_preferencia_jornada"].includes(lead.status || "")
       )
         .length,
       ofreciendoHorarios: leads.filter((lead) => lead.status === "ofreciendo_horarios").length,
-      esperandoConfirmacion: leads.filter((lead) => lead.status === "esperando_confirmacion_horario").length,
+      esperandoConfirmacion: leads.filter((lead) =>
+        ["esperando_confirmacion_horario", "esperando_dia_preferido"].includes(lead.status || "")
+      ).length,
       agendados: leads.filter((lead) => lead.status === "agendado").length,
       requierenHumano: leads.filter((lead) => lead.status === "requiere_humano").length,
     }),
@@ -568,6 +578,8 @@ export default function LeadsWhatsappPage() {
                 <option value="felicitacion_enviada">Felicitacion enviada</option>
                 <option value="respondio_para_agendar">Respondio para agendar</option>
                 <option value="pendiente_agendar">Pendiente agendar</option>
+                <option value="esperando_preferencia_jornada">Esperando jornada</option>
+                <option value="esperando_dia_preferido">Esperando dia</option>
                 <option value="ofreciendo_horarios">Ofreciendo horarios</option>
                 <option value="esperando_confirmacion_horario">Esperando confirmacion</option>
                 <option value="requiere_template">Requiere plantilla</option>
