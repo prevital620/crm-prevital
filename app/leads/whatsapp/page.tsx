@@ -264,6 +264,7 @@ const porAgendarStatuses = new Set([
   "esperando_confirmacion_horario",
   "respondio_para_agendar",
 ]);
+const activeAppointmentStatuses = new Set(["agendada", "confirmada", "reagendada", "en_espera"]);
 
 function leadActivityTime(lead: WhatsappLead) {
   return new Date(lead.last_inbound_at || lead.last_outbound_at || lead.created_at || 0).getTime();
@@ -294,10 +295,16 @@ function leadColumnId(lead: WhatsappLead) {
   if (lead.status === "requiere_humano") return "requiere_humano";
   if (lead.appointment_status === "no_asistio") return "no_asistio";
   if (lead.appointment_status === "asistio" || lead.appointment_status === "finalizada") return "asistio";
-  if (lead.status === "agendado") return "agendados";
+  if (lead.status === "agendado" || activeAppointmentStatuses.has(lead.appointment_status || "")) {
+    return "agendados";
+  }
   if (porAgendarStatuses.has(lead.status || "")) return "por_agendar";
   if (inscritosStatuses.has(lead.status || "")) return "inscritos";
   return "inscritos";
+}
+
+function canShowScheduleAction(lead: WhatsappLead) {
+  return lead.status === "agendado" || activeAppointmentStatuses.has(lead.appointment_status || "");
 }
 
 function sortColumnItems(columnId: string, items: WhatsappLead[]) {
@@ -995,14 +1002,16 @@ export default function LeadsWhatsappPage() {
                           <RefreshCcw className="h-4 w-4" />
                           {loadingMessages ? "Actualizando" : "Actualizar"}
                         </button>
-                        <button
-                          type="button"
-                          onClick={() => showActionPendingNotice("Marcar agendado")}
-                          className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-3 py-2 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
-                        >
-                          <CalendarCheck className="h-4 w-4" />
-                          Agendado
-                        </button>
+                        {canShowScheduleAction(selectedLead) ? (
+                          <button
+                            type="button"
+                            onClick={() => showActionPendingNotice("Gestionar cita")}
+                            className="inline-flex min-h-10 shrink-0 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-3 py-2 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
+                          >
+                            <CalendarCheck className="h-4 w-4" />
+                            Gestionar cita
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           onClick={() => showActionPendingNotice("Marcar no responde")}

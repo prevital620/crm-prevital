@@ -53,6 +53,7 @@ type WhatsappLeadRow = {
 type AppointmentRow = {
   id: string;
   lead_id: string | null;
+  patient_name: string | null;
   phone: string | null;
   appointment_date: string | null;
   appointment_time: string | null;
@@ -68,6 +69,16 @@ type EnrichedWhatsappLeadRow = WhatsappLeadRow & {
   appointment_status: string | null;
 };
 
+function normalizeLookupText(value: string | null | undefined) {
+  return (value || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 function phoneDigits(value: string | null | undefined) {
   return (value || "").replace(/\D/g, "");
 }
@@ -82,6 +93,17 @@ function phoneLookupKeys(value: string | null | undefined) {
 
 function appointmentTimestamp(item: Pick<AppointmentRow, "appointment_date" | "appointment_time">) {
   return `${item.appointment_date || "9999-12-31"}T${item.appointment_time || "23:59:59"}`;
+}
+
+function matchesAppointmentName(lead: WhatsappLeadRow, appointment: AppointmentRow) {
+  const leadName = normalizeLookupText(`${lead.full_name || ""} ${lead.profile_name || ""}`);
+  const appointmentName = normalizeLookupText(appointment.patient_name);
+  if (!leadName || !appointmentName) return false;
+
+  const appointmentTokens = appointmentName.split(" ").filter((token) => token.length >= 3);
+  if (appointmentTokens.length < 3) return false;
+
+  return appointmentTokens.every((token) => leadName.includes(token));
 }
 
 function chooseRelatedAppointment(appointments: AppointmentRow[]) {
@@ -108,7 +130,7 @@ async function enrichWithAppointments(leads: WhatsappLeadRow[]): Promise<Enriche
 
   const { data: appointments, error } = await supabaseAdmin
     .from("appointments")
-    .select("id, lead_id, phone, appointment_date, appointment_time, status, notes, created_at")
+    .select("id, lead_id, patient_name, phone, appointment_date, appointment_time, status, notes, created_at")
     .order("appointment_date", { ascending: false })
     .order("appointment_time", { ascending: false })
     .limit(1500);
@@ -122,7 +144,8 @@ async function enrichWithAppointments(leads: WhatsappLeadRow[]): Promise<Enriche
       const appointmentPhoneKeys = phoneLookupKeys(appointment.phone);
       const matchesPhone = appointmentPhoneKeys.some((key) => phoneKeys.has(key));
       const matchesWhatsappLead = leadIds.has(lead.id) && notes.includes(lead.id);
-      return matchesPhone || matchesWhatsappLead;
+      const matchesName = matchesAppointmentName(lead, appointment);
+      return matchesPhone || matchesWhatsappLead || matchesName;
     });
     const appointment = chooseRelatedAppointment(relatedAppointments);
 
