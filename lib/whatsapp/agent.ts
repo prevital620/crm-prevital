@@ -360,7 +360,10 @@ export function detectPeriodPreference(message: string): AgendaPeriod | null {
 
 export function isPositiveConfirmation(message: string) {
   const normalized = normalizeText(message);
-  return /^(si|sii|si correcto|correcto|asi es|exacto|ese|esa|ese mismo|esa misma|claro|dale|ok|okay|listo|confirmo|me sirve|esa me sirve|ese me sirve)$/.test(normalized);
+  return (
+    /^(si|sii|si correcto|correcto|asi es|exacto|ese|esa|ese mismo|esa misma|claro|dale|ok|okay|listo|confirmo|me sirve|esa me sirve|ese me sirve)$/.test(normalized) ||
+    /^(si|sii|correcto|asi es|exacto|ese|esa|claro|dale|ok|okay|listo|confirmo)\b/.test(normalized)
+  );
 }
 
 export function isNegativeDateConfirmation(message: string) {

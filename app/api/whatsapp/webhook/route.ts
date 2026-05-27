@@ -662,44 +662,78 @@ async function handleWhatsappAgent(
   const timePreference = knownPeriod
     ? parseTimePreference(message.body, knownPeriod)
     : initialTimePreference;
+  const pendingReplyTimePreference = context.pendingDate
+    ? parseTimePreference(message.body, context.pendingPeriod || knownPeriod || undefined)
+    : null;
+  const pendingReplyPeriod =
+    context.pendingPeriod ||
+    knownPeriod ||
+    (pendingReplyTimePreference && "time" in pendingReplyTimePreference
+      ? inferPeriodFromTime(pendingReplyTimePreference.time)
+      : null);
   const shouldTreatAsPeriod = Boolean(
     periodForScheduling && lead.status !== "esperando_dia_preferido"
   );
 
   if (context.pendingAction === "confirm_date_for_schedule" && context.pendingDate) {
-    if (isPositiveConfirmation(message.body)) {
-      if (context.pendingPeriod) {
-        if (context.pendingSlotTime) {
-          await offerSlotsFromTimePreference(
-            lead,
-            inboundWindowFields,
-            context.pendingPeriod,
-            { type: "exact", time: context.pendingSlotTime },
-            {
-              ...context,
-              preferredDate: context.pendingDate,
-              pendingDate: undefined,
-              pendingPeriod: undefined,
-              pendingSlotTime: undefined,
-              pendingAction: undefined,
-            },
-            context.pendingDate
-          );
-          return;
-        }
+    if (pendingReplyTimePreference && "time" in pendingReplyTimePreference) {
+      const confirmedPeriod =
+        pendingReplyPeriod || inferPeriodFromTime(pendingReplyTimePreference.time);
 
-        await askForTimeInPeriod(
+      if (confirmedPeriod) {
+        await offerSlotsFromTimePreference(
           lead,
           inboundWindowFields,
-          context.pendingPeriod,
+          confirmedPeriod,
+          { type: "exact", time: pendingReplyTimePreference.time },
           {
             ...context,
             preferredDate: context.pendingDate,
             pendingDate: undefined,
             pendingPeriod: undefined,
+            pendingSlotTime: undefined,
             pendingAction: undefined,
-          }
+          },
+          context.pendingDate
         );
+        return;
+      }
+    }
+
+    if (isPositiveConfirmation(message.body)) {
+      const confirmedTime =
+        pendingReplyTimePreference && "time" in pendingReplyTimePreference
+          ? pendingReplyTimePreference.time
+          : context.pendingSlotTime;
+      const confirmedPeriod =
+        pendingReplyPeriod ||
+        (confirmedTime ? inferPeriodFromTime(confirmedTime) : null);
+
+      if (confirmedTime && confirmedPeriod) {
+        await offerSlotsFromTimePreference(
+          lead,
+          inboundWindowFields,
+          confirmedPeriod,
+          { type: "exact", time: confirmedTime },
+          {
+            ...context,
+            preferredDate: context.pendingDate,
+            pendingDate: undefined,
+            pendingPeriod: undefined,
+            pendingSlotTime: undefined,
+            pendingAction: undefined,
+          },
+          context.pendingDate
+        );
+        return;
+      }
+
+      if (context.pendingPeriod) {
+        await offerWhatsappAgentSlots(lead, inboundWindowFields, {
+          period: context.pendingPeriod,
+          preferredDate: context.pendingDate,
+          exactDateOnly: true,
+        });
         return;
       }
 
