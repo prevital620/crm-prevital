@@ -13,6 +13,7 @@ export type WhatsappAgentIntent =
   | "asks_location"
   | "asks_price"
   | "asks_duration"
+  | "asks_companion"
   | "asks_what_to_bring"
   | "gives_period_preference"
   | "gives_day_preference"
@@ -57,32 +58,37 @@ export const PERIOD_QUESTION =
   "Claro 😊 ¿Te queda mejor en la mañana o en la tarde para coordinar tu experiencia en Prevital?";
 
 const CLINICAL_SAFE_REPLY =
-  "Esa información la revisa directamente nuestro equipo profesional durante la valoración 😊 Yo puedo ayudarte a agendar tu cita para que recibas orientación adecuada en Prevital.";
+  "Esa información la revisa directamente nuestro equipo profesional durante la cita 😊 Yo puedo ayudarte a coordinar el horario para que recibas orientación adecuada en Prevital.";
 
 const INFO_TO_SCHEDULE_REPLY =
   "Con gusto te ayudamos 🌿 Para darte la información completa y coordinar tu experiencia en Prevital, primero necesitamos agendar tu valoración. ¿Te queda mejor en la mañana o en la tarde?";
 
 const LOCATION_REPLY =
-  "Estamos en Medellín 🌿 Al confirmar tu cita, nuestro equipo te compartirá la información completa para llegar. ¿Te queda mejor en la mañana o en la tarde?";
+  "Estamos en El Poblado, Medellín 🌿 Cuando confirmemos tu cita te compartiremos la dirección completa e instrucciones para llegar.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const PRICE_REPLY =
-  "Esta experiencia no tiene costo para las personas seleccionadas 💚 ¿Te queda mejor en la mañana o en la tarde?";
+  "Esta experiencia no tiene costo para las personas seleccionadas 💚 Te ayudo a coordinar tu cita en Prevital.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const DURATION_REPLY =
-  "La cita inicial suele tomar aproximadamente entre 30 y 45 minutos 😊 ¿Te queda mejor en la mañana o en la tarde?";
+  "La cita inicial tiene una duración aproximada de 30 minutos 😊\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
+
+const COMPANION_REPLY =
+  "Puedes venir acompañado/a si lo deseas 😊 Lo importante es que la cita quede a tu nombre y llegues con tu cédula original.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const WHAT_TO_BRING_REPLY =
-  "Por ahora solo necesitamos coordinar tu cita 😊 Luego nuestro equipo te indicará cualquier recomendación necesaria. ¿Te queda mejor en la mañana o en la tarde?";
+  "Para la cita es importante traer tu cédula original. Al confirmar la cita te enviaremos las instrucciones completas 🌿\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
 
 const DIRECT_REPLIES_WITHOUT_PERIOD_QUESTION: Partial<Record<WhatsappAgentIntent, string>> = {
   asks_location:
-    "Estamos en Medellín 🌿 Al confirmar tu cita, nuestro equipo te compartirá la información completa para llegar.",
+    "Estamos en El Poblado, Medellín 🌿 Cuando confirmemos tu cita te compartiremos la dirección completa e instrucciones para llegar.",
   asks_price:
     "Esta experiencia no tiene costo para las personas seleccionadas 💚",
   asks_duration:
-    "La cita inicial suele tomar aproximadamente entre 30 y 45 minutos 😊",
+    "La cita inicial tiene una duración aproximada de 30 minutos 😊",
+  asks_companion:
+    "Puedes venir acompañado/a si lo deseas 😊 Lo importante es que la cita quede a tu nombre y llegues con tu cédula original.",
   asks_what_to_bring:
-    "Por ahora solo necesitamos coordinar tu cita 😊 Luego nuestro equipo te indicará cualquier recomendación necesaria.",
+    "Para la cita es importante traer tu cédula original. Al confirmar la cita te enviaremos las instrucciones completas 🌿",
   wants_info:
     "Con gusto te ayudamos 🌿 En la valoración nuestro equipo te dará la información completa para coordinar tu experiencia en Prevital.",
   greeting:
@@ -132,6 +138,10 @@ export function analyzeWhatsappAgentIntent(message: string): WhatsappAgentIntent
       "embarazada",
       "hipertension",
       "diabetes",
+      "presion",
+      "tension",
+      "tratamiento",
+      "tratamientos",
       "enfermedad",
       "dolor",
       "riesgo",
@@ -163,7 +173,11 @@ export function analyzeWhatsappAgentIntent(message: string): WhatsappAgentIntent
     return "asks_duration";
   }
 
-  if (hasAny(normalized, ["que debo llevar", "que llevo", "llevar algo", "puedo ir con alguien", "acompanante"])) {
+  if (hasAny(normalized, ["acompanante", "acompañante", "pareja", "hermana", "hermano", "mama", "mamá", "papa", "papá", "familiar", "puedo ir con alguien"])) {
+    return "asks_companion";
+  }
+
+  if (hasAny(normalized, ["que debo llevar", "que llevo", "llevar algo", "cedula", "cédula", "documento"])) {
     return "asks_what_to_bring";
   }
 
@@ -644,6 +658,7 @@ export function replyForIntent(intent: WhatsappAgentIntent) {
   if (intent === "asks_location") return LOCATION_REPLY;
   if (intent === "asks_price") return PRICE_REPLY;
   if (intent === "asks_duration") return DURATION_REPLY;
+  if (intent === "asks_companion") return COMPANION_REPLY;
   if (intent === "asks_what_to_bring") return WHAT_TO_BRING_REPLY;
   if (intent === "wants_info" || intent === "greeting") return INFO_TO_SCHEDULE_REPLY;
   return null;
@@ -652,4 +667,36 @@ export function replyForIntent(intent: WhatsappAgentIntent) {
 export function replyForIntentWithKnownPeriod(intent: WhatsappAgentIntent) {
   if (intent === "needs_human") return CLINICAL_SAFE_REPLY;
   return DIRECT_REPLIES_WITHOUT_PERIOD_QUESTION[intent] || null;
+}
+
+export function buildWhatsappAppointmentConfirmation(params: {
+  name: string | null | undefined;
+  date: string;
+  time: string;
+}) {
+  const displayName = params.name?.trim() || "Prevital";
+
+  return `*Hola, ${displayName}* 💚
+
+Tu cita gratuita en *Prevital* ha sido confirmada.
+
+📅 *Fecha:* ${formatSlotDate(params.date)}
+🕐 *Hora:* ${formatSlotTime(params.time)}
+
+*Muy importante presentar:*
+✔️ Cédula original
+✔️ Disponibilidad aproximada de 30 minutos para tu orientación inicial
+✔️ Código de consulta gratis: *BD 0803*
+
+📍 *Dirección:*
+*Av. El Poblado*
+*Edificio Caja Social*
+Carrera 43A # 1 - 71, Piso 2
+Frente a San Fernando Plaza, Medellín.
+
+📲 *Instagram:*
+https://www.instagram.com/prevital_col
+
+Gracias por priorizar tu bienestar 🌿
+Te esperamos en Prevital.`;
 }

@@ -9,10 +9,9 @@ import {
   analyzeWhatsappAgentIntent,
   buildSlotsOfferMessage,
   buildSlotsReminderMessage,
+  buildWhatsappAppointmentConfirmation,
   createWhatsappAgentAppointment,
   detectPeriodPreference,
-  formatSlotDate,
-  formatSlotTime,
   getNextWhatsappAgendaSlots,
   isWhatsappAgentBookingEnabled,
   isPositiveConfirmation,
@@ -102,7 +101,7 @@ const AFTER_HOURS_ACK_MESSAGE =
   "\u00a1Gracias por responder! \ud83d\udc9a\n\nTu mensaje qued\u00f3 registrado. Nuestro equipo de Prevital te contactar\u00e1 en horario de atenci\u00f3n para ayudarte a coordinar tu cita.\n\nHorario de atenci\u00f3n: lunes a s\u00e1bado de 8:00 a. m. a 6:00 p. m. \ud83c\udf3f";
 
 const AGENT_UNKNOWN_MESSAGE =
-  "Estoy aqui para ayudarte a agendar tu valoracion en Prevital \ud83c\udf3f Si quieres, puedo revisar horarios disponibles para ti.";
+  "Gracias por escribirnos 😊 Para ayudarte mejor, nuestro equipo revisará tu mensaje. Mientras tanto, puedo ayudarte a coordinar tu cita en Prevital.";
 
 const BOOKING_DISABLED_CONFIRMATION =
   "Perfecto \ud83d\udc9a Ya tengo tu horario preferido. Nuestro equipo confirmara la cita por este mismo chat antes de dejarla agendada.";
@@ -413,12 +412,23 @@ async function handleWhatsappAgent(
   const shouldTreatAsPeriod = Boolean(period && lead.status !== "esperando_dia_preferido");
 
   if (intent === "needs_human") {
+    const safeReply = replyForIntent(intent) || AGENT_UNKNOWN_MESSAGE;
+    if (knownPeriod) {
+      await offerWhatsappAgentSlots(lead, inboundWindowFields, {
+        period: knownPeriod,
+        preferredDate: context.preferredDate,
+        intro: safeReply,
+        reminder: true,
+      });
+      return;
+    }
+
     await updateWhatsappAgentLead(lead.id, {
       status: "requiere_humano",
       priority: "alta",
       ...inboundWindowFields,
     });
-    await replyToLead(message.from, replyForIntent(intent) || AGENT_UNKNOWN_MESSAGE);
+    await replyToLead(message.from, safeReply);
     return;
   }
 
@@ -555,9 +565,11 @@ async function handleWhatsappAgent(
 
     await replyToLead(
       message.from,
-      `\u00a1Listo! \ud83d\udc9a Tu cita quedo agendada para ${formatSlotDate(
-        selectedSlot.date
-      )} a las ${formatSlotTime(selectedSlot.time)} en Prevital.\n\nNuestro equipo te estara esperando. Si necesitas cambiarla, puedes responder por este mismo chat.`
+      buildWhatsappAppointmentConfirmation({
+        name: lead.full_name,
+        date: selectedSlot.date,
+        time: selectedSlot.time,
+      })
     );
     return;
   }
@@ -605,8 +617,8 @@ async function handleWhatsappAgent(
   }
 
   await updateWhatsappAgentLead(lead.id, {
-    status: "pendiente_agendar",
-    priority: "normal",
+    status: "requiere_humano",
+    priority: "alta",
     notes: writeWhatsappAgentContext(lead.notes, context),
     ...inboundWindowFields,
   });
