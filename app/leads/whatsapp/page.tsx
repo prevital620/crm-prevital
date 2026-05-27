@@ -5,7 +5,6 @@ import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "
 import {
   ArrowLeft,
   CalendarCheck,
-  CheckCircle2,
   Clock3,
   MessageCircle,
   Paperclip,
@@ -54,6 +53,7 @@ type WhatsappMessage = {
   media_caption: string | null;
   meta_message_id: string | null;
   status: string | null;
+  status_updated_at: string | null;
   error: string | null;
 };
 
@@ -245,6 +245,31 @@ function leadCardTone(lead: WhatsappLead, selected: boolean) {
 function canReplyFreely(lead: WhatsappLead | null) {
   if (!lead?.reply_window_expires_at) return true;
   return new Date(lead.reply_window_expires_at).getTime() > Date.now();
+}
+
+function outboundStatusMeta(status: string | null | undefined) {
+  if (status === "read") {
+    return {
+      label: "✓✓ Leído",
+      className: "text-[#2274C9]",
+    };
+  }
+  if (status === "delivered") {
+    return {
+      label: "✓✓",
+      className: "text-[#4F7B63]",
+    };
+  }
+  if (status === "failed") {
+    return {
+      label: "Error",
+      className: "font-semibold text-[#9A4E43]",
+    };
+  }
+  return {
+    label: "✓",
+    className: "text-[#607368]",
+  };
 }
 
 type KanbanColumn = {
@@ -1077,6 +1102,7 @@ export default function LeadsWhatsappPage() {
                       ) : (
                         messages.map((message) => {
                           const isOutbound = message.direction === "outbound";
+                          const outboundMeta = outboundStatusMeta(message.status);
 
                           return (
                             <div
@@ -1108,7 +1134,7 @@ export default function LeadsWhatsappPage() {
                                 <p className="mt-2 flex items-center justify-end gap-1 text-[11px] text-[#607368]">
                                   {formatDateTime(message.created_at)}
                                   {isOutbound ? (
-                                    <CheckCircle2 className="h-3 w-3 text-[#4F7B63]" />
+                                    <span className={outboundMeta.className}>{outboundMeta.label}</span>
                                   ) : null}
                                 </p>
                               </div>

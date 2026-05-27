@@ -90,6 +90,15 @@ type InboundTextMessage = {
   payload: unknown;
 };
 
+type WhatsAppStatusEvent = {
+  id: string;
+  status: "sent" | "delivered" | "read" | "failed" | string;
+  timestamp: string | null;
+  recipientId: string | null;
+  error: string | null;
+  payload: unknown;
+};
+
 const WELCOME_MESSAGE =
   "\u00a1Hola! \ud83d\udc4b Bienvenido/a a Prevital.\n\nGracias por escribirnos. Para completar tu inscripci\u00f3n y participar por una experiencia de Detox I\u00f3nico, por favor d\u00e9janos tu nombre completo.";
 
@@ -317,6 +326,79 @@ function extractInboundTextMessages(payload: unknown): InboundTextMessage[] {
   });
 
   return messages;
+}
+
+function statusErrorText(status: Record<string, unknown>) {
+  const errors = Array.isArray(status.errors) ? status.errors : [];
+  const parts = errors
+    .map((item) => {
+      const error = asRecord(item);
+      if (!error) return "";
+
+      const errorData = asRecord(error.error_data);
+      return [
+        asString(error.title),
+        asString(error.message),
+        asString(errorData?.details),
+      ]
+        .filter(Boolean)
+        .join(" - ");
+    })
+    .filter(Boolean);
+
+  return parts.join(" | ") || null;
+}
+
+function extractStatusEvents(payload: unknown): WhatsAppStatusEvent[] {
+  const root = asRecord(payload);
+  const entries = Array.isArray(root?.entry) ? root.entry : [];
+  const statuses: WhatsAppStatusEvent[] = [];
+
+  entries.forEach((entry) => {
+    const entryRecord = asRecord(entry);
+    const changes = Array.isArray(entryRecord?.changes) ? entryRecord.changes : [];
+
+    changes.forEach((change) => {
+      const changeRecord = asRecord(change);
+      const value = asRecord(changeRecord?.value);
+      const valueStatuses = Array.isArray(value?.statuses) ? value.statuses : [];
+
+      valueStatuses.forEach((item) => {
+        const status = asRecord(item);
+        if (!status) return;
+        const id = asString(status?.id);
+        const statusValue = asString(status?.status);
+        if (!id || !statusValue) return;
+
+        statuses.push({
+          id,
+          status: statusValue,
+          timestamp: asString(status?.timestamp) || null,
+          recipientId: asString(status?.recipient_id) || null,
+          error: statusValue === "failed" ? statusErrorText(status) : null,
+          payload: item,
+        });
+      });
+    });
+  });
+
+  return statuses;
+}
+
+async function updateOutboundMessageStatus(event: WhatsAppStatusEvent) {
+  const statusAt = parseInboundTimestamp(event.timestamp).toISOString();
+  const payload: Record<string, unknown> = {
+    status: event.status,
+    status_updated_at: statusAt,
+    error: event.error,
+  };
+
+  const { error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .update(payload)
+    .eq("meta_message_id", event.id);
+
+  if (error) throw error;
 }
 
 async function insertInboundMessage(message: InboundTextMessage) {
@@ -1370,6 +1452,20 @@ export async function POST(request: Request) {
 
     after(async () => {
       const messages = extractInboundTextMessages(payload);
+      const statuses = extractStatusEvents(payload);
+
+      for (const status of statuses) {
+        try {
+          await updateOutboundMessageStatus(status);
+        } catch (error) {
+          console.error("[whatsapp] Could not update outbound message status.", {
+            metaMessageId: status.id,
+            status: status.status,
+            recipientId: maskPhone(status.recipientId),
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
+      }
 
       for (const message of messages) {
         try {
