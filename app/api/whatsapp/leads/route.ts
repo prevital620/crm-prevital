@@ -13,10 +13,14 @@ const allowedStatuses = new Set([
   "felicitacion_programada",
   "felicitacion_enviada",
   "respondio_para_agendar",
+  "pendiente_agendar",
+  "ofreciendo_horarios",
+  "esperando_confirmacion_horario",
   "en_gestion_callcenter",
   "agendado",
   "sin_respuesta",
   "requiere_template",
+  "requiere_humano",
   "cerrado",
 ]);
 

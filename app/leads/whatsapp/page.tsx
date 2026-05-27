@@ -108,10 +108,14 @@ function statusLabel(status: string | null | undefined) {
     felicitacion_programada: "Felicitacion programada",
     felicitacion_enviada: "Felicitacion enviada",
     respondio_para_agendar: "Respondio para agendar",
+    pendiente_agendar: "Pendiente agendar",
+    ofreciendo_horarios: "Ofreciendo horarios",
+    esperando_confirmacion_horario: "Esperando confirmacion",
     en_gestion_callcenter: "En gestion Call Center",
     agendado: "Agendado",
     sin_respuesta: "Sin respuesta",
     requiere_template: "Requiere plantilla",
+    requiere_humano: "Requiere humano",
     cerrado: "Cerrado",
   };
 
@@ -159,6 +163,10 @@ function isScheduledToday(lead: WhatsappLead) {
 }
 
 function queuePriority(lead: WhatsappLead) {
+  if (lead.status === "requiere_humano") return 1;
+  if (lead.status === "esperando_confirmacion_horario") return 1;
+  if (lead.status === "ofreciendo_horarios") return 2;
+  if (lead.status === "pendiente_agendar") return 2;
   if (lead.status === "respondio_para_agendar") return 1;
   if (isInboundWithoutAnswer(lead)) return 2;
   if (lead.status === "requiere_template") return 3;
@@ -172,6 +180,10 @@ function queuePriority(lead: WhatsappLead) {
 
 function conversationBadge(lead: WhatsappLead) {
   if (lead.status === "agendado") return "Agendado";
+  if (lead.status === "requiere_humano") return "Requiere humano";
+  if (lead.status === "esperando_confirmacion_horario") return "Esperando confirmacion";
+  if (lead.status === "ofreciendo_horarios") return "Ofreciendo horarios";
+  if (lead.status === "pendiente_agendar") return "Pendiente agendar";
   if (lead.status === "requiere_template") return "Requiere plantilla";
   if (lead.status === "respondio_para_agendar") return "Respondio para agendar";
   if (isWindowExpiringSoon(lead)) return "Ventana por vencer";
@@ -191,10 +203,14 @@ function statusTone(status: string | null | undefined) {
     felicitacion_programada: "border-[#BFD7EA] bg-[#EAF4FB] text-[#315E7D] ring-[#BFD7EA]",
     felicitacion_enviada: "border-[#D8C8EA] bg-[#F1ECFA] text-[#6B4F8E] ring-[#D8C8EA]",
     respondio_para_agendar: "border-[#EEC6B8] bg-[#FFF0E9] text-[#9A4E2E] ring-[#EEC6B8]",
+    pendiente_agendar: "border-[#CFE4D8] bg-[#F4FAF6] text-[#4F6F5B] ring-[#CFE4D8]",
+    ofreciendo_horarios: "border-[#BFD7EA] bg-[#EAF4FB] text-[#315E7D] ring-[#BFD7EA]",
+    esperando_confirmacion_horario: "border-[#EEC6B8] bg-[#FFF0E9] text-[#9A4E2E] ring-[#EEC6B8]",
     en_gestion_callcenter: "border-[#BCE1DE] bg-[#E9F8F6] text-[#2B706E] ring-[#BCE1DE]",
     agendado: "border-[#7FA287] bg-[#D9F0E1] text-[#23563C] ring-[#9BC4AF]",
     sin_respuesta: "border-[#D7DDD9] bg-[#F1F4F2] text-[#596660] ring-[#D7DDD9]",
     requiere_template: "border-[#E8D49D] bg-[#FFF7D9] text-[#8B6B22] ring-[#E8D49D]",
+    requiere_humano: "border-[#E6C9C5] bg-[#FFF5F3] text-[#9A4E43] ring-[#E6C9C5]",
     cerrado: "border-[#B8C0BD] bg-[#E6EAE8] text-[#3E4945] ring-[#B8C0BD]",
   };
 
@@ -202,7 +218,11 @@ function statusTone(status: string | null | undefined) {
 }
 
 function leadCardTone(lead: WhatsappLead, selected: boolean) {
-  if (lead.status === "respondio_para_agendar") {
+  if (
+    lead.status === "respondio_para_agendar" ||
+    lead.status === "esperando_confirmacion_horario" ||
+    lead.status === "requiere_humano"
+  ) {
     return selected
       ? "border-[#D98D72] bg-[#FFF4EF] shadow-[0_16px_34px_rgba(154,78,46,0.16)]"
       : "border-[#EEC6B8] bg-[#FFF7F3] hover:border-[#D98D72] hover:bg-[#FFF1E9]";
@@ -259,12 +279,14 @@ export default function LeadsWhatsappPage() {
 
   const counters = useMemo(
     () => ({
-      pendientesPorAgendar: leads.filter((lead) => lead.status === "respondio_para_agendar")
+      pendientesPorAgendar: leads.filter((lead) =>
+        ["respondio_para_agendar", "pendiente_agendar"].includes(lead.status || "")
+      )
         .length,
-      respuestasSinAtender: leads.filter(isInboundWithoutAnswer).length,
-      ventanaPorVencer: leads.filter(isWindowExpiringSoon).length,
-      requierenPlantilla: leads.filter((lead) => lead.status === "requiere_template").length,
-      felicitacionesHoy: leads.filter(isScheduledToday).length,
+      ofreciendoHorarios: leads.filter((lead) => lead.status === "ofreciendo_horarios").length,
+      esperandoConfirmacion: leads.filter((lead) => lead.status === "esperando_confirmacion_horario").length,
+      agendados: leads.filter((lead) => lead.status === "agendado").length,
+      requierenHumano: leads.filter((lead) => lead.status === "requiere_humano").length,
     }),
     [leads]
   );
@@ -513,10 +535,10 @@ export default function LeadsWhatsappPage() {
         <section className={`grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5 ${selectedLead ? "hidden lg:grid" : ""}`}>
           {[
             ["Pendientes por agendar", counters.pendientesPorAgendar],
-            ["Respuestas sin atender", counters.respuestasSinAtender],
-            ["Ventana por vencer", counters.ventanaPorVencer],
-            ["Requieren plantilla", counters.requierenPlantilla],
-            ["Felicitaciones hoy", counters.felicitacionesHoy],
+            ["Ofreciendo horarios", counters.ofreciendoHorarios],
+            ["Esperando confirmacion", counters.esperandoConfirmacion],
+            ["Agendados", counters.agendados],
+            ["Requiere humano", counters.requierenHumano],
           ].map(([label, value]) => (
             <div
               key={label}
@@ -545,7 +567,11 @@ export default function LeadsWhatsappPage() {
                 <option value="felicitacion_programada">Felicitacion programada</option>
                 <option value="felicitacion_enviada">Felicitacion enviada</option>
                 <option value="respondio_para_agendar">Respondio para agendar</option>
+                <option value="pendiente_agendar">Pendiente agendar</option>
+                <option value="ofreciendo_horarios">Ofreciendo horarios</option>
+                <option value="esperando_confirmacion_horario">Esperando confirmacion</option>
                 <option value="requiere_template">Requiere plantilla</option>
+                <option value="requiere_humano">Requiere humano</option>
                 <option value="agendado">Agendados</option>
                 <option value="cerrado">Cerrados</option>
               </select>

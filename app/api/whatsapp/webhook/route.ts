@@ -5,6 +5,17 @@ import {
   sendAndStoreTextMessage,
 } from "@/lib/whatsapp/outbound";
 import { calculateFelicitationSchedule } from "@/lib/whatsapp/scheduling";
+import {
+  analyzeWhatsappAgentIntent,
+  buildSlotsOfferMessage,
+  createWhatsappAgentAppointment,
+  formatSlotDate,
+  formatSlotTime,
+  getNextWhatsappAgendaSlots,
+  isWhatsappAgentBookingEnabled,
+  pickOfferedSlot,
+  replyForIntent,
+} from "@/lib/whatsapp/agent";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -21,10 +32,14 @@ type WhatsappLeadStatus =
   | "felicitacion_programada"
   | "felicitacion_enviada"
   | "respondio_para_agendar"
+  | "pendiente_agendar"
+  | "ofreciendo_horarios"
+  | "esperando_confirmacion_horario"
   | "en_gestion_callcenter"
   | "agendado"
   | "sin_respuesta"
   | "requiere_template"
+  | "requiere_humano"
   | "cerrado";
 
 type WhatsappLeadRow = {
@@ -73,6 +88,12 @@ const UPDATE_DATA_MESSAGE =
 
 const AFTER_HOURS_ACK_MESSAGE =
   "\u00a1Gracias por responder! \ud83d\udc9a\n\nTu mensaje qued\u00f3 registrado. Nuestro equipo de Prevital te contactar\u00e1 en horario de atenci\u00f3n para ayudarte a coordinar tu cita.\n\nHorario de atenci\u00f3n: lunes a s\u00e1bado de 8:00 a. m. a 6:00 p. m. \ud83c\udf3f";
+
+const AGENT_UNKNOWN_MESSAGE =
+  "Estoy aqui para ayudarte a agendar tu valoracion en Prevital \ud83c\udf3f Si quieres, puedo revisar horarios disponibles para ti.";
+
+const BOOKING_DISABLED_CONFIRMATION =
+  "Perfecto \ud83d\udc9a Ya tengo tu horario preferido. Nuestro equipo confirmara la cita por este mismo chat antes de dejarla agendada.";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -275,6 +296,148 @@ async function createCrmLeadFromWhatsapp(_lead: WhatsappLeadRow) {
   // safely isolated in whatsapp_leads to avoid creating malformed CRM records.
 }
 
+function whatsappAgentCanHandle(status: string | null | undefined) {
+  return [
+    "registered",
+    "registrado",
+    "felicitacion_programada",
+    "felicitacion_enviada",
+    "respondio_para_agendar",
+    "pendiente_agendar",
+    "ofreciendo_horarios",
+    "esperando_confirmacion_horario",
+    "requiere_humano",
+  ].includes(status || "");
+}
+
+async function updateWhatsappAgentLead(
+  leadId: string,
+  payload: Record<string, unknown>
+) {
+  const { error } = await supabaseAdmin
+    .from("whatsapp_leads")
+    .update(payload)
+    .eq("id", leadId);
+
+  if (error) throw error;
+}
+
+async function offerWhatsappAgentSlots(
+  lead: WhatsappLeadRow,
+  inboundWindowFields: Record<string, unknown>
+) {
+  const slots = await getNextWhatsappAgendaSlots(3);
+
+  if (slots.length === 0) {
+    await updateWhatsappAgentLead(lead.id, {
+      status: "requiere_humano",
+      priority: "alta",
+      ...inboundWindowFields,
+    });
+    await replyToLead(lead.phone, buildSlotsOfferMessage(slots));
+    return;
+  }
+
+  await updateWhatsappAgentLead(lead.id, {
+    status: "esperando_confirmacion_horario",
+    priority: "alta",
+    ...inboundWindowFields,
+  });
+  await replyToLead(lead.phone, buildSlotsOfferMessage(slots));
+}
+
+async function handleWhatsappAgent(
+  lead: WhatsappLeadRow,
+  message: InboundTextMessage,
+  inboundWindowFields: Record<string, unknown>
+) {
+  const intent = analyzeWhatsappAgentIntent(message.body);
+
+  if (intent === "needs_human") {
+    await updateWhatsappAgentLead(lead.id, {
+      status: "requiere_humano",
+      priority: "alta",
+      ...inboundWindowFields,
+    });
+    await replyToLead(message.from, replyForIntent(intent) || AGENT_UNKNOWN_MESSAGE);
+    return;
+  }
+
+  if (intent === "chooses_slot") {
+    const slots = await getNextWhatsappAgendaSlots(3);
+    const selectedSlot = pickOfferedSlot(message.body, slots);
+
+    if (!selectedSlot) {
+      await updateWhatsappAgentLead(lead.id, {
+        status: "esperando_confirmacion_horario",
+        priority: "alta",
+        ...inboundWindowFields,
+      });
+      await replyToLead(
+        message.from,
+        "No alcance a identificar el horario elegido. Responde con 1, 2 o 3 segun la opcion que prefieras \ud83d\ude0a"
+      );
+      return;
+    }
+
+    if (!isWhatsappAgentBookingEnabled()) {
+      await updateWhatsappAgentLead(lead.id, {
+        status: "esperando_confirmacion_horario",
+        priority: "alta",
+        ...inboundWindowFields,
+      });
+      await replyToLead(message.from, BOOKING_DISABLED_CONFIRMATION);
+      return;
+    }
+
+    const result = await createWhatsappAgentAppointment({
+      lead,
+      slot: selectedSlot,
+    });
+
+    if (!result.ok) {
+      await updateWhatsappAgentLead(lead.id, {
+        status: "ofreciendo_horarios",
+        priority: "alta",
+        ...inboundWindowFields,
+      });
+      await replyToLead(message.from, result.error);
+      return;
+    }
+
+    await replyToLead(
+      message.from,
+      `\u00a1Listo! \ud83d\udc9a Tu cita quedo agendada para ${formatSlotDate(
+        selectedSlot.date
+      )} a las ${formatSlotTime(selectedSlot.time)} en Prevital.\n\nNuestro equipo te estara esperando. Si necesitas cambiarla, puedes responder por este mismo chat.`
+    );
+    return;
+  }
+
+  if (intent === "wants_schedule") {
+    await offerWhatsappAgentSlots(lead, inboundWindowFields);
+    return;
+  }
+
+  const directReply = replyForIntent(intent);
+  if (directReply) {
+    await updateWhatsappAgentLead(lead.id, {
+      status: "pendiente_agendar",
+      priority: "alta",
+      ...inboundWindowFields,
+    });
+    await replyToLead(message.from, directReply);
+    return;
+  }
+
+  await updateWhatsappAgentLead(lead.id, {
+    status: "pendiente_agendar",
+    priority: "normal",
+    ...inboundWindowFields,
+  });
+  await replyToLead(message.from, AGENT_UNKNOWN_MESSAGE);
+}
+
 async function getLeadByPhone(phone: string) {
   const { data, error } = await supabaseAdmin
     .from("whatsapp_leads")
@@ -403,6 +566,11 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
       process.env.WHATSAPP_IMAGE_INSCRIPCION_URL,
       "Inscripci\u00f3n confirmada Detox I\u00f3nico Prevital"
     );
+    return;
+  }
+
+  if (whatsappAgentCanHandle(currentLead.status)) {
+    await handleWhatsappAgent(currentLead, message, inboundWindowFields);
     return;
   }
 
