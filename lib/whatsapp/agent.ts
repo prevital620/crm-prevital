@@ -1,4 +1,4 @@
-import "server-only";
+﻿import "server-only";
 
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getCommercialAgendaAvailability } from "@/lib/server/agenda-scheduling";
@@ -53,6 +53,8 @@ export type WhatsappAgentContext = {
   period?: AgendaPeriod;
   preferredDate?: string;
   pendingDate?: string;
+  pendingPeriod?: AgendaPeriod;
+  pendingAction?: "confirm_date_for_schedule";
   lastOfferedPeriod?: AgendaPeriod;
   lastOfferedDate?: string;
 };
@@ -72,49 +74,49 @@ const ACTIVE_APPOINTMENT_STATUSES = [
   "en_atencion",
 ];
 const DUPLICATE_APPOINTMENT_REPLY =
-  "Ya tienes una cita registrada en Prevital 💚 Nuestro equipo revisará tu caso y te ayudará si necesitas cambiarla.";
+  "Ya tienes una cita registrada en Prevital ðŸ’š Nuestro equipo revisarÃ¡ tu caso y te ayudarÃ¡ si necesitas cambiarla.";
 const APPOINTMENT_INSERT_ERROR_REPLY =
-  "Gracias por tu paciencia 💚 Tuvimos un inconveniente al confirmar la cita automáticamente. Nuestro equipo revisará tu caso y te contactará para ayudarte a finalizar la agenda.";
+  "Gracias por tu paciencia ðŸ’š Tuvimos un inconveniente al confirmar la cita automÃ¡ticamente. Nuestro equipo revisarÃ¡ tu caso y te contactarÃ¡ para ayudarte a finalizar la agenda.";
 
 export const PERIOD_QUESTION =
-  "Claro 😊 ¿Te queda mejor en la mañana o en la tarde para coordinar tu experiencia en Prevital?";
+  "Claro ðŸ˜Š Â¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu experiencia en Prevital?";
 
 const CLINICAL_SAFE_REPLY =
-  "Esa información la revisa directamente nuestro equipo profesional durante la cita 😊 Yo puedo ayudarte a coordinar el horario para que recibas orientación adecuada en Prevital.";
+  "Esa informaciÃ³n la revisa directamente nuestro equipo profesional durante la cita ðŸ˜Š Yo puedo ayudarte a coordinar el horario para que recibas orientaciÃ³n adecuada en Prevital.";
 
 const INFO_TO_SCHEDULE_REPLY =
-  "Con gusto te ayudamos 🌿 Para darte la información completa y coordinar tu experiencia en Prevital, primero necesitamos agendar tu valoración. ¿Te queda mejor en la mañana o en la tarde?";
+  "Con gusto te ayudamos ðŸŒ¿ Para darte la informaciÃ³n completa y coordinar tu experiencia en Prevital, primero necesitamos agendar tu valoraciÃ³n. Â¿Te queda mejor en la maÃ±ana o en la tarde?";
 
 const LOCATION_REPLY =
-  "Estamos en El Poblado, Medellín 🌿 Cuando confirmemos tu cita te compartiremos la dirección completa e instrucciones para llegar.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
+  "Estamos en El Poblado, MedellÃ­n ðŸŒ¿ Cuando confirmemos tu cita te compartiremos la direcciÃ³n completa e instrucciones para llegar.\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
 
 const PRICE_REPLY =
-  "Esta experiencia no tiene costo para las personas seleccionadas 💚 Te ayudo a coordinar tu cita en Prevital.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
+  "Esta experiencia no tiene costo para las personas seleccionadas ðŸ’š Te ayudo a coordinar tu cita en Prevital.\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
 
 const DURATION_REPLY =
-  "La cita inicial tiene una duración aproximada de 30 minutos 😊\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
+  "La cita inicial tiene una duraciÃ³n aproximada de 30 minutos ðŸ˜Š\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
 
 const COMPANION_REPLY =
-  "Puedes venir acompañado/a si lo deseas 😊 Lo importante es que la cita quede a tu nombre y llegues con tu cédula original.\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
+  "Puedes venir acompaÃ±ado/a si lo deseas ðŸ˜Š Lo importante es que la cita quede a tu nombre y llegues con tu cÃ©dula original.\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
 
 const WHAT_TO_BRING_REPLY =
-  "Para la cita es importante traer tu cédula original. Al confirmar la cita te enviaremos las instrucciones completas 🌿\n\n¿Te queda mejor en la mañana o en la tarde para coordinar tu cita?";
+  "Para la cita es importante traer tu cÃ©dula original. Al confirmar la cita te enviaremos las instrucciones completas ðŸŒ¿\n\nÂ¿Te queda mejor en la maÃ±ana o en la tarde para coordinar tu cita?";
 
 const DIRECT_REPLIES_WITHOUT_PERIOD_QUESTION: Partial<Record<WhatsappAgentIntent, string>> = {
   asks_location:
-    "Estamos en El Poblado, Medellín 🌿 Cuando confirmemos tu cita te compartiremos la dirección completa e instrucciones para llegar.",
+    "Estamos en El Poblado, MedellÃ­n ðŸŒ¿ Cuando confirmemos tu cita te compartiremos la direcciÃ³n completa e instrucciones para llegar.",
   asks_price:
-    "Esta experiencia no tiene costo para las personas seleccionadas 💚",
+    "Esta experiencia no tiene costo para las personas seleccionadas ðŸ’š",
   asks_duration:
-    "La cita inicial tiene una duración aproximada de 30 minutos 😊",
+    "La cita inicial tiene una duraciÃ³n aproximada de 30 minutos ðŸ˜Š",
   asks_companion:
-    "Puedes venir acompañado/a si lo deseas 😊 Lo importante es que la cita quede a tu nombre y llegues con tu cédula original.",
+    "Puedes venir acompaÃ±ado/a si lo deseas ðŸ˜Š Lo importante es que la cita quede a tu nombre y llegues con tu cÃ©dula original.",
   asks_what_to_bring:
-    "Para la cita es importante traer tu cédula original. Al confirmar la cita te enviaremos las instrucciones completas 🌿",
+    "Para la cita es importante traer tu cÃ©dula original. Al confirmar la cita te enviaremos las instrucciones completas ðŸŒ¿",
   wants_info:
-    "Con gusto te ayudamos 🌿 En la valoración nuestro equipo te dará la información completa para coordinar tu experiencia en Prevital.",
+    "Con gusto te ayudamos ðŸŒ¿ En la valoraciÃ³n nuestro equipo te darÃ¡ la informaciÃ³n completa para coordinar tu experiencia en Prevital.",
   greeting:
-    "Con gusto te ayudamos 🌿",
+    "Con gusto te ayudamos ðŸŒ¿",
 };
 
 function normalizeText(value: string) {
@@ -195,11 +197,11 @@ export function analyzeWhatsappAgentIntent(message: string): WhatsappAgentIntent
     return "asks_duration";
   }
 
-  if (hasAny(normalized, ["acompanante", "acompañante", "pareja", "hermana", "hermano", "mama", "mamá", "papa", "papá", "familiar", "puedo ir con alguien"])) {
+  if (hasAny(normalized, ["acompanante", "acompaÃ±ante", "pareja", "hermana", "hermano", "mama", "mamÃ¡", "papa", "papÃ¡", "familiar", "puedo ir con alguien"])) {
     return "asks_companion";
   }
 
-  if (hasAny(normalized, ["que debo llevar", "que llevo", "llevar algo", "cedula", "cédula", "documento"])) {
+  if (hasAny(normalized, ["que debo llevar", "que llevo", "llevar algo", "cedula", "cÃ©dula", "documento"])) {
     return "asks_what_to_bring";
   }
 
@@ -334,7 +336,7 @@ export function detectPeriodPreference(message: string): AgendaPeriod | null {
     return "afternoon";
   }
   const normalized = normalizeText(message);
-  if (hasAny(normalized, ["manana", "mañana", "temprano", "antes del medio dia", "antes de medio dia"])) {
+  if (hasAny(normalized, ["manana", "maÃ±ana", "temprano", "antes del medio dia", "antes de medio dia"])) {
     return "morning";
   }
   if (hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"])) {
@@ -345,7 +347,15 @@ export function detectPeriodPreference(message: string): AgendaPeriod | null {
 
 export function isPositiveConfirmation(message: string) {
   const normalized = normalizeText(message);
-  return /^(si|sí|sii|dale|correcto|asi es|confirmo|ok|okay|listo)$/.test(normalized);
+  return /^(si|sÃ­|sii|si correcto|sÃ­ correcto|correcto|asi es|exacto|ese|ese mismo|claro|dale|ok|okay|listo|confirmo)$/.test(normalized);
+}
+
+export function isNegativeDateConfirmation(message: string) {
+  const normalized = normalizeText(message);
+  return (
+    /^(no|no ese|otro|otro dia|otro dÃ­a)$/.test(normalized) ||
+    hasAny(normalized, ["no el otro", "otro martes", "me referia a otro", "me referÃ­a a otro"])
+  );
 }
 
 export function isSlotRejectionMessage(message: string) {
@@ -391,6 +401,7 @@ export function parseDatePreference(
   const normalized = normalizeText(message);
   const today = todayBogota(now);
   const mentionsAfternoon = hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"]);
+  const asksAlternativeWeekday = /\bo\s+el\s+(lunes|martes|miercoles|miÃ©rcoles|jueves|viernes|sabado|sÃ¡bado|domingo)\b/.test(normalized);
   const morningOnlyPhrases = [
     "en la manana",
     "por la manana",
@@ -403,91 +414,12 @@ export function parseDatePreference(
       ? normalized.replace(/\bmanana\b/g, "")
       : normalized;
 
-  if (hasAny(normalized, ["pasado manana", "pasado mañana"])) {
-    const date = addDaysISO(today, 2);
-    return { date, needsConfirmation: false, label: formatSlotDate(date) };
-  }
-
-  if (/\bmanana\b/.test(normalized) || /\bmañana\b/.test(message.toLowerCase())) {
-    const date = addDaysISO(today, 1);
-    return { date, needsConfirmation: false, label: formatSlotDate(date) };
-  }
-
-  if (hasAny(normalized, ["otra semana", "la proxima semana", "proxima semana"])) {
-    const date = addDaysISO(today, 7);
-    return { date, needsConfirmation: true, label: formatSlotDate(date) };
-  }
-
-  const explicitDate = normalized.match(/\b(\d{1,2})(?:\s*de\s*([a-z]+))?\b/);
-  if (explicitDate) {
-    const day = Number(explicitDate[1]);
-    const parts = currentBogotaParts(now);
-    const month = explicitDate[2] ? monthNumber(explicitDate[2]) : parts.month;
-    if (month && day >= 1 && day <= 31) {
-      let year = parts.year;
-      let date = formatISODate(year, month, day);
-      if (date < today) {
-        if (explicitDate[2]) {
-          year += 1;
-          date = formatISODate(year, month, day);
-        } else {
-          const nextMonth = parts.month === 12 ? 1 : parts.month + 1;
-          const nextMonthYear = parts.month === 12 ? parts.year + 1 : parts.year;
-          date = formatISODate(nextMonthYear, nextMonth, day);
-        }
-      }
-      return {
-        date,
-        needsConfirmation: !explicitDate[2],
-        label: formatSlotDate(date),
-      };
-    }
-  }
-
-  const weekdayMatch = normalized.match(/\b(lunes|martes|miercoles|miércoles|jueves|viernes|sabado|sábado|domingo)\b/);
-  if (weekdayMatch) {
-    const target = weekdayIndex(weekdayMatch[1]);
-    if (target === null) return null;
-
-    const base = dateFromISO(today);
-    const current = base.getUTCDay();
-    const diff = (target - current + 7) % 7 || 7;
-    const date = addDaysISO(today, diff);
-
-    return {
-      date,
-      needsConfirmation: diff > 6,
-      label: formatSlotDate(date),
-    };
-  }
-
-  return null;
-}
-
-export function parseSpecificDatePreference(
-  message: string,
-  now = new Date()
-): ParsedDatePreference | null {
-  const normalized = normalizeText(message);
-  const today = todayBogota(now);
-  const mentionsAfternoon = hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"]);
-  const morningOnlyPhrases = [
-    "en la manana",
-    "por la manana",
-    "de la manana",
-    "en manana",
-    "por manana",
-  ];
-
   if (hasAny(normalized, ["pasado manana", "pasado maÃ±ana"])) {
     const date = addDaysISO(today, 2);
     return { date, needsConfirmation: false, label: formatSlotDate(date) };
   }
 
-  if (
-    (/\bmanana\b/.test(normalized) || /\bmaÃ±ana\b/.test(message.toLowerCase())) &&
-    (mentionsAfternoon || !hasAny(normalized, morningOnlyPhrases))
-  ) {
+  if (/\bmanana\b/.test(normalized) || /\bmaÃ±ana\b/.test(message.toLowerCase())) {
     const date = addDaysISO(today, 1);
     return { date, needsConfirmation: false, label: formatSlotDate(date) };
   }
@@ -535,7 +467,87 @@ export function parseSpecificDatePreference(
 
     return {
       date,
-      needsConfirmation: diff > 6,
+      needsConfirmation: diff > 6 || asksAlternativeWeekday,
+      label: formatSlotDate(date),
+    };
+  }
+
+  return null;
+}
+
+export function parseSpecificDatePreference(
+  message: string,
+  now = new Date()
+): ParsedDatePreference | null {
+  const normalized = normalizeText(message);
+  const today = todayBogota(now);
+  const mentionsAfternoon = hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"]);
+  const asksAlternativeWeekday = /\bo\s+el\s+(lunes|martes|miercoles|miÃ©rcoles|jueves|viernes|sabado|sÃ¡bado|domingo)\b/.test(normalized);
+  const morningOnlyPhrases = [
+    "en la manana",
+    "por la manana",
+    "de la manana",
+    "en manana",
+    "por manana",
+  ];
+
+  if (hasAny(normalized, ["pasado manana", "pasado maÃƒÂ±ana"])) {
+    const date = addDaysISO(today, 2);
+    return { date, needsConfirmation: false, label: formatSlotDate(date) };
+  }
+
+  if (
+    (/\bmanana\b/.test(normalized) || /\bmaÃƒÂ±ana\b/.test(message.toLowerCase())) &&
+    (mentionsAfternoon || !hasAny(normalized, morningOnlyPhrases))
+  ) {
+    const date = addDaysISO(today, 1);
+    return { date, needsConfirmation: false, label: formatSlotDate(date) };
+  }
+
+  if (hasAny(normalized, ["otra semana", "la proxima semana", "proxima semana"])) {
+    const date = addDaysISO(today, 7);
+    return { date, needsConfirmation: true, label: formatSlotDate(date) };
+  }
+
+  const explicitDate = normalized.match(/\b(\d{1,2})(?:\s*de\s*([a-z]+))?\b/);
+  if (explicitDate) {
+    const day = Number(explicitDate[1]);
+    const parts = currentBogotaParts(now);
+    const month = explicitDate[2] ? monthNumber(explicitDate[2]) : parts.month;
+    if (month && day >= 1 && day <= 31) {
+      let year = parts.year;
+      let date = formatISODate(year, month, day);
+      if (date < today) {
+        if (explicitDate[2]) {
+          year += 1;
+          date = formatISODate(year, month, day);
+        } else {
+          const nextMonth = parts.month === 12 ? 1 : parts.month + 1;
+          const nextMonthYear = parts.month === 12 ? parts.year + 1 : parts.year;
+          date = formatISODate(nextMonthYear, nextMonth, day);
+        }
+      }
+      return {
+        date,
+        needsConfirmation: !explicitDate[2],
+        label: formatSlotDate(date),
+      };
+    }
+  }
+
+  const weekdayMatch = normalized.match(/\b(lunes|martes|miercoles|miÃƒÂ©rcoles|jueves|viernes|sabado|sÃƒÂ¡bado|domingo)\b/);
+  if (weekdayMatch) {
+    const target = weekdayIndex(weekdayMatch[1]);
+    if (target === null) return null;
+
+    const base = dateFromISO(today);
+    const current = base.getUTCDay();
+    const diff = (target - current + 7) % 7 || 7;
+    const date = addDaysISO(today, diff);
+
+    return {
+      date,
+      needsConfirmation: diff > 6 || asksAlternativeWeekday,
       label: formatSlotDate(date),
     };
   }
@@ -605,26 +617,26 @@ export async function getNextWhatsappAgendaSlots(options: {
 
 export function buildSlotsOfferMessage(slots: OfferedAgendaSlot[], period?: AgendaPeriod) {
   if (slots.length === 0) {
-    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente 😊";
+    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente ðŸ˜Š";
   }
 
-  const periodLabel = period === "afternoon" ? "tarde" : "mañana";
+  const periodLabel = period === "afternoon" ? "tarde" : "maÃ±ana";
   const lines = slots.map(
     (slot) =>
       `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
   );
 
-  return `Perfecto 💚 Tenemos estas opciones en la ${periodLabel}:\n\n${lines.join(
+  return `Perfecto ðŸ’š Tenemos estas opciones en la ${periodLabel}:\n\n${lines.join(
     "\n"
-  )}\n\n¿Cuál prefieres?`;
+  )}\n\nÂ¿CuÃ¡l prefieres?`;
 }
 
 export function buildSlotsReminderMessage(slots: OfferedAgendaSlot[], period: AgendaPeriod) {
   if (slots.length === 0) {
-    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente 😊";
+    return "En este momento no veo cupos disponibles para esa jornada. Dejo tu caso para que nuestro equipo te ayude personalmente ðŸ˜Š";
   }
 
-  const periodLabel = period === "afternoon" ? "tarde" : "mañana";
+  const periodLabel = period === "afternoon" ? "tarde" : "maÃ±ana";
   const lines = slots.map(
     (slot) =>
       `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
@@ -632,7 +644,7 @@ export function buildSlotsReminderMessage(slots: OfferedAgendaSlot[], period: Ag
 
   return `Como me indicaste que te queda mejor en la ${periodLabel}, te comparto nuevamente opciones disponibles:\n\n${lines.join(
     "\n"
-  )}\n\n¿Cuál prefieres?`;
+  )}\n\nÂ¿CuÃ¡l prefieres?`;
 }
 
 export function pickOfferedSlot(message: string, slots: OfferedAgendaSlot[]) {
@@ -845,7 +857,7 @@ export async function createWhatsappAgentAppointment(params: {
       ok: false as const,
       reason: "slot_unavailable",
       error:
-        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoración 😊",
+        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoraciÃ³n ðŸ˜Š",
     };
   }
 
@@ -906,7 +918,7 @@ export async function createWhatsappAgentAppointment(params: {
       ok: false as const,
       reason: "slot_unavailable",
       error:
-        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoraciÃ³n ðŸ˜Š",
+        "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoraciÃƒÂ³n Ã°Å¸ËœÅ ",
     };
   }
 
@@ -986,27 +998,28 @@ export function buildWhatsappAppointmentConfirmation(params: {
 }) {
   const displayName = params.name?.trim() || "Prevital";
 
-  return `*Hola, ${displayName}* 💚
+  return `*Hola, ${displayName}* ðŸ’š
 
 Tu cita gratuita en *Prevital* ha sido confirmada.
 
-📅 *Fecha:* ${formatSlotDate(params.date)}
-🕐 *Hora:* ${formatSlotTime(params.time)}
+ðŸ“… *Fecha:* ${formatSlotDate(params.date)}
+ðŸ• *Hora:* ${formatSlotTime(params.time)}
 
 *Muy importante presentar:*
-✔️ Cédula original
-✔️ Disponibilidad aproximada de 30 minutos para tu orientación inicial
-✔️ Código de consulta gratis: *BD 0803*
+âœ”ï¸ CÃ©dula original
+âœ”ï¸ Disponibilidad aproximada de 30 minutos para tu orientaciÃ³n inicial
+âœ”ï¸ CÃ³digo de consulta gratis: *BD 0803*
 
-📍 *Dirección:*
+ðŸ“ *DirecciÃ³n:*
 *Av. El Poblado*
 *Edificio Caja Social*
 Carrera 43A # 1 - 71, Piso 2
-Frente a San Fernando Plaza, Medellín.
+Frente a San Fernando Plaza, MedellÃ­n.
 
-📲 *Instagram:*
+ðŸ“² *Instagram:*
 https://www.instagram.com/prevital_col
 
-Gracias por priorizar tu bienestar 🌿
+Gracias por priorizar tu bienestar ðŸŒ¿
 Te esperamos en Prevital.`;
 }
+

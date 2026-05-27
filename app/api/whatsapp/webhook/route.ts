@@ -13,6 +13,7 @@ import {
   createWhatsappAgentAppointment,
   detectPeriodPreference,
   getNextWhatsappAgendaSlots,
+  isNegativeDateConfirmation,
   isWhatsappAgentBookingEnabled,
   isPositiveConfirmation,
   isSlotRejectionMessage,
@@ -121,6 +122,14 @@ function periodLabel(period: "morning" | "afternoon") {
 
 function noAvailabilityForDateMessage(dateLabel: string, period: "morning" | "afternoon") {
   return `Para ${dateLabel} en la ${periodLabel(period)} no veo cupos disponibles por ahora \ud83d\ude0a \u00bfQuieres que revise el d\u00eda siguiente o prefieres otro d\u00eda?`;
+}
+
+function formatPendingDateLabel(date: string) {
+  return new Date(`${date}T12:00:00-05:00`).toLocaleDateString("es-CO", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+  });
 }
 
 const PRE_FELICITATION_LOCATION_MESSAGE =
@@ -438,6 +447,9 @@ async function offerWhatsappAgentSlots(
         ...context,
         period: options.period,
         preferredDate: options.preferredDate || context.preferredDate,
+        pendingDate: undefined,
+        pendingPeriod: undefined,
+        pendingAction: undefined,
       }),
       ...inboundWindowFields,
     });
@@ -457,6 +469,8 @@ async function offerWhatsappAgentSlots(
       period: options.period,
       preferredDate: options.preferredDate || context.preferredDate,
       pendingDate: undefined,
+      pendingPeriod: undefined,
+      pendingAction: undefined,
       lastOfferedPeriod: options.period,
       lastOfferedDate: slots[0]?.date,
     }),
@@ -493,6 +507,60 @@ async function handleWhatsappAgent(
   const shouldTreatAsPeriod = Boolean(
     periodForScheduling && lead.status !== "esperando_dia_preferido"
   );
+
+  if (context.pendingAction === "confirm_date_for_schedule" && context.pendingDate) {
+    if (isPositiveConfirmation(message.body)) {
+      if (context.pendingPeriod) {
+        await offerWhatsappAgentSlots(lead, inboundWindowFields, {
+          period: context.pendingPeriod,
+          preferredDate: context.pendingDate,
+          exactDateOnly: true,
+          noAvailabilityMessage: noAvailabilityForDateMessage(
+            formatPendingDateLabel(context.pendingDate),
+            context.pendingPeriod
+          ),
+        });
+        return;
+      }
+
+      await updateWhatsappAgentLead(lead.id, {
+        status: "esperando_preferencia_jornada",
+        priority: "alta",
+        notes: writeWhatsappAgentContext(lead.notes, {
+          ...context,
+          preferredDate: context.pendingDate,
+          pendingDate: undefined,
+          pendingPeriod: undefined,
+          pendingAction: undefined,
+        }),
+        ...inboundWindowFields,
+      });
+      await replyToLead(
+        message.from,
+        `Perfecto 😊 Para ${formatPendingDateLabel(context.pendingDate)}, ¿te queda mejor en la mañana o en la tarde?`
+      );
+      return;
+    }
+
+    if (isNegativeDateConfirmation(message.body)) {
+      await updateWhatsappAgentLead(lead.id, {
+        status: "esperando_dia_preferido",
+        priority: "alta",
+        notes: writeWhatsappAgentContext(lead.notes, {
+          ...context,
+          pendingDate: undefined,
+          pendingPeriod: undefined,
+          pendingAction: undefined,
+        }),
+        ...inboundWindowFields,
+      });
+      await replyToLead(
+        message.from,
+        "Claro 😊 ¿Qué día te queda fácil para revisar disponibilidad?"
+      );
+      return;
+    }
+  }
 
   if (intent === "needs_human") {
     const safeReply = replyForIntent(intent) || AGENT_UNKNOWN_MESSAGE;
@@ -557,6 +625,8 @@ async function handleWhatsappAgent(
           ...context,
           period: periodForScheduling,
           pendingDate: datePreference.date,
+          pendingPeriod: periodForScheduling,
+          pendingAction: "confirm_date_for_schedule",
         }),
         ...inboundWindowFields,
       });
@@ -592,6 +662,8 @@ async function handleWhatsappAgent(
         notes: writeWhatsappAgentContext(lead.notes, {
           ...context,
           pendingDate: datePreference.date,
+          pendingPeriod: undefined,
+          pendingAction: "confirm_date_for_schedule",
         }),
         ...inboundWindowFields,
       });
