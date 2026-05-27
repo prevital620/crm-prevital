@@ -36,6 +36,10 @@ type WhatsappLead = {
   assigned_to: string | null;
   notes: string | null;
   priority: string | null;
+  appointment_id: string | null;
+  appointment_date: string | null;
+  appointment_time: string | null;
+  appointment_status: string | null;
 };
 
 type WhatsappMessage = {
@@ -115,6 +119,13 @@ function statusLabel(status: string | null | undefined) {
     esperando_confirmacion_horario: "Esperando confirmacion",
     en_gestion_callcenter: "En gestion Call Center",
     agendado: "Agendado",
+    agendada: "Agendada",
+    confirmada: "Confirmada",
+    reagendada: "Reagendada",
+    en_espera: "En espera",
+    asistio: "Asistio",
+    finalizada: "Finalizada",
+    no_asistio: "No asistio",
     sin_respuesta: "Sin respuesta",
     requiere_template: "Requiere plantilla",
     requiere_humano: "Requiere humano",
@@ -164,24 +175,6 @@ function isScheduledToday(lead: WhatsappLead) {
   return today === scheduledDay;
 }
 
-function queuePriority(lead: WhatsappLead) {
-  if (lead.status === "requiere_humano") return 1;
-  if (lead.status === "esperando_confirmacion_horario") return 1;
-  if (lead.status === "esperando_preferencia_jornada") return 2;
-  if (lead.status === "esperando_dia_preferido") return 2;
-  if (lead.status === "ofreciendo_horarios") return 2;
-  if (lead.status === "pendiente_agendar") return 2;
-  if (lead.status === "respondio_para_agendar") return 1;
-  if (isInboundWithoutAnswer(lead)) return 2;
-  if (lead.status === "requiere_template") return 3;
-  if (isWindowExpiringSoon(lead)) return 4;
-  if (lead.status === "felicitacion_programada") return 4;
-  if (lead.status === "felicitacion_enviada") return 5;
-  if (lead.status === "registrado" || lead.status === "registered") return 6;
-  if (lead.status === "agendado" || lead.status === "cerrado") return 10;
-  return 9;
-}
-
 function conversationBadge(lead: WhatsappLead) {
   if (lead.status === "agendado") return "Agendado";
   if (lead.status === "requiere_humano") return "Requiere humano";
@@ -216,6 +209,13 @@ function statusTone(status: string | null | undefined) {
     esperando_confirmacion_horario: "border-[#EEC6B8] bg-[#FFF0E9] text-[#9A4E2E] ring-[#EEC6B8]",
     en_gestion_callcenter: "border-[#BCE1DE] bg-[#E9F8F6] text-[#2B706E] ring-[#BCE1DE]",
     agendado: "border-[#7FA287] bg-[#D9F0E1] text-[#23563C] ring-[#9BC4AF]",
+    agendada: "border-[#7FA287] bg-[#D9F0E1] text-[#23563C] ring-[#9BC4AF]",
+    confirmada: "border-[#7FA287] bg-[#D9F0E1] text-[#23563C] ring-[#9BC4AF]",
+    reagendada: "border-[#BCE1DE] bg-[#E9F8F6] text-[#2B706E] ring-[#BCE1DE]",
+    en_espera: "border-[#E8D49D] bg-[#FFF7D9] text-[#8B6B22] ring-[#E8D49D]",
+    asistio: "border-[#D8C8EA] bg-[#F1ECFA] text-[#6B4F8E] ring-[#D8C8EA]",
+    finalizada: "border-[#D8C8EA] bg-[#F1ECFA] text-[#6B4F8E] ring-[#D8C8EA]",
+    no_asistio: "border-[#E8D49D] bg-[#FFF7D9] text-[#8B6B22] ring-[#E8D49D]",
     sin_respuesta: "border-[#D7DDD9] bg-[#F1F4F2] text-[#596660] ring-[#D7DDD9]",
     requiere_template: "border-[#E8D49D] bg-[#FFF7D9] text-[#8B6B22] ring-[#E8D49D]",
     requiere_humano: "border-[#E6C9C5] bg-[#FFF5F3] text-[#9A4E43] ring-[#E6C9C5]",
@@ -247,6 +247,142 @@ function canReplyFreely(lead: WhatsappLead | null) {
   return new Date(lead.reply_window_expires_at).getTime() > Date.now();
 }
 
+type KanbanColumn = {
+  id: string;
+  title: string;
+  hint: string;
+  items: WhatsappLead[];
+  tone: string;
+};
+
+const inscritosStatuses = new Set(["registrado", "registered", "felicitacion_programada", "felicitacion_enviada"]);
+const porAgendarStatuses = new Set([
+  "pendiente_agendar",
+  "ofreciendo_horarios",
+  "esperando_preferencia_jornada",
+  "esperando_dia_preferido",
+  "esperando_confirmacion_horario",
+  "respondio_para_agendar",
+]);
+
+function leadActivityTime(lead: WhatsappLead) {
+  return new Date(lead.last_inbound_at || lead.last_outbound_at || lead.created_at || 0).getTime();
+}
+
+function appointmentSortValue(lead: WhatsappLead, fallback = "9999-12-31T23:59:59") {
+  return `${lead.appointment_date || fallback.slice(0, 10)}T${lead.appointment_time || fallback.slice(11)}`;
+}
+
+function formatAppointmentDate(value: string | null | undefined) {
+  if (!value) return "Sin fecha";
+  const [year, month, day] = value.split("-").map(Number);
+  if (!year || !month || !day) return value;
+  return new Date(year, month - 1, day).toLocaleDateString("es-CO", {
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  });
+}
+
+function formatAppointmentTime(value: string | null | undefined) {
+  if (!value) return "Sin hora";
+  const [hour = "00", minute = "00"] = value.split(":");
+  return `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+}
+
+function leadColumnId(lead: WhatsappLead) {
+  if (lead.status === "requiere_humano") return "requiere_humano";
+  if (lead.appointment_status === "no_asistio") return "no_asistio";
+  if (lead.appointment_status === "asistio" || lead.appointment_status === "finalizada") return "asistio";
+  if (lead.status === "agendado") return "agendados";
+  if (porAgendarStatuses.has(lead.status || "")) return "por_agendar";
+  if (inscritosStatuses.has(lead.status || "")) return "inscritos";
+  return "inscritos";
+}
+
+function sortColumnItems(columnId: string, items: WhatsappLead[]) {
+  const copy = [...items];
+
+  if (columnId === "por_agendar") {
+    return copy.sort((a, b) => {
+      const pendingDiff = Number(isInboundWithoutAnswer(b)) - Number(isInboundWithoutAnswer(a));
+      if (pendingDiff !== 0) return pendingDiff;
+      return leadActivityTime(b) - leadActivityTime(a);
+    });
+  }
+
+  if (columnId === "agendados") {
+    return copy.sort((a, b) => appointmentSortValue(a).localeCompare(appointmentSortValue(b)));
+  }
+
+  if (columnId === "asistio" || columnId === "no_asistio") {
+    return copy.sort((a, b) =>
+      appointmentSortValue(b, "0000-01-01T00:00:00").localeCompare(
+        appointmentSortValue(a, "0000-01-01T00:00:00")
+      )
+    );
+  }
+
+  return copy.sort((a, b) => leadActivityTime(b) - leadActivityTime(a));
+}
+
+function buildKanbanColumns(leads: WhatsappLead[]): KanbanColumn[] {
+  const columns: KanbanColumn[] = [
+    {
+      id: "inscritos",
+      title: "Inscritos",
+      hint: "Registro y felicitacion",
+      items: [],
+      tone: "border-[#BFD7EA] bg-[#F5FAFE]",
+    },
+    {
+      id: "por_agendar",
+      title: "Ganadores / Por agendar",
+      hint: "Prioridad alta",
+      items: [],
+      tone: "border-[#EEC6B8] bg-[#FFF7F3]",
+    },
+    {
+      id: "agendados",
+      title: "Agendados",
+      hint: "Orden por cita",
+      items: [],
+      tone: "border-[#BFE0CD] bg-[#F4FBF7]",
+    },
+    {
+      id: "asistio",
+      title: "Asistio",
+      hint: "Citas atendidas",
+      items: [],
+      tone: "border-[#D8C8EA] bg-[#FAF7FE]",
+    },
+    {
+      id: "no_asistio",
+      title: "No asistio",
+      hint: "Recuperacion",
+      items: [],
+      tone: "border-[#E8D49D] bg-[#FFFDF4]",
+    },
+    {
+      id: "requiere_humano",
+      title: "Requiere humano",
+      hint: "Alerta operativa",
+      items: [],
+      tone: "border-[#E6C9C5] bg-[#FFF7F5]",
+    },
+  ];
+  const byId = new Map(columns.map((column) => [column.id, column]));
+
+  leads.forEach((lead) => {
+    byId.get(leadColumnId(lead))?.items.push(lead);
+  });
+
+  return columns.map((column) => ({
+    ...column,
+    items: sortColumnItems(column.id, column.items),
+  }));
+}
+
 export default function LeadsWhatsappPage() {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
@@ -267,39 +403,10 @@ export default function LeadsWhatsappPage() {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState("");
 
-  const sortedLeads = useMemo(
-    () =>
-      [...leads].sort((a, b) => {
-        const priorityDiff = queuePriority(a) - queuePriority(b);
-        if (priorityDiff !== 0) return priorityDiff;
-
-        const aSchedule = a.felicitation_scheduled_for
-          ? new Date(a.felicitation_scheduled_for).getTime()
-          : Number.MAX_SAFE_INTEGER;
-        const bSchedule = b.felicitation_scheduled_for
-          ? new Date(b.felicitation_scheduled_for).getTime()
-          : Number.MAX_SAFE_INTEGER;
-        if (aSchedule !== bSchedule) return aSchedule - bSchedule;
-
-        return new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime();
-      }),
-    [leads]
-  );
-
-  const counters = useMemo(
-    () => ({
-      pendientesPorAgendar: leads.filter((lead) =>
-        ["respondio_para_agendar", "pendiente_agendar", "esperando_preferencia_jornada"].includes(lead.status || "")
-      )
-        .length,
-      ofreciendoHorarios: leads.filter((lead) => lead.status === "ofreciendo_horarios").length,
-      esperandoConfirmacion: leads.filter((lead) =>
-        ["esperando_confirmacion_horario", "esperando_dia_preferido"].includes(lead.status || "")
-      ).length,
-      agendados: leads.filter((lead) => lead.status === "agendado").length,
-      requierenHumano: leads.filter((lead) => lead.status === "requiere_humano").length,
-    }),
-    [leads]
+  const kanbanColumns = useMemo(() => buildKanbanColumns(leads), [leads]);
+  const totalLeads = useMemo(
+    () => kanbanColumns.reduce((total, column) => total + column.items.length, 0),
+    [kanbanColumns]
   );
 
   async function loadLeads() {
@@ -543,21 +650,15 @@ export default function LeadsWhatsappPage() {
           </div>
         </section>
 
-        <section className={`grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-5 ${selectedLead ? "hidden lg:grid" : ""}`}>
-          {[
-            ["Pendientes por agendar", counters.pendientesPorAgendar],
-            ["Ofreciendo horarios", counters.ofreciendoHorarios],
-            ["Esperando confirmacion", counters.esperandoConfirmacion],
-            ["Agendados", counters.agendados],
-            ["Requiere humano", counters.requierenHumano],
-          ].map(([label, value]) => (
+        <section className={`grid gap-3 sm:gap-4 md:grid-cols-2 xl:grid-cols-6 ${selectedLead ? "hidden lg:grid" : ""}`}>
+          {kanbanColumns.map((column) => (
             <div
-              key={label}
+              key={column.id}
               className="overflow-hidden rounded-[30px] border border-[#CFE4D8] bg-white/95 p-5 shadow-[0_18px_40px_rgba(95,125,102,0.12)]"
             >
               <div className="mb-3 h-1.5 w-full rounded-full bg-gradient-to-r from-[#C7EEE1] via-[#8CB88D] to-[#4F7B63]" />
-              <p className="text-sm font-medium text-[#5B6E63]">{label}</p>
-              <p className="mt-2 text-3xl font-bold text-[#24312A]">{value}</p>
+              <p className="text-sm font-medium text-[#5B6E63]">{column.title}</p>
+              <p className="mt-2 text-3xl font-bold text-[#24312A]">{column.items.length}</p>
             </div>
           ))}
         </section>
@@ -586,6 +687,9 @@ export default function LeadsWhatsappPage() {
                 <option value="requiere_template">Requiere plantilla</option>
                 <option value="requiere_humano">Requiere humano</option>
                 <option value="agendado">Agendados</option>
+                <option value="asistio">Asistio</option>
+                <option value="finalizada">Finalizada</option>
+                <option value="no_asistio">No asistio</option>
                 <option value="cerrado">Cerrados</option>
               </select>
             </div>
@@ -645,14 +749,14 @@ export default function LeadsWhatsappPage() {
         ) : null}
 
         <section className={`overflow-hidden border border-[#CFE4D8] bg-white/95 shadow-[0_24px_60px_rgba(95,125,102,0.12)] ${selectedLead ? "fixed inset-0 z-50 rounded-none lg:relative lg:inset-auto lg:z-auto lg:rounded-[32px]" : "rounded-[28px] sm:rounded-[32px]"}`}>
-          <div className={`grid lg:min-h-[720px] lg:grid-cols-[390px_minmax(0,1fr)] ${selectedLead ? "h-[100dvh] lg:h-auto" : "min-h-[620px]"}`}>
+          <div className={`grid lg:min-h-[720px] lg:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.9fr)] ${selectedLead ? "h-[100dvh] lg:h-auto" : "min-h-[620px]"}`}>
             <aside className={`border-b border-[#DCEDE3] bg-[#F7FCF8] lg:border-b-0 lg:border-r ${selectedLead ? "hidden lg:block" : "block"}`}>
               <div className="sticky top-0 z-10 border-b border-[#DCEDE3] bg-[#F7FCF8]/95 p-4 backdrop-blur">
                 <div className="flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-xl font-bold text-[#0E2340]">Conversaciones</h2>
                     <p className="text-xs text-[#607368]">
-                      {loading ? "Cargando..." : `${sortedLeads.length} leads filtrados`}
+                      {loading ? "Cargando..." : `${totalLeads} leads filtrados`}
                     </p>
                   </div>
                   <button
@@ -667,47 +771,85 @@ export default function LeadsWhatsappPage() {
               </div>
 
               <div className="max-h-[calc(100dvh-92px)] overflow-y-auto p-2 sm:p-3 lg:max-h-[640px]">
-                {!loading && sortedLeads.length === 0 ? (
+                {!loading && totalLeads === 0 ? (
                   <div className="rounded-[24px] border border-dashed border-[#CFE4D8] bg-white/80 px-4 py-8 text-center text-sm text-[#607368]">
                     No hay conversaciones para esos filtros.
                   </div>
                 ) : null}
 
-                <div className="space-y-2">
-                  {sortedLeads.map((lead) => (
-                    <button
-                      key={lead.id}
-                      type="button"
-                      onClick={() => selectLead(lead)}
-                      className={`w-full rounded-[24px] border p-4 text-left transition ${leadCardTone(lead, selectedLead?.id === lead.id)}`}
+                <div className="grid gap-3 xl:grid-cols-3 2xl:grid-cols-6">
+                  {kanbanColumns.map((column) => (
+                    <div
+                      key={column.id}
+                      className={`min-h-[260px] rounded-[26px] border p-3 ${column.tone}`}
                     >
-                      <div className="flex items-start gap-3">
-                        <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#C7EEE1,_#6C9C88)] text-sm font-bold text-[#1F3128]">
-                          {displayName(lead).slice(0, 1).toUpperCase()}
+                      <div className="mb-3 flex items-start justify-between gap-2">
+                        <div>
+                          <h3 className="text-sm font-bold text-[#0E2340]">{column.title}</h3>
+                          <p className="mt-0.5 text-[11px] text-[#607368]">{column.hint}</p>
                         </div>
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-start justify-between gap-2">
-                            <p className="truncate font-semibold text-[#10233F]">
-                              {displayName(lead)}
-                            </p>
-                            <span className="shrink-0 text-[11px] text-[#789084]">
-                              {formatDateTime(lead.last_inbound_at || lead.created_at)}
-                            </span>
-                          </div>
-                          <p className="mt-1 truncate text-xs text-[#607368]">{lead.phone}</p>
-                          <div className="mt-2 flex flex-wrap gap-1.5">
-                            <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusTone(lead.status)}`}>
-                              {conversationBadge(lead)}
-                            </span>
-                            {lead.campaign_code ? (
-                              <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#607368] ring-1 ring-[#DCEDE3]">
-                                {lead.campaign_code}
-                              </span>
-                            ) : null}
-                          </div>
-                        </div>
+                        <span className="rounded-full bg-white px-2.5 py-1 text-xs font-bold text-[#4F6F5B] shadow-sm">
+                          {column.items.length}
+                        </span>
                       </div>
-                    </button>
+
+                      <div className="space-y-2">
+                        {column.items.length === 0 ? (
+                          <div className="rounded-[20px] border border-dashed border-[#D6E8DA] bg-white/65 px-3 py-6 text-center text-xs text-[#607368]">
+                            Sin registros
+                          </div>
+                        ) : null}
+
+                        {column.items.map((lead) => (
+                          <button
+                            key={lead.id}
+                            type="button"
+                            onClick={() => selectLead(lead)}
+                            className={`w-full rounded-[22px] border p-3 text-left transition ${leadCardTone(lead, selectedLead?.id === lead.id)}`}
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#C7EEE1,_#6C9C88)] text-sm font-bold text-[#1F3128]">
+                                {displayName(lead).slice(0, 1).toUpperCase()}
+                              </div>
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-start justify-between gap-2">
+                                  <p className="truncate text-sm font-semibold text-[#10233F]">
+                                    {displayName(lead)}
+                                  </p>
+                                  {isInboundWithoutAnswer(lead) ? (
+                                    <span className="shrink-0 rounded-full bg-[#FFF0E9] px-2 py-0.5 text-[10px] font-bold text-[#9A4E2E] ring-1 ring-[#EEC6B8]">
+                                      Sin responder
+                                    </span>
+                                  ) : null}
+                                </div>
+                                <p className="mt-1 truncate text-xs text-[#607368]">{lead.phone}</p>
+
+                                {lead.appointment_date || lead.appointment_time ? (
+                                  <p className="mt-1 text-xs font-semibold text-[#4F6F5B]">
+                                    {formatAppointmentDate(lead.appointment_date)} · {formatAppointmentTime(lead.appointment_time)}
+                                  </p>
+                                ) : null}
+
+                                <p className="mt-1 text-[11px] text-[#789084]">
+                                  Ultimo: {formatDateTime(lead.last_inbound_at || lead.created_at)}
+                                </p>
+
+                                <div className="mt-2 flex flex-wrap gap-1.5">
+                                  <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold ring-1 ${statusTone(lead.appointment_status || lead.status)}`}>
+                                    {lead.appointment_status ? statusLabel(lead.appointment_status) : conversationBadge(lead)}
+                                  </span>
+                                  {lead.campaign_code ? (
+                                    <span className="rounded-full bg-white px-2.5 py-1 text-[11px] font-semibold text-[#607368] ring-1 ring-[#DCEDE3]">
+                                      {lead.campaign_code}
+                                    </span>
+                                  ) : null}
+                                </div>
+                              </div>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
                   ))}
                 </div>
               </div>
