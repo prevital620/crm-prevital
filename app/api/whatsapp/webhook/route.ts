@@ -99,6 +99,17 @@ type WhatsAppStatusEvent = {
   payload: unknown;
 };
 
+type AppointmentLookupRow = {
+  id: string;
+  lead_id: string | null;
+  patient_name: string | null;
+  phone: string | null;
+  appointment_date: string | null;
+  appointment_time: string | null;
+  status: string | null;
+  notes: string | null;
+};
+
 const WELCOME_MESSAGE =
   "\u00a1Hola! \ud83d\udc4b Bienvenido/a a Prevital.\n\nGracias por escribirnos. Para completar tu inscripci\u00f3n y participar por una experiencia de Detox I\u00f3nico, por favor d\u00e9janos tu nombre completo.";
 
@@ -107,6 +118,18 @@ const ASK_EMAIL_MESSAGE =
 
 const INVALID_EMAIL_MESSAGE =
   "Parece que el correo no qued\u00f3 completo. \u00bfNos lo puedes enviar nuevamente, por favor?";
+
+const EMAIL_COLLECTION_PRICE_MESSAGE =
+  "Esta experiencia no tiene costo para las personas cuyo registro resulte favorecido \ud83d\udc9a\n\nPara finalizar tu inscripci\u00f3n, solo nos falta tu correo electr\u00f3nico.";
+
+const EMAIL_COLLECTION_INFO_MESSAGE =
+  "Es una experiencia de bienestar en Prevital. La orientaci\u00f3n completa la realiza nuestro equipo durante la cita \ud83c\udf3f\n\nPara finalizar tu inscripci\u00f3n, solo nos falta tu correo electr\u00f3nico.";
+
+const EMAIL_COLLECTION_LOCATION_MESSAGE =
+  "Estamos en El Poblado, Medell\u00edn \ud83c\udf3f Si tu inscripci\u00f3n resulta favorecida, te enviaremos la direcci\u00f3n completa para coordinar tu cita.\n\nPara finalizar tu inscripci\u00f3n, solo nos falta tu correo electr\u00f3nico.";
+
+const EMAIL_COLLECTION_DURATION_MESSAGE =
+  "La cita inicial tiene una duraci\u00f3n aproximada de 30 minutos \ud83d\ude0a\n\nPara finalizar tu inscripci\u00f3n, solo nos falta tu correo electr\u00f3nico.";
 
 const REGISTERED_MESSAGE =
   "\u00a1Listo! \ud83d\udc9a Recibimos tu inscripci\u00f3n correctamente.";
@@ -119,6 +142,9 @@ const UPDATE_DATA_MESSAGE =
 
 const AFTER_HOURS_ACK_MESSAGE =
   "\u00a1Gracias por responder! \ud83d\udc9a\n\nTu mensaje qued\u00f3 registrado. Nuestro equipo de Prevital te contactar\u00e1 en horario de atenci\u00f3n para ayudarte a coordinar tu cita.\n\nHorario de atenci\u00f3n: lunes a s\u00e1bado de 8:00 a. m. a 6:00 p. m. \ud83c\udf3f";
+
+const APPOINTMENT_ARRIVAL_MESSAGE =
+  "\u00a1Perfecto! \ud83d\udc9a Te esperamos en Prevital.\n\nRecuerda traer tu c\u00e9dula original. Si tienes alg\u00fan inconveniente para llegar, escr\u00edbenos por este medio.";
 
 const AGENT_UNKNOWN_MESSAGE =
   "Gracias por escribirnos 😊 Para ayudarte mejor, nuestro equipo revisará tu mensaje. Mientras tanto, puedo ayudarte a coordinar tu cita en Prevital.";
@@ -159,7 +185,10 @@ const PRE_FELICITATION_UNKNOWN_MESSAGE =
   "Gracias por escribirnos \ud83d\ude0a Tu inscripci\u00f3n ya qued\u00f3 registrada. Nuestro equipo revisar\u00e1 tu mensaje y te contactaremos por este mismo medio si sales beneficiado/a.";
 
 const PRE_FELICITATION_THANKS_MESSAGE =
-  "Con mucho gusto \ud83d\ude0a\ud83d\udc9a\n\nTu inscripci\u00f3n qued\u00f3 registrada correctamente. Esperamos que puedas ser seleccionado/a para vivir esta experiencia en Prevital \ud83c\udf3f\n\nTe contactaremos por este mismo medio si sales beneficiado/a.";
+  "Con mucho gusto \ud83d\ude0a\ud83d\udc9a Esperamos que tu inscripci\u00f3n resulte favorecida. Te contactaremos por este mismo medio cuando el equipo revise los registros \ud83c\udf3f";
+
+const REQUIRES_HUMAN_SHORT_ACK_MESSAGE =
+  "Con gusto \ud83d\ude0a Nuestro equipo revisar\u00e1 tu mensaje para ayudarte mejor.";
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
@@ -180,6 +209,27 @@ function normalizeText(value: string) {
 
 function hasAny(text: string, words: string[]) {
   return words.some((word) => text.includes(word));
+}
+
+function normalizeLookupText(value: string | null | undefined) {
+  return normalizeText(value || "")
+    .replace(/[^a-z0-9\s]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function phoneDigits(value: string | null | undefined) {
+  return (value || "").replace(/\D/g, "");
+}
+
+function phoneLookupKeys(value: string | null | undefined) {
+  const digits = phoneDigits(value);
+  if (!digits) return [];
+
+  const local = digits.length > 10 ? digits.slice(-10) : digits;
+  return Array.from(
+    new Set([digits, local, local ? `57${local}` : ""].filter(Boolean))
+  );
 }
 
 function looksLikeEmail(value: string) {
@@ -401,6 +451,53 @@ async function updateOutboundMessageStatus(event: WhatsAppStatusEvent) {
   if (error) throw error;
 }
 
+async function markRecentOutboundMessagesDeliveredFromInbound(phone: string, inboundAt: Date) {
+  const deliveredAt = inboundAt.toISOString();
+  const recentSince = new Date(inboundAt.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const baseUpdate = {
+    status: "delivered",
+    status_updated_at: deliveredAt,
+    error: null,
+  };
+
+  const updates = [
+    supabaseAdmin
+      .from("whatsapp_messages")
+      .update(baseUpdate)
+      .eq("phone", phone)
+      .eq("direction", "outbound")
+      .is("status", null)
+      .lte("created_at", deliveredAt)
+      .gte("created_at", recentSince),
+    supabaseAdmin
+      .from("whatsapp_messages")
+      .update(baseUpdate)
+      .eq("phone", phone)
+      .eq("direction", "outbound")
+      .eq("status", "sent")
+      .lte("created_at", deliveredAt)
+      .gte("created_at", recentSince),
+    supabaseAdmin
+      .from("whatsapp_messages")
+      .update(baseUpdate)
+      .eq("phone", phone)
+      .eq("direction", "outbound")
+      .eq("status", "")
+      .lte("created_at", deliveredAt)
+      .gte("created_at", recentSince),
+  ];
+
+  const results = await Promise.all(updates);
+  const failed = results.find((result) => result.error);
+
+  if (failed?.error) {
+    console.error("[whatsapp] Could not mark recent outbound messages as delivered.", {
+      phone: maskPhone(phone),
+      error: failed.error.message,
+    });
+  }
+}
+
 async function insertInboundMessage(message: InboundTextMessage) {
   const { error } = await supabaseAdmin.from("whatsapp_messages").insert({
     phone: message.from,
@@ -432,11 +529,131 @@ async function replyToLead(phone: string, body: string) {
   return sendAndStoreTextMessage(phone, body);
 }
 
+async function hasRecentOutboundBody(phone: string, body: string, hours = 24) {
+  const since = new Date(Date.now() - hours * 60 * 60 * 1000).toISOString();
+  const { data, error } = await supabaseAdmin
+    .from("whatsapp_messages")
+    .select("id")
+    .eq("phone", phone)
+    .eq("direction", "outbound")
+    .eq("body", body)
+    .gte("created_at", since)
+    .limit(1);
+
+  if (error) {
+    console.error("[whatsapp] Could not check recent outbound duplicate.", {
+      phone: maskPhone(phone),
+      error: error.message,
+    });
+    return false;
+  }
+
+  return Boolean(data?.length);
+}
+
+async function replyToLeadOnceRecently(phone: string, body: string, hours = 24) {
+  if (await hasRecentOutboundBody(phone, body, hours)) {
+    return { ok: true, skippedDuplicate: true };
+  }
+
+  return replyToLead(phone, body);
+}
+
 async function createCrmLeadFromWhatsapp(_lead: WhatsappLeadRow) {
   // TODO: Map this lead into public.leads once the final CRM field mapping is confirmed.
   // The current public.leads schema carries operational ownership, source, status,
   // group routing and campaign assumptions. For this MVP we keep WhatsApp leads
   // safely isolated in whatsapp_leads to avoid creating malformed CRM records.
+}
+
+const APPOINTMENT_ARRIVAL_LEAD_STATUSES = new Set<WhatsappLeadStatus>([
+  "agendado",
+  "en_gestion_callcenter",
+]);
+
+const ACTIVE_APPOINTMENT_REPLY_STATUSES = new Set([
+  "agendada",
+  "confirmada",
+  "reagendada",
+  "en_espera",
+  "en_atencion",
+]);
+
+const APPOINTMENT_ARRIVAL_PHRASES = [
+  "voy en camino",
+  "ya voy",
+  "estoy llegando",
+  "voy para alla",
+  "llego en unos minutos",
+  "estoy cerca",
+  "voy llegando",
+  "ya estoy llegando",
+  "estoy en camino",
+  "voy para prevital",
+];
+
+function isAppointmentArrivalText(text: string) {
+  const normalized = normalizeLookupText(text);
+  return APPOINTMENT_ARRIVAL_PHRASES.some((phrase) =>
+    normalized.includes(phrase)
+  );
+}
+
+function matchesAppointmentName(lead: WhatsappLeadRow, appointment: AppointmentLookupRow) {
+  const leadName = normalizeLookupText(`${lead.full_name || ""} ${lead.profile_name || ""}`);
+  const appointmentName = normalizeLookupText(appointment.patient_name);
+  if (!leadName || !appointmentName) return false;
+
+  const appointmentTokens = appointmentName
+    .split(" ")
+    .filter((token) => token.length >= 3);
+  if (appointmentTokens.length < 3) return false;
+
+  return appointmentTokens.every((token) => leadName.includes(token));
+}
+
+function appointmentTimestamp(item: Pick<AppointmentLookupRow, "appointment_date" | "appointment_time">) {
+  return `${item.appointment_date || "9999-12-31"}T${item.appointment_time || "23:59:59"}`;
+}
+
+async function findActiveWhatsappAppointment(
+  lead: WhatsappLeadRow,
+  phone: string
+) {
+  const phoneKeys = new Set(phoneLookupKeys(phone));
+
+  const { data, error } = await supabaseAdmin
+    .from("appointments")
+    .select("id, lead_id, patient_name, phone, appointment_date, appointment_time, status, notes")
+    .in("status", Array.from(ACTIVE_APPOINTMENT_REPLY_STATUSES))
+    .order("appointment_date", { ascending: true })
+    .order("appointment_time", { ascending: true })
+    .limit(1500);
+
+  if (error) throw error;
+
+  return ((data || []) as AppointmentLookupRow[])
+    .filter((appointment) => {
+      const appointmentPhoneKeys = phoneLookupKeys(appointment.phone);
+      const matchesPhone = appointmentPhoneKeys.some((key) => phoneKeys.has(key));
+      const matchesWhatsappLead = Boolean(appointment.notes?.includes(lead.id));
+      const matchesName = matchesAppointmentName(lead, appointment);
+      return matchesPhone || matchesWhatsappLead || matchesName;
+    })
+    .sort((a, b) => appointmentTimestamp(a).localeCompare(appointmentTimestamp(b)))[0] || null;
+}
+
+async function shouldReplyAsAppointmentArrival(
+  lead: WhatsappLeadRow,
+  message: InboundTextMessage
+) {
+  if (!isAppointmentArrivalText(message.body)) return false;
+
+  if (APPOINTMENT_ARRIVAL_LEAD_STATUSES.has(lead.status)) {
+    return true;
+  }
+
+  return Boolean(await findActiveWhatsappAppointment(lead, message.from));
 }
 
 function whatsappAgentCanHandle(status: string | null | undefined) {
@@ -479,7 +696,39 @@ function isThanksMessage(text: string) {
     "ok gracias",
     "listo gracias",
     "perfecto gracias",
+    "dios quiera que si",
   ].includes(compact);
+}
+
+function isShortHumanAckMessage(text: string) {
+  const normalized = normalizeText(text).replace(/[^\p{Letter}\p{Number}\s]/gu, " ");
+  const compact = normalized.replace(/\s+/g, " ").trim();
+  return [
+    "gracias",
+    "si",
+    "sí",
+    "ok",
+    "listo",
+    "dale",
+    "bueno",
+    "perfecto",
+    "de acuerdo",
+  ].includes(compact);
+}
+
+function emailCollectionReplyForMessage(text: string) {
+  const intent = analyzeWhatsappAgentIntent(text);
+  if (intent === "asks_price") return EMAIL_COLLECTION_PRICE_MESSAGE;
+  if (intent === "asks_location") return EMAIL_COLLECTION_LOCATION_MESSAGE;
+  if (intent === "asks_duration") return EMAIL_COLLECTION_DURATION_MESSAGE;
+  if (intent === "wants_info" || intent === "needs_human") return EMAIL_COLLECTION_INFO_MESSAGE;
+
+  const normalized = normalizeText(text);
+  if (hasAny(normalized, ["de que se trata", "que es", "informacion", "info", "como funciona"])) {
+    return EMAIL_COLLECTION_INFO_MESSAGE;
+  }
+
+  return null;
 }
 
 async function handlePreFelicitationLead(
@@ -505,7 +754,7 @@ async function handlePreFelicitationLead(
     .from("whatsapp_leads")
     .update(inboundWindowFields)
     .eq("id", lead.id);
-  await replyToLead(message.from, reply);
+  await replyToLeadOnceRecently(message.from, reply);
 }
 
 async function updateWhatsappAgentLead(
@@ -1248,7 +1497,7 @@ async function handleWhatsappAgent(
     notes: writeWhatsappAgentContext(lead.notes, context),
     ...inboundWindowFields,
   });
-  await replyToLead(message.from, AGENT_UNHANDLED_MESSAGE);
+  await replyToLeadOnceRecently(message.from, AGENT_UNHANDLED_MESSAGE);
 }
 
 async function getLeadByPhone(phone: string) {
@@ -1274,10 +1523,12 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
     return;
   }
 
-  const currentLead = await getLeadByPhone(message.from);
   const text = message.body.trim();
   const normalizedText = normalizeText(text);
   const inboundAt = parseInboundTimestamp(message.timestamp);
+  await markRecentOutboundMessagesDeliveredFromInbound(message.from, inboundAt);
+
+  const currentLead = await getLeadByPhone(message.from);
   const schedule = calculateFelicitationSchedule(inboundAt);
   const inboundWindowFields = {
     last_inbound_at: inboundAt.toISOString(),
@@ -1325,6 +1576,17 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
     return;
   }
 
+  if (await shouldReplyAsAppointmentArrival(currentLead, message)) {
+    const { error } = await supabaseAdmin
+      .from("whatsapp_leads")
+      .update(inboundWindowFields)
+      .eq("id", currentLead.id);
+
+    if (error) throw error;
+    await replyToLead(message.from, APPOINTMENT_ARRIVAL_MESSAGE);
+    return;
+  }
+
   if (currentLead.status === "collecting_name" || currentLead.status === "pidiendo_nombre") {
     const { error } = await supabaseAdmin
       .from("whatsapp_leads")
@@ -1343,11 +1605,12 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
 
   if (currentLead.status === "collecting_email" || currentLead.status === "pidiendo_correo") {
     if (!looksLikeEmail(text)) {
+      const contextualReply = emailCollectionReplyForMessage(text);
       await supabaseAdmin
         .from("whatsapp_leads")
         .update(inboundWindowFields)
         .eq("id", currentLead.id);
-      await replyToLead(message.from, INVALID_EMAIL_MESSAGE);
+      await replyToLead(message.from, contextualReply || INVALID_EMAIL_MESSAGE);
       return;
     }
 
@@ -1384,6 +1647,17 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
 
   if (isPreFelicitationStatus(currentLead.status)) {
     await handlePreFelicitationLead(currentLead, message, inboundWindowFields);
+    return;
+  }
+
+  if (currentLead.status === "requiere_humano" && isShortHumanAckMessage(message.body)) {
+    const { error } = await supabaseAdmin
+      .from("whatsapp_leads")
+      .update(inboundWindowFields)
+      .eq("id", currentLead.id);
+
+    if (error) throw error;
+    await replyToLeadOnceRecently(message.from, REQUIRES_HUMAN_SHORT_ACK_MESSAGE);
     return;
   }
 
