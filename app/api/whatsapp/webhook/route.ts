@@ -112,7 +112,7 @@ type AppointmentLookupRow = {
 };
 
 const WELCOME_MESSAGE =
-  "\u00a1Hola! \ud83d\udc4b Bienvenido/a a Prevital.\n\nGracias por escribirnos. Para completar tu inscripci\u00f3n y participar por una experiencia de Detox I\u00f3nico, por favor d\u00e9janos tu nombre completo.";
+  "¡Hola! 👋 Bienvenido/a a Prevital 💚\n\nTe contamos un poquito: estamos invitando a algunas personas a vivir una experiencia de Detox Iónico sin costo, como parte de una jornada especial de bienestar.\n\nLa sesión es presencial en Medellín, dura aproximadamente 30 minutos y nuestro equipo te orienta durante la experiencia.\n\nPara iniciar tu inscripción, por favor déjanos tu nombre completo.";
 
 const ASK_EMAIL_MESSAGE =
   "Gracias \ud83d\ude0a Ahora d\u00e9janos tu correo electr\u00f3nico para finalizar tu inscripci\u00f3n.";
@@ -775,6 +775,25 @@ function emailCollectionReplyForMessage(text: string) {
   const normalized = normalizeText(text);
   if (hasAny(normalized, ["de que se trata", "que es", "informacion", "info", "como funciona"])) {
     return EMAIL_COLLECTION_INFO_MESSAGE;
+  }
+
+  return null;
+}
+
+function nameCollectionReplyForMessage(text: string) {
+  const intent = analyzeWhatsappAgentIntent(text);
+  if (
+    intent === "wants_info" ||
+    intent === "asks_price" ||
+    intent === "asks_location" ||
+    intent === "asks_duration"
+  ) {
+    return WELCOME_MESSAGE;
+  }
+
+  const normalized = normalizeText(text);
+  if (hasAny(normalized, ["de que se trata", "que es", "informacion", "info", "como funciona"])) {
+    return WELCOME_MESSAGE;
   }
 
   return null;
@@ -1648,6 +1667,18 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
   }
 
   if (currentLead.status === "collecting_name" || currentLead.status === "pidiendo_nombre") {
+    const contextualReply = nameCollectionReplyForMessage(text);
+    if (contextualReply) {
+      const { error } = await supabaseAdmin
+        .from("whatsapp_leads")
+        .update(inboundWindowFields)
+        .eq("id", currentLead.id);
+
+      if (error) throw error;
+      await replyToLead(message.from, contextualReply);
+      return;
+    }
+
     const { error } = await supabaseAdmin
       .from("whatsapp_leads")
       .update({
