@@ -4,6 +4,7 @@ import Image from "next/image";
 import { FormEvent, KeyboardEvent, useEffect, useMemo, useRef, useState } from "react";
 import {
   ArrowLeft,
+  BarChart3,
   CalendarCheck,
   Clock3,
   MessageCircle,
@@ -57,6 +58,45 @@ type WhatsappMessage = {
   error: string | null;
 };
 
+type AdsPerformanceRow = {
+  key: string;
+  campaign_id: string | null;
+  campaign_name: string | null;
+  adset_id: string | null;
+  adset_name: string | null;
+  ad_id: string | null;
+  ad_name: string | null;
+  source_id: string | null;
+  source_url: string | null;
+  source_type: string | null;
+  conversations: number;
+  completed_registrations: number;
+  scheduled_appointments: number;
+  attended: number;
+  no_show: number;
+  purchases: number;
+  volume_sold: number;
+  cash: number;
+  portfolio: number;
+  appointment_rate: number;
+  attendance_rate: number;
+  purchase_rate: number;
+};
+
+type AdsPerformanceTotals = Omit<
+  AdsPerformanceRow,
+  | "key"
+  | "campaign_id"
+  | "campaign_name"
+  | "adset_id"
+  | "adset_name"
+  | "ad_id"
+  | "ad_name"
+  | "source_id"
+  | "source_url"
+  | "source_type"
+>;
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -107,6 +147,8 @@ function statusLabel(status: string | null | undefined) {
   const labels: Record<string, string> = {
     collecting_name: "Pidiendo nombre",
     collecting_email: "Pidiendo correo",
+    pidiendo_nombre: "Pidiendo nombre",
+    pidiendo_correo: "Pidiendo correo",
     registered: "Registrado",
     registrado: "Registrado",
     felicitacion_programada: "Felicitacion programada",
@@ -147,6 +189,16 @@ function formatDateTime(value: string | null | undefined) {
   } catch {
     return value;
   }
+}
+
+function formatMoney(value: number | null | undefined) {
+  return `$${Number(value || 0).toLocaleString("es-CO")}`;
+}
+
+function formatPercent(value: number | null | undefined) {
+  return `${Number(value || 0).toLocaleString("es-CO", {
+    maximumFractionDigits: 1,
+  })}%`;
 }
 
 function displayName(lead: WhatsappLead) {
@@ -226,6 +278,18 @@ function statusTone(status: string | null | undefined) {
 }
 
 function leadCardTone(lead: WhatsappLead, selected: boolean) {
+  if (isAppointmentOverdue(lead)) {
+    return selected
+      ? "border-[#D98D72] bg-[#FFF4EF] shadow-[0_16px_34px_rgba(154,78,46,0.16)]"
+      : "border-[#EEC6B8] bg-[#FFF7F3] hover:border-[#D98D72] hover:bg-[#FFF1E9]";
+  }
+
+  if (lead.status === "sin_respuesta" || needsFollowUpByAge(lead)) {
+    return selected
+      ? "border-[#AEB8B2] bg-white shadow-[0_16px_34px_rgba(89,102,96,0.14)]"
+      : "border-[#D7DDD9] bg-[#FAFBFA] hover:border-[#AEB8B2] hover:bg-white";
+  }
+
   if (
     lead.status === "respondio_para_agendar" ||
     lead.status === "pendiente_agendar" ||
@@ -243,8 +307,25 @@ function leadCardTone(lead: WhatsappLead, selected: boolean) {
 }
 
 function canReplyFreely(lead: WhatsappLead | null) {
-  if (!lead?.reply_window_expires_at) return true;
+  if (!lead || lead.status === "requiere_template") return false;
+  if (!lead.reply_window_expires_at) return true;
   return new Date(lead.reply_window_expires_at).getTime() > Date.now();
+}
+
+function replyWindowBanner(lead: WhatsappLead | null) {
+  if (canReplyFreely(lead)) {
+    return {
+      tone: "border-[#CFE4D8] bg-white/85 text-[#496356]",
+      message:
+        "Ventana activa: puedes responder libremente dentro de 24h. Luego se requieren plantillas.",
+    };
+  }
+
+  return {
+    tone: "border-[#E6C9C5] bg-[#FFF5F3] text-[#9A4E43]",
+    message:
+      "La ventana de 24 horas vencio. Para responder se necesita una plantilla aprobada.",
+  };
 }
 
 function outboundStatusMeta(status: string | null | undefined) {
@@ -272,6 +353,31 @@ function outboundStatusMeta(status: string | null | undefined) {
   };
 }
 
+function cleanOutboundStatusMeta(status: string | null | undefined) {
+  if (status === "read") {
+    return {
+      label: "\u2713\u2713 Le\u00eddo",
+      className: "text-[#2274C9]",
+    };
+  }
+  if (status === "delivered") {
+    return {
+      label: "\u2713\u2713",
+      className: "text-[#4F7B63]",
+    };
+  }
+  if (status === "failed") {
+    return {
+      label: "Error",
+      className: "font-semibold text-[#9A4E43]",
+    };
+  }
+  return {
+    label: "\u2713",
+    className: "text-[#607368]",
+  };
+}
+
 type KanbanColumn = {
   id: string;
   title: string;
@@ -281,6 +387,7 @@ type KanbanColumn = {
 };
 
 const inscritosStatuses = new Set(["registrado", "registered", "felicitacion_programada", "felicitacion_enviada"]);
+const collectingStatuses = new Set(["collecting_name", "pidiendo_nombre", "collecting_email", "pidiendo_correo"]);
 const porAgendarStatuses = new Set([
   "pendiente_agendar",
   "ofreciendo_horarios",
@@ -290,6 +397,51 @@ const porAgendarStatuses = new Set([
   "respondio_para_agendar",
 ]);
 const activeAppointmentStatuses = new Set(["agendada", "confirmada", "reagendada", "en_espera"]);
+const closedLeadStatuses = new Set(["cerrado"]);
+const followUpLeadStatuses = new Set(["sin_respuesta", "requiere_template"]);
+
+function appointmentDateTimeMs(lead: WhatsappLead) {
+  if (!lead.appointment_date || !lead.appointment_time) return null;
+  const time = lead.appointment_time.slice(0, 5);
+  const value = new Date(`${lead.appointment_date}T${time}:00-05:00`).getTime();
+  return Number.isNaN(value) ? null : value;
+}
+
+function isAppointmentOverdue(lead: WhatsappLead) {
+  if (!activeAppointmentStatuses.has(lead.appointment_status || "")) return false;
+  const appointmentAt = appointmentDateTimeMs(lead);
+  return appointmentAt !== null && appointmentAt < Date.now();
+}
+
+function isOlderThanHours(value: string | null | undefined, hours: number) {
+  if (!value) return false;
+  const time = new Date(value).getTime();
+  if (Number.isNaN(time)) return false;
+  return Date.now() - time > hours * 60 * 60 * 1000;
+}
+
+function isReplyWindowExpired(lead: WhatsappLead) {
+  if (!lead.reply_window_expires_at) return false;
+  return new Date(lead.reply_window_expires_at).getTime() <= Date.now();
+}
+
+function needsFollowUpByAge(lead: WhatsappLead) {
+  const baseTime = lead.last_inbound_at || lead.created_at;
+  if (collectingStatuses.has(lead.status || "")) {
+    return isOlderThanHours(baseTime, 24);
+  }
+  if (lead.status === "registrado" || lead.status === "registered" || lead.status === "felicitacion_programada") {
+    return isOlderThanHours(lead.last_outbound_at || baseTime, 24);
+  }
+  if (
+    lead.last_outbound_at &&
+    isOlderThanHours(lead.last_outbound_at, 24) &&
+    (!lead.last_inbound_at || new Date(lead.last_outbound_at).getTime() >= new Date(lead.last_inbound_at).getTime())
+  ) {
+    return true;
+  }
+  return false;
+}
 
 function leadActivityTime(lead: WhatsappLead) {
   return new Date(lead.last_inbound_at || lead.last_outbound_at || lead.created_at || 0).getTime();
@@ -317,13 +469,17 @@ function formatAppointmentTime(value: string | null | undefined) {
 }
 
 function leadColumnId(lead: WhatsappLead) {
-  if (lead.status === "requiere_humano") return "requiere_humano";
+  if (closedLeadStatuses.has(lead.status || "")) return "cerrados";
   if (lead.appointment_status === "no_asistio") return "no_asistio";
   if (lead.appointment_status === "asistio" || lead.appointment_status === "finalizada") return "asistio";
+  if (isAppointmentOverdue(lead)) return "pendiente_cierre";
   if (lead.status === "agendado" || activeAppointmentStatuses.has(lead.appointment_status || "")) {
     return "agendados";
   }
+  if (lead.status === "requiere_humano" || lead.status === "en_gestion_callcenter") return "requiere_humano";
+  if (followUpLeadStatuses.has(lead.status || "") || needsFollowUpByAge(lead)) return "sin_respuesta";
   if (porAgendarStatuses.has(lead.status || "")) return "por_agendar";
+  if (collectingStatuses.has(lead.status || "")) return "inscritos";
   if (inscritosStatuses.has(lead.status || "")) return "inscritos";
   return "inscritos";
 }
@@ -347,7 +503,7 @@ function sortColumnItems(columnId: string, items: WhatsappLead[]) {
     return copy.sort((a, b) => appointmentSortValue(a).localeCompare(appointmentSortValue(b)));
   }
 
-  if (columnId === "asistio" || columnId === "no_asistio") {
+  if (columnId === "pendiente_cierre" || columnId === "asistio" || columnId === "no_asistio") {
     return copy.sort((a, b) =>
       appointmentSortValue(b, "0000-01-01T00:00:00").localeCompare(
         appointmentSortValue(a, "0000-01-01T00:00:00")
@@ -376,10 +532,17 @@ function buildKanbanColumns(leads: WhatsappLead[]): KanbanColumn[] {
     },
     {
       id: "agendados",
-      title: "Agendados",
-      hint: "Orden por cita",
+      title: "Agendados proximos",
+      hint: "Citas futuras",
       items: [],
       tone: "border-[#BFE0CD] bg-[#F4FBF7]",
+    },
+    {
+      id: "pendiente_cierre",
+      title: "Pendiente cierre",
+      hint: "Validar asistencia",
+      items: [],
+      tone: "border-[#E8D49D] bg-[#FFFDF4]",
     },
     {
       id: "asistio",
@@ -401,6 +564,13 @@ function buildKanbanColumns(leads: WhatsappLead[]): KanbanColumn[] {
       hint: "Alerta operativa",
       items: [],
       tone: "border-[#E6C9C5] bg-[#FFF7F5]",
+    },
+    {
+      id: "sin_respuesta",
+      title: "Sin respuesta / seguimiento",
+      hint: "Recuperacion",
+      items: [],
+      tone: "border-[#D7DDD9] bg-[#F7F8F7]",
     },
   ];
   const byId = new Map(columns.map((column) => [column.id, column]));
@@ -435,6 +605,13 @@ export default function LeadsWhatsappPage() {
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState("");
   const [activeColumnId, setActiveColumnId] = useState("inscritos");
+  const [savingAction, setSavingAction] = useState<string | null>(null);
+  const [adsReportOpen, setAdsReportOpen] = useState(false);
+  const [adsReportLoading, setAdsReportLoading] = useState(false);
+  const [adsReportError, setAdsReportError] = useState("");
+  const [adsReportRows, setAdsReportRows] = useState<AdsPerformanceRow[]>([]);
+  const [adsReportTotals, setAdsReportTotals] = useState<AdsPerformanceTotals | null>(null);
+  const [adFilter, setAdFilter] = useState("");
 
   const kanbanColumns = useMemo(() => buildKanbanColumns(leads), [leads]);
   const totalLeads = useMemo(
@@ -479,6 +656,44 @@ export default function LeadsWhatsappPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  async function loadAdsPerformance() {
+    try {
+      setAdsReportLoading(true);
+      setAdsReportError("");
+
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      if (campaignCode.trim()) params.set("campaign", campaignCode.trim());
+      if (adFilter.trim()) params.set("ad", adFilter.trim());
+      if (status) params.set("status", status);
+
+      const response = await fetch(`/api/whatsapp/ads-performance?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "No se pudo cargar el reporte de pauta.");
+      }
+
+      setAdsReportRows((payload?.rows as AdsPerformanceRow[]) || []);
+      setAdsReportTotals((payload?.totals as AdsPerformanceTotals) || null);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo cargar el reporte de pauta.";
+      setAdsReportError(message);
+      setAdsReportRows([]);
+      setAdsReportTotals(null);
+    } finally {
+      setAdsReportLoading(false);
+    }
+  }
+
+  function openAdsReport() {
+    setAdsReportOpen(true);
+    void loadAdsPerformance();
   }
 
   async function loadMessages(lead: WhatsappLead) {
@@ -563,7 +778,101 @@ export default function LeadsWhatsappPage() {
   }
 
   function showActionPendingNotice(action: string) {
-    setConversationNotice(`${action} quedara disponible cuando habilitemos actualizacion de estado.`);
+    setConversationNotice(`${action} se gestiona desde la agenda operativa por ahora.`);
+  }
+
+  async function updateLeadStatus(lead: WhatsappLead, nextStatus: "cerrado" | "sin_respuesta") {
+    const actionKey = `${lead.id}:${nextStatus}`;
+
+    try {
+      setSavingAction(actionKey);
+      setConversationError("");
+      setConversationNotice("");
+
+      const response = await fetch("/api/whatsapp/leads/status", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          lead_id: lead.id,
+          status: nextStatus,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "No se pudo actualizar el estado.");
+      }
+
+      if (nextStatus !== "cerrado") {
+        setConversationNotice("Lead marcado como sin respuesta.");
+      }
+
+      await loadLeads();
+
+      if (nextStatus === "cerrado") {
+        setSelectedLead(null);
+        setMessages([]);
+        setConversationNotice("");
+      }
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo actualizar el estado.";
+      setConversationError(message);
+    } finally {
+      setSavingAction(null);
+    }
+  }
+
+  async function closeLead(lead: WhatsappLead) {
+    setConversationError("");
+    setConversationNotice("");
+    const confirmed = window.confirm("¿Cerrar esta conversacion? El lead y sus mensajes se conservaran.");
+    if (!confirmed) return;
+    await updateLeadStatus(lead, "cerrado");
+  }
+
+  async function updateAppointmentStatus(lead: WhatsappLead, nextStatus: "asistio" | "no_asistio") {
+    if (!lead.appointment_id) {
+      setConversationError("Este lead no tiene una cita relacionada para actualizar.");
+      return;
+    }
+
+    const actionKey = `${lead.appointment_id}:${nextStatus}`;
+
+    try {
+      setSavingAction(actionKey);
+      setConversationError("");
+      setConversationNotice("");
+
+      const response = await fetch("/api/whatsapp/appointments/status", {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          appointment_id: lead.appointment_id,
+          status: nextStatus,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "No se pudo actualizar la cita.");
+      }
+
+      setConversationNotice(
+        nextStatus === "asistio"
+          ? "Cita marcada como asistio."
+          : "Cita marcada como no asistio."
+      );
+      await loadLeads();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo actualizar la cita.";
+      setConversationError(message);
+    } finally {
+      setSavingAction(null);
+    }
   }
 
   async function sendManualReply(event: FormEvent<HTMLFormElement>) {
@@ -684,10 +993,19 @@ export default function LeadsWhatsappPage() {
             >
               Actualizar
             </button>
+
+            <button
+              type="button"
+              onClick={openAdsReport}
+              className="inline-flex items-center justify-center gap-2 rounded-2xl border border-[#BFD7EA] bg-white/90 px-4 py-2 text-sm font-semibold text-[#315E7D] shadow-sm transition hover:-translate-y-0.5 hover:border-[#7FA7C4] hover:bg-[#F2F8FC]"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Métricas pauta
+            </button>
           </div>
         </section>
 
-        <section className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 ${selectedLead ? "hidden lg:grid" : ""}`}>
+        <section className={`grid gap-2 sm:grid-cols-2 lg:grid-cols-4 ${selectedLead ? "hidden lg:grid" : ""}`}>
           {kanbanColumns.map((column) => (
             <button
               key={column.id}
@@ -714,6 +1032,22 @@ export default function LeadsWhatsappPage() {
         </section>
 
         <section className={`${panelClass} ${selectedLead ? "hidden lg:block" : ""}`}>
+          <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-lg font-bold text-[#0E2340]">Filtros operativos</h2>
+              <p className="text-sm text-[#607368]">
+                Ajusta la bandeja o abre el reporte de pauta sin cargar el chat principal.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={openAdsReport}
+              className="inline-flex min-h-11 items-center justify-center gap-2 rounded-2xl border border-[#BFD7EA] bg-white px-4 py-2 text-sm font-semibold text-[#315E7D] shadow-sm transition hover:-translate-y-0.5 hover:border-[#7FA7C4] hover:bg-[#F2F8FC]"
+            >
+              <BarChart3 className="h-4 w-4" />
+              Métricas pauta
+            </button>
+          </div>
           <form onSubmit={handleSubmit} className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-700">Estado</label>
@@ -736,6 +1070,7 @@ export default function LeadsWhatsappPage() {
                 <option value="esperando_confirmacion_horario">Esperando confirmacion</option>
                 <option value="requiere_template">Requiere plantilla</option>
                 <option value="requiere_humano">Requiere humano</option>
+                <option value="sin_respuesta">Sin respuesta</option>
                 <option value="agendado">Agendados</option>
                 <option value="asistio">Asistio</option>
                 <option value="finalizada">Finalizada</option>
@@ -838,7 +1173,10 @@ export default function LeadsWhatsappPage() {
 
                   {activeColumn?.items.map((lead) => {
                     const needsAnswer = isInboundWithoutAnswer(lead);
-                    const needsHuman = lead.status === "requiere_humano";
+                    const needsHuman = lead.status === "requiere_humano" || lead.status === "en_gestion_callcenter";
+                    const appointmentOverdue = isAppointmentOverdue(lead);
+                    const needsTemplate = isReplyWindowExpired(lead);
+                    const needsFollowUp = needsFollowUpByAge(lead) || lead.status === "sin_respuesta";
 
                     return (
                       <button
@@ -891,6 +1229,21 @@ export default function LeadsWhatsappPage() {
                               {needsHuman ? (
                                 <span className="rounded-full bg-[#FFF5F3] px-2.5 py-1 text-[11px] font-bold text-[#9A4E43] ring-1 ring-[#E6C9C5]">
                                   Alerta
+                                </span>
+                              ) : null}
+                              {appointmentOverdue ? (
+                                <span className="rounded-full bg-[#FFF0E9] px-2.5 py-1 text-[11px] font-bold text-[#9A4E2E] ring-1 ring-[#EEC6B8]">
+                                  Cita vencida / pendiente cierre
+                                </span>
+                              ) : null}
+                              {needsFollowUp ? (
+                                <span className="rounded-full bg-[#F1F4F2] px-2.5 py-1 text-[11px] font-bold text-[#596660] ring-1 ring-[#D7DDD9]">
+                                  Sin respuesta
+                                </span>
+                              ) : null}
+                              {needsTemplate ? (
+                                <span className="rounded-full bg-[#FFF7D9] px-2.5 py-1 text-[11px] font-bold text-[#8B6B22] ring-1 ring-[#E8D49D]">
+                                  Requiere plantilla
                                 </span>
                               ) : null}
                             </div>
@@ -1027,7 +1380,36 @@ export default function LeadsWhatsappPage() {
                           <RefreshCcw className="h-4 w-4" />
                           {loadingMessages ? "Actualizando" : "Actualizar"}
                         </button>
-                        {canShowScheduleAction(selectedLead) ? (
+                        {isAppointmentOverdue(selectedLead) ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => void updateAppointmentStatus(selectedLead, "asistio")}
+                              disabled={savingAction === `${selectedLead.appointment_id}:asistio`}
+                              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#BFE0CD] bg-white px-3 py-1.5 text-xs font-semibold text-[#2F6B4E] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <CalendarCheck className="h-4 w-4" />
+                              {savingAction === `${selectedLead.appointment_id}:asistio` ? "Guardando" : "Marcar asistio"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void updateAppointmentStatus(selectedLead, "no_asistio")}
+                              disabled={savingAction === `${selectedLead.appointment_id}:no_asistio`}
+                              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#E8D49D] bg-white px-3 py-1.5 text-xs font-semibold text-[#8B6B22] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              <Clock3 className="h-4 w-4" />
+                              {savingAction === `${selectedLead.appointment_id}:no_asistio` ? "Guardando" : "Marcar no asistio"}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => showActionPendingNotice("Reagendar")}
+                              className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#CFE4D8] bg-white px-3 py-1.5 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
+                            >
+                              <RefreshCcw className="h-4 w-4" />
+                              Reagendar
+                            </button>
+                          </>
+                        ) : canShowScheduleAction(selectedLead) ? (
                           <button
                             type="button"
                             onClick={() => showActionPendingNotice("Gestionar cita")}
@@ -1039,37 +1421,39 @@ export default function LeadsWhatsappPage() {
                         ) : null}
                         <button
                           type="button"
-                          onClick={() => showActionPendingNotice("Marcar no responde")}
+                          onClick={() => void updateLeadStatus(selectedLead, "sin_respuesta")}
+                          disabled={savingAction === `${selectedLead.id}:sin_respuesta`}
                           className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#CFE4D8] bg-white px-3 py-1.5 text-xs font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
                         >
                           <Clock3 className="h-4 w-4" />
-                          No responde
+                          {savingAction === `${selectedLead.id}:sin_respuesta` ? "Guardando" : "No responde"}
                         </button>
                         <button
                           type="button"
-                          onClick={() => showActionPendingNotice("Cerrar conversacion")}
+                          onClick={() => void closeLead(selectedLead)}
+                          disabled={savingAction === `${selectedLead.id}:cerrado`}
                           className="inline-flex min-h-9 shrink-0 items-center gap-1.5 rounded-full border border-[#E6C9C5] bg-white px-3 py-1.5 text-xs font-semibold text-[#9A4E43] shadow-sm transition hover:-translate-y-0.5"
                         >
                           <XCircle className="h-4 w-4" />
-                          Cerrar
+                          {savingAction === `${selectedLead.id}:cerrado` ? "Cerrando" : "Cerrar"}
                         </button>
                       </div>
                     </div>
                   </header>
 
-                  <div className="shrink-0 border-b border-[#DCEDE3] bg-[#F8FCF9]/95 px-3 py-1.5 sm:px-4">
-                    <p className="rounded-xl border border-[#CFE4D8] bg-white/85 px-3 py-1.5 text-xs leading-5 text-[#496356]">
-                      Ventana activa: puedes responder libremente dentro de 24h. Luego se requieren plantillas.
-                    </p>
-                  </div>
+                  {(() => {
+                    const banner = replyWindowBanner(selectedLead);
+                    return (
+                      <div className="shrink-0 border-b border-[#DCEDE3] bg-[#F8FCF9]/95 px-3 py-1.5 sm:px-4">
+                        <p className={`rounded-xl border px-3 py-1.5 text-xs leading-5 ${banner.tone}`}>
+                          {banner.message}
+                        </p>
+                      </div>
+                    );
+                  })()}
 
-                  {conversationError || conversationNotice || attachmentNotice || !canReplyFreely(selectedLead) ? (
+                  {conversationError || conversationNotice || attachmentNotice ? (
                     <div className="shrink-0 space-y-2 border-b border-[#DCEDE3] bg-white/75 px-3 py-2 sm:px-4 sm:py-3">
-                      {!canReplyFreely(selectedLead) ? (
-                        <div className="rounded-2xl border border-[#E6C9C5] bg-[#FFF5F3] p-3 text-sm text-[#9A4E43]">
-                          La ventana de 24 horas vencio. Para responder se necesita una plantilla aprobada.
-                        </div>
-                      ) : null}
                       {conversationError ? (
                         <div className="rounded-2xl border border-[#E6C9C5] bg-[#FFF5F3] p-3 text-sm text-[#9A4E43]">
                           {conversationError}
@@ -1102,7 +1486,7 @@ export default function LeadsWhatsappPage() {
                       ) : (
                         messages.map((message) => {
                           const isOutbound = message.direction === "outbound";
-                          const outboundMeta = outboundStatusMeta(message.status);
+                          const outboundMeta = cleanOutboundStatusMeta(message.status);
 
                           return (
                             <div
@@ -1239,6 +1623,200 @@ export default function LeadsWhatsappPage() {
             </div>
           </div>
         </section>
+
+        {adsReportOpen ? (
+          <div className="fixed inset-0 z-[70] flex items-center justify-center bg-[#10233F]/35 p-3 backdrop-blur-sm sm:p-6">
+            <div className="flex max-h-[92dvh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-[#CFE4D8] bg-white shadow-[0_28px_80px_rgba(16,35,64,0.24)]">
+              <div className="shrink-0 border-b border-[#DCEDE3] bg-[#F7FCF8] p-4 sm:p-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#6C9C88]">
+                      Meta / CRM
+                    </p>
+                    <h2 className="mt-1 text-2xl font-bold text-[#0E2340]">
+                      Rendimiento de pauta
+                    </h2>
+                    <p className="mt-1 max-w-3xl text-sm leading-6 text-[#607368]">
+                      Resumen por anuncio sin cargar de metricas la bandeja operativa.
+                      Compras y caja solo se muestran cuando hay caso comercial enlazado.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void loadAdsPerformance()}
+                      disabled={adsReportLoading}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-4 py-2 text-sm font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      <RefreshCcw className="h-4 w-4" />
+                      {adsReportLoading ? "Cargando" : "Actualizar"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setAdsReportOpen(false)}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#E6C9C5] bg-white px-4 py-2 text-sm font-semibold text-[#9A4E43] shadow-sm transition hover:-translate-y-0.5"
+                    >
+                      <XCircle className="h-4 w-4" />
+                      Cerrar
+                    </button>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid gap-3 md:grid-cols-4">
+                  <label className="text-xs font-semibold text-[#607368]">
+                    Desde
+                    <input
+                      className="mt-1 w-full rounded-2xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm text-[#24312A] outline-none focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
+                      type="date"
+                      value={dateFrom}
+                      onChange={(event) => setDateFrom(event.target.value)}
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-[#607368]">
+                    Hasta
+                    <input
+                      className="mt-1 w-full rounded-2xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm text-[#24312A] outline-none focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
+                      type="date"
+                      value={dateTo}
+                      onChange={(event) => setDateTo(event.target.value)}
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-[#607368]">
+                    Campana
+                    <input
+                      className="mt-1 w-full rounded-2xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm text-[#24312A] outline-none focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
+                      value={campaignCode}
+                      onChange={(event) => setCampaignCode(event.target.value)}
+                      placeholder="PV_DETOX"
+                    />
+                  </label>
+                  <label className="text-xs font-semibold text-[#607368]">
+                    Anuncio
+                    <input
+                      className="mt-1 w-full rounded-2xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm text-[#24312A] outline-none focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4]"
+                      value={adFilter}
+                      onChange={(event) => setAdFilter(event.target.value)}
+                      placeholder="Nombre, ID o URL"
+                    />
+                  </label>
+                </div>
+              </div>
+
+              <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
+                {adsReportError ? (
+                  <div className="mb-4 rounded-2xl border border-[#E6C9C5] bg-[#FFF5F3] p-3 text-sm text-[#9A4E43]">
+                    {adsReportError}
+                  </div>
+                ) : null}
+
+                <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  {[
+                    ["Conversaciones", adsReportTotals?.conversations || 0],
+                    ["Inscripciones", adsReportTotals?.completed_registrations || 0],
+                    ["Citas", adsReportTotals?.scheduled_appointments || 0],
+                    ["Compras", adsReportTotals?.purchases || 0],
+                  ].map(([label, value]) => (
+                    <div
+                      key={label}
+                      className="rounded-2xl border border-[#DCEDE3] bg-[#F7FCF8] p-3 shadow-sm"
+                    >
+                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#789084]">
+                        {label}
+                      </p>
+                      <p className="mt-1 text-2xl font-bold text-[#1F3128]">{value}</p>
+                    </div>
+                  ))}
+                </div>
+
+                <div className="overflow-x-auto rounded-2xl border border-[#DCEDE3]">
+                  <table className="min-w-[1180px] w-full bg-white text-left text-sm">
+                    <thead className="bg-[#F1F8F3] text-xs uppercase tracking-[0.12em] text-[#607368]">
+                      <tr>
+                        <th className="px-3 py-3">Anuncio</th>
+                        <th className="px-3 py-3">Campana</th>
+                        <th className="px-3 py-3">Adset</th>
+                        <th className="px-3 py-3 text-right">Leads</th>
+                        <th className="px-3 py-3 text-right">Inscr.</th>
+                        <th className="px-3 py-3 text-right">Citas</th>
+                        <th className="px-3 py-3 text-right">Asistio</th>
+                        <th className="px-3 py-3 text-right">No asistio</th>
+                        <th className="px-3 py-3 text-right">Compras</th>
+                        <th className="px-3 py-3 text-right">Volumen</th>
+                        <th className="px-3 py-3 text-right">Caja</th>
+                        <th className="px-3 py-3 text-right">Cartera</th>
+                        <th className="px-3 py-3 text-right">Tasa cita</th>
+                        <th className="px-3 py-3 text-right">Tasa asist.</th>
+                        <th className="px-3 py-3 text-right">Tasa compra</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-[#E6F0EA]">
+                      {adsReportLoading ? (
+                        <tr>
+                          <td className="px-3 py-6 text-center text-[#607368]" colSpan={15}>
+                            Cargando reporte...
+                          </td>
+                        </tr>
+                      ) : adsReportRows.length === 0 ? (
+                        <tr>
+                          <td className="px-3 py-6 text-center text-[#607368]" colSpan={15}>
+                            Sin datos para los filtros seleccionados.
+                          </td>
+                        </tr>
+                      ) : (
+                        adsReportRows.map((row) => (
+                          <tr key={row.key} className="align-top text-[#24312A]">
+                            <td className="px-3 py-3">
+                              <p className="max-w-[260px] font-semibold text-[#0E2340]">
+                                {row.ad_name || row.ad_id || row.source_id || "Sin dato de anuncio"}
+                              </p>
+                              {row.source_url ? (
+                                <a
+                                  href={row.source_url}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="mt-1 block max-w-[260px] truncate text-xs text-[#315E7D] underline"
+                                >
+                                  {row.source_url}
+                                </a>
+                              ) : null}
+                            </td>
+                            <td className="px-3 py-3">
+                              <p>{row.campaign_name || "Sin dato"}</p>
+                              {row.campaign_id ? <p className="text-xs text-[#789084]">{row.campaign_id}</p> : null}
+                            </td>
+                            <td className="px-3 py-3">
+                              <p>{row.adset_name || "Sin dato"}</p>
+                              {row.adset_id ? <p className="text-xs text-[#789084]">{row.adset_id}</p> : null}
+                            </td>
+                            <td className="px-3 py-3 text-right font-semibold">{row.conversations}</td>
+                            <td className="px-3 py-3 text-right">{row.completed_registrations}</td>
+                            <td className="px-3 py-3 text-right">{row.scheduled_appointments}</td>
+                            <td className="px-3 py-3 text-right">{row.attended}</td>
+                            <td className="px-3 py-3 text-right">{row.no_show}</td>
+                            <td className="px-3 py-3 text-right">{row.purchases}</td>
+                            <td className="px-3 py-3 text-right">{formatMoney(row.volume_sold)}</td>
+                            <td className="px-3 py-3 text-right">{formatMoney(row.cash)}</td>
+                            <td className="px-3 py-3 text-right">{formatMoney(row.portfolio)}</td>
+                            <td className="px-3 py-3 text-right">{formatPercent(row.appointment_rate)}</td>
+                            <td className="px-3 py-3 text-right">{formatPercent(row.attendance_rate)}</td>
+                            <td className="px-3 py-3 text-right">{formatPercent(row.purchase_rate)}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <p className="mt-3 text-xs leading-5 text-[#789084]">
+                  Meta WhatsApp esta enviando principalmente source_id, source_url,
+                  headline, body y ctwa_clid dentro de referral. Los nombres de campana
+                  y conjunto quedan listos si Meta los envia o si se enriquecen despues.
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
       </div>
     </main>
   );

@@ -82,9 +82,7 @@ export async function POST(request: Request) {
 
     if (lead?.id) {
       const nextStatus =
-        lead.status === "respondio_para_agendar"
-          ? "en_gestion_callcenter"
-          : lead.status;
+        lead.status === "cerrado" ? "cerrado" : "en_gestion_callcenter";
 
       await supabaseAdmin
         .from("whatsapp_leads")

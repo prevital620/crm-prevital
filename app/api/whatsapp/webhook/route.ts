@@ -87,6 +87,7 @@ type InboundTextMessage = {
   timestamp: string | null;
   body: string;
   profileName: string | null;
+  referral: Record<string, unknown> | null;
   payload: unknown;
 };
 
@@ -199,6 +200,15 @@ function asString(value: unknown) {
   return typeof value === "string" ? value : "";
 }
 
+function firstString(...values: unknown[]) {
+  for (const value of values) {
+    const text = asString(value).trim();
+    if (text) return text;
+  }
+
+  return null;
+}
+
 function normalizeText(value: string) {
   return value
     .normalize("NFD")
@@ -216,6 +226,40 @@ function normalizeLookupText(value: string | null | undefined) {
     .replace(/[^a-z0-9\s]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function extractReferralFromMessage(message: Record<string, unknown>) {
+  const referral = asRecord(message.referral);
+  return referral && Object.keys(referral).length > 0 ? referral : null;
+}
+
+function referralLeadFields(referral: Record<string, unknown> | null) {
+  if (!referral) return {};
+
+  const adsContext = asRecord(referral.ads_context_data);
+  const campaign = asRecord(referral.campaign);
+  const adset = asRecord(referral.adset);
+  const ad = asRecord(referral.ad);
+
+  return {
+    meta_campaign_id: firstString(referral.campaign_id, adsContext?.campaign_id, campaign?.id),
+    meta_campaign_name: firstString(referral.campaign_name, adsContext?.campaign_name, campaign?.name),
+    meta_adset_id: firstString(referral.adset_id, adsContext?.adset_id, adset?.id),
+    meta_adset_name: firstString(referral.adset_name, adsContext?.adset_name, adset?.name),
+    meta_ad_id: firstString(referral.ad_id, adsContext?.ad_id, ad?.id, referral.source_id),
+    meta_ad_name: firstString(
+      referral.ad_name,
+      adsContext?.ad_name,
+      adsContext?.ad_title,
+      ad?.name,
+      referral.headline
+    ),
+    meta_source_id: firstString(referral.source_id),
+    meta_source_url: firstString(referral.source_url),
+    meta_source_type: firstString(referral.source_type),
+    meta_ctwa_clid: firstString(referral.ctwa_clid),
+    meta_referral: referral,
+  };
 }
 
 function phoneDigits(value: string | null | undefined) {
@@ -369,6 +413,7 @@ function extractInboundTextMessages(payload: unknown): InboundTextMessage[] {
           timestamp: asString(message.timestamp) || null,
           body,
           profileName: contactByWaId.get(from) || null,
+          referral: extractReferralFromMessage(message),
           payload: item,
         });
       });
@@ -512,6 +557,7 @@ async function insertInboundMessage(message: InboundTextMessage) {
       wa_id: message.waId,
       timestamp: message.timestamp,
       profile_name: message.profileName,
+      referral: message.referral,
       message: message.payload,
     },
   });
@@ -568,7 +614,6 @@ async function createCrmLeadFromWhatsapp(_lead: WhatsappLeadRow) {
 
 const APPOINTMENT_ARRIVAL_LEAD_STATUSES = new Set<WhatsappLeadStatus>([
   "agendado",
-  "en_gestion_callcenter",
 ]);
 
 const ACTIVE_APPOINTMENT_REPLY_STATUSES = new Set([
@@ -667,6 +712,10 @@ function whatsappAgentCanHandle(status: string | null | undefined) {
     "esperando_confirmacion_horario",
     "requiere_humano",
   ].includes(status || "");
+}
+
+function isHumanManagedStatus(status: string | null | undefined) {
+  return status === "en_gestion_callcenter" || status === "cerrado";
 }
 
 function isPreFelicitationStatus(status: string | null | undefined) {
@@ -886,7 +935,11 @@ async function offerSlotsFromTimePreference(
       preferredDate,
       exactDateOnly: Boolean(preferredDate),
     });
-    const exactSlot = matchingSlots.find((slot) => slot.time === timePreference.time);
+    const preferredSearchDate = preferredDate || matchingSlots[0]?.date;
+    const sameDaySlots = preferredSearchDate
+      ? matchingSlots.filter((slot) => slot.date === preferredSearchDate)
+      : matchingSlots;
+    const exactSlot = sameDaySlots.find((slot) => slot.time === timePreference.time);
 
     if (exactSlot) {
       await updateWhatsappAgentLead(lead.id, {
@@ -908,14 +961,8 @@ async function offerSlotsFromTimePreference(
       return;
     }
 
-    const allNearbySlots = await getNextWhatsappAgendaSlots({
-      limit: 80,
-      period,
-      preferredDate,
-      exactDateOnly: Boolean(preferredDate),
-    });
-    const nearbyDate = preferredDate || allNearbySlots[0]?.date;
-    const nearbySlots = allNearbySlots
+    const nearbyDate = preferredSearchDate;
+    const nearbySlots = matchingSlots
       .filter((slot) => slot.date === nearbyDate && slot.time !== timePreference.time)
       .sort(
         (left, right) =>
@@ -1530,6 +1577,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
 
   const currentLead = await getLeadByPhone(message.from);
   const schedule = calculateFelicitationSchedule(inboundAt);
+  const referralFields = referralLeadFields(message.referral);
   const inboundWindowFields = {
     last_inbound_at: inboundAt.toISOString(),
     reply_window_expires_at: schedule.replyWindowExpiresAt.toISOString(),
@@ -1540,7 +1588,9 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
       message_id: message.messageId,
       timestamp: message.timestamp,
       text: message.body,
+      referral: message.referral,
     },
+    ...referralFields,
     updated_at: new Date().toISOString(),
   };
 
@@ -1557,6 +1607,16 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
 
     if (error) throw error;
     await replyToLead(message.from, WELCOME_MESSAGE);
+    return;
+  }
+
+  if (isHumanManagedStatus(currentLead.status)) {
+    const { error } = await supabaseAdmin
+      .from("whatsapp_leads")
+      .update(inboundWindowFields)
+      .eq("id", currentLead.id);
+
+    if (error) throw error;
     return;
   }
 

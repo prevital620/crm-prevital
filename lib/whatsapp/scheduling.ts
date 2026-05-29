@@ -17,7 +17,7 @@ export type FelicitationScheduleResult =
       reason: "window_expired" | "scheduled_outside_reply_window";
     };
 
-function bogotaParts(date: Date) {
+export function bogotaParts(date: Date) {
   const formatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: BOGOTA_TIME_ZONE,
     year: "numeric",
@@ -69,6 +69,40 @@ export function isWithinBogotaBusinessHours(date: Date) {
   return parts.hour >= 8 && parts.hour < 16;
 }
 
+function bogotaDateKey(parts: ReturnType<typeof bogotaParts>) {
+  return `${parts.year}-${String(parts.month).padStart(2, "0")}-${String(parts.day).padStart(2, "0")}`;
+}
+
+function minutesOfDay(parts: ReturnType<typeof bogotaParts>) {
+  return parts.hour * 60 + parts.minute;
+}
+
+export function isValidFelicitationSendTime(nowInput: Date, scheduledForInput: Date) {
+  const now = new Date(nowInput);
+  const scheduledFor = new Date(scheduledForInput);
+  const nowParts = bogotaParts(now);
+  const scheduledParts = bogotaParts(scheduledFor);
+
+  if (bogotaDateKey(nowParts) !== bogotaDateKey(scheduledParts)) {
+    return false;
+  }
+
+  const scheduledMinutes = minutesOfDay(scheduledParts);
+  const nowMinutes = minutesOfDay(nowParts);
+  const morningTarget = 8 * 60 + 26;
+  const middayTarget = 12 * 60 + 43;
+
+  if (scheduledMinutes === morningTarget) {
+    return nowMinutes >= morningTarget && nowMinutes < 16 * 60;
+  }
+
+  if (scheduledMinutes === middayTarget) {
+    return nowMinutes >= middayTarget && nowMinutes < 16 * 60;
+  }
+
+  return false;
+}
+
 export function calculateFelicitationSchedule(
   lastInboundAtInput: Date,
   nowInput = new Date()
@@ -92,15 +126,13 @@ export function calculateFelicitationSchedule(
   const isMorningBeforeBusiness = parts.hour < 8;
   const isBusinessBlock = parts.hour >= 8 && parts.hour < 16;
 
+  const sameDayMidday = dateAtBogotaWallTime(parts.year, parts.month, parts.day, 12, 43);
+  const nextDayMidday = dateAtBogotaWallTime(nextDay.year, nextDay.month, nextDay.day, 12, 43);
   const scheduledAt = isBusinessBlock
     ? dateAtBogotaWallTime(nextDay.year, nextDay.month, nextDay.day, 8, 26)
-    : dateAtBogotaWallTime(
-        isMorningBeforeBusiness ? parts.year : nextDay.year,
-        isMorningBeforeBusiness ? parts.month : nextDay.month,
-        isMorningBeforeBusiness ? parts.day : nextDay.day,
-        12,
-        43
-      );
+    : now < sameDayMidday
+      ? sameDayMidday
+      : nextDayMidday;
 
   if (scheduledAt >= now && scheduledAt <= replyWindowExpiresAt) {
     return {

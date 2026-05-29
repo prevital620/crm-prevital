@@ -5,7 +5,7 @@ import {
   sendAndStoreImageMessage,
   sendAndStoreTextMessage,
 } from "@/lib/whatsapp/outbound";
-import { isWithinBogotaBusinessHours } from "@/lib/whatsapp/scheduling";
+import { isValidFelicitationSendTime } from "@/lib/whatsapp/scheduling";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -247,7 +247,10 @@ export async function POST(request: Request) {
         continue;
       }
 
-      if (!isWithinBogotaBusinessHours(now)) {
+      if (
+        !lead.felicitation_scheduled_for ||
+        !isValidFelicitationSendTime(now, new Date(lead.felicitation_scheduled_for))
+      ) {
         summary.skippedOutsideBusinessHours += 1;
         continue;
       }

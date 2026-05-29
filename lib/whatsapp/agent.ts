@@ -84,6 +84,8 @@ const ACTIVE_APPOINTMENT_STATUSES = [
   "reagendada",
   "en_atencion",
 ];
+const WHATSAPP_AGENT_SLOT_CAPACITY = 3;
+const WHATSAPP_AGENT_NOTE_MARKER = "Cita agendada desde WhatsApp IA";
 const DUPLICATE_APPOINTMENT_REPLY =
   "Ya tienes una cita registrada en Prevital 💚 Nuestro equipo revisará tu caso y te ayudará si necesitas cambiarla.";
 const APPOINTMENT_INSERT_ERROR_REPLY =
@@ -315,6 +317,31 @@ function formatISODate(year: number, month: number, day: number) {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+function findExplicitDateMatch(normalized: string) {
+  const explicitDatePattern = /\b(\d{1,2})(?:\s*de\s*([a-z]+))?\b/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = explicitDatePattern.exec(normalized))) {
+    const before = normalized.slice(Math.max(0, match.index - 10), match.index);
+    const after = normalized.slice(match.index + match[0].length, match.index + match[0].length + 8);
+
+    if (
+      !match[2] &&
+      (after.startsWith(":") ||
+        before.endsWith(":") ||
+        /^\s*(am|pm|a\s*m|p\s*m)\b/.test(after) ||
+        /\blas\s+$/.test(before) ||
+        /\ba\s+las\s+$/.test(before))
+    ) {
+      continue;
+    }
+
+    return match;
+  }
+
+  return null;
+}
+
 function currentBogotaParts(now = new Date()) {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: "America/Bogota",
@@ -349,11 +376,21 @@ export function formatSlotTime(time: string) {
 
 export function detectPeriodPreference(message: string): AgendaPeriod | null {
   const normalized = normalizeText(message);
-  if (hasAny(normalized, ["manana", "temprano", "antes del medio dia", "antes de medio dia"])) {
-    return "morning";
-  }
   if (hasAny(normalized, ["tarde", "despues del medio dia", "despues de medio dia"])) {
     return "afternoon";
+  }
+  if (
+    normalized === "manana" ||
+    hasAny(normalized, [
+      "en la manana",
+      "por la manana",
+      "de la manana",
+      "temprano",
+      "antes del medio dia",
+      "antes de medio dia",
+    ])
+  ) {
+    return "morning";
   }
   return null;
 }
@@ -462,7 +499,7 @@ export function parseDatePreference(
     };
   }
 
-  const explicitDate = normalized.match(/\b(\d{1,2})(?:\s*de\s*([a-z]+))?\b/);
+  const explicitDate = findExplicitDateMatch(normalized);
   if (explicitDate) {
     const day = Number(explicitDate[1]);
     const parts = currentBogotaParts(now);
@@ -542,7 +579,7 @@ export function parseSpecificDatePreference(
     };
   }
 
-  const explicitDate = normalized.match(/\b(\d{1,2})(?:\s*de\s*([a-z]+))?\b/);
+  const explicitDate = findExplicitDateMatch(normalized);
   if (explicitDate) {
     const day = Number(explicitDate[1]);
     const parts = currentBogotaParts(now);
@@ -577,6 +614,10 @@ function periodMatches(time: string, period?: AgendaPeriod) {
   return time >= "12:30" && time <= "17:30";
 }
 
+function normalizeDatabaseTime(value: string | null | undefined) {
+  return String(value || "").slice(0, 5);
+}
+
 export function timeToMinutes(time: string) {
   const [hour, minute] = time.split(":").map(Number);
   return hour * 60 + minute;
@@ -603,6 +644,31 @@ function normalizeRequestedHour(hour: number, period?: AgendaPeriod, meridiem?: 
   }
 
   return hour;
+}
+
+function findExplicitTimeMatch(normalized: string) {
+  const exactTimePattern =
+    /(?:\ba\s+las\s+|\blas\s+)?(\d{1,2})(?::([0-5]\d))?\s*(a\s*m|p\s*m|am|pm)?\b/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = exactTimePattern.exec(normalized))) {
+    const hourOffset = match[0].indexOf(match[1]);
+    const hourStart = match.index + Math.max(hourOffset, 0);
+    const before = normalized.slice(Math.max(0, hourStart - 8), hourStart);
+    const afterHour = normalized.slice(hourStart + match[1].length, hourStart + match[1].length + 12);
+    const hasTimeSignal =
+      match[0].includes(":") ||
+      Boolean(match[3]) ||
+      /\ba\s+las\s+$/.test(before) ||
+      /\blas\s+$/.test(before);
+
+    if (before.endsWith(":")) continue;
+    if (!hasTimeSignal && /^\s*de\s+[a-z]+/.test(afterHour)) continue;
+
+    return match;
+  }
+
+  return null;
 }
 
 export function parseTimePreference(
@@ -637,9 +703,7 @@ export function parseTimePreference(
     return { type: "after", time: minutesToTime(hour * 60 + minute) };
   }
 
-  const exactMatch = normalized.match(
-    /(?:\ba\s+las\s+|\blas\s+|\b)(\d{1,2})(?::([0-5]\d))?\s*(a\s*m|p\s*m|am|pm)?\b/
-  );
+  const exactMatch = findExplicitTimeMatch(normalized);
   if (!exactMatch) return null;
 
   const rawHour = Number(exactMatch[1]);
@@ -669,6 +733,37 @@ export function isFutureSlotAllowed(
   return slotDate.getTime() >= now.getTime() + minimumLeadMinutes * 60 * 1000;
 }
 
+async function getWhatsappAgentSlotUsageForDates(dates: string[]) {
+  const uniqueDates = Array.from(new Set(dates.filter(Boolean)));
+  const usage = new Map<string, number>();
+
+  if (uniqueDates.length === 0) return usage;
+
+  const { data, error } = await supabaseAdmin
+    .from("appointments")
+    .select("appointment_date, appointment_time, status, notes")
+    .in("appointment_date", uniqueDates)
+    .in("status", ACTIVE_APPOINTMENT_STATUSES)
+    .ilike("notes", `%${WHATSAPP_AGENT_NOTE_MARKER}%`);
+
+  if (error) throw error;
+
+  (data || []).forEach((item) => {
+    const date = String(item.appointment_date || "");
+    const time = normalizeDatabaseTime(item.appointment_time);
+    if (!date || !time) return;
+    const key = `${date}_${time}`;
+    usage.set(key, (usage.get(key) || 0) + 1);
+  });
+
+  return usage;
+}
+
+async function getWhatsappAgentSlotUsage(date: string, time: string) {
+  const usage = await getWhatsappAgentSlotUsageForDates([date]);
+  return usage.get(`${date}_${normalizeDatabaseTime(time)}`) || 0;
+}
+
 export async function getNextWhatsappAgendaSlots(options: {
   limit?: number;
   period?: AgendaPeriod;
@@ -686,6 +781,10 @@ export async function getNextWhatsappAgendaSlots(options: {
   const today = todayBogota(now);
   const startDate = options.preferredDate || addDaysISO(today, 1);
   const shouldRankByTarget = Boolean(options.targetTime);
+  const datesToSearch = Array.from({ length: maxDays }, (_, offset) =>
+    addDaysISO(startDate, offset)
+  ).filter((date) => date >= today);
+  const agentSlotUsage = await getWhatsappAgentSlotUsageForDates(datesToSearch);
 
   for (
     let offset = 0;
@@ -706,12 +805,15 @@ export async function getNextWhatsappAgendaSlots(options: {
       if (!periodMatches(slot.time, options.period)) continue;
       if (options.minTime && slot.time < options.minTime) continue;
       if (!isFutureSlotAllowed(date, slot.time, now, 60)) continue;
+      const agentUsed = agentSlotUsage.get(`${date}_${slot.time}`) || 0;
+      const agentRemaining = Math.min(slot.remaining, WHATSAPP_AGENT_SLOT_CAPACITY - agentUsed);
+      if (agentRemaining <= 0) continue;
 
       slots.push({
         index: slots.length + 1,
         date,
         time: slot.time,
-        remaining: slot.remaining,
+        remaining: agentRemaining,
       });
 
       if (!shouldRankByTarget && slots.length >= limit) break;
@@ -1026,6 +1128,19 @@ export async function createWhatsappAgentAppointment(params: {
     };
   }
 
+  const agentSlotUsage = await getWhatsappAgentSlotUsage(
+    params.slot.date,
+    params.slot.time
+  );
+  if (agentSlotUsage >= WHATSAPP_AGENT_SLOT_CAPACITY) {
+    return {
+      ok: false as const,
+      reason: "slot_unavailable",
+      error:
+        "Ese horario ya no tiene cupo disponible para agenda WhatsApp IA. Revisemos otros horarios para tu valoración 😊",
+    };
+  }
+
   const claimed = await claimWhatsappLeadForBooking(params.lead.id);
   if (!claimed) {
     return {
@@ -1084,6 +1199,20 @@ export async function createWhatsappAgentAppointment(params: {
       reason: "slot_unavailable",
       error:
         "Ese horario ya no tiene cupo disponible. Revisemos otros horarios para tu valoración 😊",
+    };
+  }
+
+  const freshAgentSlotUsage = await getWhatsappAgentSlotUsage(
+    params.slot.date,
+    params.slot.time
+  );
+  if (freshAgentSlotUsage >= WHATSAPP_AGENT_SLOT_CAPACITY) {
+    await markWhatsappLeadWaitingConfirmation(params.lead.id);
+    return {
+      ok: false as const,
+      reason: "slot_unavailable",
+      error:
+        "Ese horario ya no tiene cupo disponible para agenda WhatsApp IA. Revisemos otros horarios para tu valoración 😊",
     };
   }
 
