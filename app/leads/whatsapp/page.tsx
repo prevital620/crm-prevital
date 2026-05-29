@@ -97,6 +97,32 @@ type AdsPerformanceTotals = Omit<
   | "source_type"
 >;
 
+type MetaConversionCandidate = {
+  event_id: string;
+  event_name: string;
+  event_label: string;
+  event_time: string;
+  event_value: number | null;
+  currency: string | null;
+  whatsapp_lead_id: string;
+  appointment_id: string | null;
+  commercial_case_id: string | null;
+  lead_name: string;
+  phone: string;
+  email: string | null;
+  meta_ctwa_clid: string | null;
+  meta_source_id: string | null;
+  meta_ad_id: string | null;
+  meta_ad_name: string | null;
+  meta_campaign_name: string | null;
+  meta_source_url: string | null;
+  report_status: "candidate" | "pending" | "sent" | "error" | "skipped" | "not_reportable";
+  error_message: string | null;
+  sent_at: string | null;
+  reportable: boolean;
+  reportable_reason: string | null;
+};
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -612,6 +638,13 @@ export default function LeadsWhatsappPage() {
   const [adsReportRows, setAdsReportRows] = useState<AdsPerformanceRow[]>([]);
   const [adsReportTotals, setAdsReportTotals] = useState<AdsPerformanceTotals | null>(null);
   const [adFilter, setAdFilter] = useState("");
+  const [adsReportMode, setAdsReportMode] = useState<"performance" | "conversions">("performance");
+  const [metaConversionsLoading, setMetaConversionsLoading] = useState(false);
+  const [metaConversionsSaving, setMetaConversionsSaving] = useState(false);
+  const [metaConversionsError, setMetaConversionsError] = useState("");
+  const [metaConversionsNotice, setMetaConversionsNotice] = useState("");
+  const [metaConversionCandidates, setMetaConversionCandidates] = useState<MetaConversionCandidate[]>([]);
+  const [selectedMetaEventIds, setSelectedMetaEventIds] = useState<Set<string>>(new Set());
 
   const kanbanColumns = useMemo(() => buildKanbanColumns(leads), [leads]);
   const totalLeads = useMemo(
@@ -693,7 +726,113 @@ export default function LeadsWhatsappPage() {
 
   function openAdsReport() {
     setAdsReportOpen(true);
+    setAdsReportMode("performance");
     void loadAdsPerformance();
+  }
+
+  async function loadMetaConversions() {
+    try {
+      setMetaConversionsLoading(true);
+      setMetaConversionsError("");
+      setMetaConversionsNotice("");
+
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      if (campaignCode.trim()) params.set("campaign", campaignCode.trim());
+      if (adFilter.trim()) params.set("ad", adFilter.trim());
+      if (status) params.set("status", status);
+
+      const response = await fetch(`/api/whatsapp/meta-conversions?${params.toString()}`, {
+        cache: "no-store",
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "No se pudieron cargar conversiones Meta.");
+      }
+
+      const candidates = (payload?.candidates as MetaConversionCandidate[]) || [];
+      setMetaConversionCandidates(candidates);
+      setSelectedMetaEventIds(
+        new Set(
+          candidates
+            .filter((candidate) => candidate.reportable && candidate.report_status === "candidate")
+            .slice(0, 50)
+            .map((candidate) => candidate.event_id)
+        )
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudieron cargar conversiones Meta.";
+      setMetaConversionsError(message);
+      setMetaConversionCandidates([]);
+      setSelectedMetaEventIds(new Set());
+    } finally {
+      setMetaConversionsLoading(false);
+    }
+  }
+
+  function openMetaConversions() {
+    setAdsReportOpen(true);
+    setAdsReportMode("conversions");
+    void loadMetaConversions();
+  }
+
+  function toggleMetaEvent(eventId: string) {
+    setSelectedMetaEventIds((current) => {
+      const next = new Set(current);
+      if (next.has(eventId)) {
+        next.delete(eventId);
+      } else {
+        next.add(eventId);
+      }
+      return next;
+    });
+  }
+
+  async function prepareSelectedMetaConversions() {
+    if (selectedMetaEventIds.size === 0) {
+      setMetaConversionsError("Selecciona al menos una conversion.");
+      return;
+    }
+
+    try {
+      setMetaConversionsSaving(true);
+      setMetaConversionsError("");
+      setMetaConversionsNotice("");
+
+      const params = new URLSearchParams();
+      if (dateFrom) params.set("date_from", dateFrom);
+      if (dateTo) params.set("date_to", dateTo);
+      if (campaignCode.trim()) params.set("campaign", campaignCode.trim());
+      if (adFilter.trim()) params.set("ad", adFilter.trim());
+      if (status) params.set("status", status);
+
+      const response = await fetch(`/api/whatsapp/meta-conversions?${params.toString()}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          event_ids: Array.from(selectedMetaEventIds),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.ok) {
+        throw new Error(payload?.error || "No se pudieron preparar las conversiones.");
+      }
+
+      setMetaConversionsNotice(
+        `Conversiones dejadas en pendiente: ${payload.inserted || 0}. Omitidas: ${payload.skipped || 0}.`
+      );
+      await loadMetaConversions();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudieron preparar las conversiones.";
+      setMetaConversionsError(message);
+    } finally {
+      setMetaConversionsSaving(false);
+    }
   }
 
   async function loadMessages(lead: WhatsappLead) {
@@ -1645,12 +1784,26 @@ export default function LeadsWhatsappPage() {
                   <div className="flex flex-wrap gap-2">
                     <button
                       type="button"
-                      onClick={() => void loadAdsPerformance()}
-                      disabled={adsReportLoading}
+                      onClick={() => {
+                        if (adsReportMode === "conversions") {
+                          void loadMetaConversions();
+                        } else {
+                          void loadAdsPerformance();
+                        }
+                      }}
+                      disabled={adsReportLoading || metaConversionsLoading}
                       className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-4 py-2 text-sm font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <RefreshCcw className="h-4 w-4" />
-                      {adsReportLoading ? "Cargando" : "Actualizar"}
+                      {adsReportLoading || metaConversionsLoading ? "Cargando" : "Actualizar"}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={openMetaConversions}
+                      className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#BFD7EA] bg-white px-4 py-2 text-sm font-semibold text-[#315E7D] shadow-sm transition hover:-translate-y-0.5"
+                    >
+                      <BarChart3 className="h-4 w-4" />
+                      Conversiones Meta
                     </button>
                     <button
                       type="button"
@@ -1661,6 +1814,34 @@ export default function LeadsWhatsappPage() {
                       Cerrar
                     </button>
                   </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAdsReportMode("performance");
+                      void loadAdsPerformance();
+                    }}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      adsReportMode === "performance"
+                        ? "bg-[#5F7D66] text-white shadow-sm"
+                        : "border border-[#CFE4D8] bg-white text-[#4F6F5B]"
+                    }`}
+                  >
+                    Rendimiento por anuncio
+                  </button>
+                  <button
+                    type="button"
+                    onClick={openMetaConversions}
+                    className={`rounded-full px-4 py-2 text-sm font-semibold transition ${
+                      adsReportMode === "conversions"
+                        ? "bg-[#315E7D] text-white shadow-sm"
+                        : "border border-[#BFD7EA] bg-white text-[#315E7D]"
+                    }`}
+                  >
+                    Reportar conversiones
+                  </button>
                 </div>
 
                 <div className="mt-4 grid gap-3 md:grid-cols-4">
@@ -1704,30 +1885,196 @@ export default function LeadsWhatsappPage() {
               </div>
 
               <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-5">
-                {adsReportError ? (
-                  <div className="mb-4 rounded-2xl border border-[#E6C9C5] bg-[#FFF5F3] p-3 text-sm text-[#9A4E43]">
-                    {adsReportError}
-                  </div>
-                ) : null}
+                {adsReportMode === "conversions" ? (
+                  <div className="space-y-4">
+                    {metaConversionsError ? (
+                      <div className="rounded-2xl border border-[#E6C9C5] bg-[#FFF5F3] p-3 text-sm text-[#9A4E43]">
+                        {metaConversionsError}
+                      </div>
+                    ) : null}
+                    {metaConversionsNotice ? (
+                      <div className="rounded-2xl border border-[#BFE0CD] bg-[#F1FBF5] p-3 text-sm text-[#2D6B4A]">
+                        {metaConversionsNotice}
+                      </div>
+                    ) : null}
 
-                <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                  {[
-                    ["Conversaciones", adsReportTotals?.conversations || 0],
-                    ["Inscripciones", adsReportTotals?.completed_registrations || 0],
-                    ["Citas", adsReportTotals?.scheduled_appointments || 0],
-                    ["Compras", adsReportTotals?.purchases || 0],
-                  ].map(([label, value]) => (
-                    <div
-                      key={label}
-                      className="rounded-2xl border border-[#DCEDE3] bg-[#F7FCF8] p-3 shadow-sm"
-                    >
-                      <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#789084]">
-                        {label}
-                      </p>
-                      <p className="mt-1 text-2xl font-bold text-[#1F3128]">{value}</p>
+                    <div className="flex flex-col gap-3 rounded-2xl border border-[#DCEDE3] bg-[#F7FCF8] p-4 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <h3 className="text-lg font-bold text-[#0E2340]">Conversiones Meta preparadas</h3>
+                        <p className="mt-1 text-sm leading-6 text-[#607368]">
+                          Esta vista solo prepara eventos en cola. No envia nada a Meta ni ejecuta cron.
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          type="button"
+                          onClick={() => void loadMetaConversions()}
+                          disabled={metaConversionsLoading}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#CFE4D8] bg-white px-4 py-2 text-sm font-semibold text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <RefreshCcw className="h-4 w-4" />
+                          {metaConversionsLoading ? "Cargando" : "Actualizar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void prepareSelectedMetaConversions()}
+                          disabled={metaConversionsSaving || selectedMetaEventIds.size === 0}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[#315E7D] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {metaConversionsSaving
+                            ? "Guardando"
+                            : `Dejar pending (${selectedMetaEventIds.size})`}
+                        </button>
+                      </div>
                     </div>
-                  ))}
-                </div>
+
+                    <div className="overflow-x-auto rounded-2xl border border-[#DCEDE3]">
+                      <table className="min-w-[1180px] w-full bg-white text-left text-sm">
+                        <thead className="bg-[#F1F8F3] text-xs uppercase tracking-[0.12em] text-[#607368]">
+                          <tr>
+                            <th className="px-3 py-3">Sel.</th>
+                            <th className="px-3 py-3">Lead</th>
+                            <th className="px-3 py-3">Evento</th>
+                            <th className="px-3 py-3">Fecha evento</th>
+                            <th className="px-3 py-3">Anuncio</th>
+                            <th className="px-3 py-3 text-right">Valor</th>
+                            <th className="px-3 py-3">Estado Meta</th>
+                            <th className="px-3 py-3">Auditoria</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-[#E6F0EA]">
+                          {metaConversionsLoading ? (
+                            <tr>
+                              <td className="px-3 py-6 text-center text-[#607368]" colSpan={8}>
+                                Cargando conversiones...
+                              </td>
+                            </tr>
+                          ) : metaConversionCandidates.length === 0 ? (
+                            <tr>
+                              <td className="px-3 py-6 text-center text-[#607368]" colSpan={8}>
+                                Sin eventos candidatos para los filtros seleccionados.
+                              </td>
+                            </tr>
+                          ) : (
+                            metaConversionCandidates.map((candidate) => {
+                              const canSelect =
+                                candidate.reportable &&
+                                candidate.report_status !== "sent" &&
+                                candidate.report_status !== "pending";
+
+                              return (
+                                <tr key={candidate.event_id} className="align-top text-[#24312A]">
+                                  <td className="px-3 py-3">
+                                    <input
+                                      type="checkbox"
+                                      checked={selectedMetaEventIds.has(candidate.event_id)}
+                                      onChange={() => toggleMetaEvent(candidate.event_id)}
+                                      disabled={!canSelect}
+                                      className="h-4 w-4 rounded border-[#CFE4D8] text-[#315E7D]"
+                                      aria-label={`Seleccionar ${candidate.event_label}`}
+                                    />
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <p className="font-semibold text-[#0E2340]">{candidate.lead_name}</p>
+                                    <p className="text-xs text-[#607368]">{candidate.phone}</p>
+                                    <p className="text-xs text-[#607368]">{candidate.email || "Sin correo"}</p>
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <p className="font-semibold">{candidate.event_label}</p>
+                                    <p className="text-xs text-[#789084]">{candidate.event_name}</p>
+                                  </td>
+                                  <td className="px-3 py-3">{formatDateTime(candidate.event_time)}</td>
+                                  <td className="px-3 py-3">
+                                    <p className="max-w-[260px] font-semibold text-[#0E2340]">
+                                      {candidate.meta_ad_name ||
+                                        candidate.meta_ad_id ||
+                                        candidate.meta_source_id ||
+                                        "Sin dato de anuncio"}
+                                    </p>
+                                    <p className="text-xs text-[#607368]">
+                                      {candidate.meta_campaign_name || "Sin campana"}
+                                    </p>
+                                    {candidate.meta_source_url ? (
+                                      <a
+                                        href={candidate.meta_source_url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="mt-1 block max-w-[260px] truncate text-xs text-[#315E7D] underline"
+                                      >
+                                        {candidate.meta_source_url}
+                                      </a>
+                                    ) : null}
+                                  </td>
+                                  <td className="px-3 py-3 text-right">
+                                    {candidate.event_value
+                                      ? formatMoney(candidate.event_value)
+                                      : candidate.event_name === "Purchase"
+                                        ? "Sin dato"
+                                        : "-"}
+                                  </td>
+                                  <td className="px-3 py-3">
+                                    <span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                                      candidate.report_status === "sent"
+                                        ? "bg-[#D9F0E1] text-[#23563C]"
+                                        : candidate.report_status === "pending"
+                                          ? "bg-[#FFF7D9] text-[#8B6B22]"
+                                          : candidate.report_status === "error"
+                                            ? "bg-[#FFF5F3] text-[#9A4E43]"
+                                            : candidate.report_status === "not_reportable"
+                                              ? "bg-[#F1F4F2] text-[#596660]"
+                                              : "bg-[#EAF4FB] text-[#315E7D]"
+                                    }`}>
+                                      {candidate.report_status === "candidate"
+                                        ? "Candidato"
+                                        : candidate.report_status === "not_reportable"
+                                          ? "No reportable"
+                                          : candidate.report_status}
+                                    </span>
+                                  </td>
+                                  <td className="px-3 py-3 text-xs text-[#607368]">
+                                    {candidate.reportable_reason ||
+                                      candidate.error_message ||
+                                      `event_id: ${candidate.event_id}`}
+                                  </td>
+                                </tr>
+                              );
+                            })
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <p className="text-xs leading-5 text-[#789084]">
+                      Datos sensibles preparados para envio: telefono y correo se normalizan y se hashean con SHA-256.
+                      El envio real queda separado en endpoint protegido por secret y no se ejecuta automaticamente.
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    {adsReportError ? (
+                      <div className="mb-4 rounded-2xl border border-[#E6C9C5] bg-[#FFF5F3] p-3 text-sm text-[#9A4E43]">
+                        {adsReportError}
+                      </div>
+                    ) : null}
+
+                    <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      {[
+                        ["Conversaciones", adsReportTotals?.conversations || 0],
+                        ["Inscripciones", adsReportTotals?.completed_registrations || 0],
+                        ["Citas", adsReportTotals?.scheduled_appointments || 0],
+                        ["Compras", adsReportTotals?.purchases || 0],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="rounded-2xl border border-[#DCEDE3] bg-[#F7FCF8] p-3 shadow-sm"
+                        >
+                          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-[#789084]">
+                            {label}
+                          </p>
+                          <p className="mt-1 text-2xl font-bold text-[#1F3128]">{value}</p>
+                        </div>
+                      ))}
+                    </div>
 
                 <div className="overflow-x-auto rounded-2xl border border-[#DCEDE3]">
                   <table className="min-w-[1180px] w-full bg-white text-left text-sm">
@@ -1813,6 +2160,8 @@ export default function LeadsWhatsappPage() {
                   headline, body y ctwa_clid dentro de referral. Los nombres de campana
                   y conjunto quedan listos si Meta los envia o si se enriquecen despues.
                 </p>
+                  </>
+                )}
               </div>
             </div>
           </div>
