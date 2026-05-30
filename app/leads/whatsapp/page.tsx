@@ -630,6 +630,10 @@ export default function LeadsWhatsappPage() {
   const [conversationNotice, setConversationNotice] = useState("");
   const [emojiOpen, setEmojiOpen] = useState(false);
   const [attachmentNotice, setAttachmentNotice] = useState("");
+  const [imageComposerOpen, setImageComposerOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageCaption, setImageCaption] = useState("");
+  const [sendingImage, setSendingImage] = useState(false);
   const [activeColumnId, setActiveColumnId] = useState("inscritos");
   const [savingAction, setSavingAction] = useState<string | null>(null);
   const [adsReportOpen, setAdsReportOpen] = useState(false);
@@ -867,6 +871,9 @@ export default function LeadsWhatsappPage() {
     setReplyMessage("");
     setEmojiOpen(false);
     setAttachmentNotice("");
+    setImageComposerOpen(false);
+    setImageUrl("");
+    setImageCaption("");
     void loadMessages(lead);
   }
 
@@ -875,6 +882,9 @@ export default function LeadsWhatsappPage() {
     setMessages([]);
     setReplyMessage("");
     setEmojiOpen(false);
+    setImageComposerOpen(false);
+    setImageUrl("");
+    setImageCaption("");
     setConversationError("");
     setConversationNotice("");
     setAttachmentNotice("");
@@ -910,10 +920,10 @@ export default function LeadsWhatsappPage() {
     }
   }
 
-  function showAttachmentBlockedNotice() {
-    setAttachmentNotice(
-      "El envio de imagenes manuales estara disponible cuando se configure storage."
-    );
+  function toggleImageComposer() {
+    setAttachmentNotice("");
+    setConversationError("");
+    setImageComposerOpen((current) => !current);
   }
 
   function showActionPendingNotice(action: string) {
@@ -1062,6 +1072,55 @@ export default function LeadsWhatsappPage() {
     }
   }
 
+  async function sendManualImage() {
+    if (!selectedLead || !imageUrl.trim()) {
+      setConversationError("Pega la URL publica de la imagen antes de enviarla.");
+      return;
+    }
+
+    if (!canReplyFreely(selectedLead)) {
+      setConversationError(
+        "La ventana de 24 horas vencio. Para responder se necesita una plantilla aprobada."
+      );
+      return;
+    }
+
+    try {
+      setSendingImage(true);
+      setConversationError("");
+      setConversationNotice("");
+      setAttachmentNotice("");
+
+      const response = await fetch("/api/whatsapp/messages/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: selectedLead.phone,
+          image_url: imageUrl.trim(),
+          caption: imageCaption.trim(),
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.success) {
+        throw new Error(payload?.error || "No se pudo enviar la imagen.");
+      }
+
+      setImageUrl("");
+      setImageCaption("");
+      setImageComposerOpen(false);
+      setConversationNotice("Imagen enviada y guardada en el historial.");
+      await loadMessages(selectedLead);
+      await loadLeads();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo enviar la imagen.";
+      setConversationError(message);
+    } finally {
+      setSendingImage(false);
+    }
+  }
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void loadLeads();
@@ -1680,7 +1739,7 @@ export default function LeadsWhatsappPage() {
                             key={reply.label}
                             type="button"
                             onClick={() => insertQuickReply(reply.text)}
-                            disabled={sendingReply || !canReplyFreely(selectedLead)}
+                            disabled={sendingReply || sendingImage || !canReplyFreely(selectedLead)}
                             className="shrink-0 rounded-full border border-[#CFE4D8] bg-[#F7FCF8] px-2.5 py-1 text-[11px] font-semibold text-[#4F6F5B] transition hover:-translate-y-0.5 hover:bg-[#EAF7EF] disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {reply.label}
@@ -1695,7 +1754,8 @@ export default function LeadsWhatsappPage() {
                               key={emoji}
                               type="button"
                               onClick={() => insertTextAtCursor(emoji)}
-                              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-lg shadow-sm transition hover:-translate-y-0.5"
+                              disabled={sendingReply || sendingImage || !canReplyFreely(selectedLead)}
+                              className="flex h-9 w-9 items-center justify-center rounded-xl bg-white text-lg shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                             >
                               {emoji}
                             </button>
@@ -1703,11 +1763,44 @@ export default function LeadsWhatsappPage() {
                         </div>
                       ) : null}
 
+                      {imageComposerOpen ? (
+                        <div className="rounded-2xl border border-[#CFE4D8] bg-[#F7FCF8] p-3">
+                          <div className="grid gap-2 md:grid-cols-[1fr_1fr_auto]">
+                            <input
+                              type="url"
+                              value={imageUrl}
+                              onChange={(event) => setImageUrl(event.target.value)}
+                              placeholder="URL publica de la imagen"
+                              disabled={sendingImage || !canReplyFreely(selectedLead)}
+                              className="min-w-0 rounded-2xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                            <input
+                              type="text"
+                              value={imageCaption}
+                              onChange={(event) => setImageCaption(event.target.value)}
+                              placeholder="Caption opcional"
+                              disabled={sendingImage || !canReplyFreely(selectedLead)}
+                              className="min-w-0 rounded-2xl border border-[#CFE4D8] bg-white px-3 py-2 text-sm text-[#24312A] shadow-sm outline-none transition focus:border-[#7FA287] focus:ring-4 focus:ring-[#DDEFE4] disabled:cursor-not-allowed disabled:opacity-60"
+                            />
+                            <button
+                              type="button"
+                              onClick={sendManualImage}
+                              disabled={sendingImage || !imageUrl.trim() || !canReplyFreely(selectedLead)}
+                              className="rounded-2xl bg-[#5F7D66] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                              {sendingImage ? "Enviando..." : "Enviar imagen"}
+                            </button>
+                          </div>
+                          <p className="mt-2 text-xs leading-5 text-[#607368]">
+                            Usa una URL publica https de una imagen. WhatsApp no recibe archivos locales directamente desde este boton.
+                          </p>
+                        </div>
+                      ) : null}
                       <div className="flex items-end gap-1.5 rounded-[20px] border border-[#CFE4D8] bg-[#F7FCF8] p-1.5">
                         <button
                           type="button"
                           onClick={() => setEmojiOpen((current) => !current)}
-                          disabled={sendingReply || !canReplyFreely(selectedLead)}
+                          disabled={sendingReply || sendingImage || !canReplyFreely(selectedLead)}
                           className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                           title="Emojis"
                         >
@@ -1715,8 +1808,11 @@ export default function LeadsWhatsappPage() {
                         </button>
                         <button
                           type="button"
-                          onClick={showAttachmentBlockedNotice}
-                          className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5"
+                          onClick={toggleImageComposer}
+                          disabled={sendingReply || sendingImage || !canReplyFreely(selectedLead)}
+                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white text-[#4F6F5B] shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60 ${
+                            imageComposerOpen ? "ring-2 ring-[#9CCDB1]" : ""
+                          }`}
                           title="Adjuntar imagen"
                         >
                           <Paperclip className="h-5 w-5" />
@@ -1732,11 +1828,11 @@ export default function LeadsWhatsappPage() {
                               ? "Escribe un mensaje..."
                               : "Ventana vencida: se requiere plantilla aprobada"
                           }
-                          disabled={sendingReply || !canReplyFreely(selectedLead)}
+                          disabled={sendingReply || sendingImage || !canReplyFreely(selectedLead)}
                         />
                         <button
                           type="submit"
-                          disabled={sendingReply || !replyMessage.trim() || !canReplyFreely(selectedLead)}
+                          disabled={sendingReply || sendingImage || !replyMessage.trim() || !canReplyFreely(selectedLead)}
                           className="flex h-9 min-w-9 shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,_#6C9C88_0%,_#5F7D66_55%,_#456A55_100%)] px-3 text-sm font-semibold text-white shadow-[0_14px_28px_rgba(95,125,102,0.24)] transition hover:-translate-y-0.5 hover:brightness-105 disabled:cursor-not-allowed disabled:opacity-60"
                           title="Enviar"
                         >
