@@ -92,13 +92,13 @@ const APPOINTMENT_INSERT_ERROR_REPLY =
   "Gracias por tu paciencia 💚 Tuvimos un inconveniente al confirmar la cita automáticamente. Nuestro equipo revisará tu caso y te contactará para ayudarte a finalizar la agenda.";
 
 export const PERIOD_QUESTION =
-  "Claro 😊 ¿Te queda mejor en la mañana o en la tarde?";
+  "Claro 😊 La experiencia es presencial en Medellín y dura aproximadamente 30 minutos. ¿Te queda mejor en la mañana o en la tarde?";
 
 export const MORNING_TIME_QUESTION =
-  "Perfecto 💚 ¿Qué horario te queda mejor entre 8:30 a. m. y 12:30 p. m.?";
+  "Perfecto 💚 Elige un horario al que realmente puedas asistir, porque reservamos el cupo para ti. ¿Qué horario te queda mejor entre 8:30 a. m. y 12:30 p. m.?";
 
 export const AFTERNOON_TIME_QUESTION =
-  "Perfecto 💚 ¿Qué horario te queda mejor entre 12:30 p. m. y 5:30 p. m.?";
+  "Perfecto 💚 Elige un horario al que realmente puedas asistir, porque reservamos el cupo para ti. ¿Qué horario te queda mejor entre 12:30 p. m. y 5:30 p. m.?";
 
 const CLINICAL_SAFE_REPLY =
   "Esa información la revisa directamente nuestro equipo profesional durante la cita 😊 Yo puedo ayudarte a coordinar el horario para que recibas orientación adecuada en Prevital.";
@@ -400,6 +400,33 @@ export function isPositiveConfirmation(message: string) {
   return (
     /^(si|sii|si correcto|correcto|asi es|exacto|ese|esa|ese mismo|esa misma|claro|dale|ok|okay|listo|confirmo|me sirve|esa me sirve|ese me sirve)$/.test(normalized) ||
     /^(si|sii|correcto|asi es|exacto|ese|esa|claro|dale|ok|okay|listo|confirmo)\b/.test(normalized)
+  );
+}
+
+export function isExplicitAttendanceConfirmation(message: string) {
+  if (/[?¿]/.test(message)) return false;
+  const normalized = normalizeText(message).replace(/[^\p{Letter}\p{Number}\s]/gu, " ");
+  const compact = normalized.replace(/\s+/g, " ").trim();
+  if (
+    hasAny(compact, [
+      "pero",
+      "cuanto",
+      "costo",
+      "precio",
+      "donde",
+      "ubicacion",
+      "direccion",
+      "que",
+      "como",
+      "cuando",
+    ])
+  ) {
+    return false;
+  }
+
+  return (
+    /^(si|sii|confirmo|correcto|listo|claro|de acuerdo|perfecto)$/.test(compact) ||
+    /^(si|sii|confirmo|correcto|listo|claro|de acuerdo|perfecto)\b/.test(compact)
   );
 }
 
@@ -849,9 +876,9 @@ export function buildSlotsOfferMessage(slots: OfferedAgendaSlot[], period?: Agen
       `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
   );
 
-  return `Perfecto 💚 Tenemos estas opciones en la ${periodLabel}:\n\n${lines.join(
+  return `Perfecto 💚 La experiencia es presencial en Medellín y dura aproximadamente 30 minutos. Tenemos estas opciones en la ${periodLabel}:\n\n${lines.join(
     "\n"
-  )}\n\n¿Cuál prefieres?`;
+  )}\n\n¿Cuál prefieres? Elige un horario al que realmente puedas asistir.`;
 }
 
 export function buildSlotsReminderMessage(slots: OfferedAgendaSlot[], period: AgendaPeriod) {
@@ -865,9 +892,9 @@ export function buildSlotsReminderMessage(slots: OfferedAgendaSlot[], period: Ag
       `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
   );
 
-  return `Como me indicaste que te queda mejor en la ${periodLabel}, te comparto nuevamente opciones disponibles:\n\n${lines.join(
+  return `Como me indicaste que te queda mejor en la ${periodLabel}, te comparto nuevamente opciones disponibles para la experiencia presencial en Medellín:\n\n${lines.join(
     "\n"
-  )}\n\n¿Cuál prefieres?`;
+  )}\n\n¿Cuál prefieres? Elige un horario al que realmente puedas asistir.`;
 }
 
 export function buildSlotsOptionsMessage(slots: OfferedAgendaSlot[]) {
@@ -888,7 +915,11 @@ export function buildPeriodTimeQuestion(period: AgendaPeriod) {
 }
 
 export function buildExactSlotAvailableMessage(slot: OfferedAgendaSlot) {
-  return `Sí 💚 Tenemos disponible ${formatSlotDate(slot.date)} a las ${formatSlotTime(slot.time)}. ¿Quieres que te la separe?`;
+  return buildInPersonSlotConfirmationMessage(slot);
+}
+
+export function buildInPersonSlotConfirmationMessage(slot: Pick<OfferedAgendaSlot, "date" | "time">) {
+  return `Perfecto 😊 Tengo disponibilidad para ${formatSlotDate(slot.date)} a las ${formatSlotTime(slot.time)}. ¿Confirmas que puedes asistir puntualmente a esta cita presencial en Medellín?`;
 }
 
 export function buildExactSlotUnavailableIntro(date: string, time: string) {
@@ -896,7 +927,7 @@ export function buildExactSlotUnavailableIntro(date: string, time: string) {
 }
 
 export function buildSingleNearbySlotMessage(requestedTime: string, slot: OfferedAgendaSlot) {
-  return `Para ${formatSlotTime(requestedTime)} no veo cupo disponible por ahora 😊 Pero tengo disponibilidad a las ${formatSlotTime(slot.time)} ¿Te sirve?`;
+  return `Para ${formatSlotTime(requestedTime)} no veo cupo disponible por ahora 😊\n\n${buildInPersonSlotConfirmationMessage(slot)}`;
 }
 
 export function buildMultipleNearbySlotsMessage(requestedTime: string, slots: OfferedAgendaSlot[]) {
