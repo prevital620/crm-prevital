@@ -117,6 +117,15 @@ const WELCOME_MESSAGE =
 const ASK_EMAIL_MESSAGE =
   "Gracias \ud83d\ude0a Ahora d\u00e9janos tu correo electr\u00f3nico para finalizar tu inscripci\u00f3n.";
 
+const NAME_COLLECTION_INFO_MESSAGE =
+  "Claro 😊 Te cuento: es una experiencia presencial de Detox Iónico en Medellín, dura aproximadamente 30 minutos y hace parte de una jornada especial de bienestar de Prevital.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+
+const NAME_COLLECTION_SCHEDULE_MESSAGE =
+  "Claro 😊 La experiencia se agenda según disponibilidad de nuestra jornada en Medellín. Dura aproximadamente 30 minutos y nuestro equipo te orienta durante la sesión.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+
+const NAME_COLLECTION_OTHER_CITY_MESSAGE =
+  "Gracias por contarnos 😊 Por ahora esta experiencia es presencial en Medellín. Si más adelante tenemos jornadas en otras ciudades, con gusto podremos avisarte.";
+
 const INVALID_EMAIL_MESSAGE =
   "Parece que el correo no qued\u00f3 completo. \u00bfNos lo puedes enviar nuevamente, por favor?";
 
@@ -781,6 +790,14 @@ function emailCollectionReplyForMessage(text: string) {
 }
 
 function nameCollectionReplyForMessage(text: string) {
+  const normalized = normalizeText(text);
+  if (isOtherCityMessage(normalized)) {
+    return {
+      reply: NAME_COLLECTION_OTHER_CITY_MESSAGE,
+      status: "sin_respuesta" as const,
+    };
+  }
+
   const intent = analyzeWhatsappAgentIntent(text);
   if (
     intent === "wants_info" ||
@@ -788,15 +805,143 @@ function nameCollectionReplyForMessage(text: string) {
     intent === "asks_location" ||
     intent === "asks_duration"
   ) {
-    return WELCOME_MESSAGE;
+    return {
+      reply: NAME_COLLECTION_INFO_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
   }
 
-  const normalized = normalizeText(text);
-  if (hasAny(normalized, ["de que se trata", "que es", "informacion", "info", "como funciona"])) {
-    return WELCOME_MESSAGE;
+  if (isNameCollectionQuestion(normalized)) {
+    return {
+      reply: isNameCollectionScheduleQuestion(normalized)
+        ? NAME_COLLECTION_SCHEDULE_MESSAGE
+        : NAME_COLLECTION_INFO_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
   }
 
   return null;
+}
+
+function isOtherCityMessage(normalized: string) {
+  return hasAny(normalized, [
+    "otra ciudad",
+    "estoy en otra ciudad",
+    "vivo en otra ciudad",
+    "no estoy en medellin",
+    "no estoy en medellín",
+    "estoy fuera de medellin",
+    "estoy fuera de medellín",
+  ]);
+}
+
+function isNameCollectionQuestion(normalized: string) {
+  return hasAny(normalized, [
+    "cuando seria",
+    "cuando es",
+    "cuando",
+    "que dia",
+    "que fecha",
+    "para cuando",
+    "horarios",
+    "horario",
+    "que horarios",
+    "como agendo",
+    "como es",
+    "que es",
+    "qué es",
+    "de que se trata",
+    "de qué se trata",
+    "q se trata",
+    "como seria",
+    "cómo sería",
+    "programacion",
+    "programación",
+    "costo",
+    "vale",
+    "precio",
+    "ubicacion",
+    "ubicación",
+    "direccion",
+    "dirección",
+    "duracion",
+    "duración",
+    "gracias",
+    "muchas gracias",
+    "buenas tardes",
+    "buenos dias",
+    "buenos días",
+    "hola",
+    "informacion",
+    "información",
+    "info",
+    "como funciona",
+    "cómo funciona",
+  ]);
+}
+
+function isNameCollectionScheduleQuestion(normalized: string) {
+  return hasAny(normalized, [
+    "cuando seria",
+    "cuando es",
+    "cuando",
+    "que dia",
+    "que fecha",
+    "para cuando",
+    "horarios",
+    "horario",
+    "que horarios",
+    "programacion",
+    "programación",
+    "como seria",
+    "cómo sería",
+    "como es",
+    "cómo es",
+    "como agendo",
+    "cómo agendo",
+  ]);
+}
+
+function looksLikeFullName(text: string) {
+  const trimmed = text.trim();
+  if (!trimmed || /[?¿]/.test(trimmed)) return false;
+  if (trimmed.length > 70) return false;
+
+  const normalized = normalizeText(trimmed);
+  if (isOtherCityMessage(normalized) || isNameCollectionQuestion(normalized)) return false;
+  if (
+    hasAny(normalized, [
+      "que",
+      "qué",
+      "como",
+      "cómo",
+      "cuando",
+      "cuanto",
+      "cuánto",
+      "donde",
+      "dónde",
+      "horario",
+      "horarios",
+      "fecha",
+      "programacion",
+      "programación",
+      "costo",
+      "ciudad",
+      "informacion",
+      "información",
+    ])
+  ) {
+    return false;
+  }
+
+  const words = trimmed
+    .replace(/[^\p{Letter}\s'-]/gu, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+
+  if (words.length < 2 || words.length > 6) return false;
+  return words.every((word) => /\p{Letter}{2,}/u.test(word));
 }
 
 async function handlePreFelicitationLead(
@@ -1671,11 +1816,28 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
     if (contextualReply) {
       const { error } = await supabaseAdmin
         .from("whatsapp_leads")
-        .update(inboundWindowFields)
+        .update({
+          status: contextualReply.status,
+          ...inboundWindowFields,
+        })
         .eq("id", currentLead.id);
 
       if (error) throw error;
-      await replyToLead(message.from, contextualReply);
+      await replyToLead(message.from, contextualReply.reply);
+      return;
+    }
+
+    if (!looksLikeFullName(text)) {
+      const { error } = await supabaseAdmin
+        .from("whatsapp_leads")
+        .update({
+          status: "pidiendo_nombre",
+          ...inboundWindowFields,
+        })
+        .eq("id", currentLead.id);
+
+      if (error) throw error;
+      await replyToLead(message.from, NAME_COLLECTION_INFO_MESSAGE);
       return;
     }
 
