@@ -2,20 +2,26 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getErrorMessage } from "@/lib/server/user-security";
+import { requireWhatsappLeadsAccess } from "@/lib/server/whatsapp-access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
 
+type SendMode = "dry_run" | "test" | "send";
+type EventStatus = "pending" | "error";
+type EventName = "Lead" | "Schedule" | "QualifiedLead" | "Purchase";
+
 type ConversionRow = {
   id: string;
   whatsapp_lead_id: string | null;
-  event_name: string;
+  event_name: EventName;
   event_time: string;
   event_value: number | null;
   currency: string | null;
   event_id: string;
   payload_preview: Record<string, unknown> | null;
   meta_ctwa_clid: string | null;
+  status: string;
 };
 
 type LeadRow = {
@@ -26,17 +32,44 @@ type LeadRow = {
   meta_ctwa_clid: string | null;
 };
 
+const EVENT_NAMES = new Set<EventName>(["Lead", "Schedule", "QualifiedLead", "Purchase"]);
+const RETRYABLE_STATUSES = new Set<EventStatus>(["pending", "error"]);
+
 function normalizeSecret(value: string | null | undefined) {
   return String(value || "").trim();
 }
 
-function requireSecret(request: Request) {
-  const expected = normalizeSecret(process.env.META_CONVERSIONS_SECRET);
-  const provided =
+function providedSecret(request: Request) {
+  return (
     normalizeSecret(request.headers.get("x-meta-conversions-secret")) ||
-    normalizeSecret(request.headers.get("x-internal-secret"));
+    normalizeSecret(request.headers.get("x-internal-secret"))
+  );
+}
 
+function hasValidSecret(request: Request) {
+  const expected = normalizeSecret(process.env.META_CONVERSIONS_SECRET);
+  const provided = providedSecret(request);
   return Boolean(expected && provided && expected === provided);
+}
+
+async function authorizeRequest(request: Request, mode: SendMode) {
+  if (hasValidSecret(request)) return { ok: true as const, via: "secret" as const };
+
+  if (mode === "test" || mode === "dry_run") {
+    const authCheck = await requireWhatsappLeadsAccess();
+    if (authCheck.ok) return { ok: true as const, via: "crm" as const };
+    return {
+      ok: false as const,
+      status: authCheck.status,
+      error: authCheck.error,
+    };
+  }
+
+  return {
+    ok: false as const,
+    status: 401,
+    error: "No autorizado. El envio real requiere META_CONVERSIONS_SECRET.",
+  };
 }
 
 function sha256(value: string | null | undefined) {
@@ -61,40 +94,141 @@ function eventTimeSeconds(value: string) {
   return Math.floor((Number.isNaN(time) ? Date.now() : time) / 1000);
 }
 
+function normalizeMode(value: unknown): SendMode {
+  const mode = String(value || "dry_run").trim();
+  if (mode === "test" || mode === "send" || mode === "dry_run") return mode;
+  return "dry_run";
+}
+
+function normalizeEventName(value: unknown) {
+  const eventName = String(value || "").trim();
+  return EVENT_NAMES.has(eventName as EventName) ? (eventName as EventName) : null;
+}
+
+function normalizeStatus(value: unknown): EventStatus {
+  const status = String(value || "pending").trim();
+  return RETRYABLE_STATUSES.has(status as EventStatus) ? (status as EventStatus) : "pending";
+}
+
+function environmentConfig(mode: SendMode) {
+  const accessToken = normalizeSecret(process.env.META_ACCESS_TOKEN);
+  const datasetId = normalizeSecret(process.env.META_DATASET_ID || process.env.META_PIXEL_ID);
+  const datasetEnvName = normalizeSecret(process.env.META_DATASET_ID)
+    ? "META_DATASET_ID"
+    : normalizeSecret(process.env.META_PIXEL_ID)
+      ? "META_PIXEL_ID"
+      : null;
+  const apiVersion = normalizeSecret(process.env.META_API_VERSION);
+  const conversionsSecret = normalizeSecret(process.env.META_CONVERSIONS_SECRET);
+  const testEventCode = normalizeSecret(process.env.META_TEST_EVENT_CODE);
+
+  const missing: string[] = [];
+  if (!accessToken) missing.push("META_ACCESS_TOKEN");
+  if (!datasetId) missing.push("META_DATASET_ID or META_PIXEL_ID");
+  if (!apiVersion) missing.push("META_API_VERSION");
+  if (!conversionsSecret) missing.push("META_CONVERSIONS_SECRET");
+  if (mode === "test" && !testEventCode) missing.push("META_TEST_EVENT_CODE");
+
+  return {
+    accessToken,
+    datasetId,
+    datasetEnvName,
+    apiVersion,
+    conversionsSecret,
+    testEventCode,
+    missing,
+  };
+}
+
+function selectedEventIds(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function safePayloadForResponse(payload: Record<string, unknown>, testMode: boolean) {
+  if (!testMode) return payload;
+  return {
+    ...payload,
+    test_event_code: "[configured]",
+  };
+}
+
 export async function POST(request: Request) {
   try {
-    if (!requireSecret(request)) {
-      return NextResponse.json({ error: "No autorizado." }, { status: 401 });
-    }
+    const body = await request.json().catch(() => null);
+    const mode = normalizeMode(body?.mode);
 
-    const accessToken = normalizeSecret(process.env.META_ACCESS_TOKEN);
-    const datasetId = normalizeSecret(process.env.META_DATASET_ID || process.env.META_PIXEL_ID);
-    const apiVersion = normalizeSecret(process.env.META_API_VERSION) || "v20.0";
-
-    if (!accessToken || !datasetId) {
+    if (mode === "send" && !normalizeSecret(process.env.META_CONVERSIONS_SECRET)) {
       return NextResponse.json(
         {
-          error:
-            "Envio desactivado: faltan META_ACCESS_TOKEN y META_DATASET_ID o META_PIXEL_ID.",
+          ok: false,
+          error: "Envio Meta desactivado: faltan variables de entorno.",
+          missing: ["META_CONVERSIONS_SECRET"],
+          mode,
+          test_mode: false,
         },
         { status: 503 }
       );
     }
 
-    const body = await request.json().catch(() => null);
-    const limit = Math.min(Math.max(Number(body?.limit || 25), 1), 100);
+    const authorization = await authorizeRequest(request, mode);
 
-    const { data: eventsData, error: eventsError } = await supabaseAdmin
+    if (!authorization.ok) {
+      return NextResponse.json({ ok: false, error: authorization.error }, { status: authorization.status });
+    }
+
+    const config = environmentConfig(mode);
+    if (config.missing.length > 0 && mode !== "dry_run") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Envio Meta desactivado: faltan variables de entorno.",
+          missing: config.missing,
+          mode,
+          test_mode: mode === "test",
+        },
+        { status: 503 }
+      );
+    }
+
+    const limit = Math.min(Math.max(Number(body?.limit || 25), 1), 100);
+    const eventName = normalizeEventName(body?.event_name);
+    const status = normalizeStatus(body?.status);
+    const eventIds = selectedEventIds(body?.event_ids);
+
+    if (body?.event_name && !eventName) {
+      return NextResponse.json(
+        { ok: false, error: "event_name invalido. Usa Lead, Schedule, QualifiedLead o Purchase." },
+        { status: 400 }
+      );
+    }
+
+    let query = supabaseAdmin
       .from("meta_conversion_events")
-      .select("id, whatsapp_lead_id, event_name, event_time, event_value, currency, event_id, payload_preview, meta_ctwa_clid")
-      .eq("status", "pending")
+      .select("id, whatsapp_lead_id, event_name, event_time, event_value, currency, event_id, payload_preview, meta_ctwa_clid, status")
+      .neq("status", "sent")
+      .eq("status", status)
       .order("created_at", { ascending: true })
       .limit(limit);
 
+    if (eventName) query = query.eq("event_name", eventName);
+    if (eventIds.length > 0) query = query.in("event_id", eventIds);
+
+    const { data: eventsData, error: eventsError } = await query;
     if (eventsError) throw eventsError;
 
     const events = (eventsData || []) as ConversionRow[];
-    if (!events.length) return NextResponse.json({ ok: true, sent: 0, failed: 0 });
+    if (!events.length) {
+      return NextResponse.json({
+        ok: true,
+        mode,
+        test_mode: mode === "test",
+        selected: 0,
+        sent: 0,
+        failed: 0,
+        message: "No hay eventos pendientes para los filtros indicados.",
+      });
+    }
 
     const leadIds = Array.from(new Set(events.map((event) => event.whatsapp_lead_id).filter(Boolean) as string[]));
     const { data: leadsData, error: leadsError } = leadIds.length
@@ -133,49 +267,96 @@ export async function POST(request: Request) {
     });
 
     const payload: Record<string, unknown> = { data };
-    const testEventCode = normalizeSecret(process.env.META_TEST_EVENT_CODE);
-    if (testEventCode) payload.test_event_code = testEventCode;
+    if (mode === "test") payload.test_event_code = config.testEventCode;
 
-    const response = await fetch(`https://graph.facebook.com/${apiVersion}/${datasetId}/events`, {
+    if (mode === "dry_run") {
+      return NextResponse.json({
+        ok: true,
+        mode,
+        test_mode: false,
+        selected: events.length,
+        sent: 0,
+        failed: 0,
+        dataset_env: config.datasetEnvName,
+        ready_to_send: config.missing.length === 0,
+        missing: config.missing,
+        payload_preview: safePayloadForResponse(payload, false),
+        event_ids: events.map((event) => event.event_id),
+      });
+    }
+
+    const response = await fetch(`https://graph.facebook.com/${config.apiVersion}/${config.datasetId}/events`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${config.accessToken}`,
       },
       body: JSON.stringify(payload),
     });
     const result = await response.json().catch(() => ({}));
+    const eventsReceived = Number(result?.events_received || 0);
+    const metaAcceptedAll = response.ok && eventsReceived === events.length;
 
-    if (!response.ok) {
+    if (!metaAcceptedAll) {
       const errorMessage =
         typeof result?.error?.message === "string"
           ? result.error.message
-          : "Meta rechazo el lote de conversiones.";
+          : response.ok
+            ? `Meta recibio ${eventsReceived} de ${events.length} eventos.`
+            : "Meta rechazo el lote de conversiones.";
 
+      if (mode === "send") {
+        await supabaseAdmin
+          .from("meta_conversion_events")
+          .update({
+            status: "error",
+            error_message: errorMessage,
+          })
+          .in("id", events.map((event) => event.id));
+      }
+
+      return NextResponse.json(
+        {
+          ok: false,
+          mode,
+          test_mode: mode === "test",
+          error: errorMessage,
+          selected: events.length,
+          sent: 0,
+          failed: events.length,
+          meta: result,
+          status_not_changed: mode === "test",
+        },
+        { status: 502 }
+      );
+    }
+
+    if (mode === "send") {
       await supabaseAdmin
         .from("meta_conversion_events")
         .update({
-          status: "error",
-          error_message: errorMessage,
+          status: "sent",
+          error_message: null,
+          sent_at: new Date().toISOString(),
         })
         .in("id", events.map((event) => event.id));
-
-      return NextResponse.json({ ok: false, error: errorMessage }, { status: 502 });
     }
 
-    await supabaseAdmin
-      .from("meta_conversion_events")
-      .update({
-        status: "sent",
-        error_message: null,
-        sent_at: new Date().toISOString(),
-      })
-      .in("id", events.map((event) => event.id));
-
-    return NextResponse.json({ ok: true, sent: events.length, failed: 0, meta: result });
+    return NextResponse.json({
+      ok: true,
+      mode,
+      test_mode: mode === "test",
+      selected: events.length,
+      sent: mode === "send" ? events.length : 0,
+      failed: 0,
+      meta_events_received: eventsReceived,
+      meta: result,
+      status_not_changed: mode === "test",
+      payload_preview: safePayloadForResponse(payload, mode === "test"),
+    });
   } catch (error: unknown) {
     return NextResponse.json(
-      { error: getErrorMessage(error, "No se pudieron enviar conversiones Meta.") },
+      { ok: false, error: getErrorMessage(error, "No se pudieron enviar conversiones Meta.") },
       { status: 500 }
     );
   }

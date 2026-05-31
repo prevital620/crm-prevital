@@ -645,10 +645,14 @@ export default function LeadsWhatsappPage() {
   const [adsReportMode, setAdsReportMode] = useState<"performance" | "conversions">("performance");
   const [metaConversionsLoading, setMetaConversionsLoading] = useState(false);
   const [metaConversionsSaving, setMetaConversionsSaving] = useState(false);
+  const [metaConversionsTesting, setMetaConversionsTesting] = useState(false);
   const [metaConversionsError, setMetaConversionsError] = useState("");
   const [metaConversionsNotice, setMetaConversionsNotice] = useState("");
   const [metaConversionCandidates, setMetaConversionCandidates] = useState<MetaConversionCandidate[]>([]);
   const [selectedMetaEventIds, setSelectedMetaEventIds] = useState<Set<string>>(new Set());
+  const [metaConversionTypeFilter, setMetaConversionTypeFilter] = useState<
+    "all" | "Lead" | "Schedule" | "QualifiedLead" | "Purchase"
+  >("all");
 
   const kanbanColumns = useMemo(() => buildKanbanColumns(leads), [leads]);
   const totalLeads = useMemo(
@@ -658,6 +662,25 @@ export default function LeadsWhatsappPage() {
   const activeColumn = useMemo(
     () => kanbanColumns.find((column) => column.id === activeColumnId) || kanbanColumns[0],
     [activeColumnId, kanbanColumns]
+  );
+  const metaConversionCounts = useMemo(
+    () => ({
+      lead: metaConversionCandidates.filter((candidate) => candidate.event_name === "Lead").length,
+      schedule: metaConversionCandidates.filter((candidate) => candidate.event_name === "Schedule").length,
+      qualifiedLead: metaConversionCandidates.filter((candidate) => candidate.event_name === "QualifiedLead").length,
+      purchase: metaConversionCandidates.filter((candidate) => candidate.event_name === "Purchase").length,
+      pending: metaConversionCandidates.filter((candidate) => candidate.report_status === "pending").length,
+      sent: metaConversionCandidates.filter((candidate) => candidate.report_status === "sent").length,
+      error: metaConversionCandidates.filter((candidate) => candidate.report_status === "error").length,
+    }),
+    [metaConversionCandidates]
+  );
+  const filteredMetaConversionCandidates = useMemo(
+    () =>
+      metaConversionTypeFilter === "all"
+        ? metaConversionCandidates
+        : metaConversionCandidates.filter((candidate) => candidate.event_name === metaConversionTypeFilter),
+    [metaConversionCandidates, metaConversionTypeFilter]
   );
 
   async function loadLeads() {
@@ -836,6 +859,50 @@ export default function LeadsWhatsappPage() {
       setMetaConversionsError(message);
     } finally {
       setMetaConversionsSaving(false);
+    }
+  }
+
+  async function testQualifiedLeadMetaConversions() {
+    const confirmed = window.confirm(
+      "Esto enviara solo eventos pending QualifiedLead a Meta en modo prueba. Requiere META_TEST_EVENT_CODE configurado. No marcara eventos como sent. ¿Continuar?"
+    );
+    if (!confirmed) return;
+
+    try {
+      setMetaConversionsTesting(true);
+      setMetaConversionsError("");
+      setMetaConversionsNotice("");
+
+      const response = await fetch("/api/whatsapp/meta-conversions/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mode: "test",
+          event_name: "QualifiedLead",
+          status: "pending",
+          limit: 10,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+
+      if (!response.ok || !payload?.ok) {
+        const missing = Array.isArray(payload?.missing) ? ` Faltan: ${payload.missing.join(", ")}.` : "";
+        throw new Error(payload?.error ? `${payload.error}${missing}` : "No se pudo probar el envio a Meta.");
+      }
+
+      setMetaConversionsNotice(
+        payload.selected > 0
+          ? `Prueba Meta enviada para ${payload.selected} QualifiedLead. Eventos recibidos por Meta: ${payload.meta_events_received || 0}. Los eventos siguen en pending.`
+          : "No hay QualifiedLead pending para probar con los filtros actuales."
+      );
+      await loadMetaConversions();
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo probar el envio a Meta.";
+      setMetaConversionsError(message);
+    } finally {
+      setMetaConversionsTesting(false);
     }
   }
 
@@ -1121,6 +1188,7 @@ export default function LeadsWhatsappPage() {
       setSendingImage(false);
     }
   }
+
   function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     void loadLeads();
@@ -1796,6 +1864,7 @@ export default function LeadsWhatsappPage() {
                           </p>
                         </div>
                       ) : null}
+
                       <div className="flex items-end gap-1.5 rounded-[20px] border border-[#CFE4D8] bg-[#F7FCF8] p-1.5">
                         <button
                           type="button"
@@ -2014,13 +2083,73 @@ export default function LeadsWhatsappPage() {
                         <button
                           type="button"
                           onClick={() => void prepareSelectedMetaConversions()}
-                          disabled={metaConversionsSaving || selectedMetaEventIds.size === 0}
+                          disabled={metaConversionsSaving || metaConversionsTesting || selectedMetaEventIds.size === 0}
                           className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[#315E7D] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {metaConversionsSaving
                             ? "Guardando"
                             : `Dejar pending (${selectedMetaEventIds.size})`}
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => void testQualifiedLeadMetaConversions()}
+                          disabled={metaConversionsSaving || metaConversionsTesting}
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#315E7D] bg-white px-4 py-2 text-sm font-semibold text-[#315E7D] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#EEF6FB] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {metaConversionsTesting ? "Probando" : "Probar QualifiedLead"}
+                        </button>
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-7">
+                      {[
+                        ["Leads completos", metaConversionCounts.lead],
+                        ["Citas agendadas", metaConversionCounts.schedule],
+                        ["Asistieron / QualifiedLead", metaConversionCounts.qualifiedLead],
+                        ["Compras / Purchase", metaConversionCounts.purchase],
+                        ["Pendientes", metaConversionCounts.pending],
+                        ["Enviados", metaConversionCounts.sent],
+                        ["Errores", metaConversionCounts.error],
+                      ].map(([label, value]) => (
+                        <div
+                          key={label}
+                          className="rounded-2xl border border-[#DCEDE3] bg-white p-3 shadow-sm"
+                        >
+                          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#789084]">
+                            {label}
+                          </p>
+                          <p className="mt-1 text-2xl font-bold text-[#1F3128]">{value}</p>
+                        </div>
+                      ))}
+                    </div>
+
+                    <div className="flex flex-col gap-2 rounded-2xl border border-[#DCEDE3] bg-white p-3 sm:flex-row sm:items-center sm:justify-between">
+                      <p className="text-sm font-semibold text-[#0E2340]">Filtrar por tipo de evento</p>
+                      <div className="flex flex-wrap gap-2">
+                        {[
+                          ["all", "Todos"],
+                          ["Lead", "Lead"],
+                          ["Schedule", "Schedule"],
+                          ["QualifiedLead", "QualifiedLead"],
+                          ["Purchase", "Purchase"],
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() =>
+                              setMetaConversionTypeFilter(
+                                value as "all" | "Lead" | "Schedule" | "QualifiedLead" | "Purchase"
+                              )
+                            }
+                            className={`rounded-full px-3 py-1.5 text-xs font-semibold transition ${
+                              metaConversionTypeFilter === value
+                                ? "bg-[#315E7D] text-white shadow-sm"
+                                : "border border-[#BFD7EA] bg-[#F7FCF8] text-[#315E7D] hover:bg-[#EAF4FB]"
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
@@ -2045,14 +2174,14 @@ export default function LeadsWhatsappPage() {
                                 Cargando conversiones...
                               </td>
                             </tr>
-                          ) : metaConversionCandidates.length === 0 ? (
+                          ) : filteredMetaConversionCandidates.length === 0 ? (
                             <tr>
                               <td className="px-3 py-6 text-center text-[#607368]" colSpan={8}>
                                 Sin eventos candidatos para los filtros seleccionados.
                               </td>
                             </tr>
                           ) : (
-                            metaConversionCandidates.map((candidate) => {
+                            filteredMetaConversionCandidates.map((candidate) => {
                               const canSelect =
                                 candidate.reportable &&
                                 candidate.report_status !== "sent" &&
