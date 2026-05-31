@@ -695,6 +695,25 @@ export default function LeadsWhatsappPage() {
         : metaConversionCandidates.filter((candidate) => candidate.event_name === metaConversionTypeFilter),
     [metaConversionCandidates, metaConversionTypeFilter]
   );
+  const selectedVisibleMetaConversionCandidates = useMemo(
+    () =>
+      filteredMetaConversionCandidates.filter(
+        (candidate) =>
+          selectedMetaEventIds.has(candidate.event_id) &&
+          candidate.reportable &&
+          candidate.report_status !== "sent"
+      ),
+    [filteredMetaConversionCandidates, selectedMetaEventIds]
+  );
+  const selectedVisibleMetaConversionCounts = useMemo(
+    () => ({
+      lead: selectedVisibleMetaConversionCandidates.filter((candidate) => candidate.event_name === "Lead").length,
+      schedule: selectedVisibleMetaConversionCandidates.filter((candidate) => candidate.event_name === "Schedule").length,
+      qualifiedLead: selectedVisibleMetaConversionCandidates.filter((candidate) => candidate.event_name === "QualifiedLead").length,
+      purchase: selectedVisibleMetaConversionCandidates.filter((candidate) => candidate.event_name === "Purchase").length,
+    }),
+    [selectedVisibleMetaConversionCandidates]
+  );
 
   async function loadLeads() {
     try {
@@ -850,10 +869,25 @@ export default function LeadsWhatsappPage() {
   }
 
   async function prepareSelectedMetaConversions() {
-    if (selectedMetaEventIds.size === 0) {
-      setMetaConversionsError("Selecciona al menos una conversion.");
+    if (selectedVisibleMetaConversionCandidates.length === 0) {
+      setMetaConversionsError("Selecciona al menos una conversion visible para preparar.");
       return;
     }
+
+    const breakdown = [
+      selectedVisibleMetaConversionCounts.lead ? `${selectedVisibleMetaConversionCounts.lead} Lead` : null,
+      selectedVisibleMetaConversionCounts.schedule ? `${selectedVisibleMetaConversionCounts.schedule} Schedule` : null,
+      selectedVisibleMetaConversionCounts.qualifiedLead
+        ? `${selectedVisibleMetaConversionCounts.qualifiedLead} QualifiedLead`
+        : null,
+      selectedVisibleMetaConversionCounts.purchase ? `${selectedVisibleMetaConversionCounts.purchase} Purchase` : null,
+    ]
+      .filter(Boolean)
+      .join(", ");
+    const confirmed = window.confirm(
+      `Vas a preparar solo ${selectedVisibleMetaConversionCandidates.length} evento(s) seleccionado(s) visibles: ${breakdown}. Los eventos ocultos por filtro no se modificaran. ¿Continuar?`
+    );
+    if (!confirmed) return;
 
     try {
       setMetaConversionsSaving(true);
@@ -874,7 +908,7 @@ export default function LeadsWhatsappPage() {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          event_ids: Array.from(selectedMetaEventIds),
+          event_ids: selectedVisibleMetaConversionCandidates.map((candidate) => candidate.event_id),
         }),
       });
       const payload = await response.json().catch(() => ({}));
@@ -2194,12 +2228,16 @@ export default function LeadsWhatsappPage() {
                         <button
                           type="button"
                           onClick={() => void prepareSelectedMetaConversions()}
-                          disabled={metaConversionsSaving || metaConversionsTesting || selectedMetaEventIds.size === 0}
+                          disabled={
+                            metaConversionsSaving ||
+                            metaConversionsTesting ||
+                            selectedVisibleMetaConversionCandidates.length === 0
+                          }
                           className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[#315E7D] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {metaConversionsSaving
                             ? "Guardando"
-                            : `Dejar pending (${selectedMetaEventIds.size})`}
+                            : `Preparar seleccionados (${selectedVisibleMetaConversionCandidates.length})`}
                         </button>
                         <button
                           type="button"
