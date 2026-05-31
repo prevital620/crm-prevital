@@ -153,6 +153,40 @@ function safePayloadForResponse(payload: Record<string, unknown>, testMode: bool
   };
 }
 
+function metaSummary(result: Record<string, unknown>, eventsReceived: number) {
+  const error = result.error as Record<string, unknown> | undefined;
+  return {
+    events_received: eventsReceived,
+    messages: result.messages || undefined,
+    fbtrace_id: result.fbtrace_id || error?.fbtrace_id || undefined,
+    error_message: typeof error?.message === "string" ? error.message : undefined,
+    error_type: typeof error?.type === "string" ? error.type : undefined,
+    error_code: typeof error?.code === "number" ? error.code : undefined,
+  };
+}
+
+function logMetaConversionAttempt(details: {
+  eventName: EventName | null;
+  mode: SendMode;
+  count: number;
+  httpStatus?: number;
+  error?: string;
+}) {
+  const logPayload = {
+    event_name: details.eventName || "all",
+    mode: details.mode,
+    count: details.count,
+    http_status: details.httpStatus || null,
+    error: details.error || null,
+  };
+
+  if (details.error) {
+    console.error("[meta-conversions/send]", logPayload);
+  } else {
+    console.info("[meta-conversions/send]", logPayload);
+  }
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
@@ -163,8 +197,15 @@ export async function POST(request: Request) {
         {
           ok: false,
           error: "Envio Meta desactivado: faltan variables de entorno.",
+          message: "Envio Meta desactivado: faltan variables de entorno.",
           missing: ["META_CONVERSIONS_SECRET"],
           mode,
+          event_name: normalizeEventName(body?.event_name) || "all",
+          found: 0,
+          attempted: 0,
+          tested: 0,
+          errors: 0,
+          meta_response: metaSummary({}, 0),
           test_mode: false,
         },
         { status: 503 }
@@ -174,17 +215,47 @@ export async function POST(request: Request) {
     const authorization = await authorizeRequest(request, mode);
 
     if (!authorization.ok) {
-      return NextResponse.json({ ok: false, error: authorization.error }, { status: authorization.status });
+      return NextResponse.json(
+        {
+          ok: false,
+          error: authorization.error,
+          message: authorization.error,
+          mode,
+          event_name: normalizeEventName(body?.event_name) || "all",
+          found: 0,
+          attempted: 0,
+          tested: 0,
+          errors: 0,
+          missing: [],
+          meta_response: metaSummary({}, 0),
+        },
+        { status: authorization.status }
+      );
     }
 
     const config = environmentConfig(mode);
     if (config.missing.length > 0 && mode !== "dry_run") {
+      logMetaConversionAttempt({
+        eventName: normalizeEventName(body?.event_name),
+        mode,
+        count: 0,
+        httpStatus: 503,
+        error: `Missing env: ${config.missing.join(", ")}`,
+      });
+
       return NextResponse.json(
         {
           ok: false,
           error: "Envio Meta desactivado: faltan variables de entorno.",
+          message: "Envio Meta desactivado: faltan variables de entorno.",
           missing: config.missing,
           mode,
+          event_name: normalizeEventName(body?.event_name) || "all",
+          found: 0,
+          attempted: 0,
+          tested: 0,
+          errors: 0,
+          meta_response: metaSummary({}, 0),
           test_mode: mode === "test",
         },
         { status: 503 }
@@ -198,7 +269,19 @@ export async function POST(request: Request) {
 
     if (body?.event_name && !eventName) {
       return NextResponse.json(
-        { ok: false, error: "event_name invalido. Usa Lead, Schedule, QualifiedLead o Purchase." },
+        {
+          ok: false,
+          error: "event_name invalido. Usa Lead, Schedule, QualifiedLead o Purchase.",
+          message: "event_name invalido. Usa Lead, Schedule, QualifiedLead o Purchase.",
+          mode,
+          event_name: "invalid",
+          found: 0,
+          attempted: 0,
+          tested: 0,
+          errors: 0,
+          missing: [],
+          meta_response: metaSummary({}, 0),
+        },
         { status: 400 }
       );
     }
@@ -219,14 +302,41 @@ export async function POST(request: Request) {
 
     const events = (eventsData || []) as ConversionRow[];
     if (!events.length) {
+      logMetaConversionAttempt({
+        eventName,
+        mode,
+        count: 0,
+        httpStatus: 200,
+      });
+
       return NextResponse.json({
         ok: true,
         mode,
+        event_name: eventName || "all",
+        found: 0,
+        attempted: 0,
+        tested: 0,
+        errors: 0,
+        missing: [],
+        meta_response: metaSummary({}, 0),
+        dataset_env: config.datasetEnvName,
+        dataset_id: config.datasetId,
+        api_version: config.apiVersion,
+        test_event_code_configured: Boolean(config.testEventCode),
         test_mode: mode === "test",
         selected: 0,
         sent: 0,
         failed: 0,
+        sent_test: 0,
         message: "No hay eventos pendientes para los filtros indicados.",
+        summary: {
+          candidates_found: 0,
+          sent_to_meta_test: 0,
+          sent_to_meta: 0,
+          failed: 0,
+          status_not_changed: mode === "test",
+          meta: metaSummary({}, 0),
+        },
       });
     }
 
@@ -273,13 +383,23 @@ export async function POST(request: Request) {
       return NextResponse.json({
         ok: true,
         mode,
+        event_name: eventName || "all",
+        found: events.length,
+        attempted: 0,
+        tested: 0,
+        errors: 0,
+        missing: config.missing,
+        meta_response: metaSummary({}, 0),
+        dataset_env: config.datasetEnvName,
+        dataset_id: config.datasetId,
+        api_version: config.apiVersion,
+        test_event_code_configured: Boolean(config.testEventCode),
+        message: "Vista previa generada. No se enviaron eventos a Meta.",
         test_mode: false,
         selected: events.length,
         sent: 0,
         failed: 0,
-        dataset_env: config.datasetEnvName,
         ready_to_send: config.missing.length === 0,
-        missing: config.missing,
         payload_preview: safePayloadForResponse(payload, false),
         event_ids: events.map((event) => event.event_id),
       });
@@ -296,6 +416,14 @@ export async function POST(request: Request) {
     const result = await response.json().catch(() => ({}));
     const eventsReceived = Number(result?.events_received || 0);
     const metaAcceptedAll = response.ok && eventsReceived === events.length;
+    const summary = {
+      candidates_found: events.length,
+      sent_to_meta_test: mode === "test" ? eventsReceived : 0,
+      sent_to_meta: mode === "send" ? eventsReceived : 0,
+      failed: metaAcceptedAll ? 0 : events.length,
+      status_not_changed: mode === "test",
+      meta: metaSummary(result, eventsReceived),
+    };
 
     if (!metaAcceptedAll) {
       const errorMessage =
@@ -304,6 +432,14 @@ export async function POST(request: Request) {
           : response.ok
             ? `Meta recibio ${eventsReceived} de ${events.length} eventos.`
             : "Meta rechazo el lote de conversiones.";
+
+      logMetaConversionAttempt({
+        eventName,
+        mode,
+        count: events.length,
+        httpStatus: response.status,
+        error: errorMessage,
+      });
 
       if (mode === "send") {
         await supabaseAdmin
@@ -319,12 +455,27 @@ export async function POST(request: Request) {
         {
           ok: false,
           mode,
+          event_name: eventName || "all",
+          found: events.length,
+          attempted: events.length,
+          tested: mode === "test" ? eventsReceived : 0,
+          errors: events.length,
+          missing: [],
+          meta_response: summary.meta,
+          dataset_env: config.datasetEnvName,
+          dataset_id: config.datasetId,
+          api_version: config.apiVersion,
+          test_event_code_configured: Boolean(config.testEventCode),
+          message: errorMessage,
           test_mode: mode === "test",
           error: errorMessage,
           selected: events.length,
           sent: 0,
           failed: events.length,
+          sent_test: 0,
           meta: result,
+          meta_summary: summary.meta,
+          summary,
           status_not_changed: mode === "test",
         },
         { status: 502 }
@@ -342,21 +493,59 @@ export async function POST(request: Request) {
         .in("id", events.map((event) => event.id));
     }
 
+    logMetaConversionAttempt({
+      eventName,
+      mode,
+      count: events.length,
+      httpStatus: response.status,
+    });
+
     return NextResponse.json({
       ok: true,
       mode,
+      event_name: eventName || "all",
+      found: events.length,
+      attempted: events.length,
+      tested: mode === "test" ? eventsReceived : 0,
+      errors: 0,
+      missing: [],
+      meta_response: summary.meta,
+      dataset_env: config.datasetEnvName,
+      dataset_id: config.datasetId,
+      api_version: config.apiVersion,
+      test_event_code_configured: Boolean(config.testEventCode),
+      message:
+        mode === "test"
+          ? "Prueba Meta completada. Los eventos no fueron marcados como sent."
+          : "Envio Meta completado.",
       test_mode: mode === "test",
       selected: events.length,
       sent: mode === "send" ? events.length : 0,
       failed: 0,
+      sent_test: mode === "test" ? eventsReceived : 0,
       meta_events_received: eventsReceived,
       meta: result,
+      meta_summary: summary.meta,
+      summary,
       status_not_changed: mode === "test",
       payload_preview: safePayloadForResponse(payload, mode === "test"),
     });
   } catch (error: unknown) {
+    const message = getErrorMessage(error, "No se pudieron enviar conversiones Meta.");
     return NextResponse.json(
-      { ok: false, error: getErrorMessage(error, "No se pudieron enviar conversiones Meta.") },
+      {
+        ok: false,
+        error: message,
+        message,
+        mode: "unknown",
+        event_name: "unknown",
+        found: 0,
+        attempted: 0,
+        tested: 0,
+        errors: 1,
+        missing: [],
+        meta_response: metaSummary({}, 0),
+      },
       { status: 500 }
     );
   }

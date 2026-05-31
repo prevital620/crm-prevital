@@ -123,6 +123,18 @@ type MetaConversionCandidate = {
   reportable_reason: string | null;
 };
 
+type MetaConversionTestResult = {
+  mode: string;
+  eventName: string;
+  candidatesFound: number;
+  attempted: number;
+  sentToMetaTest: number;
+  failed: number;
+  missing: string[];
+  metaSummary: string;
+  statusNotChanged: boolean;
+};
+
 const panelClass =
   "rounded-[32px] border border-[#CFE4D8] bg-[linear-gradient(180deg,_rgba(255,255,255,0.97)_0%,_rgba(247,252,248,0.98)_100%)] p-6 shadow-[0_24px_60px_rgba(95,125,102,0.12)]";
 
@@ -648,6 +660,7 @@ export default function LeadsWhatsappPage() {
   const [metaConversionsTesting, setMetaConversionsTesting] = useState(false);
   const [metaConversionsError, setMetaConversionsError] = useState("");
   const [metaConversionsNotice, setMetaConversionsNotice] = useState("");
+  const [metaConversionTestResult, setMetaConversionTestResult] = useState<MetaConversionTestResult | null>(null);
   const [metaConversionCandidates, setMetaConversionCandidates] = useState<MetaConversionCandidate[]>([]);
   const [selectedMetaEventIds, setSelectedMetaEventIds] = useState<Set<string>>(new Set());
   const [metaConversionTypeFilter, setMetaConversionTypeFilter] = useState<
@@ -817,6 +830,25 @@ export default function LeadsWhatsappPage() {
     });
   }
 
+  function metaTestSummaryText(payload: Record<string, unknown>) {
+    const metaSummary = payload.meta_summary as Record<string, unknown> | undefined;
+    const summary = payload.summary as Record<string, unknown> | undefined;
+    const nestedMeta = summary?.meta as Record<string, unknown> | undefined;
+    const meta = metaSummary || nestedMeta || {};
+
+    const eventsReceived = Number(meta.events_received ?? payload.meta_events_received ?? 0);
+    const fbtraceId = typeof meta.fbtrace_id === "string" ? meta.fbtrace_id : "";
+    const errorMessage = typeof meta.error_message === "string" ? meta.error_message : "";
+    const messages = Array.isArray(meta.messages) ? meta.messages.length : 0;
+
+    if (errorMessage) return errorMessage;
+    if (eventsReceived > 0) {
+      return `Meta recibio ${eventsReceived} evento(s) en modo test${fbtraceId ? ` · fbtrace_id ${fbtraceId}` : ""}.`;
+    }
+    if (messages > 0) return `Meta devolvio ${messages} mensaje(s) de diagnostico.`;
+    return "Meta no devolvio detalles adicionales.";
+  }
+
   async function prepareSelectedMetaConversions() {
     if (selectedMetaEventIds.size === 0) {
       setMetaConversionsError("Selecciona al menos una conversion.");
@@ -827,6 +859,7 @@ export default function LeadsWhatsappPage() {
       setMetaConversionsSaving(true);
       setMetaConversionsError("");
       setMetaConversionsNotice("");
+      setMetaConversionTestResult(null);
 
       const params = new URLSearchParams();
       if (dateFrom) params.set("date_from", dateFrom);
@@ -872,6 +905,7 @@ export default function LeadsWhatsappPage() {
       setMetaConversionsTesting(true);
       setMetaConversionsError("");
       setMetaConversionsNotice("");
+      setMetaConversionTestResult(null);
 
       const response = await fetch("/api/whatsapp/meta-conversions/send", {
         method: "POST",
@@ -886,18 +920,44 @@ export default function LeadsWhatsappPage() {
         }),
       });
       const payload = await response.json().catch(() => ({}));
+      const missing = Array.isArray(payload?.missing) ? payload.missing.map((item: unknown) => String(item)) : [];
 
       if (!response.ok || !payload?.ok) {
-        const missing = Array.isArray(payload?.missing) ? ` Faltan: ${payload.missing.join(", ")}.` : "";
-        throw new Error(payload?.error ? `${payload.error}${missing}` : "No se pudo probar el envio a Meta.");
+        const message = payload?.message || payload?.error || `Error HTTP ${response.status}`;
+        setMetaConversionTestResult({
+          mode: String(payload?.mode || "test"),
+          eventName: String(payload?.event_name || "QualifiedLead"),
+          candidatesFound: Number(payload?.found || payload?.selected || 0),
+          attempted: Number(payload?.attempted || 0),
+          sentToMetaTest: Number(payload?.tested || payload?.sent_test || payload?.meta_events_received || 0),
+          failed: Number(payload?.errors || payload?.failed || 0),
+          missing,
+          metaSummary: metaTestSummaryText(payload as Record<string, unknown>),
+          statusNotChanged: payload?.status_not_changed !== false,
+        });
+        throw new Error(missing.length ? `${message} Faltan: ${missing.join(", ")}.` : message);
       }
 
+      const candidatesFound = Number(payload.found || payload.selected || 0);
+      const attempted = Number(payload.attempted || candidatesFound);
+      const sentToMetaTest = Number(payload.tested || payload.sent_test || payload.meta_events_received || 0);
+      const failed = Number(payload.errors || payload.failed || 0);
+      setMetaConversionTestResult({
+        mode: String(payload.mode || "test"),
+        eventName: String(payload.event_name || "QualifiedLead"),
+        candidatesFound,
+        attempted,
+        sentToMetaTest,
+        failed,
+        missing,
+        metaSummary: metaTestSummaryText(payload as Record<string, unknown>),
+        statusNotChanged: payload?.status_not_changed !== false,
+      });
       setMetaConversionsNotice(
-        payload.selected > 0
-          ? `Prueba Meta enviada para ${payload.selected} QualifiedLead. Eventos recibidos por Meta: ${payload.meta_events_received || 0}. Los eventos siguen en pending.`
-          : "No hay QualifiedLead pending para probar con los filtros actuales."
+        candidatesFound > 0
+          ? `Prueba QualifiedLead finalizada: ${sentToMetaTest} enviado(s) a Meta en modo test, ${failed} error(es). Los eventos siguen en pending.`
+          : "No hay eventos QualifiedLead pending para probar."
       );
-      await loadMetaConversions();
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "No se pudo probar el envio a Meta.";
       setMetaConversionsError(message);
@@ -2060,6 +2120,57 @@ export default function LeadsWhatsappPage() {
                     {metaConversionsNotice ? (
                       <div className="rounded-2xl border border-[#BFE0CD] bg-[#F1FBF5] p-3 text-sm text-[#2D6B4A]">
                         {metaConversionsNotice}
+                      </div>
+                    ) : null}
+                    {metaConversionTestResult ? (
+                      <div className="rounded-2xl border border-[#BFD7EA] bg-[#F7FBFF] p-4 text-sm text-[#24435C]">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                          <div>
+                            <p className="font-bold text-[#0E2340]">Resultado prueba Meta</p>
+                            <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#607D92]">
+                              Modo {metaConversionTestResult.mode} · {metaConversionTestResult.eventName}
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#315E7D] shadow-sm">
+                            {metaConversionTestResult.statusNotChanged
+                              ? "Eventos siguen en pending"
+                              : "Revisar estado"}
+                          </span>
+                        </div>
+                        <div className="mt-3 grid gap-2 sm:grid-cols-4">
+                          <div className="rounded-xl bg-white p-3 shadow-sm">
+                            <p className="text-xs text-[#607368]">Candidatos encontrados</p>
+                            <p className="text-xl font-bold text-[#0E2340]">
+                              {metaConversionTestResult.candidatesFound}
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-white p-3 shadow-sm">
+                            <p className="text-xs text-[#607368]">Intentados</p>
+                            <p className="text-xl font-bold text-[#0E2340]">
+                              {metaConversionTestResult.attempted}
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-white p-3 shadow-sm">
+                            <p className="text-xs text-[#607368]">Enviados a Meta test</p>
+                            <p className="text-xl font-bold text-[#0E2340]">
+                              {metaConversionTestResult.sentToMetaTest}
+                            </p>
+                          </div>
+                          <div className="rounded-xl bg-white p-3 shadow-sm">
+                            <p className="text-xs text-[#607368]">Errores</p>
+                            <p className="text-xl font-bold text-[#0E2340]">{metaConversionTestResult.failed}</p>
+                          </div>
+                        </div>
+                        <p className="mt-3 leading-6">
+                          <span className="font-semibold">Respuesta Meta:</span>{" "}
+                          {metaConversionTestResult.metaSummary}
+                        </p>
+                        {metaConversionTestResult.missing.length > 0 ? (
+                          <p className="mt-2 leading-6 text-[#9A4E43]">
+                            <span className="font-semibold">Variables faltantes:</span>{" "}
+                            {metaConversionTestResult.missing.join(", ")}
+                          </p>
+                        ) : null}
                       </div>
                     ) : null}
 
