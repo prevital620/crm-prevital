@@ -162,6 +162,9 @@ function metaSummary(result: Record<string, unknown>, eventsReceived: number) {
     error_message: typeof error?.message === "string" ? error.message : undefined,
     error_type: typeof error?.type === "string" ? error.type : undefined,
     error_code: typeof error?.code === "number" ? error.code : undefined,
+    error_subcode: typeof error?.error_subcode === "number" ? error.error_subcode : undefined,
+    error_user_title: typeof error?.error_user_title === "string" ? error.error_user_title : undefined,
+    error_user_msg: typeof error?.error_user_msg === "string" ? error.error_user_msg : undefined,
   };
 }
 
@@ -171,6 +174,7 @@ function logMetaConversionAttempt(details: {
   count: number;
   httpStatus?: number;
   error?: string;
+  meta?: ReturnType<typeof metaSummary>;
 }) {
   const logPayload = {
     event_name: details.eventName || "all",
@@ -178,6 +182,10 @@ function logMetaConversionAttempt(details: {
     count: details.count,
     http_status: details.httpStatus || null,
     error: details.error || null,
+    meta_error_type: details.meta?.error_type || null,
+    meta_error_code: details.meta?.error_code || null,
+    meta_error_subcode: details.meta?.error_subcode || null,
+    meta_fbtrace_id: details.meta?.fbtrace_id || null,
   };
 
   if (details.error) {
@@ -185,6 +193,11 @@ function logMetaConversionAttempt(details: {
   } else {
     console.info("[meta-conversions/send]", logPayload);
   }
+}
+
+function metaEventNameForMode(eventName: EventName, mode: SendMode) {
+  if (mode === "test" && eventName === "QualifiedLead") return "Lead";
+  return eventName;
 }
 
 export async function POST(request: Request) {
@@ -356,22 +369,29 @@ export async function POST(request: Request) {
       const phoneHash = sha256(normalizedPhoneForMeta(lead?.phone));
       const emailHash = sha256(lead?.email);
       const previewCustomData = (event.payload_preview?.custom_data || {}) as Record<string, unknown>;
+      const metaEventName = metaEventNameForMode(event.event_name, mode);
+      const ctwaClid = event.meta_ctwa_clid || lead?.meta_ctwa_clid || undefined;
 
       return {
-        event_name: event.event_name,
+        event_name: metaEventName,
         event_time: eventTimeSeconds(event.event_time),
         event_id: event.event_id,
         action_source: "business_messaging",
+        messaging_channel: "whatsapp",
         event_source_url: lead?.meta_source_url || undefined,
         user_data: {
           ph: phoneHash ? [phoneHash] : undefined,
           em: emailHash ? [emailHash] : undefined,
-          ctwa_clid: event.meta_ctwa_clid || lead?.meta_ctwa_clid || undefined,
         },
         custom_data: {
           ...previewCustomData,
           value: event.event_value || undefined,
           currency: event.currency || undefined,
+          ctwa_clid: ctwaClid,
+          crm_event: event.event_name,
+          lead_stage: event.event_name === "QualifiedLead" ? "qualified_attended" : undefined,
+          attendance_status: event.event_name === "QualifiedLead" ? "attended" : undefined,
+          meta_event_name_original: event.event_name !== metaEventName ? event.event_name : undefined,
         },
       };
     });
@@ -416,13 +436,14 @@ export async function POST(request: Request) {
     const result = await response.json().catch(() => ({}));
     const eventsReceived = Number(result?.events_received || 0);
     const metaAcceptedAll = response.ok && eventsReceived === events.length;
+    const currentMetaSummary = metaSummary(result, eventsReceived);
     const summary = {
       candidates_found: events.length,
       sent_to_meta_test: mode === "test" ? eventsReceived : 0,
       sent_to_meta: mode === "send" ? eventsReceived : 0,
       failed: metaAcceptedAll ? 0 : events.length,
       status_not_changed: mode === "test",
-      meta: metaSummary(result, eventsReceived),
+      meta: currentMetaSummary,
     };
 
     if (!metaAcceptedAll) {
@@ -439,6 +460,7 @@ export async function POST(request: Request) {
         count: events.length,
         httpStatus: response.status,
         error: errorMessage,
+        meta: currentMetaSummary,
       });
 
       if (mode === "send") {

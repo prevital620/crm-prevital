@@ -132,6 +132,7 @@ type MetaConversionTestResult = {
   failed: number;
   missing: string[];
   metaSummary: string;
+  metaDetails: Array<[string, string]>;
   statusNotChanged: boolean;
 };
 
@@ -868,6 +869,31 @@ export default function LeadsWhatsappPage() {
     return "Meta no devolvio detalles adicionales.";
   }
 
+  function metaTestDetails(payload: Record<string, unknown>) {
+    const metaSummary = payload.meta_summary as Record<string, unknown> | undefined;
+    const metaResponse = payload.meta_response as Record<string, unknown> | undefined;
+    const summary = payload.summary as Record<string, unknown> | undefined;
+    const nestedMeta = summary?.meta as Record<string, unknown> | undefined;
+    const meta = metaResponse || metaSummary || nestedMeta || {};
+    const details: Array<[string, string]> = [];
+
+    [
+      ["message", meta.error_message],
+      ["type", meta.error_type],
+      ["code", meta.error_code],
+      ["error_subcode", meta.error_subcode],
+      ["error_user_title", meta.error_user_title],
+      ["error_user_msg", meta.error_user_msg],
+      ["fbtrace_id", meta.fbtrace_id],
+    ].forEach(([label, value]) => {
+      if (value !== undefined && value !== null && String(value).trim()) {
+        details.push([String(label), String(value)]);
+      }
+    });
+
+    return details;
+  }
+
   async function prepareSelectedMetaConversions() {
     if (selectedVisibleMetaConversionCandidates.length === 0) {
       setMetaConversionsError("Selecciona al menos una conversion visible para preparar.");
@@ -967,6 +993,7 @@ export default function LeadsWhatsappPage() {
           failed: Number(payload?.errors || payload?.failed || 0),
           missing,
           metaSummary: metaTestSummaryText(payload as Record<string, unknown>),
+          metaDetails: metaTestDetails(payload as Record<string, unknown>),
           statusNotChanged: payload?.status_not_changed !== false,
         });
         throw new Error(missing.length ? `${message} Faltan: ${missing.join(", ")}.` : message);
@@ -985,6 +1012,7 @@ export default function LeadsWhatsappPage() {
         failed,
         missing,
         metaSummary: metaTestSummaryText(payload as Record<string, unknown>),
+        metaDetails: metaTestDetails(payload as Record<string, unknown>),
         statusNotChanged: payload?.status_not_changed !== false,
       });
       setMetaConversionsNotice(
@@ -2199,6 +2227,18 @@ export default function LeadsWhatsappPage() {
                           <span className="font-semibold">Respuesta Meta:</span>{" "}
                           {metaConversionTestResult.metaSummary}
                         </p>
+                        {metaConversionTestResult.metaDetails.length > 0 ? (
+                          <dl className="mt-3 grid gap-2 rounded-xl bg-white p-3 sm:grid-cols-2">
+                            {metaConversionTestResult.metaDetails.map(([label, value]) => (
+                              <div key={label}>
+                                <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#789084]">
+                                  {label}
+                                </dt>
+                                <dd className="mt-1 break-words text-[#24435C]">{value}</dd>
+                              </div>
+                            ))}
+                          </dl>
+                        ) : null}
                         {metaConversionTestResult.missing.length > 0 ? (
                           <p className="mt-2 leading-6 text-[#9A4E43]">
                             <span className="font-semibold">Variables faltantes:</span>{" "}
