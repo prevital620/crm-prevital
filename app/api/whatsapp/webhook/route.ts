@@ -128,6 +128,10 @@ const NAME_COLLECTION_SCHEDULE_MESSAGE =
 const NAME_COLLECTION_OTHER_CITY_MESSAGE =
   "Gracias por contarnos 😊 Por ahora esta experiencia es presencial en Medellín. Si más adelante tenemos jornadas en otras ciudades, con gusto podremos avisarte.";
 
+function askLastNameMessage(firstName: string) {
+  return `Gracias, ${firstName} 😊 ¿Nos puedes compartir también tu apellido para completar el registro?`;
+}
+
 const INVALID_EMAIL_MESSAGE =
   "Parece que el correo no qued\u00f3 completo. \u00bfNos lo puedes enviar nuevamente, por favor?";
 
@@ -922,6 +926,90 @@ function isNameCollectionScheduleQuestion(normalized: string) {
     "como agendo",
     "cómo agendo",
   ]);
+}
+
+type NameCollectionInputResult =
+  | { kind: "full"; name: string }
+  | { kind: "partial"; firstName: string }
+  | null;
+
+function cutBeforeCourtesyText(text: string) {
+  const match = text.match(
+    /\b(gracias|por\s+favor|porfa|me\s+ayudas|me\s+puedes\s+ayudar|me\s+puedes\s+colaborar|puedes\s+colaborarme)\b/iu
+  );
+  return match?.index && match.index > 0 ? text.slice(0, match.index).trim() : text.trim();
+}
+
+function nameWords(text: string) {
+  return text
+    .replace(/[^\p{Letter}\s'-]/gu, " ")
+    .split(/\s+/)
+    .map((word) => word.trim())
+    .filter(Boolean);
+}
+
+function normalizeNameText(words: string[]) {
+  return words.join(" ").replace(/\s+/g, " ").trim();
+}
+
+function titleCaseNamePart(value: string) {
+  const lower = value.toLocaleLowerCase("es-CO");
+  return lower.replace(/^\p{Letter}/u, (letter) => letter.toLocaleUpperCase("es-CO"));
+}
+
+function containsNameBlockingTerms(normalized: string) {
+  return (
+    isOtherCityMessage(normalized) ||
+    isNameCollectionQuestion(normalized) ||
+    hasAny(normalized, [
+      "que",
+      "qué",
+      "como",
+      "cómo",
+      "cuando",
+      "cuanto",
+      "cuánto",
+      "donde",
+      "dónde",
+      "precio",
+      "ubicacion",
+      "ubicación",
+      "direccion",
+      "dirección",
+      "horario",
+      "horarios",
+      "fecha",
+      "programacion",
+      "programación",
+      "costo",
+      "ciudad",
+      "informacion",
+      "información",
+      "info",
+      "hola",
+      "buenas tardes",
+      "buenos dias",
+      "buenos días",
+    ])
+  );
+}
+
+function extractNameCollectionInput(text: string): NameCollectionInputResult {
+  const candidateText = cutBeforeCourtesyText(text);
+  if (!candidateText || /[?Â¿]/.test(candidateText) || candidateText.length > 90) return null;
+
+  const normalized = normalizeText(candidateText);
+  if (containsNameBlockingTerms(normalized)) return null;
+
+  const words = nameWords(candidateText);
+  if (words.length === 1 && /^\p{Letter}{2,}$/u.test(words[0])) {
+    return { kind: "partial", firstName: titleCaseNamePart(words[0]) };
+  }
+
+  if (words.length < 2 || words.length > 6) return null;
+  if (!words.every((word) => /^\p{Letter}{2,}(?:['-]\p{Letter}{2,})?$/u.test(word))) return null;
+
+  return { kind: "full", name: normalizeNameText(words) };
 }
 
 function looksLikeFullName(text: string) {
@@ -1870,6 +1958,21 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
   }
 
   if (currentLead.status === "collecting_name" || currentLead.status === "pidiendo_nombre") {
+    const nameInput = extractNameCollectionInput(text);
+    if (nameInput?.kind === "partial") {
+      const { error } = await supabaseAdmin
+        .from("whatsapp_leads")
+        .update({
+          status: "pidiendo_nombre",
+          ...inboundWindowFields,
+        })
+        .eq("id", currentLead.id);
+
+      if (error) throw error;
+      await replyToLead(message.from, askLastNameMessage(nameInput.firstName));
+      return;
+    }
+
     const contextualReply = nameCollectionReplyForMessage(text);
     if (contextualReply) {
       const { error } = await supabaseAdmin
@@ -1885,7 +1988,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
       return;
     }
 
-    if (!looksLikeFullName(text)) {
+    if (!nameInput || !looksLikeFullName(nameInput.name)) {
       const { error } = await supabaseAdmin
         .from("whatsapp_leads")
         .update({
@@ -1902,7 +2005,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
     const { error } = await supabaseAdmin
       .from("whatsapp_leads")
       .update({
-        full_name: text,
+        full_name: nameInput.name,
         profile_name: currentLead.profile_name || message.profileName,
         status: "collecting_email",
         ...inboundWindowFields,
