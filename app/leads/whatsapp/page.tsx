@@ -126,6 +126,8 @@ type MetaConversionCandidate = {
 type MetaConversionTestResult = {
   mode: string;
   eventName: string;
+  metaEventNames: string[];
+  crmEventNames: string[];
   candidatesFound: number;
   attempted: number;
   sentToMetaTest: number;
@@ -133,6 +135,7 @@ type MetaConversionTestResult = {
   missing: string[];
   metaSummary: string;
   metaDetails: Array<[string, string]>;
+  diagnostics: Array<[string, string]>;
   statusNotChanged: boolean;
 };
 
@@ -894,6 +897,31 @@ export default function LeadsWhatsappPage() {
     return details;
   }
 
+  function stringArrayFromPayload(value: unknown) {
+    return Array.isArray(value) ? value.map((item) => String(item)).filter(Boolean) : [];
+  }
+
+  function metaTestDiagnostics(payload: Record<string, unknown>) {
+    const diagnostics = (payload.diagnostics || {}) as Record<string, unknown>;
+    const details: Array<[string, string]> = [];
+    const fields: Array<[string, unknown]> = [
+      ["dataset_id", payload.dataset_id || diagnostics.dataset_id],
+      ["api_version", payload.api_version || diagnostics.api_version],
+      ["test_event_code_present", payload.test_event_code_present ?? diagnostics.test_event_code_present],
+      ["test_event_code_prefix", payload.test_event_code_prefix || diagnostics.test_event_code_prefix],
+      ["graph_url_sin_token", payload.graph_url_sin_token || diagnostics.graph_url_sin_token],
+      ["test_event_code_location", diagnostics.test_event_code_location],
+    ];
+
+    fields.forEach(([label, value]) => {
+      if (value !== undefined && value !== null && String(value).trim()) {
+        details.push([label, String(value)]);
+      }
+    });
+
+    return details;
+  }
+
   async function prepareSelectedMetaConversions() {
     if (selectedVisibleMetaConversionCandidates.length === 0) {
       setMetaConversionsError("Selecciona al menos una conversion visible para preparar.");
@@ -987,6 +1015,8 @@ export default function LeadsWhatsappPage() {
         setMetaConversionTestResult({
           mode: String(payload?.mode || "test"),
           eventName: String(payload?.event_name || "QualifiedLead"),
+          metaEventNames: stringArrayFromPayload(payload?.meta_event_names),
+          crmEventNames: stringArrayFromPayload(payload?.crm_event_names),
           candidatesFound: Number(payload?.found || payload?.selected || 0),
           attempted: Number(payload?.attempted || 0),
           sentToMetaTest: Number(payload?.tested || payload?.sent_test || payload?.meta_events_received || 0),
@@ -994,6 +1024,7 @@ export default function LeadsWhatsappPage() {
           missing,
           metaSummary: metaTestSummaryText(payload as Record<string, unknown>),
           metaDetails: metaTestDetails(payload as Record<string, unknown>),
+          diagnostics: metaTestDiagnostics(payload as Record<string, unknown>),
           statusNotChanged: payload?.status_not_changed !== false,
         });
         throw new Error(missing.length ? `${message} Faltan: ${missing.join(", ")}.` : message);
@@ -1006,6 +1037,8 @@ export default function LeadsWhatsappPage() {
       setMetaConversionTestResult({
         mode: String(payload.mode || "test"),
         eventName: String(payload.event_name || "QualifiedLead"),
+        metaEventNames: stringArrayFromPayload(payload.meta_event_names),
+        crmEventNames: stringArrayFromPayload(payload.crm_event_names),
         candidatesFound,
         attempted,
         sentToMetaTest,
@@ -1013,6 +1046,7 @@ export default function LeadsWhatsappPage() {
         missing,
         metaSummary: metaTestSummaryText(payload as Record<string, unknown>),
         metaDetails: metaTestDetails(payload as Record<string, unknown>),
+        diagnostics: metaTestDiagnostics(payload as Record<string, unknown>),
         statusNotChanged: payload?.status_not_changed !== false,
       });
       setMetaConversionsNotice(
@@ -2192,6 +2226,14 @@ export default function LeadsWhatsappPage() {
                             <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#607D92]">
                               Modo {metaConversionTestResult.mode} · {metaConversionTestResult.eventName}
                             </p>
+                            {metaConversionTestResult.metaEventNames.length > 0 ? (
+                              <p className="mt-1 text-xs text-[#607368]">
+                                Enviado a Meta como: {metaConversionTestResult.metaEventNames.join(", ")}
+                                {metaConversionTestResult.crmEventNames.length > 0
+                                  ? ` · CRM: ${metaConversionTestResult.crmEventNames.join(", ")}`
+                                  : ""}
+                              </p>
+                            ) : null}
                           </div>
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#315E7D] shadow-sm">
                             {metaConversionTestResult.statusNotChanged
@@ -2238,6 +2280,30 @@ export default function LeadsWhatsappPage() {
                               </div>
                             ))}
                           </dl>
+                        ) : null}
+                        {metaConversionTestResult.diagnostics.length > 0 ? (
+                          <div className="mt-3 rounded-xl border border-[#D7E7F3] bg-white p-3">
+                            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#607D92]">
+                              Diagnostico seguro
+                            </p>
+                            <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+                              {metaConversionTestResult.diagnostics.map(([label, value]) => (
+                                <div key={label}>
+                                  <dt className="text-[11px] font-semibold uppercase tracking-[0.12em] text-[#789084]">
+                                    {label}
+                                  </dt>
+                                  <dd className="mt-1 break-words text-[#24435C]">{value}</dd>
+                                </div>
+                              ))}
+                            </dl>
+                          </div>
+                        ) : null}
+                        {metaConversionTestResult.sentToMetaTest > 0 && metaConversionTestResult.failed === 0 ? (
+                          <p className="mt-3 rounded-xl bg-white p-3 leading-6 text-[#315E7D]">
+                            Meta acepto {metaConversionTestResult.sentToMetaTest} evento(s). Si no aparecen en Test
+                            Events, verifica que el test_event_code pertenezca al mismo dataset/pixel y que esa pagina
+                            de Meta este abierta.
+                          </p>
                         ) : null}
                         {metaConversionTestResult.missing.length > 0 ? (
                           <p className="mt-2 leading-6 text-[#9A4E43]">

@@ -200,6 +200,14 @@ function metaEventNameForMode(eventName: EventName, mode: SendMode) {
   return eventName;
 }
 
+function testEventCodePrefix(value: string) {
+  return value ? value.slice(0, 6) : null;
+}
+
+function uniqueValues(values: Array<string | undefined>) {
+  return Array.from(new Set(values.filter(Boolean) as string[]));
+}
+
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => null);
@@ -398,6 +406,26 @@ export async function POST(request: Request) {
 
     const payload: Record<string, unknown> = { data };
     if (mode === "test") payload.test_event_code = config.testEventCode;
+    const graphUrl = `https://graph.facebook.com/${config.apiVersion}/${config.datasetId}/events`;
+    const metaEventNames = uniqueValues(data.map((item) => String(item.event_name || "")));
+    const crmEventNames = uniqueValues(
+      data.map((item) => {
+        const customData = item.custom_data as Record<string, unknown> | undefined;
+        return String(customData?.crm_event || "");
+      })
+    );
+    const diagnostics = {
+      dataset_id: config.datasetId,
+      dataset_env: config.datasetEnvName,
+      api_version: config.apiVersion,
+      graph_url_sin_token: graphUrl,
+      test_event_code_present: mode === "test" ? Boolean(config.testEventCode) : false,
+      test_event_code_prefix: mode === "test" ? testEventCodePrefix(config.testEventCode) : null,
+      mode,
+      meta_event_names: metaEventNames,
+      crm_event_names: crmEventNames,
+      test_event_code_location: mode === "test" ? "body_root" : null,
+    };
 
     if (mode === "dry_run") {
       return NextResponse.json({
@@ -413,7 +441,13 @@ export async function POST(request: Request) {
         dataset_env: config.datasetEnvName,
         dataset_id: config.datasetId,
         api_version: config.apiVersion,
+        graph_url_sin_token: graphUrl,
         test_event_code_configured: Boolean(config.testEventCode),
+        test_event_code_present: false,
+        test_event_code_prefix: null,
+        meta_event_names: metaEventNames,
+        crm_event_names: crmEventNames,
+        diagnostics,
         message: "Vista previa generada. No se enviaron eventos a Meta.",
         test_mode: false,
         selected: events.length,
@@ -425,7 +459,7 @@ export async function POST(request: Request) {
       });
     }
 
-    const response = await fetch(`https://graph.facebook.com/${config.apiVersion}/${config.datasetId}/events`, {
+    const response = await fetch(graphUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -487,7 +521,13 @@ export async function POST(request: Request) {
           dataset_env: config.datasetEnvName,
           dataset_id: config.datasetId,
           api_version: config.apiVersion,
+          graph_url_sin_token: graphUrl,
           test_event_code_configured: Boolean(config.testEventCode),
+          test_event_code_present: mode === "test" ? Boolean(config.testEventCode) : false,
+          test_event_code_prefix: mode === "test" ? testEventCodePrefix(config.testEventCode) : null,
+          meta_event_names: metaEventNames,
+          crm_event_names: crmEventNames,
+          diagnostics,
           message: errorMessage,
           test_mode: mode === "test",
           error: errorMessage,
@@ -535,7 +575,13 @@ export async function POST(request: Request) {
       dataset_env: config.datasetEnvName,
       dataset_id: config.datasetId,
       api_version: config.apiVersion,
+      graph_url_sin_token: graphUrl,
       test_event_code_configured: Boolean(config.testEventCode),
+      test_event_code_present: mode === "test" ? Boolean(config.testEventCode) : false,
+      test_event_code_prefix: mode === "test" ? testEventCodePrefix(config.testEventCode) : null,
+      meta_event_names: metaEventNames,
+      crm_event_names: crmEventNames,
+      diagnostics,
       message:
         mode === "test"
           ? "Prueba Meta completada. Los eventos no fueron marcados como sent."
