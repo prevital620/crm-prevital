@@ -92,7 +92,7 @@ const APPOINTMENT_INSERT_ERROR_REPLY =
   "Gracias por tu paciencia 💚 Tuvimos un inconveniente al confirmar la cita automáticamente. Nuestro equipo revisará tu caso y te contactará para ayudarte a finalizar la agenda.";
 
 export const PERIOD_QUESTION =
-  "Claro 😊 La experiencia es presencial en Medellín y dura aproximadamente 30 minutos. ¿Te queda mejor en la mañana o en la tarde?";
+  "Claro 😊 La experiencia es presencial en Medellín, en nuestra sede de El Poblado, y dura aproximadamente 30 minutos. ¿Puedes desplazarte hasta nuestra sede? Si sí, ¿te queda mejor en la mañana o en la tarde?";
 
 export const MORNING_TIME_QUESTION =
   "Perfecto 💚 Elige un horario al que realmente puedas asistir, porque reservamos el cupo para ti. ¿Qué horario te queda mejor entre 8:30 a. m. y 12:30 p. m.?";
@@ -876,7 +876,7 @@ export function buildSlotsOfferMessage(slots: OfferedAgendaSlot[], period?: Agen
       `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
   );
 
-  return `Perfecto 💚 La experiencia es presencial en Medellín y dura aproximadamente 30 minutos. Tenemos estas opciones en la ${periodLabel}:\n\n${lines.join(
+  return `Perfecto 💚 La experiencia es presencial en Medellín, en nuestra sede de El Poblado, y dura aproximadamente 30 minutos. Tenemos estas opciones en la ${periodLabel}:\n\n${lines.join(
     "\n"
   )}\n\n¿Cuál prefieres? Elige un horario al que realmente puedas asistir.`;
 }
@@ -892,7 +892,7 @@ export function buildSlotsReminderMessage(slots: OfferedAgendaSlot[], period: Ag
       `${slot.index}. ${formatSlotDate(slot.date)} ${formatSlotTime(slot.time)}`
   );
 
-  return `Como me indicaste que te queda mejor en la ${periodLabel}, te comparto nuevamente opciones disponibles para la experiencia presencial en Medellín:\n\n${lines.join(
+  return `Como me indicaste que te queda mejor en la ${periodLabel}, te comparto nuevamente opciones disponibles para la experiencia presencial en El Poblado, Medellín:\n\n${lines.join(
     "\n"
   )}\n\n¿Cuál prefieres? Elige un horario al que realmente puedas asistir.`;
 }
@@ -919,7 +919,7 @@ export function buildExactSlotAvailableMessage(slot: OfferedAgendaSlot) {
 }
 
 export function buildInPersonSlotConfirmationMessage(slot: Pick<OfferedAgendaSlot, "date" | "time">) {
-  return `Perfecto 😊 Tengo disponibilidad para ${formatSlotDate(slot.date)} a las ${formatSlotTime(slot.time)}. ¿Confirmas que puedes asistir puntualmente a esta cita presencial en Medellín?`;
+  return `Perfecto 😊 Tengo disponibilidad para ${formatSlotDate(slot.date)} a las ${formatSlotTime(slot.time)}. ¿Confirmas que puedes asistir puntualmente a esta cita presencial en El Poblado, Medellín?`;
 }
 
 export function buildExactSlotUnavailableIntro(date: string, time: string) {

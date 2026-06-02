@@ -125,8 +125,17 @@ const NAME_COLLECTION_INFO_MESSAGE =
 const NAME_COLLECTION_SCHEDULE_MESSAGE =
   "Claro 😊 La experiencia se agenda según disponibilidad de nuestra jornada en Medellín. Dura aproximadamente 30 minutos y nuestro equipo te orienta durante la sesión.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
 
-const NAME_COLLECTION_OTHER_CITY_MESSAGE =
-  "Gracias por contarnos 😊 Por ahora esta experiencia es presencial en Medellín. Si más adelante tenemos jornadas en otras ciudades, con gusto podremos avisarte.";
+const NAME_COLLECTION_PRICE_MESSAGE =
+  "Claro 😊 La experiencia de Detox Iónico de esta jornada no tiene costo para las personas seleccionadas.\n\nSolo debes completar tu inscripción y, si resultas favorecido/a, nuestro equipo te contactará para coordinar tu cita presencial en nuestra sede de El Poblado, Medellín.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+
+const NAME_COLLECTION_NEARBY_CITY_MESSAGE =
+  "Perfecto 😊 La experiencia es presencial en Medellín, en nuestra sede de El Poblado. Si puedes desplazarte hasta allí, con gusto continuamos tu inscripción.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+
+const NAME_COLLECTION_AMBIGUOUS_CITY_MESSAGE =
+  "Entiendo 😊 La experiencia es presencial en El Poblado, Medellín. ¿Puedes desplazarte hasta nuestra sede para asistir a la cita?\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+
+const NAME_COLLECTION_OUT_OF_COVERAGE_MESSAGE =
+  "Gracias por contarnos 😊 Por ahora esta experiencia es presencial en Medellín, en nuestra sede de El Poblado. Si estás fuera de cobertura y no puedes desplazarte, no queremos hacerte perder tiempo. Cuando tengamos jornadas en otras ciudades, con gusto podremos avisarte 💚";
 
 function askLastNameMessage(firstName: string) {
   return `Gracias, ${firstName} 😊 ¿Nos puedes compartir también tu apellido para completar el registro?`;
@@ -171,8 +180,17 @@ const BOOKING_DISABLED_CONFIRMATION =
 const AGENT_UNHANDLED_MESSAGE =
   "Gracias por escribirnos \ud83d\ude0a Nuestro equipo revisar\u00e1 tu mensaje para ayudarte mejor.";
 
-const NOT_MEDELLIN_REPLY =
-  "Gracias por contarnos 😊 Por ahora esta experiencia es presencial en Medellín. Si más adelante tenemos jornadas en otras ciudades, con gusto podremos avisarte.";
+const OUT_OF_COVERAGE_REPLY =
+  "Gracias por contarnos 😊 Por ahora esta experiencia es presencial en Medellín, en nuestra sede de El Poblado. Si más adelante tenemos jornadas en otras ciudades, con gusto podremos avisarte 💚";
+
+const FAR_CITY_OUT_OF_COVERAGE_REPLY =
+  "Gracias por contarnos 😊 Por ahora esta experiencia es presencial en Medellín, en nuestra sede de El Poblado. Si estás fuera de cobertura y no puedes desplazarte, no queremos hacerte perder tiempo. Cuando tengamos jornadas en otras ciudades, con gusto podremos avisarte 💚";
+
+const AMBIGUOUS_DISPLACEMENT_REPLY =
+  "Entiendo 😊 La experiencia es presencial en El Poblado, Medellín. ¿Puedes desplazarte hasta nuestra sede para asistir a la cita?";
+
+const NEARBY_CITY_REPLY =
+  "Perfecto 😊 La experiencia es presencial en Medellín, en nuestra sede de El Poblado. Si puedes desplazarte hasta allí, con gusto continuamos tu inscripción.";
 
 const DIFFERENT_DAY_MESSAGE =
   "Claro, sin problema 😊 ¿Qué día te queda fácil? Puedo revisar disponibilidad entre mañana y los próximos días.";
@@ -239,21 +257,126 @@ function hasAny(text: string, words: string[]) {
   return words.some((word) => text.includes(word));
 }
 
-function isUnableToAttendMedellinMessage(normalized: string) {
+type DisplacementStatus = "nearby" | "ambiguous" | "out_of_coverage" | null;
+
+const NEARBY_CITY_KEYWORDS = [
+  "bello",
+  "itagui",
+  "envigado",
+  "sabaneta",
+  "la estrella",
+  "copacabana",
+  "caldas",
+  "barbosa",
+  "girardota",
+  "rionegro",
+  "guarne",
+  "marinilla",
+];
+
+const FAR_CITY_KEYWORDS = [
+  "barranquilla",
+  "bogota",
+  "cali",
+  "cartagena",
+  "santa marta",
+  "bucaramanga",
+  "pereira",
+  "manizales",
+  "armenia",
+  "cucuta",
+  "monteria",
+  "sincelejo",
+  "valledupar",
+  "pasto",
+  "villavicencio",
+];
+
+const FAR_CITY_LABELS: Record<string, string> = {
+  barranquilla: "Barranquilla",
+  bogota: "Bogotá",
+  cali: "Cali",
+  cartagena: "Cartagena",
+  "santa marta": "Santa Marta",
+  bucaramanga: "Bucaramanga",
+  pereira: "Pereira",
+  manizales: "Manizales",
+  armenia: "Armenia",
+  cucuta: "Cúcuta",
+  monteria: "Montería",
+  sincelejo: "Sincelejo",
+  valledupar: "Valledupar",
+  pasto: "Pasto",
+  villavicencio: "Villavicencio",
+};
+
+function canTravelToMedellin(normalized: string) {
   return hasAny(normalized, [
-    "estoy en otra ciudad",
-    "estoy otra ciudad",
-    "vivo en otra ciudad",
-    "no estoy en medellin",
-    "soy de otro municipio",
-    "otro municipio",
-    "no puedo ir",
-    "me queda lejos",
-    "no puedo desplazarme",
-    "no me puedo desplazar",
-    "no puedo desplazar",
-    "fuera de medellin",
+    "puedo viajar",
+    "puedo ir",
+    "puedo desplazarme",
+    "si puedo desplazarme",
+    "si puedo ir",
+    "si puedo viajar",
+    "puedo asistir",
+    "voy a medellin",
+    "viajo a medellin",
+    "me desplazo",
   ]);
+}
+
+function classifyDisplacementMessage(normalized: string): DisplacementStatus {
+  if (
+    hasAny(normalized, [
+      "no puedo ir",
+      "no puedo desplazarme",
+      "no me puedo desplazar",
+      "no puedo desplazar",
+      "no puedo viajar",
+      "no puedo asistir",
+      "no tengo como ir",
+      "me queda imposible",
+    ])
+  ) {
+    return "out_of_coverage";
+  }
+
+  if (hasAny(normalized, FAR_CITY_KEYWORDS) && !canTravelToMedellin(normalized)) {
+    return "out_of_coverage";
+  }
+
+  if (hasAny(normalized, NEARBY_CITY_KEYWORDS)) {
+    return "nearby";
+  }
+
+  if (
+    hasAny(normalized, [
+      "estoy lejos",
+      "me queda lejos",
+      "vivo fuera de medellin",
+      "estoy fuera de medellin",
+      "fuera de medellin",
+      "soy de otro municipio",
+      "otro municipio",
+      "estoy en un pueblo",
+      "vivo en un pueblo",
+      "estoy en otra ciudad",
+      "estoy otra ciudad",
+      "vivo en otra ciudad",
+      "no estoy en medellin",
+    ])
+  ) {
+    return "ambiguous";
+  }
+
+  return null;
+}
+
+function farCityOutOfCoverageReply(normalized: string) {
+  const city = FAR_CITY_KEYWORDS.find((keyword) => normalized.includes(keyword));
+  if (!city) return FAR_CITY_OUT_OF_COVERAGE_REPLY;
+
+  return `Gracias por contarnos 😊 Por ahora esta experiencia es presencial en Medellín, en nuestra sede de El Poblado. Si estás en ${FAR_CITY_LABELS[city] || city} y no puedes desplazarte, no queremos hacerte perder tiempo. Cuando tengamos jornadas en otras ciudades, con gusto podremos avisarte 💚`;
 }
 
 function normalizeLookupText(value: string | null | undefined) {
@@ -801,13 +924,22 @@ function isShortHumanAckMessage(text: string) {
 }
 
 function emailCollectionReplyForMessage(text: string) {
+  const normalized = normalizeText(text);
+  const displacementStatus = classifyDisplacementMessage(normalized);
+  if (displacementStatus === "out_of_coverage") return OUT_OF_COVERAGE_REPLY;
+  if (displacementStatus === "nearby") {
+    return `${NEARBY_CITY_REPLY}\n\nPara finalizar tu inscripción, solo nos falta tu correo electrónico.`;
+  }
+  if (displacementStatus === "ambiguous") {
+    return `${AMBIGUOUS_DISPLACEMENT_REPLY}\n\nPara finalizar tu inscripción, solo nos falta tu correo electrónico.`;
+  }
+
   const intent = analyzeWhatsappAgentIntent(text);
   if (intent === "asks_price") return EMAIL_COLLECTION_PRICE_MESSAGE;
   if (intent === "asks_location") return EMAIL_COLLECTION_LOCATION_MESSAGE;
   if (intent === "asks_duration") return EMAIL_COLLECTION_DURATION_MESSAGE;
   if (intent === "wants_info" || intent === "needs_human") return EMAIL_COLLECTION_INFO_MESSAGE;
 
-  const normalized = normalizeText(text);
   if (hasAny(normalized, ["de que se trata", "que es", "informacion", "info", "como funciona"])) {
     return EMAIL_COLLECTION_INFO_MESSAGE;
   }
@@ -817,10 +949,32 @@ function emailCollectionReplyForMessage(text: string) {
 
 function nameCollectionReplyForMessage(text: string) {
   const normalized = normalizeText(text);
-  if (isOtherCityMessage(normalized)) {
+  const displacementStatus = classifyDisplacementMessage(normalized);
+  if (displacementStatus === "out_of_coverage") {
     return {
-      reply: NAME_COLLECTION_OTHER_CITY_MESSAGE,
+      reply: hasAny(normalized, FAR_CITY_KEYWORDS)
+        ? farCityOutOfCoverageReply(normalized)
+        : OUT_OF_COVERAGE_REPLY,
       status: "sin_respuesta" as const,
+    };
+  }
+  if (displacementStatus === "nearby") {
+    return {
+      reply: NAME_COLLECTION_NEARBY_CITY_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
+  }
+  if (displacementStatus === "ambiguous") {
+    return {
+      reply: NAME_COLLECTION_AMBIGUOUS_CITY_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
+  }
+
+  if (isNameCollectionPriceQuestion(normalized)) {
+    return {
+      reply: NAME_COLLECTION_PRICE_MESSAGE,
+      status: "pidiendo_nombre" as const,
     };
   }
 
@@ -847,6 +1001,19 @@ function nameCollectionReplyForMessage(text: string) {
   }
 
   return null;
+}
+
+function isNameCollectionPriceQuestion(normalized: string) {
+  return hasAny(normalized, [
+    "que precio tiene",
+    "cuanto vale",
+    "tiene costo",
+    "costo",
+    "precio",
+    "vale algo",
+    "es gratis",
+    "gratis",
+  ]);
 }
 
 function isOtherCityMessage(normalized: string) {
@@ -959,7 +1126,7 @@ function titleCaseNamePart(value: string) {
 
 function containsNameBlockingTerms(normalized: string) {
   return (
-    isOtherCityMessage(normalized) ||
+    Boolean(classifyDisplacementMessage(normalized)) ||
     isNameCollectionQuestion(normalized) ||
     hasAny(normalized, [
       "que",
@@ -1018,7 +1185,7 @@ function looksLikeFullName(text: string) {
   if (trimmed.length > 70) return false;
 
   const normalized = normalizeText(trimmed);
-  if (isOtherCityMessage(normalized) || isNameCollectionQuestion(normalized)) return false;
+  if (classifyDisplacementMessage(normalized) || isNameCollectionQuestion(normalized)) return false;
   if (
     hasAny(normalized, [
       "que",
@@ -1346,7 +1513,8 @@ async function handleWhatsappAgent(
     periodForScheduling && lead.status !== "esperando_dia_preferido"
   );
 
-  if (isUnableToAttendMedellinMessage(normalizedMessage)) {
+  const displacementStatus = classifyDisplacementMessage(normalizedMessage);
+  if (displacementStatus === "out_of_coverage") {
     await updateWhatsappAgentLead(lead.id, {
       status: "sin_respuesta",
       priority: "normal",
@@ -1360,7 +1528,38 @@ async function handleWhatsappAgent(
       }),
       ...inboundWindowFields,
     });
-    await replyToLead(message.from, NOT_MEDELLIN_REPLY);
+    await replyToLead(
+      message.from,
+      hasAny(normalizedMessage, FAR_CITY_KEYWORDS)
+        ? farCityOutOfCoverageReply(normalizedMessage)
+        : OUT_OF_COVERAGE_REPLY
+    );
+    return;
+  }
+
+  if (displacementStatus === "ambiguous") {
+    await updateWhatsappAgentLead(lead.id, {
+      status: "pendiente_agendar",
+      priority: "alta",
+      notes: writeWhatsappAgentContext(lead.notes, context),
+      ...inboundWindowFields,
+    });
+    await replyToLead(message.from, AMBIGUOUS_DISPLACEMENT_REPLY);
+    return;
+  }
+
+  if (displacementStatus === "nearby") {
+    const nextQuestion = knownPeriod ? buildPeriodTimeQuestion(knownPeriod) : PERIOD_QUESTION;
+    await updateWhatsappAgentLead(lead.id, {
+      status: knownPeriod ? "esperando_confirmacion_horario" : "esperando_preferencia_jornada",
+      priority: "alta",
+      notes: writeWhatsappAgentContext(lead.notes, {
+        ...context,
+        period: knownPeriod || context.period,
+      }),
+      ...inboundWindowFields,
+    });
+    await replyToLead(message.from, `${NEARBY_CITY_REPLY}\n\n${nextQuestion}`);
     return;
   }
 
@@ -2018,6 +2217,26 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
   }
 
   if (currentLead.status === "collecting_email" || currentLead.status === "pidiendo_correo") {
+    const displacementStatus = classifyDisplacementMessage(normalizeText(text));
+    if (displacementStatus === "out_of_coverage") {
+      const { error } = await supabaseAdmin
+        .from("whatsapp_leads")
+        .update({
+          status: "sin_respuesta",
+          ...inboundWindowFields,
+        })
+        .eq("id", currentLead.id);
+
+      if (error) throw error;
+      await replyToLead(
+        message.from,
+        hasAny(normalizeText(text), FAR_CITY_KEYWORDS)
+          ? farCityOutOfCoverageReply(normalizeText(text))
+          : OUT_OF_COVERAGE_REPLY
+      );
+      return;
+    }
+
     if (!looksLikeEmail(text)) {
       const contextualReply = emailCollectionReplyForMessage(text);
       await supabaseAdmin
