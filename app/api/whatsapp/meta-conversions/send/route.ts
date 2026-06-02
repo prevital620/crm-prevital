@@ -29,6 +29,7 @@ type LeadRow = {
   phone: string | null;
   email: string | null;
   meta_source_url: string | null;
+  meta_source_id: string | null;
   meta_ctwa_clid: string | null;
 };
 
@@ -288,6 +289,46 @@ export async function POST(request: Request) {
     const status = normalizeStatus(body?.status);
     const eventIds = selectedEventIds(body?.event_ids);
 
+    if (mode === "send") {
+      if (eventName !== "Purchase") {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "El envio real manual solo esta habilitado para Purchase seleccionado.",
+            message: "El envio real manual solo esta habilitado para Purchase seleccionado.",
+            mode,
+            event_name: eventName || "all",
+            found: 0,
+            attempted: 0,
+            tested: 0,
+            errors: 0,
+            missing: [],
+            meta_response: metaSummary({}, 0),
+          },
+          { status: 400 }
+        );
+      }
+
+      if (eventIds.length === 0) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Selecciona explicitamente al menos un Purchase pending para envio real.",
+            message: "Selecciona explicitamente al menos un Purchase pending para envio real.",
+            mode,
+            event_name: "Purchase",
+            found: 0,
+            attempted: 0,
+            tested: 0,
+            errors: 0,
+            missing: [],
+            meta_response: metaSummary({}, 0),
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     if (body?.event_name && !eventName) {
       return NextResponse.json(
         {
@@ -322,6 +363,32 @@ export async function POST(request: Request) {
     if (eventsError) throw eventsError;
 
     const events = (eventsData || []) as ConversionRow[];
+    const invalidPurchaseEvents = events.filter(
+      (event) =>
+        event.event_name === "Purchase" &&
+        (!event.event_value || Number(event.event_value) <= 0 || !event.currency)
+    );
+
+    if (invalidPurchaseEvents.length > 0 && mode !== "dry_run") {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: "Purchase no reportable: falta valor real de compra o moneda.",
+          message: "Purchase no reportable: falta valor real de compra o moneda.",
+          mode,
+          event_name: eventName || "all",
+          found: events.length,
+          attempted: 0,
+          tested: 0,
+          errors: invalidPurchaseEvents.length,
+          missing: [],
+          meta_response: metaSummary({}, 0),
+          event_ids: invalidPurchaseEvents.map((event) => event.event_id),
+        },
+        { status: 400 }
+      );
+    }
+
     if (!events.length) {
       logMetaConversionAttempt({
         eventName,
@@ -365,7 +432,7 @@ export async function POST(request: Request) {
     const { data: leadsData, error: leadsError } = leadIds.length
       ? await supabaseAdmin
           .from("whatsapp_leads")
-          .select("id, phone, email, meta_source_url, meta_ctwa_clid")
+          .select("id, phone, email, meta_source_url, meta_source_id, meta_ctwa_clid")
           .in("id", leadIds)
       : { data: [], error: null };
 
@@ -379,6 +446,9 @@ export async function POST(request: Request) {
       const previewCustomData = (event.payload_preview?.custom_data || {}) as Record<string, unknown>;
       const metaEventName = metaEventNameForMode(event.event_name, mode);
       const ctwaClid = event.meta_ctwa_clid || lead?.meta_ctwa_clid || undefined;
+      const isPurchase = event.event_name === "Purchase";
+      const eventValue = event.event_value === null ? undefined : Number(event.event_value);
+      const currency = event.currency || undefined;
 
       return {
         event_name: metaEventName,
@@ -393,13 +463,16 @@ export async function POST(request: Request) {
         },
         custom_data: {
           ...previewCustomData,
-          value: event.event_value || undefined,
-          currency: event.currency || undefined,
+          value: eventValue,
+          currency,
           ctwa_clid: ctwaClid,
           crm_event: event.event_name,
+          purchase_value: isPurchase ? eventValue : undefined,
+          lead_source: lead?.meta_source_id || previewCustomData.meta_source_id || lead?.meta_source_url || undefined,
           lead_stage: event.event_name === "QualifiedLead" ? "qualified_attended" : undefined,
           attendance_status: event.event_name === "QualifiedLead" ? "attended" : undefined,
-          meta_event_name_original: event.event_name !== metaEventName ? event.event_name : undefined,
+          meta_event_name_original:
+            isPurchase || event.event_name !== metaEventName ? event.event_name : undefined,
         },
       };
     });

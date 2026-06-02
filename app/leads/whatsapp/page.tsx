@@ -124,6 +124,7 @@ type MetaConversionCandidate = {
 };
 
 type MetaConversionTestResult = {
+  title: string;
   mode: string;
   eventName: string;
   metaEventNames: string[];
@@ -131,6 +132,7 @@ type MetaConversionTestResult = {
   candidatesFound: number;
   attempted: number;
   sentToMetaTest: number;
+  sentToMetaReal: number;
   failed: number;
   missing: string[];
   metaSummary: string;
@@ -662,6 +664,7 @@ export default function LeadsWhatsappPage() {
   const [metaConversionsLoading, setMetaConversionsLoading] = useState(false);
   const [metaConversionsSaving, setMetaConversionsSaving] = useState(false);
   const [metaConversionsTesting, setMetaConversionsTesting] = useState(false);
+  const [metaConversionsSendingReal, setMetaConversionsSendingReal] = useState(false);
   const [metaConversionsError, setMetaConversionsError] = useState("");
   const [metaConversionsNotice, setMetaConversionsNotice] = useState("");
   const [metaConversionTestResult, setMetaConversionTestResult] = useState<MetaConversionTestResult | null>(null);
@@ -717,6 +720,21 @@ export default function LeadsWhatsappPage() {
       purchase: selectedVisibleMetaConversionCandidates.filter((candidate) => candidate.event_name === "Purchase").length,
     }),
     [selectedVisibleMetaConversionCandidates]
+  );
+  const selectedPendingPurchaseCandidates = useMemo(
+    () =>
+      selectedVisibleMetaConversionCandidates.filter(
+        (candidate) => candidate.event_name === "Purchase" && candidate.report_status === "pending"
+      ),
+    [selectedVisibleMetaConversionCandidates]
+  );
+  const selectedPendingPurchaseTotal = useMemo(
+    () =>
+      selectedPendingPurchaseCandidates.reduce(
+        (total, candidate) => total + Number(candidate.event_value || 0),
+        0
+      ),
+    [selectedPendingPurchaseCandidates]
   );
 
   async function loadLeads() {
@@ -793,7 +811,7 @@ export default function LeadsWhatsappPage() {
     void loadAdsPerformance();
   }
 
-  async function loadMetaConversions() {
+  async function loadMetaConversions(preserveSelection = false) {
     try {
       setMetaConversionsLoading(true);
       setMetaConversionsError("");
@@ -817,14 +835,19 @@ export default function LeadsWhatsappPage() {
 
       const candidates = (payload?.candidates as MetaConversionCandidate[]) || [];
       setMetaConversionCandidates(candidates);
-      setSelectedMetaEventIds(
-        new Set(
+      setSelectedMetaEventIds((current) => {
+        if (preserveSelection) {
+          const available = new Set(candidates.map((candidate) => candidate.event_id));
+          return new Set(Array.from(current).filter((eventId) => available.has(eventId)));
+        }
+
+        return new Set(
           candidates
             .filter((candidate) => candidate.reportable && candidate.report_status === "candidate")
             .slice(0, 50)
             .map((candidate) => candidate.event_id)
-        )
-      );
+        );
+      });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "No se pudieron cargar conversiones Meta.";
       setMetaConversionsError(message);
@@ -974,13 +997,44 @@ export default function LeadsWhatsappPage() {
       setMetaConversionsNotice(
         `Conversiones dejadas en pendiente: ${payload.inserted || 0}. Omitidas: ${payload.skipped || 0}.`
       );
-      await loadMetaConversions();
+      await loadMetaConversions(true);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "No se pudieron preparar las conversiones.";
       setMetaConversionsError(message);
     } finally {
       setMetaConversionsSaving(false);
     }
+  }
+
+  function buildMetaConversionResult(
+    payload: Record<string, unknown>,
+    fallbackEventName: string,
+    title: string
+  ): MetaConversionTestResult {
+    const missing = Array.isArray(payload?.missing) ? payload.missing.map((item: unknown) => String(item)) : [];
+    const candidatesFound = Number(payload.found || payload.selected || 0);
+    const attempted = Number(payload.attempted || candidatesFound);
+    const sentToMetaTest = Number(payload.tested || payload.sent_test || payload.meta_events_received || 0);
+    const sentToMetaReal = Number(payload.sent || 0);
+    const failed = Number(payload.errors || payload.failed || 0);
+
+    return {
+      title,
+      mode: String(payload.mode || "test"),
+      eventName: String(payload.event_name || fallbackEventName),
+      metaEventNames: stringArrayFromPayload(payload.meta_event_names),
+      crmEventNames: stringArrayFromPayload(payload.crm_event_names),
+      candidatesFound,
+      attempted,
+      sentToMetaTest,
+      sentToMetaReal,
+      failed,
+      missing,
+      metaSummary: metaTestSummaryText(payload),
+      metaDetails: metaTestDetails(payload),
+      diagnostics: metaTestDiagnostics(payload),
+      statusNotChanged: payload?.status_not_changed !== false,
+    };
   }
 
   async function testQualifiedLeadMetaConversions() {
@@ -1008,50 +1062,22 @@ export default function LeadsWhatsappPage() {
         }),
       });
       const payload = await response.json().catch(() => ({}));
-      const missing = Array.isArray(payload?.missing) ? payload.missing.map((item: unknown) => String(item)) : [];
+      const result = buildMetaConversionResult(
+        payload as Record<string, unknown>,
+        "QualifiedLead",
+        "Resultado prueba Meta"
+      );
 
       if (!response.ok || !payload?.ok) {
         const message = payload?.message || payload?.error || `Error HTTP ${response.status}`;
-        setMetaConversionTestResult({
-          mode: String(payload?.mode || "test"),
-          eventName: String(payload?.event_name || "QualifiedLead"),
-          metaEventNames: stringArrayFromPayload(payload?.meta_event_names),
-          crmEventNames: stringArrayFromPayload(payload?.crm_event_names),
-          candidatesFound: Number(payload?.found || payload?.selected || 0),
-          attempted: Number(payload?.attempted || 0),
-          sentToMetaTest: Number(payload?.tested || payload?.sent_test || payload?.meta_events_received || 0),
-          failed: Number(payload?.errors || payload?.failed || 0),
-          missing,
-          metaSummary: metaTestSummaryText(payload as Record<string, unknown>),
-          metaDetails: metaTestDetails(payload as Record<string, unknown>),
-          diagnostics: metaTestDiagnostics(payload as Record<string, unknown>),
-          statusNotChanged: payload?.status_not_changed !== false,
-        });
-        throw new Error(missing.length ? `${message} Faltan: ${missing.join(", ")}.` : message);
+        setMetaConversionTestResult(result);
+        throw new Error(result.missing.length ? `${message} Faltan: ${result.missing.join(", ")}.` : message);
       }
 
-      const candidatesFound = Number(payload.found || payload.selected || 0);
-      const attempted = Number(payload.attempted || candidatesFound);
-      const sentToMetaTest = Number(payload.tested || payload.sent_test || payload.meta_events_received || 0);
-      const failed = Number(payload.errors || payload.failed || 0);
-      setMetaConversionTestResult({
-        mode: String(payload.mode || "test"),
-        eventName: String(payload.event_name || "QualifiedLead"),
-        metaEventNames: stringArrayFromPayload(payload.meta_event_names),
-        crmEventNames: stringArrayFromPayload(payload.crm_event_names),
-        candidatesFound,
-        attempted,
-        sentToMetaTest,
-        failed,
-        missing,
-        metaSummary: metaTestSummaryText(payload as Record<string, unknown>),
-        metaDetails: metaTestDetails(payload as Record<string, unknown>),
-        diagnostics: metaTestDiagnostics(payload as Record<string, unknown>),
-        statusNotChanged: payload?.status_not_changed !== false,
-      });
+      setMetaConversionTestResult(result);
       setMetaConversionsNotice(
-        candidatesFound > 0
-          ? `Prueba QualifiedLead finalizada: ${sentToMetaTest} enviado(s) a Meta en modo test, ${failed} error(es). Los eventos siguen en pending.`
+        result.candidatesFound > 0
+          ? `Prueba QualifiedLead finalizada: ${result.sentToMetaTest} enviado(s) a Meta en modo test, ${result.failed} error(es). Los eventos siguen en pending.`
           : "No hay eventos QualifiedLead pending para probar."
       );
     } catch (err: unknown) {
@@ -1059,6 +1085,138 @@ export default function LeadsWhatsappPage() {
       setMetaConversionsError(message);
     } finally {
       setMetaConversionsTesting(false);
+    }
+  }
+
+  async function testPurchaseMetaConversions() {
+    if (selectedPendingPurchaseCandidates.length === 0) {
+      setMetaConversionsError("Selecciona al menos un Purchase en estado pending para probar.");
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Esto enviara ${selectedPendingPurchaseCandidates.length} Purchase pending seleccionado(s) a Meta en modo prueba. Valor total: ${formatMoney(selectedPendingPurchaseTotal)} COP. No marcara eventos como sent. ¿Continuar?`
+    );
+    if (!confirmed) return;
+
+    try {
+      setMetaConversionsTesting(true);
+      setMetaConversionsError("");
+      setMetaConversionsNotice("");
+      setMetaConversionTestResult(null);
+
+      const response = await fetch("/api/whatsapp/meta-conversions/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          mode: "test",
+          event_name: "Purchase",
+          status: "pending",
+          event_ids: selectedPendingPurchaseCandidates.map((candidate) => candidate.event_id),
+          limit: selectedPendingPurchaseCandidates.length,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      const result = buildMetaConversionResult(
+        payload as Record<string, unknown>,
+        "Purchase",
+        "Resultado prueba Meta"
+      );
+
+      setMetaConversionTestResult(result);
+
+      if (!response.ok || !payload?.ok) {
+        const message = payload?.message || payload?.error || `Error HTTP ${response.status}`;
+        throw new Error(result.missing.length ? `${message} Faltan: ${result.missing.join(", ")}.` : message);
+      }
+
+      setMetaConversionsNotice(
+        result.candidatesFound > 0
+          ? `Prueba Purchase finalizada: ${result.sentToMetaTest} enviado(s) a Meta en modo test, ${result.failed} error(es). Los eventos siguen en pending.`
+          : "No hay eventos Purchase pending seleccionados para probar."
+      );
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo probar Purchase en Meta.";
+      setMetaConversionsError(message);
+    } finally {
+      setMetaConversionsTesting(false);
+    }
+  }
+
+  async function sendPurchaseMetaConversions() {
+    if (selectedPendingPurchaseCandidates.length === 0) {
+      setMetaConversionsError("Selecciona al menos un Purchase en estado pending para envio real.");
+      return;
+    }
+
+    const names = selectedPendingPurchaseCandidates
+      .map((candidate) => candidate.lead_name)
+      .filter(Boolean)
+      .join(", ");
+    const confirmed = window.confirm(
+      `Esto enviara conversiones reales a Meta.\n\nPurchase a enviar: ${selectedPendingPurchaseCandidates.length}\nLeads: ${names || "Sin nombre"}\nValor total: ${formatMoney(selectedPendingPurchaseTotal)} COP\n\n¿Continuar?`
+    );
+    if (!confirmed) return;
+
+    const typedConfirmation = window.prompt(
+      'Confirmacion fuerte: escribe "ENVIAR PURCHASE" para continuar.'
+    );
+    if (typedConfirmation !== "ENVIAR PURCHASE") {
+      setMetaConversionsNotice("Envio real cancelado. No se envio nada a Meta.");
+      return;
+    }
+
+    const secret = window.prompt("Ingresa META_CONVERSIONS_SECRET para autorizar el envio real.");
+    if (!secret) {
+      setMetaConversionsError("Envio real cancelado: falta META_CONVERSIONS_SECRET.");
+      return;
+    }
+
+    try {
+      setMetaConversionsSendingReal(true);
+      setMetaConversionsError("");
+      setMetaConversionsNotice("");
+      setMetaConversionTestResult(null);
+
+      const response = await fetch("/api/whatsapp/meta-conversions/send", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-meta-conversions-secret": secret,
+        },
+        body: JSON.stringify({
+          mode: "send",
+          event_name: "Purchase",
+          status: "pending",
+          event_ids: selectedPendingPurchaseCandidates.map((candidate) => candidate.event_id),
+          limit: selectedPendingPurchaseCandidates.length,
+        }),
+      });
+      const payload = await response.json().catch(() => ({}));
+      const result = buildMetaConversionResult(
+        payload as Record<string, unknown>,
+        "Purchase",
+        "Resultado envio real Meta"
+      );
+      setMetaConversionTestResult(result);
+
+      if (!response.ok || !payload?.ok) {
+        const message = payload?.message || payload?.error || `Error HTTP ${response.status}`;
+        throw new Error(result.missing.length ? `${message} Faltan: ${result.missing.join(", ")}.` : message);
+      }
+
+      setMetaConversionsNotice(
+        `Envio real Purchase completado: ${result.sentToMetaReal} evento(s) marcado(s) como sent.`
+      );
+      await loadMetaConversions(true);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "No se pudo enviar Purchase real a Meta.";
+      setMetaConversionsError(message);
+      await loadMetaConversions(true);
+    } finally {
+      setMetaConversionsSendingReal(false);
     }
   }
 
@@ -2222,7 +2380,7 @@ export default function LeadsWhatsappPage() {
                       <div className="rounded-2xl border border-[#BFD7EA] bg-[#F7FBFF] p-4 text-sm text-[#24435C]">
                         <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
                           <div>
-                            <p className="font-bold text-[#0E2340]">Resultado prueba Meta</p>
+                            <p className="font-bold text-[#0E2340]">{metaConversionTestResult.title}</p>
                             <p className="mt-1 text-xs font-semibold uppercase tracking-[0.12em] text-[#607D92]">
                               Modo {metaConversionTestResult.mode} · {metaConversionTestResult.eventName}
                             </p>
@@ -2238,7 +2396,7 @@ export default function LeadsWhatsappPage() {
                           <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold text-[#315E7D] shadow-sm">
                             {metaConversionTestResult.statusNotChanged
                               ? "Eventos siguen en pending"
-                              : "Revisar estado"}
+                              : "Estado actualizado"}
                           </span>
                         </div>
                         <div className="mt-3 grid gap-2 sm:grid-cols-4">
@@ -2261,8 +2419,10 @@ export default function LeadsWhatsappPage() {
                             </p>
                           </div>
                           <div className="rounded-xl bg-white p-3 shadow-sm">
-                            <p className="text-xs text-[#607368]">Errores</p>
-                            <p className="text-xl font-bold text-[#0E2340]">{metaConversionTestResult.failed}</p>
+                            <p className="text-xs text-[#607368]">Enviados real / Errores</p>
+                            <p className="text-xl font-bold text-[#0E2340]">
+                              {metaConversionTestResult.sentToMetaReal} / {metaConversionTestResult.failed}
+                            </p>
                           </div>
                         </div>
                         <p className="mt-3 leading-6">
@@ -2337,6 +2497,7 @@ export default function LeadsWhatsappPage() {
                           disabled={
                             metaConversionsSaving ||
                             metaConversionsTesting ||
+                            metaConversionsSendingReal ||
                             selectedVisibleMetaConversionCandidates.length === 0
                           }
                           className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[#315E7D] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
@@ -2348,10 +2509,38 @@ export default function LeadsWhatsappPage() {
                         <button
                           type="button"
                           onClick={() => void testQualifiedLeadMetaConversions()}
-                          disabled={metaConversionsSaving || metaConversionsTesting}
+                          disabled={metaConversionsSaving || metaConversionsTesting || metaConversionsSendingReal}
                           className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#315E7D] bg-white px-4 py-2 text-sm font-semibold text-[#315E7D] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#EEF6FB] disabled:cursor-not-allowed disabled:opacity-60"
                         >
                           {metaConversionsTesting ? "Probando" : "Probar QualifiedLead"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void testPurchaseMetaConversions()}
+                          disabled={
+                            metaConversionsSaving ||
+                            metaConversionsTesting ||
+                            metaConversionsSendingReal ||
+                            selectedPendingPurchaseCandidates.length === 0
+                          }
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full border border-[#7A5A1C] bg-white px-4 py-2 text-sm font-semibold text-[#7A5A1C] shadow-sm transition hover:-translate-y-0.5 hover:bg-[#FFF8E6] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {metaConversionsTesting ? "Probando" : "Probar Purchase"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void sendPurchaseMetaConversions()}
+                          disabled={
+                            metaConversionsSaving ||
+                            metaConversionsTesting ||
+                            metaConversionsSendingReal ||
+                            selectedPendingPurchaseCandidates.length === 0
+                          }
+                          className="inline-flex min-h-10 items-center gap-2 rounded-full bg-[#9A4E43] px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {metaConversionsSendingReal
+                            ? "Enviando Purchase"
+                            : `Enviar Purchase real (${selectedPendingPurchaseCandidates.length})`}
                         </button>
                       </div>
                     </div>
@@ -2408,6 +2597,15 @@ export default function LeadsWhatsappPage() {
                       </div>
                     </div>
 
+                    {selectedPendingPurchaseCandidates.length > 0 ? (
+                      <div className="rounded-2xl border border-[#F0D7A5] bg-[#FFF9EA] p-3 text-sm text-[#6F531A]">
+                        Purchase pending seleccionado(s):{" "}
+                        <span className="font-bold">{selectedPendingPurchaseCandidates.length}</span>
+                        {" "}· Valor total real:{" "}
+                        <span className="font-bold">{formatMoney(selectedPendingPurchaseTotal)} COP</span>
+                      </div>
+                    ) : null}
+
                     <div className="overflow-x-auto rounded-2xl border border-[#DCEDE3]">
                       <table className="min-w-[1180px] w-full bg-white text-left text-sm">
                         <thead className="bg-[#F1F8F3] text-xs uppercase tracking-[0.12em] text-[#607368]">
@@ -2440,7 +2638,7 @@ export default function LeadsWhatsappPage() {
                               const canSelect =
                                 candidate.reportable &&
                                 candidate.report_status !== "sent" &&
-                                candidate.report_status !== "pending";
+                                candidate.report_status !== "not_reportable";
 
                               return (
                                 <tr key={candidate.event_id} className="align-top text-[#24312A]">
