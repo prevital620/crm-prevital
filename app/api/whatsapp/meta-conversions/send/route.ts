@@ -2,7 +2,10 @@ import { createHash } from "crypto";
 import { NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase-admin";
 import { getErrorMessage } from "@/lib/server/user-security";
-import { requireWhatsappLeadsAccess } from "@/lib/server/whatsapp-access";
+import {
+  requireWhatsappLeadsAccess,
+  requireWhatsappMetaConversionsSendAccess,
+} from "@/lib/server/whatsapp-access";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -66,10 +69,13 @@ async function authorizeRequest(request: Request, mode: SendMode) {
     };
   }
 
+  const authCheck = await requireWhatsappMetaConversionsSendAccess();
+  if (authCheck.ok) return { ok: true as const, via: "super_user" as const };
+
   return {
     ok: false as const,
-    status: 401,
-    error: "No autorizado. El envio real requiere META_CONVERSIONS_SECRET.",
+    status: authCheck.status,
+    error: authCheck.error,
   };
 }
 
@@ -144,6 +150,10 @@ function environmentConfig(mode: SendMode) {
 function selectedEventIds(value: unknown) {
   if (!Array.isArray(value)) return [];
   return value.map((item) => String(item || "").trim()).filter(Boolean);
+}
+
+function hasExactPurchaseSendConfirmation(value: unknown) {
+  return String(value || "").trim() === "ENVIAR PURCHASE";
 }
 
 function safePayloadForResponse(payload: Record<string, unknown>, testMode: boolean) {
@@ -290,6 +300,25 @@ export async function POST(request: Request) {
     const eventIds = selectedEventIds(body?.event_ids);
 
     if (mode === "send") {
+      if (!hasExactPurchaseSendConfirmation(body?.confirmation_text)) {
+        return NextResponse.json(
+          {
+            ok: false,
+            error: "Confirmacion invalida. Escribe exactamente ENVIAR PURCHASE.",
+            message: "Confirmacion invalida. Escribe exactamente ENVIAR PURCHASE.",
+            mode,
+            event_name: eventName || "all",
+            found: 0,
+            attempted: 0,
+            tested: 0,
+            errors: 0,
+            missing: [],
+            meta_response: metaSummary({}, 0),
+          },
+          { status: 400 }
+        );
+      }
+
       if (eventName !== "Purchase") {
         return NextResponse.json(
           {

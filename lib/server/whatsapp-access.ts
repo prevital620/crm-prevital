@@ -131,3 +131,66 @@ export async function requireWhatsappLeadsAccess() {
     user: sessionState.user,
   };
 }
+
+export async function requireWhatsappMetaConversionsSendAccess() {
+  const supabase = await createRouteHandlerSupabaseClient();
+  const sessionState = await getVerifiedSessionState(supabase);
+
+  if (sessionState.error) {
+    return {
+      ok: false as const,
+      error: sessionState.error,
+      status: 500,
+    };
+  }
+
+  if (!sessionState.user) {
+    return {
+      ok: false as const,
+      error: "Debes iniciar sesion para enviar conversiones reales a Meta.",
+      status: 401,
+    };
+  }
+
+  if (sessionState.mustChangePassword) {
+    return {
+      ok: false as const,
+      error: "Debes cambiar tu contrasena antes de continuar.",
+      status: 403,
+    };
+  }
+
+  const { data: roleRows, error: rolesError } = await supabase
+    .from("user_roles")
+    .select(
+      `
+      roles (
+        code
+      )
+    `
+    )
+    .eq("user_id", sessionState.user.id);
+
+  if (rolesError) {
+    return {
+      ok: false as const,
+      error: rolesError.message,
+      status: 500,
+    };
+  }
+
+  const roleCodes = roleCodesFromRows(roleRows);
+  if (!roleCodes.includes("super_user")) {
+    return {
+      ok: false as const,
+      error: "Solo un Super Usuario puede enviar conversiones reales a Meta.",
+      status: 403,
+    };
+  }
+
+  return {
+    ok: true as const,
+    user: sessionState.user,
+    roleCodes,
+  };
+}

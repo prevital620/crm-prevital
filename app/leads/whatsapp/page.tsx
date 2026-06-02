@@ -1168,12 +1168,6 @@ export default function LeadsWhatsappPage() {
       return;
     }
 
-    const secret = window.prompt("Ingresa META_CONVERSIONS_SECRET para autorizar el envio real.");
-    if (!secret) {
-      setMetaConversionsError("Envio real cancelado: falta META_CONVERSIONS_SECRET.");
-      return;
-    }
-
     try {
       setMetaConversionsSendingReal(true);
       setMetaConversionsError("");
@@ -1184,13 +1178,13 @@ export default function LeadsWhatsappPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "x-meta-conversions-secret": secret,
         },
         body: JSON.stringify({
           mode: "send",
           event_name: "Purchase",
           status: "pending",
           event_ids: selectedPendingPurchaseCandidates.map((candidate) => candidate.event_id),
+          confirmation_text: typedConfirmation,
           limit: selectedPendingPurchaseCandidates.length,
         }),
       });
