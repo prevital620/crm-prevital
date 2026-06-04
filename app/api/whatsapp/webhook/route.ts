@@ -128,6 +128,12 @@ const NAME_COLLECTION_SCHEDULE_MESSAGE =
 const NAME_COLLECTION_PRICE_MESSAGE =
   "Claro 😊 La experiencia de Detox Iónico de esta jornada no tiene costo para las personas seleccionadas.\n\nSolo debes completar tu inscripción y, si resultas favorecido/a, nuestro equipo te contactará para coordinar tu cita presencial en nuestra sede de El Poblado, Medellín.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
 
+const NAME_COLLECTION_LOCATION_MESSAGE =
+  "Estamos en Medellín 😊 La experiencia es presencial en nuestra sede de El Poblado.\n\nLa sesión dura aproximadamente 30 minutos y se agenda según disponibilidad.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+
+const NAME_COLLECTION_WHEN_PLACE_MESSAGE =
+  "Claro 😊 La experiencia es presencial en Medellín, en nuestra sede de El Poblado. La cita se agenda según disponibilidad y la sesión dura aproximadamente 30 minutos.\n\nPara poder continuar con tu inscripción y luego coordinar horario, por favor envíanos tu nombre completo.";
+
 const NAME_COLLECTION_NEARBY_CITY_MESSAGE =
   "Perfecto 😊 La experiencia es presencial en Medellín, en nuestra sede de El Poblado. Si puedes desplazarte hasta allí, con gusto continuamos tu inscripción.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
 
@@ -139,6 +145,14 @@ const NAME_COLLECTION_OUT_OF_COVERAGE_MESSAGE =
 
 function askLastNameMessage(firstName: string) {
   return `Gracias, ${firstName} 😊 ¿Nos puedes compartir también tu apellido para completar el registro?`;
+}
+
+function askEmailAfterMedellinArrivalMessage(firstName: string) {
+  return `Perfecto, ${firstName} 😊 Cuando estés en Medellín podemos ayudarte a coordinar según disponibilidad. Para completar tu inscripción, por favor déjanos tu correo electrónico.`;
+}
+
+function askEmailAfterLocationQuestionMessage(firstName: string) {
+  return `Perfecto, ${firstName} 😊 Estamos en Medellín, en nuestra sede de El Poblado. La sesión dura aproximadamente 30 minutos y se agenda según disponibilidad.\n\nPara completar tu inscripción, por favor déjanos tu correo electrónico.`;
 }
 
 const INVALID_EMAIL_MESSAGE =
@@ -322,6 +336,13 @@ function canTravelToMedellin(normalized: string) {
     "voy a medellin",
     "viajo a medellin",
     "me desplazo",
+    "estare alla",
+    "estare en medellin",
+    "voy a estar en medellin",
+    "estoy en medellin la proxima semana",
+    "estare en medellin la proxima semana",
+    "apenas llegue",
+    "apenas llegue me comunico",
   ]);
 }
 
@@ -364,7 +385,8 @@ function classifyDisplacementMessage(normalized: string): DisplacementStatus {
       "estoy otra ciudad",
       "vivo en otra ciudad",
       "no estoy en medellin",
-    ])
+    ]) &&
+    !canTravelToMedellin(normalized)
   ) {
     return "ambiguous";
   }
@@ -978,15 +1000,35 @@ function nameCollectionReplyForMessage(text: string) {
     };
   }
 
+  if (isNameCollectionWhenPlaceQuestion(normalized)) {
+    return {
+      reply: NAME_COLLECTION_WHEN_PLACE_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
+  }
+
+  if (isNameCollectionLocationQuestion(normalized)) {
+    return {
+      reply: NAME_COLLECTION_LOCATION_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
+  }
+
   const intent = analyzeWhatsappAgentIntent(text);
   if (
     intent === "wants_info" ||
     intent === "asks_price" ||
-    intent === "asks_location" ||
     intent === "asks_duration"
   ) {
     return {
       reply: NAME_COLLECTION_INFO_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
+  }
+
+  if (intent === "asks_location") {
+    return {
+      reply: NAME_COLLECTION_LOCATION_MESSAGE,
       status: "pidiendo_nombre" as const,
     };
   }
@@ -1014,6 +1056,42 @@ function isNameCollectionPriceQuestion(normalized: string) {
     "es gratis",
     "gratis",
   ]);
+}
+
+function isNameCollectionLocationQuestion(normalized: string) {
+  return hasAny(normalized, [
+    "en que ciudad estan",
+    "donde estan",
+    "ubicacion",
+    "direccion",
+    "lugar",
+    "sede",
+    "donde quedan",
+    "donde estan ubicados",
+  ]);
+}
+
+function isNameCollectionWhenPlaceQuestion(normalized: string) {
+  const asksWhen = hasAny(normalized, [
+    "cuando",
+    "que dia",
+    "que fecha",
+    "para cuando",
+    "hora",
+    "horario",
+    "horarios",
+    "fecha",
+  ]);
+  const asksPlace = hasAny(normalized, ["lugar", "ubicacion", "direccion", "donde estan"]);
+
+  return (
+    hasAny(normalized, [
+      "cuando hora lugar",
+      "cuando, hora, lugar",
+      "cuando, hora y lugar",
+      "cuando hora y lugar",
+    ]) || (asksWhen && asksPlace)
+  );
 }
 
 function isOtherCityMessage(normalized: string) {
@@ -1119,6 +1197,67 @@ function normalizeNameText(words: string[]) {
   return words.join(" ").replace(/\s+/g, " ").trim();
 }
 
+function buildNameInputFromCandidate(candidateText: string): NameCollectionInputResult {
+  const trimmed = candidateText.trim();
+  if (!trimmed || /[?Ã‚Â¿]/.test(trimmed) || trimmed.length > 90) return null;
+
+  const normalized = normalizeText(trimmed);
+  if (containsNameBlockingTerms(normalized)) return null;
+
+  const words = nameWords(trimmed);
+  if (words.length === 1 && /^\p{Letter}{2,}$/u.test(words[0])) {
+    return { kind: "partial", firstName: titleCaseNamePart(words[0]) };
+  }
+
+  if (words.length < 2 || words.length > 6) return null;
+  if (!words.every((word) => /^\p{Letter}{2,}(?:['-]\p{Letter}{2,})?$/u.test(word))) return null;
+
+  return { kind: "full", name: normalizeNameText(words) };
+}
+
+function extractLeadingNameBeforeQuestion(text: string): NameCollectionInputResult {
+  const firstSegment = text.split(/[,.!?Â¿]/u)[0]?.trim() || "";
+  if (!firstSegment || firstSegment === text.trim()) return null;
+  return buildNameInputFromCandidate(firstSegment);
+}
+
+function extractTrailingNameAfterContext(text: string): NameCollectionInputResult {
+  const segments = text
+    .split(/[.!?Â¿\n]+/u)
+    .map((segment) => segment.trim())
+    .filter(Boolean);
+  const lastSegment = segments[segments.length - 1] || "";
+  if (!lastSegment || lastSegment === text.trim()) return null;
+
+  return buildNameInputFromCandidate(lastSegment);
+}
+
+function isMedellinArrivalContext(normalized: string) {
+  return hasAny(normalized, [
+    "estare alla",
+    "estare en medellin",
+    "voy a estar en medellin",
+    "estoy en medellin la proxima semana",
+    "estare en medellin la proxima semana",
+    "apenas llegue",
+  ]);
+}
+
+function nameCollectionEmailReplyForSavedName(originalText: string, fullName: string) {
+  const normalized = normalizeText(originalText);
+  const firstName = nameWords(fullName)[0] || fullName;
+
+  if (isMedellinArrivalContext(normalized)) {
+    return askEmailAfterMedellinArrivalMessage(titleCaseNamePart(firstName));
+  }
+
+  if (isNameCollectionLocationQuestion(normalized) || isNameCollectionWhenPlaceQuestion(normalized)) {
+    return askEmailAfterLocationQuestionMessage(titleCaseNamePart(firstName));
+  }
+
+  return ASK_EMAIL_MESSAGE;
+}
+
 function titleCaseNamePart(value: string) {
   const lower = value.toLocaleLowerCase("es-CO");
   return lower.replace(/^\p{Letter}/u, (letter) => letter.toLocaleUpperCase("es-CO"));
@@ -1162,6 +1301,12 @@ function containsNameBlockingTerms(normalized: string) {
 }
 
 function extractNameCollectionInput(text: string): NameCollectionInputResult {
+  const leadingName = extractLeadingNameBeforeQuestion(text);
+  if (leadingName) return leadingName;
+
+  const trailingName = extractTrailingNameAfterContext(text);
+  if (trailingName) return trailingName;
+
   const candidateText = cutBeforeCourtesyText(text);
   if (!candidateText || /[?Â¿]/.test(candidateText) || candidateText.length > 90) return null;
 
@@ -2212,7 +2357,7 @@ async function handleInboundTextMessage(message: InboundTextMessage) {
       .eq("id", currentLead.id);
 
     if (error) throw error;
-    await replyToLead(message.from, ASK_EMAIL_MESSAGE);
+    await replyToLead(message.from, nameCollectionEmailReplyForSavedName(text, nameInput.name));
     return;
   }
 

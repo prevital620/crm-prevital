@@ -347,6 +347,44 @@ function profileDisplayLabel(profile: ProfileOption | null | undefined, fallback
     .join(" - ");
 }
 
+const CB_REDES_COMMISSION_EMPLOYEE_CODE = "1984";
+const CB_REDES_COMMISSION_GROUP_CODE = "CB";
+
+function isRedesCommissionSource(sourceType: string | null | undefined) {
+  return sourceType === "redes";
+}
+
+function findCbRedesCommissionProfile(profileMap: Map<string, ProfileOption>) {
+  const profiles = Array.from(profileMap.values());
+  return (
+    profiles.find(
+      (profile) =>
+        profile.employee_code === CB_REDES_COMMISSION_EMPLOYEE_CODE &&
+        resolveCommissionGroupCode({
+          commissionGroupCode: profile.commission_group_code,
+          employeeCode: profile.employee_code,
+        }) === CB_REDES_COMMISSION_GROUP_CODE
+    ) ||
+    profiles.find((profile) => profile.employee_code === CB_REDES_COMMISSION_EMPLOYEE_CODE) ||
+    null
+  );
+}
+
+function findCbRedesCommissionCollaborator(collaboratorMap: Map<string, CollaboratorOption>) {
+  const collaborators = Array.from(collaboratorMap.values());
+  return (
+    collaborators.find(
+      (collaborator) =>
+        collaborator.employeeCode === CB_REDES_COMMISSION_EMPLOYEE_CODE &&
+        collaborator.groupCode === CB_REDES_COMMISSION_GROUP_CODE
+    ) ||
+    collaborators.find(
+      (collaborator) => collaborator.employeeCode === CB_REDES_COMMISSION_EMPLOYEE_CODE
+    ) ||
+    null
+  );
+}
+
 function buildCommissionEntries(
   caseItem: AdminCommercialCase,
   profileMap: Map<string, ProfileOption>
@@ -360,6 +398,10 @@ function buildCommissionEntries(
   const sourceType = inferPayableCommissionSource(caseItem);
   const hasSale = hasRealSale(caseItem);
   const isQ = isCaseQ(caseItem);
+  const cbRedesCommissionProfile = isRedesCommissionSource(sourceType)
+    ? findCbRedesCommissionProfile(profileMap)
+    : null;
+  const callCommissionUserId = cbRedesCommissionProfile?.id || caseItem.call_user_id;
 
   if (caseItem.opc_user_id) {
     const opcProfile = profileMap.get(caseItem.opc_user_id);
@@ -393,8 +435,8 @@ function buildCommissionEntries(
     });
   }
 
-  if (caseItem.call_user_id) {
-    const callProfile = profileMap.get(caseItem.call_user_id);
+  if (callCommissionUserId) {
+    const callProfile = cbRedesCommissionProfile || profileMap.get(callCommissionUserId);
     const isBase = sourceType === "base";
     const isLeadSource = isLeadCommissionSource(sourceType);
     const fixedCommission = isQ ? (isBase ? 10000 : isLeadSource ? 5000 : 0) : 0;
@@ -405,7 +447,7 @@ function buildCommissionEntries(
       customerName: caseItem.customer_name,
       phone: caseItem.phone,
       createdAt: caseItem.created_at,
-      beneficiaryId: caseItem.call_user_id,
+      beneficiaryId: callCommissionUserId,
       beneficiaryName: profileDisplayLabel(callProfile, "TMK sin asignar"),
       beneficiaryArea: normalizeArea(callProfile?.job_title),
       commissionKind: "tmk",
@@ -1091,16 +1133,21 @@ export default function AdminComisionesPage() {
 
     return cases.filter((item) => {
       const createdDate = item.created_at?.slice(0, 10) || "";
+      const sourceType = inferPayableCommissionSource(item);
+      const cbRedesCommissionCollaborator = isRedesCommissionSource(sourceType)
+        ? findCbRedesCommissionCollaborator(collaboratorOptionMap)
+        : null;
+      const callCommissionUserId = cbRedesCommissionCollaborator?.id || item.call_user_id;
       const commercialProfile = item.assigned_commercial_user_id
         ? profileMap.get(item.assigned_commercial_user_id)
         : null;
         const opcProfile = item.opc_user_id ? profileMap.get(item.opc_user_id) : null;
-        const callProfile = item.call_user_id ? profileMap.get(item.call_user_id) : null;
+        const callProfile = callCommissionUserId ? profileMap.get(callCommissionUserId) : null;
         const opcGroupCode = item.opc_user_id
           ? collaboratorOptionMap.get(item.opc_user_id)?.groupCode || null
           : null;
-        const callGroupCode = item.call_user_id
-          ? collaboratorOptionMap.get(item.call_user_id)?.groupCode || null
+        const callGroupCode = callCommissionUserId
+          ? collaboratorOptionMap.get(callCommissionUserId)?.groupCode || null
           : null;
         const collaboratorName = commercialProfile?.full_name || "";
       const collaboratorArea = getCollaboratorArea(commercialProfile);
@@ -1114,7 +1161,7 @@ export default function AdminComisionesPage() {
         departments: getProfileDepartments(commercialProfile).map((name) => ({ name })),
       });
       const opcName = item.opc_user_id ? profileMap.get(item.opc_user_id)?.full_name || "" : "";
-      const callName = item.call_user_id ? profileMap.get(item.call_user_id)?.full_name || "" : "";
+      const callName = callProfile?.full_name || "";
       const opcArea = getCollaboratorArea(opcProfile);
       const callArea = getCollaboratorArea(callProfile);
       const callTeam = callProfile
@@ -1137,7 +1184,7 @@ export default function AdminComisionesPage() {
         : currentRoleCode === "promotor_opc"
           ? item.opc_user_id === currentUserId
           : currentRoleCode === "tmk"
-            ? item.call_user_id === currentUserId
+            ? callCommissionUserId === currentUserId
             : currentRoleCode === "comercial"
               ? item.assigned_commercial_user_id === currentUserId
               : currentRoleCode === "supervisor_opc"
@@ -1245,11 +1292,11 @@ export default function AdminComisionesPage() {
               : collaboratorAreaForFilter === "TMK" ||
                   collaboratorAreaForFilter === "Confirmador TMK" ||
                   collaboratorAreaForFilter === "Supervisor Call"
-                ? item.call_user_id === effectiveCollaboratorFilter
+                ? callCommissionUserId === effectiveCollaboratorFilter
                 : [
                     item.assigned_commercial_user_id || "",
                     item.opc_user_id || "",
-                    item.call_user_id || "",
+                    callCommissionUserId || "",
                   ].includes(effectiveCollaboratorFilter)
         : true;
       const matchesArea = effectiveAreaFilter
@@ -1258,11 +1305,11 @@ export default function AdminComisionesPage() {
           : effectiveAreaFilter === "Supervisor OPC"
             ? Boolean(item.opc_user_id)
             : effectiveAreaFilter === "Supervisor Call"
-              ? Boolean(item.call_user_id)
+              ? Boolean(callCommissionUserId)
           : [collaboratorArea, opcArea, callArea].includes(effectiveAreaFilter)
         : true;
       const matchesCommissionSource = commissionSourceFilter
-        ? inferPayableCommissionSource(item) === commissionSourceFilter
+        ? sourceType === commissionSourceFilter
         : true;
       const matchesSearch = q
         ? normalizeText(item.customer_name).includes(q) ||
@@ -1361,8 +1408,13 @@ export default function AdminComisionesPage() {
         }
       }
 
-      if (item.call_user_id) {
-        const call = collaboratorOptionMap.get(item.call_user_id);
+      const cbRedesCommissionCollaborator = isRedesCommissionSource(sourceType)
+        ? findCbRedesCommissionCollaborator(collaboratorOptionMap)
+        : null;
+      const callCommissionUserId = cbRedesCommissionCollaborator?.id || item.call_user_id;
+
+      if (callCommissionUserId) {
+        const call = cbRedesCommissionCollaborator || collaboratorOptionMap.get(callCommissionUserId);
         const supervisorCall =
           (call?.groupCode ? supervisorCallByGroup.get(call.groupCode) : null) ||
           (call?.teamKey ? supervisorCallByTeam.get(call.teamKey) : null) ||
@@ -1528,7 +1580,15 @@ export default function AdminComisionesPage() {
         if (item.commissionKind !== "tmk") return false;
 
         return casosFiltrados.some(
-          (caseItem) => caseItem.id === item.caseId && caseItem.call_user_id === item.beneficiaryId
+          (caseItem) => {
+            if (caseItem.id !== item.caseId) return false;
+            const sourceType = inferPayableCommissionSource(caseItem);
+            const cbRedesCommissionCollaborator = isRedesCommissionSource(sourceType)
+              ? findCbRedesCommissionCollaborator(collaboratorOptionMap)
+              : null;
+            const callCommissionUserId = cbRedesCommissionCollaborator?.id || caseItem.call_user_id;
+            return callCommissionUserId === item.beneficiaryId;
+          }
         );
       });
     }
