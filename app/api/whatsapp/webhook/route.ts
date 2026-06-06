@@ -119,20 +119,29 @@ const WELCOME_MESSAGE =
 const ASK_EMAIL_MESSAGE =
   "Gracias \ud83d\ude0a Ahora d\u00e9janos tu correo electr\u00f3nico para finalizar tu inscripci\u00f3n.";
 
+const NAME_COLLECTION_PENDING_PROMPT =
+  "Para continuar con tu inscripción, por favor envíanos tu nombre completo 😊";
+
+const EMAIL_COLLECTION_PENDING_PROMPT =
+  "Para continuar, por favor envíanos tu correo electrónico 😊";
+
 const NAME_COLLECTION_INFO_MESSAGE =
-  "Claro 😊 Te cuento: es una experiencia presencial de Detox Iónico en Medellín, dura aproximadamente 30 minutos y hace parte de una jornada especial de bienestar de Prevital.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+  `El Detox Iónico es una experiencia de bienestar de aproximadamente 30 minutos, acompañada por el equipo de Prevital y enfocada en orientación preventiva y bienestar 🌿\n\n${NAME_COLLECTION_PENDING_PROMPT}`;
 
 const NAME_COLLECTION_SCHEDULE_MESSAGE =
-  "Claro 😊 La experiencia se agenda según disponibilidad de nuestra jornada en Medellín. Dura aproximadamente 30 minutos y nuestro equipo te orienta durante la sesión.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+  `La experiencia se agenda según disponibilidad de nuestra jornada preventiva de bienestar en Medellín. La sesión dura aproximadamente 30 minutos 🌿\n\n${NAME_COLLECTION_PENDING_PROMPT}`;
 
 const NAME_COLLECTION_PRICE_MESSAGE =
-  "Claro 😊 La experiencia de Detox Iónico de esta jornada no tiene costo para las personas seleccionadas.\n\nSolo debes completar tu inscripción y, si resultas favorecido/a, nuestro equipo te contactará para coordinar tu cita presencial en nuestra sede de El Poblado, Medellín.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+  `La experiencia de Detox Iónico no tiene costo para las personas seleccionadas dentro de nuestra jornada preventiva de bienestar 🌿\n\nLa sesión es presencial en Medellín y dura aproximadamente 30 minutos.\n\n${NAME_COLLECTION_PENDING_PROMPT}`;
 
 const NAME_COLLECTION_LOCATION_MESSAGE =
-  "Estamos en Medellín 😊 La experiencia es presencial en nuestra sede de El Poblado.\n\nLa sesión dura aproximadamente 30 minutos y se agenda según disponibilidad.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
+  `La atención es presencial en Medellín, en El Poblado 🌿\n\nNuestro equipo te compartirá la información necesaria para asistir cuando avancemos con tu inscripción.\n\n${NAME_COLLECTION_PENDING_PROMPT}`;
+
+const NAME_COLLECTION_DURATION_MESSAGE =
+  `La sesión dura aproximadamente 30 minutos 😊\n\n${NAME_COLLECTION_PENDING_PROMPT}`;
 
 const NAME_COLLECTION_WHEN_PLACE_MESSAGE =
-  "Claro 😊 La experiencia es presencial en Medellín, en nuestra sede de El Poblado. La cita se agenda según disponibilidad y la sesión dura aproximadamente 30 minutos.\n\nPara poder continuar con tu inscripción y luego coordinar horario, por favor envíanos tu nombre completo.";
+  `Claro 😊 La experiencia es presencial en Medellín, en nuestra sede de El Poblado. La cita se agenda según disponibilidad y la sesión dura aproximadamente 30 minutos.\n\n${NAME_COLLECTION_PENDING_PROMPT}`;
 
 const NAME_COLLECTION_NEARBY_CITY_MESSAGE =
   "Perfecto 😊 La experiencia es presencial en Medellín, en nuestra sede de El Poblado. Si puedes desplazarte hasta allí, con gusto continuamos tu inscripción.\n\nPara iniciar tu inscripción, por favor envíanos tu nombre completo.";
@@ -155,20 +164,26 @@ function askEmailAfterLocationQuestionMessage(firstName: string) {
   return `Perfecto, ${firstName} 😊 Estamos en Medellín, en nuestra sede de El Poblado. La sesión dura aproximadamente 30 minutos y se agenda según disponibilidad.\n\nPara completar tu inscripción, por favor déjanos tu correo electrónico.`;
 }
 
+function askEmailAfterFullNameMessage(fullName: string) {
+  const words = nameWords(fullName);
+  const shortName = words.slice(0, Math.min(words.length, 2)).map(titleCaseNamePart).join(" ");
+  return `Gracias, ${shortName || "gracias"} 😊 Ahora déjanos tu correo electrónico para finalizar tu inscripción.`;
+}
+
 const INVALID_EMAIL_MESSAGE =
   "Parece que el correo no qued\u00f3 completo. \u00bfNos lo puedes enviar nuevamente, por favor?";
 
 const EMAIL_COLLECTION_PRICE_MESSAGE =
-  "Esta experiencia no tiene costo para las personas cuyo registro resulte favorecido \ud83d\udc9a\n\nPara finalizar tu inscripci\u00f3n, solo nos falta tu correo electr\u00f3nico.";
+  `La experiencia de Detox Iónico no tiene costo para las personas seleccionadas dentro de nuestra jornada preventiva de bienestar 🌿\n\nLa sesión es presencial en Medellín y dura aproximadamente 30 minutos.\n\n${EMAIL_COLLECTION_PENDING_PROMPT}`;
 
 const EMAIL_COLLECTION_INFO_MESSAGE =
-  "Es una experiencia de bienestar en Prevital. La orientaci\u00f3n completa la realiza nuestro equipo durante la cita \ud83c\udf3f\n\nPara finalizar tu inscripci\u00f3n, solo nos falta tu correo electr\u00f3nico.";
+  `El Detox Iónico es una experiencia de bienestar de aproximadamente 30 minutos, acompañada por el equipo de Prevital y enfocada en orientación preventiva y bienestar 🌿\n\n${EMAIL_COLLECTION_PENDING_PROMPT}`;
 
 const EMAIL_COLLECTION_LOCATION_MESSAGE =
-  "Estamos en El Poblado, Medell\u00edn \ud83c\udf3f Si tu inscripci\u00f3n resulta favorecida, te enviaremos la direcci\u00f3n completa para coordinar tu cita.\n\nPara finalizar tu inscripci\u00f3n, solo nos falta tu correo electr\u00f3nico.";
+  `La atención es presencial en Medellín, en El Poblado 🌿\n\nNuestro equipo te compartirá la información necesaria para asistir cuando avancemos con tu inscripción.\n\n${EMAIL_COLLECTION_PENDING_PROMPT}`;
 
 const EMAIL_COLLECTION_DURATION_MESSAGE =
-  "La cita inicial tiene una duraci\u00f3n aproximada de 30 minutos \ud83d\ude0a\n\nPara finalizar tu inscripci\u00f3n, solo nos falta tu correo electr\u00f3nico.";
+  `La sesión dura aproximadamente 30 minutos 😊\n\n${EMAIL_COLLECTION_PENDING_PROMPT}`;
 
 const REGISTERED_MESSAGE =
   "\u00a1Listo! \ud83d\udc9a Recibimos tu inscripci\u00f3n correctamente.";
@@ -957,6 +972,11 @@ function emailCollectionReplyForMessage(text: string) {
   }
 
   const intent = analyzeWhatsappAgentIntent(text);
+  if (isNameCollectionPriceQuestion(normalized)) return EMAIL_COLLECTION_PRICE_MESSAGE;
+  if (isNameCollectionLocationQuestion(normalized)) return EMAIL_COLLECTION_LOCATION_MESSAGE;
+  if (isPendingDurationQuestion(normalized)) return EMAIL_COLLECTION_DURATION_MESSAGE;
+  if (isPendingDetoxInfoQuestion(normalized)) return EMAIL_COLLECTION_INFO_MESSAGE;
+
   if (intent === "asks_price") return EMAIL_COLLECTION_PRICE_MESSAGE;
   if (intent === "asks_location") return EMAIL_COLLECTION_LOCATION_MESSAGE;
   if (intent === "asks_duration") return EMAIL_COLLECTION_DURATION_MESSAGE;
@@ -1014,14 +1034,34 @@ function nameCollectionReplyForMessage(text: string) {
     };
   }
 
+  if (isPendingDurationQuestion(normalized)) {
+    return {
+      reply: NAME_COLLECTION_DURATION_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
+  }
+
+  if (isPendingDetoxInfoQuestion(normalized)) {
+    return {
+      reply: NAME_COLLECTION_INFO_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
+  }
+
   const intent = analyzeWhatsappAgentIntent(text);
   if (
     intent === "wants_info" ||
-    intent === "asks_price" ||
-    intent === "asks_duration"
+    intent === "asks_price"
   ) {
     return {
       reply: NAME_COLLECTION_INFO_MESSAGE,
+      status: "pidiendo_nombre" as const,
+    };
+  }
+
+  if (intent === "asks_duration") {
+    return {
+      reply: NAME_COLLECTION_DURATION_MESSAGE,
       status: "pidiendo_nombre" as const,
     };
   }
@@ -1049,12 +1089,38 @@ function isNameCollectionPriceQuestion(normalized: string) {
   return hasAny(normalized, [
     "que precio tiene",
     "cuanto vale",
+    "cuanto cuesta",
     "tiene costo",
+    "sin costo",
     "costo",
     "precio",
+    "valor",
     "vale algo",
     "es gratis",
     "gratis",
+  ]);
+}
+
+function isPendingDurationQuestion(normalized: string) {
+  return hasAny(normalized, [
+    "cuanto dura",
+    "cuanto tarda",
+    "duracion",
+    "demora",
+    "cuanto tiempo",
+    "tiempo dura",
+  ]);
+}
+
+function isPendingDetoxInfoQuestion(normalized: string) {
+  return hasAny(normalized, [
+    "que es el detox",
+    "que es detox",
+    "que es",
+    "de que se trata",
+    "como funciona",
+    "informacion",
+    "info",
   ]);
 }
 
@@ -1062,12 +1128,14 @@ function isNameCollectionLocationQuestion(normalized: string) {
   return hasAny(normalized, [
     "en que ciudad estan",
     "donde estan",
+    "donde queda",
+    "donde quedan",
     "ubicacion",
     "direccion",
     "lugar",
     "sede",
-    "donde quedan",
     "donde estan ubicados",
+    "donde esta ubicado",
   ]);
 }
 
@@ -1255,7 +1323,7 @@ function nameCollectionEmailReplyForSavedName(originalText: string, fullName: st
     return askEmailAfterLocationQuestionMessage(titleCaseNamePart(firstName));
   }
 
-  return ASK_EMAIL_MESSAGE;
+  return askEmailAfterFullNameMessage(fullName);
 }
 
 function titleCaseNamePart(value: string) {
@@ -1263,40 +1331,42 @@ function titleCaseNamePart(value: string) {
   return lower.replace(/^\p{Letter}/u, (letter) => letter.toLocaleUpperCase("es-CO"));
 }
 
+function hasNameBlockingKeyword(normalized: string) {
+  const tokenText = ` ${normalized
+    .replace(/[^\p{Letter}\p{Number}]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim()} `;
+
+  return [
+    "que",
+    "como",
+    "cuando",
+    "cuanto",
+    "donde",
+    "precio",
+    "ubicacion",
+    "direccion",
+    "horario",
+    "horarios",
+    "fecha",
+    "programacion",
+    "costo",
+    "ciudad",
+    "informacion",
+    "info",
+    "hola",
+    "buenas tardes",
+    "buenos dias",
+  ].some((term) =>
+    term.includes(" ") ? normalized.includes(term) : tokenText.includes(` ${term} `)
+  );
+}
+
 function containsNameBlockingTerms(normalized: string) {
   return (
     Boolean(classifyDisplacementMessage(normalized)) ||
     isNameCollectionQuestion(normalized) ||
-    hasAny(normalized, [
-      "que",
-      "qué",
-      "como",
-      "cómo",
-      "cuando",
-      "cuanto",
-      "cuánto",
-      "donde",
-      "dónde",
-      "precio",
-      "ubicacion",
-      "ubicación",
-      "direccion",
-      "dirección",
-      "horario",
-      "horarios",
-      "fecha",
-      "programacion",
-      "programación",
-      "costo",
-      "ciudad",
-      "informacion",
-      "información",
-      "info",
-      "hola",
-      "buenas tardes",
-      "buenos dias",
-      "buenos días",
-    ])
+    hasNameBlockingKeyword(normalized)
   );
 }
 
@@ -1331,6 +1401,19 @@ function looksLikeFullName(text: string) {
 
   const normalized = normalizeText(trimmed);
   if (classifyDisplacementMessage(normalized) || isNameCollectionQuestion(normalized)) return false;
+  if (hasNameBlockingKeyword(normalized)) return false;
+
+  {
+    const words = trimmed
+      .replace(/[^\p{Letter}\s'-]/gu, " ")
+      .split(/\s+/)
+      .map((word) => word.trim())
+      .filter(Boolean);
+
+    if (words.length < 2 || words.length > 6) return false;
+    return words.every((word) => /\p{Letter}{2,}/u.test(word));
+  }
+
   if (
     hasAny(normalized, [
       "que",
